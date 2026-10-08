@@ -224,6 +224,7 @@ public final class PlayScreen extends ScreenAdapter {
         if (fade > 0) fade = Math.max(0, fade - dt * 2.2f);
         world.particles.update(play ? dt : 0f);
         world.render(sim, play ? acc / Sim.DT : 1f, dt, time, true);
+        if (world.cloudsBroken > 0) { g.audio.play("poof", 0.45f, 0.9f + MathUtils.random(0.3f)); world.cloudsBroken = 0; }
         drawHud();
         g.autoShot("play", dt);
         if (next != null) { com.badlogic.gdx.Screen n = next; next = null; boolean d = disposeOnLeave; g.setScreen(n); if (d) dispose(); }

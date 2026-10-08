@@ -45,6 +45,7 @@ public final class WorldRenderer implements Disposable {
     private final java.util.ArrayList<Vis> vis = new java.util.ArrayList<>();
     private int pruneCursor;
     private final Background bg = new Background();
+    private Clouds clouds;
     public final Particles particles;
     private static final float CAM_DIST = Float.parseFloat(System.getProperty("climb.camDist", "9.6"));
     public int quality = 2;           // 0 low, 1 medium, 2 high
@@ -55,6 +56,7 @@ public final class WorldRenderer implements Disposable {
     private final ModelInstance shadow;
     private float renderS, renderY;
     public float lastCamS;
+    public int cloudsBroken;          // PlayScreen reads and clears this to play the poof sound
     private final Array<ModelInstance> tmp = new Array<>();
 
     private static com.badlogic.gdx.graphics.g3d.shaders.DefaultShader.Config boneConfig() {
@@ -284,6 +286,10 @@ public final class WorldRenderer implements Disposable {
         batch.begin(cam);
         syncVis();
         int lo = Math.max(0, sim.winLo), hi = Math.min(vis.size() - 1, sim.winHi);
+        if (clouds == null) clouds = new Clouds(models, T, course);
+        clouds.update(ps, camY, ps, py, lo, hi, dt, reducedMotion, quality);
+        cloudsBroken += clouds.brokenThisFrame;
+        clouds.render(batch, env, (inst, arc, yy, dz, sx, sy, sz, yaw) -> place(inst, arc, yy, dz, ps, sx, sy, sz, yaw), ps, camY);
         for (int i = lo; i <= hi; i++) {
             Vis v = vis.get(i); Element e = v.e;
             float es = sim.es1[i] , ey = sim.ey1[i];

@@ -565,6 +565,12 @@ public final class CourseGenerator {
             for (Element h : hz) if (h.anchor == i || h.anchor + 1 == i || h.anchor == i + 1) touched = true;
             if (!res.ok || res.margin() < Math.max(minMargin, 0f)) { ok = false; failPlan++; if (trace.length() < 600) trace.append(String.format("[link %d %s->%s ok=%b %d/%d need %.3f]", i, c.get(i).type, c.get(i + 1).type, res.ok, res.successes, res.trials, minMargin)); }
             else if (touched && res.window < windowNeeded(c.get(i).y)) { ok = false; failWindow++; }
+            else if (Autopilot.hasMidHazard(c, i)) {       // a person never stands on the exact spot the planner starts from: the move must work from nearby too
+                for (float dx : new float[]{-0.5f, 0.4f}) {
+                    Sim b = Sim.startOn(c, T, i); b.s = c.wrap(b.s + dx);
+                    if (!Autopilot.plan(b, i, false).ok) { ok = false; failPlan++; break; }
+                }
+            }
         }
         if (!ok) { while (c.size() > n0) c.elements.remove(c.size() - 1); while (c.hazards.size() > h0) c.hazards.remove(c.hazards.size() - 1); }
         else if (!hz.isEmpty()) { hazardsPlaced += hz.size(); }

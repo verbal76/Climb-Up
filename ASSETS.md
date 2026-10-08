@@ -30,6 +30,7 @@ Asset sources in priority order: 1) appropriately licensed free assets (CC0/publ
 | File | Source URL | Creator | License | Downloaded |
 |---|---|---|---|---|
 | `assets/models/*.obj, *.mtl, Textures/colormap.png` (blocks, props, flag/chest/jewel; 40 models) | owner-supplied pack `kenney_platformer-kit.zip` (https://kenney.nl/assets/platformer-kit) | Kenney (www.kenney.nl) | CC0 1.0 (`assets/licenses/Kenney_PlatformerKit_License.txt`) | 2026-10-08 |
+| `assets/pack/*.g3dj` (hazards: saw, cannon, spiked ball, spikes, spike trap; later keys, castle, crabs, club) | converted from the same owner-supplied Quaternius pack by `tools/gltf_static_to_g3dj.py` | Quaternius | CC0 1.0 (`assets/licenses/Quaternius_UltimatePlatformer_License.txt`) | 2026-10-08 |
 | `assets/hero/hero.g3dj` (converted from `Character.gltf` by `tools/gltf_to_g3dj.py`) | owner-supplied pack `Ultimate Platformer Pack by Quaternius.zip` (https://quaternius.com / quaternius.itch.io) | Quaternius | CC0 1.0 (`assets/licenses/Quaternius_UltimatePlatformer_License.txt`) | 2026-10-08 |
 | `tools/legacy_robot/*.png` (no longer in the game; only the app-icon source) | owner-supplied pack `Foozle_2DC0001_Cute_Robot.zip` | Foozle, commissioned from mayakhan95 | CC0 1.0 (`tools/legacy_robot/Foozle_CuteRobot_License.txt`) | 2026-10-08 |
 | `assets/branding/studio_splash.png` | owner-supplied (`branding/master/studio_splash_e3d9bb56.png`) | Hot Attic Games | owner-supplied, unmodified | 2026-10-08 |

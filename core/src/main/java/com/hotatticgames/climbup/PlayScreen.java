@@ -216,7 +216,38 @@ public final class PlayScreen extends ScreenAdapter {
         if (next != null) { com.badlogic.gdx.Screen n = next; next = null; boolean d = disposeOnLeave; g.setScreen(n); if (d) dispose(); }
     }
 
+    private final java.util.HashMap<Element, Integer> cycleSeen = new java.util.HashMap<>();
+    private float sawT;
+
+    /** Hazards you can hear: cannon booms, spikes snapping up, the saw's whir. Volume falls off with distance. */
+    private void hazardSounds(float dt) {
+        sawT -= dt;
+        for (int k = 0, cnt = sim.hz == null ? course.hazards.size() : sim.hz.length; k < cnt; k++) {
+            Element h = course.hazards.get(sim.hz == null ? k : sim.hz[k]);
+            float d = Math.abs(course.dsWrap(h.sAt(sim.time), sim.s)) + Math.abs(h.y - sim.y) * 0.6f;
+            if (d > 14f) continue;
+            float vol = Math.max(0f, 1f - d / 14f);
+            switch (h.type) {
+                case CANNON: case SPIKE_TRAP: {
+                    int cyc = (int) Math.floor(h.type == Element.Type.CANNON ? sim.time / h.period + h.phase / 6.2832f : (sim.time / h.period + h.phase / 6.2832f - 0.55f));
+                    Integer prev = cycleSeen.put(h, cyc);
+                    if (prev != null && prev != cyc) {
+                        if (h.type == Element.Type.CANNON) { g.audio.play("cannon", 0.9f * vol + 0.1f, 1f); world.particles.burst(h.s + h.dir * 0.8f, h.y, 6, dust, 1.5f, 0.6f, 0.12f, 0f, 0.4f); world.shake(0.15f * vol); say("[BOOM]"); }
+                        else g.audio.play("spikes", 0.7f * vol + 0.05f, 1f);
+                    }
+                    break;
+                }
+                case SAW_H: case SAW_V:
+                    if (sawT <= 0f && d < 9f) { sawT = 0.45f; g.audio.play("saw", 0.35f * vol, 0.95f + MathUtils.random(0.1f)); }
+                    break;
+                default: break;
+            }
+        }
+        if (cycleSeen.size() > 64) cycleSeen.clear();
+    }
+
     private void ambientSounds(float dt) {
+        hazardSounds(dt);
         if (sim.mode == Sim.Mode.LEDGE) {   // he is really trying not to fall
             gruntT -= dt;
             if (gruntT <= 0) {

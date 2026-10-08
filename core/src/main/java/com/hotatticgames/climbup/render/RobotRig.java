@@ -55,9 +55,9 @@ public final class RobotRig implements Disposable {
             case ROPE: targetYaw = sim.facing * 12f; break;
             case LEDGE: case PULLUP: targetYaw = sim.ledgeSide * 16f; break;
             case CABLE: targetYaw = sim.facing * 18f; break;
-            default: targetYaw = sim.facing * 30f;
+            default: targetYaw = sim.facing * 68f;   // clearly faces the direction of travel (face still readable in 3/4 view)
         }
-        yaw = smooth(yaw, targetYaw, 14f, dt);
+        yaw = smooth(yaw, targetYaw, 18f, dt);
         squash = smooth(squash, 0f, 12f, dt);
         if ((sim.events & Sim.EV_LAND) != 0) squash = Math.min(1f, sim.landSpeed / 14f) * 0.9f + 0.1f;
 

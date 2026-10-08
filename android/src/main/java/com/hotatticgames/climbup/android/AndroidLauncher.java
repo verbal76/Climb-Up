@@ -14,6 +14,7 @@ public class AndroidLauncher extends AndroidApplication {
         config.useCompass = false;
         config.useGyroscope = false;
         config.numSamples = 0;
+        config.maxSimultaneousSounds = 24;
         initialize(new ClimbGame(getFilesDir()), config);
     }
 }

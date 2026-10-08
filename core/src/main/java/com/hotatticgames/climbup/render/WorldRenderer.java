@@ -168,6 +168,13 @@ public final class WorldRenderer implements Disposable {
                     ps.add(boxPart(-0.35f, 0.02f, 0.2f, 0.22f, 0.05f, 0.18f, new Color(0.35f, 0.25f, 0.18f, 1f)));
                     ps.add(boxPart(0.4f, 0.02f, -0.1f, 0.18f, 0.05f, 0.22f, new Color(0.35f, 0.25f, 0.18f, 1f)));
                 }
+                if (!orbit && quality > 0 && (e.zone == 2 || e.zone == 3) && e.type != Element.Type.GOAL) {       // dusk and night: islands hang from a Space Kit rock
+                    int hh = hash(idx, 41); boolean big = w >= 5;
+                    String rock = big ? new String[]{"rock_large_1", "rock_large_2", "rock_large_3"}[hh % 3] : new String[]{"rock_1", "rock_2", "rock_3", "rock_4"}[hh % 4];
+                    float sc = Math.max(0.3f, Math.min(w, 6f) * 0.85f / (big ? 7.6f : 3.0f)), top = big ? 0.3f : 0.4f;
+                    Part rk = part(models.space(rock), ((hh >> 5) % 5 - 2) * 0.08f * w, -h - 0.25f - top * sc, ((hh >> 9) % 3 - 1) * 0.15f, sc, sc, sc);
+                    rk.roll = 180f; rk.yaw = (hh >> 3) % 360; ps.add(rk);
+                }
                 if (orbit) { /* decorated by spacePlatform */ }
                 else if (thick && e.type != Element.Type.GOAL && quality > 0) decorate(ps, e, idx, w, snow);
                 else if (!thick && e.type == Element.Type.STATIC && quality > 0 && hash(idx, 7) % 3 == 0) decorate(ps, e, idx, w, snow);
@@ -456,6 +463,7 @@ public final class WorldRenderer implements Disposable {
     private ColorAttribute gemDiff, gemEmis, glowEmis;
     private BlendingAttribute gemBlend, glowBlend;
     private final java.util.HashMap<Integer, Float> gemAct = new java.util.HashMap<>();
+    private final Color keyCol = new Color(1f, 1f, 1f, 1f);
     private final Color gemRed = new Color(1f, 0.12f, 0.16f, 1f);
 
     private void initGem() {
@@ -613,6 +621,10 @@ public final class WorldRenderer implements Disposable {
                 k.transform.idt().translate(T.radius * MathUtils.sin(phi), h.y + bob, -T.radius + T.radius * MathUtils.cos(phi))
                         .rotate(0, 1, 0, phi * MathUtils.radiansToDegrees + time * 140f).rotate(0, 0, 1, 25f).scale(0.5f, 0.5f, 0.5f).translate(-0.45f, 0f, 0f);
                 batch.render(k, env);
+                if (!reducedMotion && quality > 0 && MathUtils.random() < frameDt * 12f) {       // a thin stream of sparkles in the key's colour rises from it: a hidden key can be spotted from a distance
+                    float[] rgb = KEY_RGB[h.color % KEY_RGB.length]; keyCol.set(rgb[0], rgb[1], rgb[2], 1f);
+                    particles.spawn(h.s + MathUtils.random(-0.15f, 0.15f), h.y + 0.5f, 0f, 1.6f + MathUtils.random(0.6f), keyCol, 0.09f, 0f, 2.4f);
+                }
                 break;
             }
             case GATE: {

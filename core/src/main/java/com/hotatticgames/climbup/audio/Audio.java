@@ -49,7 +49,34 @@ public final class Audio implements Disposable {
             if (v.length > 1 && lastVariant.getOrDefault(name, -1) == i) i = (i + 1) % v.length;
             lastVariant.put(name, i); s = v[i];
         }
-        if (s != null && settings.sfx > 0) s.play(MathUtils.clamp(vol, 0, 1) * settings.sfx / 10f, pitch, 0f);
+        if (s == null || settings.sfx <= 0) return;
+        // a runaway caller must never flood the platform's sound pool (Android silently stops serving a saturated pool): cap how often one sound can start
+        long now = System.nanoTime();
+        Long last = lastPlay.get(name);
+        float gap = name.equals("step") ? 0.07f : 0.045f;
+        if (last != null && (now - last) < gap * 1e9f) { throttled++; return; }
+        lastPlay.put(name, now);
+        try { if (s.play(MathUtils.clamp(vol, 0, 1) * settings.sfx / 10f, pitch, 0f) == -1) refused++; played++; }
+        catch (Exception e) { errors++; lastError = e.getClass().getSimpleName(); }
+    }
+
+    private final Map<String, Long> lastPlay = new HashMap<>();
+    private int played, throttled, refused, errors, musicRestarts;
+    private String lastError = "-";
+    /** One line for Settings > About: what the audio system has been doing (helps when a phone loses sound). */
+    public String diag() {
+        String m = current == null ? "NONE" : (current.isPlaying() ? "PLAYING" : "STOPPED");
+        return "AUDIO: MUSIC " + m + "  FX " + played + " (REFUSED " + refused + ", ERR " + errors + " " + lastError + ")  RESTARTS " + musicRestarts;
+    }
+    /** Settings > About > restart audio: rebuilds the music player and starts the current track again. */
+    public void restart() {
+        musicRestarts++;
+        try {
+            for (Music m : tracks.values()) { try { m.setOnCompletionListener(null); m.stop(); m.dispose(); } catch (Exception ignored) { } }
+            tracks.clear(); current = null;
+            String n = currentName; String[] l = list; currentName = "";
+            if (l != null) { list = null; playlist(l); } else if (!n.isEmpty()) music(n);
+        } catch (Exception e) { errors++; lastError = e.getClass().getSimpleName(); }
     }
 
     public void play(String name) { play(name, 0.9f, 1f); }
@@ -123,6 +150,7 @@ public final class Audio implements Disposable {
             String name = list != null ? list[listIdx] : currentName;
             Music old = tracks.remove(name);
             if (old != null) { old.setOnCompletionListener(null); try { old.dispose(); } catch (Exception ignored) { } }
+            musicRestarts++;
             if (list != null) startListTrack();
             else { String n = currentName; currentName = ""; music(n); }
         } catch (Exception ignored) { }

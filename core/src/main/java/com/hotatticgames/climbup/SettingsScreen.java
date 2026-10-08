@@ -46,9 +46,10 @@ public final class SettingsScreen extends ScreenAdapter {
         float W = ui.w(), H = ui.h();
         ui.textC("SETTINGS", W / 2, H - 78, 7f, Ui.TEXT);
         if (ui.button("BACK", 40, H - 100, 200, 64, true)) { g.audio.play("click"); g.persist(); if (back instanceof PlayScreen) ((PlayScreen) back).resumeFromSettings(); g.setScreen(back); ui.end(); return; }
-        float tw = 300;
-        if (ui.button("AUDIO + DISPLAY", W / 2 - tw - 12, H - 168, tw, 60, page == 0)) page = 0;
-        if (ui.button("CONTROLS + ACCESS", W / 2 + 12, H - 168, tw + 40, 60, page == 1)) page = 1;
+        float x0 = W / 2 - 440;
+        if (ui.button("AUDIO + DISPLAY", x0, H - 168, 300, 60, page == 0)) page = 0;
+        if (ui.button("CONTROLS + ACCESS", x0 + 312, H - 168, 340, 60, page == 1)) page = 1;
+        if (ui.button("ABOUT", x0 + 664, H - 168, 216, 60, page == 2)) page = 2;
         rowY = H - 176 - 64;
         if (page == 0) {
             row("CHARACTER", com.hotatticgames.climbup.render.Characters.name(s.character), null, null, () -> s.character = com.hotatticgames.climbup.render.Characters.next(s.character));
@@ -58,6 +59,11 @@ public final class SettingsScreen extends ScreenAdapter {
             row("TEXT SIZE", TXT[s.textScale], null, null, () -> s.textScale = (s.textScale + 1) % 3);
             toggle("REDUCED MOTION", s.reducedMotion, () -> s.reducedMotion = !s.reducedMotion);
             toggle("CAPTIONS FOR SOUNDS", s.captions, () -> s.captions = !s.captions);
+        } else if (page == 2) {
+            rowY -= 24; ui.textC("CLIMB UP  V" + ClimbGame.VERSION, W / 2, rowY + 30, 4.5f, Ui.TEXT); rowY -= 72;
+            ui.textC("CONTENT: BUNDLED (NO UPDATES INSTALLED)", W / 2, rowY + 30, 3.4f, Ui.DIM); rowY -= 64;
+            ui.textC(g.audio.diag(), W / 2, rowY + 30, 2.8f, Ui.DIM); rowY -= 64;
+            row("RESTART AUDIO", "RESTART", null, null, () -> g.audio.restart());
         } else {
             row("HAPTICS", HAP[s.haptics], null, null, () -> s.haptics = (s.haptics + 1) % 3);
             toggle("LEFT-HANDED LAYOUT", s.leftHanded, () -> s.leftHanded = !s.leftHanded);

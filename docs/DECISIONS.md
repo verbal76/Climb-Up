@@ -61,3 +61,10 @@
 - **Checkpoints are red gems** that hover above rest platforms (bob, wobble, pulse, drop sparks, soft glow shell), placed by height: about every 30 m (`gemSpacing`, +-15% random give), never right before a slice's own closing gem; a dropped castle attempt can no longer leave two gems close together. Reaching one pops it (burst + sound + toast); passed gems stay as small dim markers. Respawning behind a reached gem resets nothing.
 - **Biomes are 400 m each** (`zoneHeight`), so one lap of the five worlds is 2,000 m; base difficulty still ramps over 520 m and hazards over their own ramp. Colour blends over the last 20% of each world.
 - **Coloured castles with hidden matching keys** (already built) now appear about every 110-120 m instead of every ~270 m (every slice may host one; rest platforms of 4 m+ qualify). Each castle still gets a provable key room or is removed. The solver was taught to line itself up and shuffle along the platform before the key detour, which fixed key-room failures that came from knife-edge start positions.
+
+## Flesh-out pass (thin items from build 31)
+- **Audio:** per-sound throttle (a runaway caller can no longer flood Android's sound pool), exception guards, up to 24 simultaneous sounds on Android, Settings > About shows version, content status and a live audio line (music playing/stopped, effects played/refused/errors, music restarts) plus a RESTART AUDIO button. This is a mitigation and diagnostic; the original dropout has still never been reproduced.
+- **Juice:** wind streaks in a fast fall, a spark trail after a pad bounce, seesaw landing thump and wood creaks while it tips, hover-ramp and shaky-ramp landing sounds/particles.
+- **Rocks:** dusk and night islands now hang from Space Kit rocks (deep space already had asteroid-deck platforms).
+- **Keys:** every hidden key sends a thin stream of sparkles in its colour upward so it can be spotted from a distance.
+- Not done: character blinking (eyes are painted into the textures), camera effects beyond the existing shakes/kicks.

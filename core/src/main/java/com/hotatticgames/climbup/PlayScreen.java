@@ -221,6 +221,7 @@ public final class PlayScreen extends ScreenAdapter {
             for (int pi = pops.size() - 1; pi >= 0; pi--) { Pop pp = pops.get(pi); pp.age += dt; if (pp.age > 1.1f) pops.remove(pi); }
             autosaveT += dt; if (autosaveT > 8f) { autosaveT = 0; g.persist(); }
             ambientSounds(dt);
+            juice(dt);
             updateTips(dt);
         }
         if (fade > 0) fade = Math.max(0, fade - dt * 2.2f);
@@ -288,6 +289,25 @@ public final class PlayScreen extends ScreenAdapter {
 
     private final Color red = new Color(1f, 0.3f, 0.25f, 1f), dust = new Color(0.9f, 0.88f, 0.8f, 1f), gold = new Color(1f, 0.85f, 0.25f, 1f), brown = new Color(0.55f, 0.4f, 0.28f, 1f), cyan = new Color(0.4f, 0.9f, 1f, 1f);
 
+    private float windT, trailT, creakT;
+
+    /** Cosmetic feedback that runs every frame: wind streaks in a fast fall, a spark trail after a bounce, wood creaks on a tipping bridge. */
+    private void juice(float dt) {
+        if (g.settings.reducedMotion || sim == null) return;
+        if (sim.mode == Sim.Mode.AIR && sim.vy < -11f) {
+            windT -= dt;
+            if (windT <= 0) { windT = 0.03f; world.particles.spawn(sim.s + MathUtils.random(-0.8f, 0.8f), sim.y + MathUtils.random(0f, 1.6f), 0f, 9f + MathUtils.random(4f), Color.WHITE, 0.045f, 0f, 0.3f); }
+        }
+        if (sim.mode == Sim.Mode.AIR && sim.vy > 8f && sim.lastPad >= 0 && sim.lastPad < course.size() && course.get(sim.lastPad).type == Element.Type.PAD) {
+            trailT -= dt;
+            if (trailT <= 0) { trailT = 0.04f; world.particles.spawn(sim.s + MathUtils.random(-0.2f, 0.2f), sim.y + 0.3f, MathUtils.random(-0.3f, 0.3f), -1.5f, cyan, 0.07f, 0f, 0.5f); }
+        }
+        if (sim.mode == Sim.Mode.GROUND && sim.onElem >= 0 && course.get(sim.onElem).type == Element.Type.SEESAW && Math.abs(sim.tilt[sim.onElem]) > 0.25f) {
+            creakT -= dt;
+            if (creakT <= 0) { creakT = 0.4f; g.audio.play("rope", 0.35f, 0.55f + MathUtils.random(0.15f)); world.particles.burst(sim.s, sim.y, 2, brown, 0.8f, 0.6f, 0.07f, 4f, 0.4f); }
+        }
+    }
+
     private void handleEvents(int ev) {
         if (ev == 0) return;
         float s = sim.s, y = sim.y;
@@ -296,6 +316,9 @@ public final class PlayScreen extends ScreenAdapter {
             world.platformLanded(sim.onElem, sim.landSpeed);
             Element le = course.get(sim.onElem);
             float edge = Math.abs(course.dsWrap(sim.s, sim.es1[sim.onElem])) - le.halfW();
+            if (le.type == Element.Type.SEESAW) { g.audio.play("bonk", 0.7f, 0.65f); world.particles.burst(sim.s, sim.y, 6, brown, 1.6f, 1.2f, 0.12f, 6f, 0.5f); }
+            if (le.type == Element.Type.RAMP && le.skin == 3) { g.audio.play("poof", 0.5f, 1.7f); world.particles.burst(sim.s, sim.y - 0.4f, 8, cyan, 1.4f, 0.8f, 0.1f, 1f, 0.6f); }
+            if (le.type == Element.Type.RAMP && le.skin == 2) { g.audio.play("bonk", 0.5f, 1.2f); }
             if (le.isPlatform() && edge > 0.06f && sim.landSpeed > 5f) { pop(CLOSE[MathUtils.random(CLOSE.length - 1)], gold); freeze(0.07f); world.shake(0.5f); vibrate(25, 1); }
         }
         if ((ev & Sim.EV_JUMP) != 0) world.kick(0.8f);

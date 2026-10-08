@@ -317,7 +317,7 @@ public final class PlayScreen extends ScreenAdapter {
             Element le = course.get(sim.onElem);
             float edge = Math.abs(course.dsWrap(sim.s, sim.es1[sim.onElem])) - le.halfW();
             if (le.type == Element.Type.SEESAW) { g.audio.play("bonk", 0.7f, 0.65f); world.particles.burst(sim.s, sim.y, 6, brown, 1.6f, 1.2f, 0.12f, 6f, 0.5f); }
-            if (le.type == Element.Type.RAMP && le.skin == 3) { g.audio.play("poof", 0.5f, 1.7f); world.particles.burst(sim.s, sim.y - 0.4f, 8, cyan, 1.4f, 0.8f, 0.1f, 1f, 0.6f); }
+            if (le.type == Element.Type.RAMP && le.skin == 3) { g.audio.play("steam", 0.5f, 1.0f); world.particles.burst(sim.s, sim.y - 0.4f, 8, cyan, 1.4f, 0.8f, 0.1f, 1f, 0.6f); }
             if (le.type == Element.Type.RAMP && le.skin == 2) { g.audio.play("bonk", 0.5f, 1.2f); }
             if (le.isPlatform() && edge > 0.06f && sim.landSpeed > 5f) { pop(CLOSE[MathUtils.random(CLOSE.length - 1)], gold); freeze(0.07f); world.shake(0.5f); vibrate(25, 1); }
         }
@@ -523,9 +523,11 @@ public final class PlayScreen extends ScreenAdapter {
         }
     }
 
+    private String lastBubble;
     private void drawHeroBubble() {
         String b = world.heroBubble();
-        if (b == null || state != State.PLAYING) return;
+        if (b == null || state != State.PLAYING) { lastBubble = null; return; }
+        if (!b.equals(lastBubble)) { lastBubble = b; g.audio.play("talk", 0.45f, com.hotatticgames.climbup.render.Characters.voice(g.settings.character)); }
         world.heroHeadScreen(g.ui.w(), g.ui.h(), headPos);
         g.ui.bubble(b, headPos[0], headPos[1] + 6, world.heroBubbleAlpha());
     }

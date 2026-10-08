@@ -33,7 +33,8 @@ public final class CreditsScreen extends ScreenAdapter {
         float W = ui.w(), H = ui.h();
         ui.textC("CREDITS", W / 2, H - 80, 7f, Ui.TEXT);
         float y = H - 170; float px = 3.2f * ui.tm();
-        for (String l : LINES) { ui.textC(l, W / 2, y, Math.min(px, (W - 80) / Math.max(1, l.length() * 6f)), l.startsWith("CLIMB") ? Ui.ACCENT : Ui.TEXT); y -= 46 * Math.min(ui.tm(), 1.3f); }
+        float step = Math.min(46 * Math.min(ui.tm(), 1.3f), (H - 170 - 130) / (LINES.length - 1));       // always leave room for the BACK button, whatever the screen shape
+        for (String l : LINES) { ui.textC(l, W / 2, y, Math.min(px, (W - 80) / Math.max(1, l.length() * 6f)), l.startsWith("CLIMB") ? Ui.ACCENT : Ui.TEXT); y -= step; }
         if (ui.button("BACK", W / 2 - 150, 22, 300, 78, true)) { g.audio.play("click"); g.setScreen(back); }
         ui.end();
         g.autoShot("credits", dt);

@@ -21,6 +21,7 @@ public final class TitleScreen extends ScreenAdapter {
     private WorldRenderer world;
     private float time;
     private boolean confirmNew;
+    private String lastBub;
     private com.badlogic.gdx.Screen next;   // screen change is applied after ui.end() so the sprite batch is never left open
 
     public TitleScreen(ClimbGame g) { this.g = g; }
@@ -62,6 +63,8 @@ public final class TitleScreen extends ScreenAdapter {
         ui.font.drawShadow(ui.batch, t1, tx, ty, px, new Color(1f, 0.74f, 0.16f, 1f), new Color(0.2f, 0.07f, 0.0f, 0.9f));
         ui.textC("A TOWER THAT DOESN'T EXIST. A CLIMB THAT DOES.", W / 2, ty - 56, 3.4f, Ui.TEXT);
         String bub = world.heroBubble();
+        if (bub != null && !bub.equals(lastBub)) g.audio.play("talk", 0.4f, com.hotatticgames.climbup.render.Characters.voice(g.settings.character));
+        lastBub = bub;
         if (bub != null) { float[] hp = new float[2]; world.heroHeadScreen(W, H, hp); ui.bubble(bub, hp[0], hp[1] + 6, world.heroBubbleAlpha()); }
         float bw = 400, bh = 76, bx = Math.max(40f, W / 2 - 640f + 40f);
         boolean has = g.save.seed != 0 && g.save.sliceJson != null;

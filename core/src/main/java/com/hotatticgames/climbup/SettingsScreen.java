@@ -46,10 +46,10 @@ public final class SettingsScreen extends ScreenAdapter {
         float W = ui.w(), H = ui.h();
         ui.textC("SETTINGS", W / 2, H - 78, 7f, Ui.TEXT);
         if (ui.button("BACK", 40, H - 100, 200, 64, true)) { g.audio.play("click"); g.persist(); if (back instanceof PlayScreen) ((PlayScreen) back).resumeFromSettings(); g.setScreen(back); ui.end(); return; }
-        float x0 = W / 2 - 440;
-        if (ui.button("AUDIO + DISPLAY", x0, H - 168, 300, 60, page == 0)) page = 0;
-        if (ui.button("CONTROLS + ACCESS", x0 + 312, H - 168, 340, 60, page == 1)) page = 1;
-        if (ui.button("ABOUT", x0 + 664, H - 168, 216, 60, page == 2)) page = 2;
+        float x0 = W / 2 - 470;
+        if (ui.button("AUDIO + DISPLAY", x0, H - 168, 330, 60, page == 0)) page = 0;
+        if (ui.button("CONTROLS + ACCESS", x0 + 342, H - 168, 380, 60, page == 1)) page = 1;
+        if (ui.button("ABOUT", x0 + 734, H - 168, 206, 60, page == 2)) page = 2;
         rowY = H - 176 - 64;
         if (page == 0) {
             row("CHARACTER", com.hotatticgames.climbup.render.Characters.name(s.character), null, null, () -> s.character = com.hotatticgames.climbup.render.Characters.next(s.character));

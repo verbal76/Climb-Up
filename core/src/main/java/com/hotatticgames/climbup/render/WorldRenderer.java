@@ -38,7 +38,11 @@ public final class WorldRenderer implements Disposable {
     private final ModelBatch batch = new ModelBatch(new com.badlogic.gdx.graphics.g3d.utils.DefaultShaderProvider(boneConfig()));
     private final PerspectiveCamera cam = new PerspectiveCamera(40f, 16, 9);
     private final Environment env = new Environment();
-    private final DirectionalLight sun = new DirectionalLight();
+    private final DirectionalLight sun = new DirectionalLight(), fillL = new DirectionalLight(), bounceL = new DirectionalLight();
+    private final Environment heroEnv = new Environment();
+    private final DirectionalLight hKey = new DirectionalLight(), hFill = new DirectionalLight(), hBounce = new DirectionalLight(), hRim = new DirectionalLight();
+    private final Color lc = new Color(); private final com.badlogic.gdx.math.Vector3 lv = new com.badlogic.gdx.math.Vector3();
+    private com.badlogic.gdx.graphics.Texture vignette;
     private final ShapeRenderer shapes = new ShapeRenderer();
     private final SpriteBatch sb = new SpriteBatch();
     private HeroRig hero;
@@ -57,7 +61,7 @@ public final class WorldRenderer implements Disposable {
     public int quality = 2;           // 0 low, 1 medium, 2 high
     public boolean reducedMotion;
 
-    private float camY, camShake, shakeT;
+    private float camY, camShake, shakeT, camPull;
     private final Color skyTop = new Color(), skyBot = new Color(), tint = new Color(), amb = new Color();
     private final ModelInstance shadow;
     private float renderS, renderY;
@@ -68,6 +72,7 @@ public final class WorldRenderer implements Disposable {
     private static com.badlogic.gdx.graphics.g3d.shaders.DefaultShader.Config boneConfig() {
         com.badlogic.gdx.graphics.g3d.shaders.DefaultShader.Config c = new com.badlogic.gdx.graphics.g3d.shaders.DefaultShader.Config();
         c.numBones = 32;   // the hero rig has 29 bones
+        c.numDirectionalLights = 4;   // key, fill, bounce (+ the hero's rim light)
         return c;
     }
 
@@ -80,7 +85,11 @@ public final class WorldRenderer implements Disposable {
         syncVis();
         env.set(new ColorAttribute(ColorAttribute.AmbientLight, 0.62f, 0.62f, 0.66f, 1f));
         sun.set(1f, 0.97f, 0.9f, -0.5f, -0.9f, -0.6f);
-        env.add(sun);
+        fillL.set(0.2f, 0.3f, 0.45f, 0.75f, -0.25f, -0.45f); bounceL.set(0.3f, 0.25f, 0.18f, 0.1f, 1f, -0.3f);
+        env.add(sun); env.add(fillL); env.add(bounceL);
+        heroEnv.set(new ColorAttribute(ColorAttribute.AmbientLight, 0.7f, 0.7f, 0.74f, 1f));
+        hKey.set(1f, 0.97f, 0.9f, -0.5f, -0.9f, -0.6f); hFill.set(0.3f, 0.35f, 0.5f, 0.75f, -0.25f, -0.45f); hBounce.set(0.3f, 0.25f, 0.18f, 0.1f, 1f, -0.3f); hRim.set(0.55f, 0.75f, 1f, -0.35f, -0.2f, 1f);
+        heroEnv.add(hKey); heroEnv.add(hFill); heroEnv.add(hBounce); heroEnv.add(hRim);
         env.set(new ColorAttribute(ColorAttribute.Fog, 0.8f, 0.9f, 1f, 1f));
         cam.near = 0.5f; cam.far = 75f;
         for (String n : new String[]{"block-grass", "block-grass-low", "block-grass-long", "block-grass-low-long", "block-snow", "block-snow-low", "block-snow-long", "block-snow-low-long",
@@ -345,6 +354,15 @@ public final class WorldRenderer implements Disposable {
         Palette.blend(Palette.SKY_TOP, zoneF, skyTop); Palette.blend(Palette.SKY_BOT, zoneF, skyBot);
         Palette.blend(Palette.TINT, zoneF, tint); Palette.blend(Palette.AMBIENT, zoneF, amb);
         ((ColorAttribute) env.get(ColorAttribute.AmbientLight)).color.set(amb);
+        Palette.blend(Palette.SUN, zoneF, lc); sun.color.set(lc); Palette.blendDir(Palette.SUN_DIR, zoneF, lv); sun.direction.set(lv);
+        Palette.blend(Palette.FILL, zoneF, lc); fillL.color.set(lc);
+        Palette.blend(Palette.BOUNCE, zoneF, lc); bounceL.color.set(lc);
+        // the hero gets his own three-point rig: a stronger key, a fill, the bounce, and a contrasting rim light from behind so his silhouette always separates from the background
+        ((ColorAttribute) heroEnv.get(ColorAttribute.AmbientLight)).color.set(amb.r + 0.10f, amb.g + 0.10f, amb.b + 0.10f, 1f);
+        Palette.blend(Palette.SUN, zoneF, lc); hKey.color.set(lc.r * 1.15f, lc.g * 1.15f, lc.b * 1.15f, 1f); hKey.direction.set(lv);
+        Palette.blend(Palette.FILL, zoneF, lc); hFill.color.set(lc.r * 1.4f, lc.g * 1.4f, lc.b * 1.4f, 1f);
+        Palette.blend(Palette.BOUNCE, zoneF, lc); hBounce.color.set(lc);
+        Palette.blend(Palette.RIM, zoneF, lc); hRim.color.set(lc.r * 0.95f, lc.g * 0.95f, lc.b * 0.95f, 1f);
         ((ColorAttribute) env.get(ColorAttribute.Fog)).color.set(skyBot).lerp(skyTop, 0.25f);
 
         // camera
@@ -353,7 +371,9 @@ public final class WorldRenderer implements Disposable {
         fovV += (-90f * fovK - 11f * fovV) * dt; fovK += fovV * dt; cam.fieldOfView = 40f + (reducedMotion ? 0f : fovK);
         for (int di = 0; di < dip.length; di++) if (dip[di] != 0 || dipV[di] != 0) { dipV[di] += (-160f * dip[di] - 12f * dipV[di]) * dt; dip[di] += dipV[di] * dt; if (Math.abs(dip[di]) < 0.002f && Math.abs(dipV[di]) < 0.02f) { dip[di] = 0; dipV[di] = 0; } }
         if (quality > 0 && !reducedMotion) ambientMotes(dt, zoneF, ps);
-        cam.position.set(sh * 0.1f, camY + (CAM_DIST < 6f ? -0.6f : 2.2f) + sh * 0.1f, CAM_DIST);
+        float pullT = (!reducedMotion && sim.mode == Sim.Mode.AIR && sim.vy < -10f) ? MathUtils.clamp((-sim.vy - 10f) / 14f, 0f, 1f) * 2.4f : 0f;       // pull back in a long fall to see where you will land
+        camPull += (pullT - camPull) * Math.min(1f, 3f * dt);
+        cam.position.set(sh * 0.1f, camY + (CAM_DIST < 6f ? -0.6f : 2.2f) + sh * 0.1f, CAM_DIST + camPull);
         cam.lookAt(0f, camY + (CAM_DIST < 6f ? -1.15f : 1.15f), -0.4f);
         cam.up.set(0, 1, 0);
         cam.update();
@@ -399,6 +419,23 @@ public final class WorldRenderer implements Disposable {
         if (showPlayer) drawPlayer(sim, dt, time, ps, py, alpha);
         particles.render(batch, env, ps, T, course);
         batch.end();
+        drawVignette(Palette.blendF(Palette.VIGNETTE, zoneF));
+    }
+
+    /** A soft dark vignette that pulls the eye to the middle of the screen (stronger at night and in space). */
+    private void drawVignette(float strength) {
+        if (vignette == null) {
+            int n = 128; com.badlogic.gdx.graphics.Pixmap pm = new com.badlogic.gdx.graphics.Pixmap(n, n, com.badlogic.gdx.graphics.Pixmap.Format.RGBA8888);
+            for (int y = 0; y < n; y++) for (int x = 0; x < n; x++) {
+                float dx = (x + 0.5f) / n * 2f - 1f, dy = (y + 0.5f) / n * 2f - 1f, r = (float) Math.sqrt(dx * dx * 0.8f + dy * dy);
+                float a = MathUtils.clamp((r - 0.55f) / 0.75f, 0f, 1f); a = a * a;
+                pm.setColor(0f, 0f, 0.03f, a); pm.drawPixel(x, y);
+            }
+            vignette = new com.badlogic.gdx.graphics.Texture(pm); vignette.setFilter(com.badlogic.gdx.graphics.Texture.TextureFilter.Linear, com.badlogic.gdx.graphics.Texture.TextureFilter.Linear); pm.dispose();
+        }
+        float w = Gdx.graphics.getWidth(), h = Gdx.graphics.getHeight();
+        sb.getProjectionMatrix().setToOrtho2D(0, 0, w, h); sb.enableBlending();
+        sb.begin(); sb.setColor(1f, 1f, 1f, strength * 2.2f); sb.draw(vignette, 0, 0, w, h); sb.setColor(Color.WHITE); sb.end();
     }
 
     private void drawElement(Sim sim, int i, Vis v, float es, float ey, float camS, float time) {
@@ -515,7 +552,11 @@ public final class WorldRenderer implements Disposable {
 
     private ModelInstance pack(String name) {
         ModelInstance m = packInst.get(name);
-        if (m == null) { m = new ModelInstance(models.pack(name)); packInst.put(name, m); }
+        if (m == null) {
+            m = new ModelInstance(models.pack(name)); packInst.put(name, m);
+            if (name.startsWith("hazard_") || name.equals("spikes") || name.equals("cube_spikes") || name.equals("spikyball") || name.equals("cannonball") || name.equals("bomb") || name.equals("skull"))
+                for (com.badlogic.gdx.graphics.g3d.Material mat : m.materials) mat.set(ColorAttribute.createEmissive(0.30f, 0.05f, 0.03f, 1f));       // dangers glow a little warm so they read against any background
+        }
         return m;
     }
 
@@ -724,7 +765,7 @@ public final class WorldRenderer implements Disposable {
         }
         float wy = py; heroY = py;
         hero.update(sim, dt, time, 0f, wy, 0f, phi, reducedMotion);
-        hero.render(batch, env);
+        hero.render(batch, heroEnv);
         if (sim.clubTime > 0f) {
             float k = sim.swingT > 0f ? 1f - sim.swingT / Sim.SWING_TIME : -1f;
             float ang = k < 0f ? 35f + 5f * MathUtils.sin(time * 5f) : MathUtils.lerp(-70f, 110f, Math.min(1f, k * 1.25f));       // degrees forward of straight up
@@ -801,6 +842,6 @@ public final class WorldRenderer implements Disposable {
     public float getCamY() { return camY; }
 
     @Override public void dispose() {
-        batch.dispose(); shapes.dispose(); sb.dispose(); hero.dispose(); bg.dispose();
+        batch.dispose(); shapes.dispose(); sb.dispose(); hero.dispose(); bg.dispose(); if (vignette != null) vignette.dispose();
     }
 }

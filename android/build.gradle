@@ -47,3 +47,8 @@ tasks.register('copyAndroidNatives') {
     }
 }
 tasks.matching { it.name.contains('merge') && it.name.contains('JniLibFolders') }.configureEach { dependsOn 'copyAndroidNatives' }
+
+// gdx-backend-android pulls androidx.core 1.17.0, which needs AGP 8.9.1+/compileSdk 36; pin to the last release matching AGP 8.7.3 / SDK 35.
+configurations.configureEach {
+    resolutionStrategy.force 'androidx.core:core:1.15.0'
+}

@@ -65,6 +65,13 @@ public final class SaveStore {
         d.courseIndex = Math.max(0, d.courseIndex); d.checkpoint = Math.max(0, d.checkpoint);
         if (!(d.bestHeight >= 0)) d.bestHeight = 0;
         if (!(d.playSeconds >= 0)) d.playSeconds = 0;
+        if (!(d.runClock >= 0)) d.runClock = 0;
+        if (!(d.towerStartClock >= 0)) d.towerStartClock = 0;
+        if (!(d.towerStartHeight >= 0)) d.towerStartHeight = 0;
+        if (d.splits == null) d.splits = new float[0];
+        if (d.towerTotals == null) d.towerTotals = new float[0];
+        if (d.bestTotals == null) d.bestTotals = new float[0];
+        d.towers = Math.max(0, Math.min(d.towers, Math.min(d.splits.length, d.towerTotals.length)));
         return d;
     }
 

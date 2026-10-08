@@ -35,6 +35,8 @@ public final class PlayScreen extends ScreenAdapter {
     private final ShapeRenderer shapes = new ShapeRenderer();
     private final Autopilot.Driver[] driver = new Autopilot.Driver[1];
     private State state = State.PLAYING;
+    private boolean clockLive;           // the speed-run clock starts on the first input of a session
+    private String toastSub = "";
     private float acc, time, runTime, fade, toastT, zoneT, stepT, ropeT, autosaveT, tipT, shotT;
     private String toast = "", tip = "", caption = ""; private float captionT;
     private int lastZone = -1, shots;
@@ -208,7 +210,9 @@ public final class PlayScreen extends ScreenAdapter {
                 if (demo) { driver[0].drive(sim, in); } else readInput();
                 sim.step(in);
                 in.jumpPressed = false; jumpLatch = false; kJump = false; in.swingPressed = false; swingLatch = false; kSwing = false;
-                runTime += Sim.DT; handleEvents(sim.consumeEvents());
+                runTime += Sim.DT;
+                if (!demo) { if (!clockLive && (in.moveX != 0f || in.jumpPressed || in.moveY != 0f)) clockLive = true; if (clockLive) g.save.runClock += Sim.DT; }
+                handleEvents(sim.consumeEvents());
                 acc -= Sim.DT; steps++;
                 if (state != State.PLAYING) break;
             }
@@ -289,6 +293,31 @@ public final class PlayScreen extends ScreenAdapter {
 
     private final Color red = new Color(1f, 0.3f, 0.25f, 1f), dust = new Color(0.9f, 0.88f, 0.8f, 1f), gold = new Color(1f, 0.85f, 0.25f, 1f), brown = new Color(0.55f, 0.4f, 0.28f, 1f), cyan = new Color(0.4f, 0.9f, 1f, 1f);
 
+    /** A castle was opened: record the split (time since the previous unlock) and the total, keep the personal bests, start timing the next tower. */
+    private void towerUnlocked() {
+        SaveData sd = g.save;
+        float split = sd.runClock - sd.towerStartClock, total = sd.runClock;
+        int n = sd.towers;
+        sd.splits = java.util.Arrays.copyOf(sd.splits, n + 1); sd.splits[n] = split;
+        sd.towerTotals = java.util.Arrays.copyOf(sd.towerTotals, n + 1); sd.towerTotals[n] = total;
+        sd.towers = n + 1;
+        boolean hadSplit = sd.bestSplit > 0f, pbSplit = !hadSplit || split < sd.bestSplit;
+        if (pbSplit) sd.bestSplit = split;
+        if (sd.bestTotals.length <= n) sd.bestTotals = java.util.Arrays.copyOf(sd.bestTotals, n + 1);
+        boolean hadTotal = sd.bestTotals[n] > 0f, pbTotal = !hadTotal || total < sd.bestTotals[n];
+        if (pbTotal) sd.bestTotals[n] = total;
+        sd.towerStartClock = sd.runClock; sd.towerStartHeight = Math.max(0f, sim.maxHeight);
+        toast = KEY_NAMES[sim.lastGateColor] + " CASTLE OPENED!"; toastT = 3.2f;
+        toastSub = "TOWER " + (n + 1) + "  " + fmtTime(split) + (pbSplit && hadSplit ? "  FASTEST TOWER!" : "") + "    TOTAL " + fmtTime(total) + (pbTotal && hadTotal ? "  PACE PB!" : "");
+        g.persist();
+    }
+
+    /** m:ss.t (h:mm:ss.t from an hour). */
+    static String fmtTime(float sec) {
+        int t = Math.max(0, (int) (sec * 10f)), tenth = t % 10, s = (t / 10) % 60, m = (t / 600) % 60, h = t / 36000;
+        return h > 0 ? String.format("%d:%02d:%02d.%d", h, m, s, tenth) : String.format("%d:%02d.%d", m, s, tenth);
+    }
+
     private float windT, trailT, creakT;
 
     /** Cosmetic feedback that runs every frame: wind streaks in a fast fall, a spark trail after a bounce, wood creaks on a tipping bridge. */
@@ -364,7 +393,8 @@ public final class PlayScreen extends ScreenAdapter {
         if ((ev & Sim.EV_DOOR) != 0) {
             float[] kc = KEY_RGB[sim.lastGateColor];
             g.audio.play("door", 1f, 1f); world.particles.burst(s + sim.facing * 1.4f, y + 1.2f, 22, new Color(kc[0], kc[1], kc[2], 1f), 3.5f, 3.5f, 0.14f, 0f, 1.0f); world.shake(0.5f); vibrate(40, 1);
-            toast = KEY_NAMES[sim.lastGateColor] + " CASTLE OPENED!"; toastT = 2.4f; say("[DOOR OPENS]");
+            towerUnlocked();
+            say("[DOOR OPENS]");
         }
         if ((ev & Sim.EV_BLOCKED) != 0 && lockedT <= 0f) {
             lockedT = 1.6f; g.audio.play("locked", 0.8f, 1f); vibrate(15, 2);
@@ -455,10 +485,14 @@ public final class PlayScreen extends ScreenAdapter {
         float zk = Math.min(tm, 1.3f);
         int Z = Palette.ZONES; int zone = Math.min(Z - 1, (int) (((sim.y / g.tuning.zoneHeight) % Z + Z) % Z)), lap = (int) (sim.y / (g.tuning.zoneHeight * Z));
         String hs = (int) Math.max(0, sim.y) + " M";
-        ui.rect(m - 6, H - m - 62 * zk - 18, 360 * zk + 12, 62 * zk + 18 + 6, new Color(0.05f, 0.07f, 0.14f, 0.55f));
+        ui.rect(m - 6, H - m - 136 * zk, 380 * zk + 12, 136 * zk + 6, new Color(0.05f, 0.07f, 0.14f, 0.55f));
         ui.text(hs, m, H - m - 30 * zk, 4f * zk, Ui.TEXT);
         ui.text("BEST " + (int) Math.max(g.save.bestHeight, sim.maxHeight), m, H - m - 56 * zk, 2.6f * zk, Ui.DIM);
-        float barW = 340 * zk, barY = H - m - 70 * zk - 6;
+        // speed-run clock: distance and time on the tower being worked towards, and the total time of the climb (always shown)
+        float segM = Math.max(0f, sim.maxHeight - g.save.towerStartHeight);
+        ui.text("TOWER " + (int) segM + " M  " + fmtTime(g.save.runClock - g.save.towerStartClock), m, H - m - 80 * zk, 3f * zk, new Color(1f, 0.82f, 0.3f, 1f));
+        ui.text("TOTAL " + fmtTime(g.save.runClock), m, H - m - 104 * zk, 3f * zk, Ui.TEXT);
+        float barW = 360 * zk, barY = H - m - 126 * zk;
         float within = ((sim.y / g.tuning.zoneHeight) % Z + Z) % Z / Z;
         ui.rect(m, barY, barW, 8, new Color(0.2f, 0.22f, 0.32f, 1f));
         for (int z = 0; z < Z; z++) { Color c = Palette.SKY_BOT[z]; ui.rect(m + z * barW / Z + 1, barY + 1, barW / Z - 2, 6, new Color(c.r, c.g, c.b, 0.9f)); }
@@ -493,7 +527,7 @@ public final class PlayScreen extends ScreenAdapter {
             float a = Math.min(1f, zoneT);
             ui.textC(Palette.NAMES[zone] + (lap > 0 ? " " + (lap + 1) : ""), W / 2, H - 70, 7f, new Color(1f, 0.95f, 0.8f, a));
         }
-        if (toastT > 0) ui.textC(toast, W / 2, H - 125f, 6f, new Color(1f, 0.9f, 0.4f, Math.min(1f, toastT)));
+        if (toastT > 0) { ui.textC(toast, W / 2, H - 125f, 6f, new Color(1f, 0.9f, 0.4f, Math.min(1f, toastT))); if (!toastSub.isEmpty() && toast.endsWith("OPENED!")) ui.textC(toastSub, W / 2, H - 168f, Math.min(3.6f * tm, (W - 60) / Math.max(1, toastSub.length() * 6f)), new Color(1f, 1f, 1f, Math.min(1f, toastT))); }
         if (captionT > 0 && g.settings.captions) { float cw = ui.font.width(caption, 4f * tm); ui.rect(W / 2 - cw / 2 - 14, 28, cw + 28, 44 * tm, new Color(0, 0, 0, 0.6f)); ui.text(caption, W / 2 - cw / 2, 40, 4f * tm, Ui.TEXT); }
         if (!tip.isEmpty() && state == State.PLAYING) {
             float px2 = 3.4f * tm; float maxW = W * 0.5f;
@@ -587,6 +621,20 @@ public final class PlayScreen extends ScreenAdapter {
         float pw = 560, ph = 560, x = W / 2 - pw / 2, y = H / 2 - ph / 2;
         ui.panel(x, y, pw, ph);
         ui.textC("PAUSED", W / 2, y + ph - 90, 8f, Ui.TEXT);
+        if (W >= pw + 2 * 450f) {                  // speed-run splits beside the menu
+            SaveData sd = g.save; float sx = x + pw + 28, sw = 420, sh = 560;
+            ui.panel(sx, y, sw, sh);
+            ui.textC("TOWER SPLITS", sx + sw / 2, y + sh - 56, 4.4f, Ui.ACCENT);
+            ui.text("NOW   " + fmtTime(sd.runClock - sd.towerStartClock), sx + 26, y + sh - 108, 3.4f, new Color(1f, 0.82f, 0.3f, 1f));
+            ui.text("TOTAL " + fmtTime(sd.runClock), sx + 26, y + sh - 146, 3.4f, Ui.TEXT);
+            int first = Math.max(0, sd.towers - 7);
+            for (int i = first; i < sd.towers; i++) ui.text((i + 1) + "  " + fmtTime(sd.splits[i]) + "  " + fmtTime(sd.towerTotals[i]), sx + 26, y + sh - 196 - (i - first) * 40, 3f, Ui.TEXT);
+            if (sd.towers == 0) ui.text("NO TOWER OPENED YET", sx + 26, y + sh - 196, 3f, Ui.DIM);
+            if (sd.bestSplit > 0f) ui.text("FASTEST TOWER " + fmtTime(sd.bestSplit), sx + 26, y + 40, 3f, Ui.DIM);        } else {                                   // narrow screens: a compact line under the title
+            SaveData sd = g.save;
+            ui.textC("TOWER " + fmtTime(sd.runClock - sd.towerStartClock) + "   TOTAL " + fmtTime(sd.runClock), W / 2, y + ph - 140, 3f, new Color(1f, 0.82f, 0.3f, 1f));
+            if (sd.towers > 0) ui.textC("LAST TOWER " + fmtTime(sd.splits[sd.towers - 1]) + "   OPENED AT " + fmtTime(sd.towerTotals[sd.towers - 1]), W / 2, y + ph - 170, 2.6f, Ui.DIM);
+        }
         float bw = 440, bh = 84, bx = W / 2 - bw / 2;
         if (ui.button("RESUME", bx, y + ph - 200, bw, bh, true)) resumePlay();
         if (ui.button(confirmRestart ? "TAP AGAIN TO CONFIRM" : "RETRY CHECKPOINT", bx, y + ph - 304, bw, bh)) {

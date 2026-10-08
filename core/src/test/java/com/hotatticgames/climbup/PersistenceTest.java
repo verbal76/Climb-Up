@@ -23,6 +23,19 @@ public class PersistenceTest {
         assertEquals(3, rs.music); assertTrue(rs.reducedMotion); assertEquals(2, rs.textScale); assertTrue(rs.leftHanded);
     }
 
+    @Test public void speedRunSplitsSurviveASaveAndOldSavesGetDefaults() throws Exception {
+        File dir = tmp(); SaveStore st = new SaveStore(dir);
+        SaveData d = new SaveData(); d.runClock = 312.4f; d.towerStartClock = 200f; d.towerStartHeight = 140f; d.towers = 2;
+        d.splits = new float[]{80.5f, 119.5f}; d.towerTotals = new float[]{80.5f, 200f}; d.bestSplit = 80.5f; d.bestTotals = new float[]{80.5f, 200f};
+        st.saveGame(d);
+        SaveData r = st.loadGame();
+        assertEquals(312.4f, r.runClock, 1e-3f); assertEquals(2, r.towers); assertEquals(119.5f, r.splits[1], 1e-3f); assertEquals(200f, r.towerTotals[1], 1e-3f);
+        assertEquals(80.5f, r.bestSplit, 1e-3f); assertEquals(2, r.bestTotals.length);
+        st.writeAtomic("save.json", "{\"version\":3,\"bestHeight\":70,\"falls\":2}");      // a save from before the clock existed
+        SaveData old = st.loadGame();
+        assertEquals(0f, old.runClock, 0f); assertEquals(0, old.towers); assertNotNull(old.splits); assertEquals(70f, old.bestHeight, 0f);
+    }
+
     @Test public void corruptSaveIsBackedUpAndDefaultsReturned() throws Exception {
         File dir = tmp(); SaveStore st = new SaveStore(dir);
         st.writeAtomic("save.json", "{ this is not json");

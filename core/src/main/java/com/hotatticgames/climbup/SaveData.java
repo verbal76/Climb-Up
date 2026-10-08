@@ -20,4 +20,12 @@ public final class SaveData {
     public int completions = 0;
     public float bestTime = 0f;          // fastest summit, seconds (0 = none yet)
     public List<String> shownTips = new ArrayList<>();
+    // speed-run clock: counted only while playing, from the first input of a climb; reset by NEW CLIMB
+    public float runClock = 0f;          // total seconds of this climb so far
+    public float towerStartClock = 0f, towerStartHeight = 0f;   // when / where the current tower segment began (the last unlock, or the start)
+    public int towers = 0;               // castles unlocked this climb
+    public float[] splits = new float[0];        // seconds each unlocked castle took (from the previous unlock)
+    public float[] towerTotals = new float[0];  // run clock at each unlock (the last one is the total time to the last tower)
+    public float bestSplit = 0f;                 // fastest single tower ever (0 = none)
+    public float[] bestTotals = new float[0];    // fastest run clock at the Nth unlock, ever
 }

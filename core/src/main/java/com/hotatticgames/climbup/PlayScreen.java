@@ -82,7 +82,7 @@ public final class PlayScreen extends ScreenAdapter {
             String hzType = System.getProperty("climb.hazard");              // test hook: start beside the first hazard of this type (e.g. CANNON)
             if (hzType != null) {
                 for (int tries = 0; tries < 40; tries++) {
-                    for (int q = 3; q < course.size(); q++) { Element e = course.get(q); if (e.anchor < 0 && (e.type.name().equals(hzType) || (hzType.equals("BRIDGE") && e.skin == 1 && e.type == Element.Type.STATIC))) { run.startIdx = Math.max(0, q - Integer.getInteger("climb.hazardBack", 1)); break; } }
+                    for (int q = 3; q < course.size(); q++) { Element e = course.get(q); if (e.anchor < 0 && ((e.type.name().equals(hzType) && (e.type != Element.Type.RAMP || Integer.getInteger("climb.rampSkin", -1) < 0 || e.skin == Integer.getInteger("climb.rampSkin", -1))) || (hzType.equals("BRIDGE") && e.skin == 1 && e.type == Element.Type.STATIC))) { run.startIdx = Math.max(0, q - Integer.getInteger("climb.hazardBack", 1)); break; } }
                     for (Element h : course.hazards) if (run.startIdx == 0 && h.type.name().equals(hzType) && h.anchor > 2 && course.get(h.anchor).anchor < 0) { run.startIdx = Math.max(0, h.anchor - Integer.getInteger("climb.hazardBack", 1)); break; }
                     if (run.startIdx > 0) break;
                     tower.extend();
@@ -372,6 +372,10 @@ public final class PlayScreen extends ScreenAdapter {
         {"club", "A SPIKED CLUB! PRESS SWING TO KNOCK CRABS OFF THE PLATFORM. IT WEARS OFF AFTER A WHILE."},
         {"drop", "SPIKED SLABS SLAM DOWN ON A BEAT. SLIP UNDER WHILE THEY ARE RAISED."},
         {"spring", "SPRINGS LAUNCH YOU ALONG THE ARROW. STEER IN THE AIR TO LAND IT."},
+        {"ramp", "RAMPS LEAD UP TO BLOCKS TOO TALL TO JUMP. JUST RUN UP."},
+        {"rampcrumble", "THIS RAMP CRUMBLES WHEN YOU STAND ON IT. RUN!"},
+        {"rampshake", "A SHAKY RAMP BOUNCES YOU AROUND. KEEP MOVING AND AIM FOR THE TOP."},
+        {"rampsink", "A HOVER RAMP SINKS AWAY UNDER YOUR WEIGHT. GET UP BEFORE IT GOES."},
         {"seesaw", "THE BRIDGE TIPS UNDER YOU. KEEP RUNNING ACROSS BEFORE IT DUMPS YOU OFF."},
         {"gate", "A COLOURED CASTLE NEEDS THE KEY OF ITS COLOUR. THE KEY IS HIDDEN BELOW THE PATH BEFORE IT: DROP DOWN, FIND IT, CLIMB BACK."},
     };
@@ -389,7 +393,7 @@ public final class PlayScreen extends ScreenAdapter {
             String key = null;
             switch (e.type) {
                 case PAD: key = "pad"; break; case ROPE: key = "rope"; break; case CRUMBLE: key = "crumble"; break;
-                case MOVE_H: case MOVE_V: key = "move"; break; case CABLE: key = "cable"; break; case SWING: key = "swing"; break; case SPRING: key = "spring"; break; case SEESAW: key = "seesaw"; break;
+                case MOVE_H: case MOVE_V: key = "move"; break; case CABLE: key = "cable"; break; case SWING: key = "swing"; break; case SPRING: key = "spring"; break; case SEESAW: key = "seesaw"; break; case RAMP: key = e.skin == 1 ? "rampcrumble" : e.skin == 2 ? "rampshake" : e.skin == 3 ? "rampsink" : "ramp"; break;
                 default: if (e.checkpoint && i > 0) key = "checkpoint";
             }
             if (key == null && i == 1) key = "jump";

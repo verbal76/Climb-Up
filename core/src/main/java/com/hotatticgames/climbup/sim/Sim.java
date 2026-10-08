@@ -27,6 +27,7 @@ public final class Sim {
     public boolean jumpedUp;         // current ascent came from a jump (variable height cut applies)
     public boolean prevJumpHeld;
     public float lastGroundY;
+    public float[] onT;             // ramps: seconds spent standing on them (shaking / sinking ramps)
     public float[] tilt;             // seesaw bridges: slope (height gained per metre toward +s) of each element
     public float floorY = Float.NEGATIVE_INFINITY;   // endless: height of the lowest platform in the window; falling past it (nothing left to land on) respawns
     public int checkpoint;
@@ -100,7 +101,7 @@ public final class Sim {
         if (n <= es0.length) return;
         int m = Math.max(n, es0.length * 3 / 2 + 16), o = es0.length;
         es0 = java.util.Arrays.copyOf(es0, m); ey0 = java.util.Arrays.copyOf(ey0, m); es1 = java.util.Arrays.copyOf(es1, m); ey1 = java.util.Arrays.copyOf(ey1, m);
-        crumbleT = java.util.Arrays.copyOf(crumbleT, m); gone = java.util.Arrays.copyOf(gone, m); goneT = java.util.Arrays.copyOf(goneT, m); padSquash = java.util.Arrays.copyOf(padSquash, m); tilt = java.util.Arrays.copyOf(tilt, m);
+        crumbleT = java.util.Arrays.copyOf(crumbleT, m); gone = java.util.Arrays.copyOf(gone, m); goneT = java.util.Arrays.copyOf(goneT, m); padSquash = java.util.Arrays.copyOf(padSquash, m); tilt = java.util.Arrays.copyOf(tilt, m); onT = java.util.Arrays.copyOf(onT, m);
         java.util.Arrays.fill(crumbleT, o, m, -1f);
         for (int i = o; i < n; i++) { Element e = course.get(i); es0[i] = es1[i] = e.sAt(time); ey0[i] = ey1[i] = e.yAt(time); }
     }
@@ -109,7 +110,7 @@ public final class Sim {
         this.course = c; this.T = t;
         int n = c.size();
         es0 = new float[n]; ey0 = new float[n]; es1 = new float[n]; ey1 = new float[n];
-        crumbleT = new float[n]; gone = new boolean[n]; goneT = new float[n]; padSquash = new float[n]; tilt = new float[n];
+        crumbleT = new float[n]; gone = new boolean[n]; goneT = new float[n]; padSquash = new float[n]; tilt = new float[n]; onT = new float[n];
         java.util.Arrays.fill(crumbleT, -1f);
         featDone = new boolean[c.hazards.size() + 8];
         refreshElements();
@@ -125,7 +126,7 @@ public final class Sim {
         checkpoint = o.checkpoint; bestElem = o.bestElem; maxHeight = o.maxHeight; won = o.won; falls = o.falls;
         landSpeed = o.landSpeed; events = o.events; assistForgive = o.assistForgive; ps0 = o.ps0; py0 = o.py0; teleported = o.teleported;
         es0 = o.es0.clone(); ey0 = o.ey0.clone(); es1 = o.es1.clone(); ey1 = o.ey1.clone();
-        crumbleT = o.crumbleT.clone(); gone = o.gone.clone(); goneT = o.goneT.clone(); padSquash = o.padSquash.clone(); tilt = o.tilt.clone();
+        crumbleT = o.crumbleT.clone(); gone = o.gone.clone(); goneT = o.goneT.clone(); padSquash = o.padSquash.clone(); tilt = o.tilt.clone(); onT = o.onT.clone();
         clubTime = o.clubTime; swingT = o.swingT; shoveCd = o.shoveCd; crabS = o.crabS; crabY = o.crabY; keys = o.keys; keysFree = o.keysFree; featDone = o.featDone.clone(); lastKeyColor = o.lastKeyColor; lastGateColor = o.lastGateColor;
         act = o.act; hz = o.hz; winLo = o.winLo; winHi = o.winHi; invuln = o.invuln; hits = o.hits; hitS = o.hitS; hitY = o.hitY;
     }
@@ -181,7 +182,8 @@ public final class Sim {
                         m.s = c.wrap(m.es1[idx] - e.halfW() + 1.0f); break;
                     }
                 }
-                if (e.type == Element.Type.CRUMBLE) m.crumbleT[idx] = 0;
+                if (e.crumbles()) m.crumbleT[idx] = 0;
+                if (e.type == Element.Type.RAMP) m.s = c.wrap(m.es1[idx] - e.halfW() + 0.4f);
                 if (e.type == Element.Type.SEESAW) m.s = c.wrap(m.es1[idx] - e.halfW() + 0.7f);
         }
         return m;
@@ -197,6 +199,8 @@ public final class Sim {
     }
 
     // ---------------------------------------------------------------- helpers
+
+    public static final float RAMP_SINK_DELAY = 0.35f, RAMP_SINK_MAX = 3.2f, RAMP_SINK_SPEED = 2.2f, RAMP_SHAKE_EVERY = 0.55f;
 
     private float dsTo(int i) { return course.dsWrap(es1[i], s); }  // element - player
 
@@ -228,9 +232,16 @@ public final class Sim {
                 float kp = tilt[i], tgt = on ? -Math.max(-1f, Math.min(1f, x / hw)) * T.seesawMaxTilt : 0f;
                 float kn = approach(kp, tgt, (on ? T.seesawRate : T.seesawRelax) * dt);
                 tilt[i] = kn; ey0[i] = e.y + kp * x; ey1[i] = e.y + kn * x;
+            } else if (e.type == Element.Type.RAMP) {          // sloped walkway: surface height at the player's own position along it
+                float hw = e.halfW(), x = Math.max(-hw, Math.min(hw, course.dsWrap(s, es1[i])));
+                boolean on = mode == Mode.GROUND && onElem == i;
+                onT[i] = on ? onT[i] + dt : Math.max(0f, onT[i] - 1.5f * dt);
+                float d0 = e.skin == 3 ? tilt[i] : 0f, d1 = d0;
+                if (e.skin == 3) { d1 = approach(d0, on && onT[i] > RAMP_SINK_DELAY ? RAMP_SINK_MAX : 0f, (on ? RAMP_SINK_SPEED : 0.7f) * dt); tilt[i] = d1; }
+                ey0[i] = e.y + e.amp * x - d0; ey1[i] = e.y + e.amp * x - d1;
             }
             if (padSquash[i] > 0) padSquash[i] = Math.max(0, padSquash[i] - dt);
-            if (e.type == Element.Type.CRUMBLE) {
+            if (e.crumbles()) {
                 if (gone[i]) { goneT[i] -= dt; if (goneT[i] <= 0) { gone[i] = false; crumbleT[i] = -1f; } }
                 else if (crumbleT[i] >= 0) { crumbleT[i] += dt; if (crumbleT[i] >= T.crumbleDelay) { gone[i] = true; goneT[i] = T.crumbleRespawn; events |= EV_CRUMBLE; } }
             }
@@ -387,7 +398,14 @@ public final class Sim {
             return;
         }
         // crumble trigger
-        if (el.type == Element.Type.CRUMBLE && crumbleT[e] < 0) crumbleT[e] = 0;
+        if (el.crumbles() && crumbleT[e] < 0) crumbleT[e] = 0;
+        if (el.type == Element.Type.RAMP && el.skin == 2 && onT[e] >= RAMP_SHAKE_EVERY) {      // a shaking ramp throws you around
+            int n = (int) tilt[e]; tilt[e] = n + 1; onT[e] = 0f;
+            int h = (n * 73856093 + e * 19349663) >>> 7;
+            vx = (h % 3 == 0 ? -1f : 1f) * (2.2f + (h % 5) * 0.5f); vy = 7.5f + (h % 4) * 0.8f;
+            mode = Mode.AIR; onElem = -1; jumpedUp = false; coyote = 0; events |= EV_BOUNCE;
+            return;
+        }
         // checkpoint / win
         if (el.checkpoint && e > checkpoint) { checkpoint = e; events |= EV_CHECKPOINT; }
         if (el.type == Element.Type.GOAL && !won) { won = true; events |= EV_WIN; }
@@ -447,7 +465,7 @@ public final class Sim {
         vy = 0; mode = Mode.GROUND; onElem = i; jumpedUp = false; coyote = T.coyote + assistForgive;
         events |= EV_LAND;
         if (el.checkpoint && i > checkpoint) { checkpoint = i; events |= EV_CHECKPOINT; }
-        if (el.type == Element.Type.CRUMBLE && crumbleT[i] < 0) crumbleT[i] = 0;
+        if (el.crumbles() && crumbleT[i] < 0) crumbleT[i] = 0;
         if (el.type == Element.Type.GOAL && !won) { won = true; events |= EV_WIN; }
         progress(i);
         // buffered jump on landing
@@ -561,7 +579,7 @@ public final class Sim {
         if (k >= 1f) {
             s = course.wrap(toS); y = ey1[i]; vx = vy = 0; mode = Mode.GROUND; onElem = i; coyote = T.coyote;
             if (el.checkpoint && i > checkpoint) { checkpoint = i; events |= EV_CHECKPOINT; }
-            if (el.type == Element.Type.CRUMBLE && crumbleT[i] < 0) crumbleT[i] = 0;
+            if (el.crumbles() && crumbleT[i] < 0) crumbleT[i] = 0;
             if (el.type == Element.Type.GOAL && !won) { won = true; events |= EV_WIN; }
             progress(i);
         }

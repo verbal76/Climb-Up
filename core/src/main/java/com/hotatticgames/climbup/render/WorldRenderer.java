@@ -130,6 +130,15 @@ public final class WorldRenderer implements Disposable {
         String base = snow ? "block-snow" : "block-grass";
         switch (e.type) {
             case SEESAW: bridgeParts(ps, e.w, true); break;
+            case RAMP: {
+                float sc = e.len;
+                Part rp = part(models.space("ramp"), 2.98f * sc, -0.62f * sc, 0f, 0.72f * sc, sc, sc); rp.yaw = -90f; rp.tinted = false; ps.add(rp);
+                if (e.skin == 3) {          // sinking ramps carry two glowing hover pads
+                    Color glow = new Color(0.30f, 0.85f, 1f, 1f), pad = new Color(0.30f, 0.32f, 0.40f, 1f);
+                    for (int sd = -1; sd <= 1; sd += 2) { ps.add(boxPart(sd * e.halfW() * 0.62f, e.amp * sd * e.halfW() * 0.62f - 0.42f, 0f, 0.7f, 0.18f, 1.1f, pad)); ps.add(boxPart(sd * e.halfW() * 0.62f, e.amp * sd * e.halfW() * 0.62f - 0.56f, 0f, 0.5f, 0.08f, 0.8f, glow)); }
+                }
+                break;
+            }
             case STATIC: case GOAL: case CRUMBLE: {
                 if (e.skin == 1 && e.type == Element.Type.STATIC) { bridgeParts(ps, e.w, false); break; }
                 int w = Math.max(1, Math.round(e.w));
@@ -349,8 +358,12 @@ public final class WorldRenderer implements Disposable {
         boolean gone = sim.gone[i];
         float crumble = sim.crumbleT[i];
         for (Part p : v.parts) {
-            float du = p.du, dy = p.dy, extraYaw = 0f; float sy = p.sy, roll = p.roll;
+            float du = p.du, dy = p.dy, extraYaw = p.yaw; float sy = p.sy, roll = p.roll;
             float y = e.isPlatform() ? ey - Math.max(-0.1f, Math.min(0.22f, dip[i])) : ey;
+            if (e.type == Element.Type.RAMP) {
+                y = e.y - (e.skin == 3 ? sim.tilt[i] : 0f);
+                if (e.skin == 2) { float on = Math.min(1f, sim.onT[i] / Sim.RAMP_SHAKE_EVERY), a = reducedMotion ? 0f : 0.025f + 0.07f * on; shakeX = a * MathUtils.sin(time * 85f + p.du); y += a * 0.8f * MathUtils.sin(time * 97f); }
+            }
             if (e.type == Element.Type.SEESAW) {
                 y = e.y - Math.max(-0.1f, Math.min(0.22f, dip[i]));
                 if (!p.fixed) {         // tilt the plank about its pivot
@@ -366,7 +379,7 @@ public final class WorldRenderer implements Disposable {
                 }
                 default: break;
             }
-            if (e.type == Element.Type.CRUMBLE) {
+            if (e.crumbles()) {
                 if (gone) {
                     float el = T.crumbleRespawn - sim.goneT[i];
                     if (el > 1.1f) continue;
@@ -379,7 +392,9 @@ public final class WorldRenderer implements Disposable {
                 float sq = sim.padSquash[i] / 0.25f; sy = p.sy * (1f - 0.6f * sq);
             }
             if (e.type == Element.Type.PAD && p.dy > -0.05f) { float sq = sim.padSquash[i] / 0.25f; dy = p.dy - 0.18f * sq; }
-            if (p.tintAttr != null) {
+            if (p.tintAttr != null && e.type == Element.Type.RAMP && p.fixed == false && p.tinted == false && p.color == null) {
+                if (e.skin == 1) p.tintAttr.color.set(1f, 0.78f, 0.6f, 1f); else if (e.skin == 2) p.tintAttr.color.set(1f, 0.9f, 0.55f, 1f); else if (e.skin == 3) p.tintAttr.color.set(0.8f, 0.95f, 1f, 1f); else p.tintAttr.color.set(Color.WHITE);
+            } else if (p.tintAttr != null) {
                 if (p.color != null && p.fall) p.tintAttr.color.set(p.color);          // crumbling tiles keep their warm tint
                 else if (p.tinted) p.tintAttr.color.set(tint);
                 else p.tintAttr.color.set(Color.WHITE);

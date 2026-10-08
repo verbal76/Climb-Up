@@ -14,7 +14,8 @@ import java.util.Random;
  * from a saved slice without regenerating anything below it.
  */
 public final class CourseGenerator {
-    enum Kind { HOP, STAIRS, CRUMBLE, MOVER_H, MOVER_V, PAD, ROPE, CABLE, SWING, GRAB, HAZ, TRAP, SPRING, SEESAW, BRIDGE }
+    static final float RAMP_SLOPE = 0.576f;
+    enum Kind { HOP, STAIRS, CRUMBLE, MOVER_H, MOVER_V, PAD, ROPE, CABLE, SWING, GRAB, HAZ, TRAP, SPRING, SEESAW, BRIDGE, RAMP }
 
     private final Tuning T;
     private final Random rnd;
@@ -465,12 +466,12 @@ public final class CourseGenerator {
         }
     }
     private static float vLo(Element e) {
-        switch (e.type) { case ROPE: return e.y - e.len; case CABLE: return e.y - 2.4f; case SEESAW: return e.y - 2.8f; default: return e.y - 0.8f; }
+        switch (e.type) { case ROPE: return e.y - e.len; case CABLE: return e.y - 2.4f; case SEESAW: return e.y - 2.8f; case RAMP: return e.y - e.amp * e.halfW() - 3.4f; default: return e.y - 0.8f; }
     }
     private static float vHi(Element e) {
         switch (e.type) {
             case ROPE: return e.y + 0.6f; case CABLE: return e.y + 0.4f; case SWING: return e.y + e.len + 0.4f;
-            case MOVE_V: return e.y + e.amp + 2.8f; default: return e.y + 2.8f;
+            case MOVE_V: return e.y + e.amp + 2.8f; case RAMP: return e.y + e.amp * e.halfW() + 2.8f; default: return e.y + 2.8f;
         }
     }
     /** True if two elements from different spiral revolutions would intersect or allow a shortcut between layers. */
@@ -592,6 +593,7 @@ public final class CourseGenerator {
                     w[Kind.MOVER_V.ordinal()] = 2; w[Kind.CABLE.ordinal()] = 2; w[Kind.SWING.ordinal()] = 3; w[Kind.GRAB.ordinal()] = 3;
         }
         float inten = intensity(last.y);
+        w[Kind.RAMP.ordinal()] = zone == 0 ? 1.5f : 3f;
         if (zone >= 1) { w[Kind.SEESAW.ordinal()] = 4f; w[Kind.BRIDGE.ordinal()] = 4f; }
         else w[Kind.BRIDGE.ordinal()] = 2f;
         if (inten > 0f || (!endless && last.y > T.courseHeight * 0.18f)) { w[Kind.HAZ.ordinal()] = 3f + 9f * inten; if (zone >= 1) w[Kind.SPRING.ordinal()] = 2f + 2f * inten; w[Kind.TRAP.ordinal()] = 2f + 5f * inten; }
@@ -843,6 +845,24 @@ public final class CourseGenerator {
                 } else {
                     l.add(plat(S, br.s + w / 2f + reach(0.6f) * lerp(0.4f, 0.8f, d) * (1f - 0.04f * attempt) + 1.5f, br.y + 0.6f, 3f, z));
                 }
+                break;
+            }
+            case RAMP: {
+                // a walkway up to a block that is taller than a jump; from the second world it may crumble, shake you about, or sink away
+                float sc = r(1.3f, 1.75f), L = 2.2f * sc, slope = RAMP_SLOPE, rise = slope * L;
+                int skin = 0;
+                if (z >= 1) { int roll = rnd.nextInt(8); skin = roll < 2 ? 0 : roll < 4 ? 1 : roll < 6 ? 2 : 3; }
+                float gapIn = r(0.05f, 0.45f);
+                Element rp = plat(Element.Type.RAMP, eR + gapIn + L / 2f, y0 + rise / 2f, L, z); rp.amp = slope; rp.skin = skin; rp.len = sc;
+                l.add(rp);
+                float wB = 3f + rnd.nextInt(2);
+                if (z >= 1 && rnd.nextInt(10) < 4) {         // ski jump: leap off the top of the ramp across a gap to a block up there
+                    float dyJ = r(0f, 0.7f), gapJ = reach(dyJ) * lerp(0.5f, 0.85f, d) * r(0.92f, 1f) * (1f - 0.04f * attempt);
+                    l.add(plat(S, rp.s + L / 2f + gapJ + wB / 2f, y0 + rise + dyJ, wB, z));
+                    break;
+                }
+                Element blk = plat(S, rp.s + L / 2f + wB / 2f + r(0f, 0.25f), y0 + rise + r(0f, 0.1f), wB, z);
+                l.add(blk);
                 break;
             }
             case GRAB: {

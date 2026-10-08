@@ -53,6 +53,16 @@ public final class Models implements Disposable {
         return m;
     }
 
+    /** Quaternius Ultimate Space Kit model (CC0), baked to per-vertex colour by tools/space_kit_to_g3dj.py. */
+    public Model space(String name) {
+        Model m = pack.get("space/" + name);
+        if (m == null) {
+            m = new com.badlogic.gdx.graphics.g3d.loader.G3dModelLoader(new com.badlogic.gdx.utils.JsonReader()).loadModel(Gdx.files.internal("space/" + name + ".g3dj"));
+            pack.put("space/" + name, m);
+        }
+        return m;
+    }
+
     @Override public void dispose() {
         for (Model m : pack.values()) m.dispose();
         for (Model m : map.values()) m.dispose();

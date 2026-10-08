@@ -14,7 +14,9 @@ public final class Element {
         /** Bee: flies in, hovers and dives around a spot to bump you (never hurts), then flies away until its next visit. */
         BEE,
         /** Wooden bridge balanced on a pivot in its middle: tips toward whoever stands on it, so keep running. (tilt state lives in the Sim) */
-        SEESAW }
+        SEESAW,
+        /** Sloped walkway (amp = height gained per metre toward +s, w = horizontal length, y = height at its middle). skin: 0 plain, 1 crumbles, 2 shakes and bounces you, 3 sinks away when stepped on. */
+        RAMP }
 
     public Type type;
     public int zone;
@@ -32,6 +34,8 @@ public final class Element {
     public boolean isHazard() {
         switch (type) { case SAW_H: case SAW_V: case PENDULUM: case CANNON: case SPIKE_TRAP: case SPIKE_BLOCK: case SPIKE_DROP: return true; default: return false; }
     }
+    /** Platforms that fall apart soon after being stood on. */
+    public boolean crumbles() { return type == Type.CRUMBLE || (type == Type.RAMP && skin == 1); }
     public boolean isPlatform() { return type != Type.ROPE && type != Type.CABLE && !isHazard(); }
     /** True for anything that changes with time (planner sweeps its phase). */
     public boolean isMoving() {

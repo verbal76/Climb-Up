@@ -303,7 +303,7 @@ public final class Autopilot {
         for (int ci = 0; ci < cands.size(); ci++) {
             PolicyFactory f = cands.get(ci);
             r.trials++;
-            float limit = 4.5f + (c.get(a).type == Element.Type.CRUMBLE ? 0 : 6f);
+            float limit = 4.5f + (c.get(a).crumbles() ? 0 : 6f);
             if (lookahead) {
                 Sim end = trialEnd(base, a, tgt, f, limit);
                 if (end == null) continue;

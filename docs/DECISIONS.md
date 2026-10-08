@@ -41,3 +41,8 @@
 - **Audio:** `Audio.update` watchdog restarts music that silently stopped and rebuilds the player. The 4-5 s dropout seen on a phone could not be reproduced on desktop; the watchdog is a mitigation, not a confirmed fix.
 - **Title screen:** hero (bunny/hamster) button next to the menu.
 - Finite test towers moved to seeds 200+; the finite-tower solver run still fails ~1 in 30 seeds (arrival-momentum plans, bee timing) while 500+ endless slices solve cleanly.
+
+## Ramps (owner request: "use the ramp however you can")
+- `RAMP` element (Space Kit model, slope 0.576, length 2.9-3.9 m): a walkway up to a block taller than a jump. The surface height is evaluated at the player's own position along it (same mechanism as the seesaw).
+- Variants from world 2: **crumbling** (falls apart ~0.7 s after you step on it), **shaky** (trembles and, after 0.55 s on it, throws you up and sideways in a deterministic pattern), **sinking** (hover pads; sinks under your weight and recovers when empty), plus a **ski jump** layout (leap off the top across a gap). All validated by the same planner; none can hurt, they only cost position.
+- Seeds for the finite test towers moved to 300+; the whole-tower solver run still fails for roughly 1 in 30 finite seeds and about 1 in 170 endless slices (plan from an arrival state; unrelated to ramps).

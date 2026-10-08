@@ -42,8 +42,17 @@ jobs:
         with:
           name: climb-up-debug-apk-${{ github.run_number }}
           path: android/build/outputs/apk/debug/*.apk
+      - name: Release diagnostics (temporary)
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          curl -sS -i -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" https://api.github.com/repos/${{ github.repository }}/releases -d '{"tag_name":"v0.0.0-diag","target_commitish":"${{ github.sha }}","name":"diag","draft":true}' | head -40
+          echo ---; curl -sS -H "Authorization: Bearer $GH_TOKEN" https://api.github.com/repos/${{ github.repository }}/actions/permissions/workflow
+          echo ---; curl -sS -i -H "Authorization: Bearer $GH_TOKEN" https://api.github.com/repos/${{ github.repository }}/releases | head -20
       - name: One-time - publish the already-built build 4 APK as its own release
-        if: github.run_number == 5
+        continue-on-error: true
+        if: github.run_number == 6
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -55,6 +64,7 @@ jobs:
           printf 'Physical-test build 4 (debug-signed, sideload).\n\nSource: de5521f3aebe89c1ee74ec0ae3062284df54aa1b\nPackage: com.hotatticgames.climbup, versionName 0.1.0, versionCode 4, minSdk 26, targetSdk 35\nSHA-256: %s\n' "$SHA" > notes4.md
           gh release create v0.1.0-build4 "$APK" --target de5521f3aebe89c1ee74ec0ae3062284df54aa1b --title "Climb up v0.1.0 (build 4)" --notes-file notes4.md --latest=false
       - name: Publish GitHub Release
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
         run: |

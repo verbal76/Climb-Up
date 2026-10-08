@@ -74,6 +74,12 @@ public final class PlayScreen extends ScreenAdapter {
         Gdx.input.setCatchKey(Input.Keys.BACK, true);
         g.audio.music("music_game");
         runTime = 0; milestone = (int) (sim.maxHeight / 50f);
+        if (Boolean.getBoolean("climb.hang")) {   // test hook: hang from the left edge of the first platform ahead
+            int e = 1; Element el = course.get(e);
+            sim.mode = Sim.Mode.LEDGE; sim.onElem = e; sim.ledgeSide = 1; sim.facing = 1;
+            sim.s = course.wrap(sim.es1[e] - (el.halfW() + 0.24f)); sim.y = sim.ey1[e] - g.tuning.handHeight + 0.08f;
+            world.snapCamera(sim);
+        }
     }
 
     private void applySettings() {

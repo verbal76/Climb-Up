@@ -16,7 +16,7 @@ public final class Audio implements Disposable {
     private final Settings settings;
     private Music current;
     private String currentName = "";
-    public static final String[] SFX = {"jump", "land", "bounce", "grab", "pull", "crumble", "checkpoint", "respawn", "win", "click", "rope", "step"};
+    public static final String[] SFX = {"jump", "land", "bounce", "grab", "pull", "crumble", "checkpoint", "respawn", "win", "click", "rope", "step", "grunt1", "grunt2", "grunt3", "effort"};
 
     public Audio(Settings s) {
         settings = s;

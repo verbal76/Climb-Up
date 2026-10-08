@@ -55,6 +55,20 @@ save('click', note(1200, 0.04, 'sq', 0.5, 0.001, 0.03))
 save('rope', lp(noise(0.07), 0.25) * env(int(SR * 0.07), 0.002, 0.05) + note(520, 0.07, 'tri', 0.2))
 save('step', lp(noise(0.05), 0.2) * env(int(SR * 0.05), 0.001, 0.04))
 
+# ---------------- effort grunts (voiced saw through a low-pass + breath noise): 'hnnf', 'ungh', 'hup'
+def grunt(f0, d, drop, breath, seed):
+    r = np.random.default_rng(seed)
+    t = t_arr(d); f = f0 * (1 - drop * t / d) * (1 + 0.02 * np.sin(2 * np.pi * 31 * t))
+    ph = np.cumsum(f) / SR; src = 2 * (ph % 1) - 1
+    v = lp(lp(src, 0.10), 0.18)
+    nz = lp(r.uniform(-1, 1, len(t)), 0.35) * breath
+    env = (1 - np.exp(-t * 90)) * np.exp(-t * (5.5 if d < 0.3 else 4.0))
+    return (v * 1.4 + nz) * env
+save('grunt1', grunt(112, 0.26, 0.30, 0.45, 1))
+save('grunt2', grunt(96, 0.32, 0.38, 0.55, 2))
+save('grunt3', grunt(128, 0.22, 0.22, 0.40, 3))
+save('effort', grunt(150, 0.30, -0.35, 0.50, 4))      # rising 'huup' for the pull-up
+
 # ---------------- music (chord sequencer, loops cleanly on a bar boundary)
 def song(name, bpm, bars, prog, seed, bright):
     r = np.random.default_rng(seed); beat = 60.0 / bpm; total = bars * 4 * beat

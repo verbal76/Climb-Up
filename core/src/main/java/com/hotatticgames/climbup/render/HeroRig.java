@@ -66,7 +66,8 @@ public final class HeroRig implements Disposable {
     }
 
     // ---- hanging: both arms are posed in code to reach up and grip (the pack has no hang/climb clips)
-    private Node upL, loL, fiL, upR, loR, fiR;
+    private Node upL, loL, fiL, upR, loR, fiR, ulL, ulR, llL, llR;
+    private float hangT;
     private final Vector3 pB = new Vector3(), pC = new Vector3(), dir = new Vector3(), tgt = new Vector3();
     private final Quaternion arc = new Quaternion(), part = new Quaternion(), ident = new Quaternion();
     private final Matrix4 rot = new Matrix4(), wNew = new Matrix4(), parInv = new Matrix4();
@@ -77,6 +78,7 @@ public final class HeroRig implements Disposable {
     private void collect(Node n) {
         String id = n.id;
         if (id.endsWith("_UpperArm.L")) upL = n; else if (id.endsWith("_LowerArm.L")) loL = n; else if (id.endsWith("_Fist.L")) fiL = n;
+        else if (id.endsWith("_UpperLeg.L")) ulL = n; else if (id.endsWith("_UpperLeg.R")) ulR = n; else if (id.endsWith("_LowerLeg.L")) llL = n; else if (id.endsWith("_LowerLeg.R")) llR = n;
         else if (id.endsWith("_UpperArm.R")) upR = n; else if (id.endsWith("_LowerArm.R")) loR = n; else if (id.endsWith("_Fist.R")) fiR = n;
         for (Node c : n.getChildren()) collect(c);
     }
@@ -94,6 +96,29 @@ public final class HeroRig implements Disposable {
         bone.localTransform.set(parInv).mul(wNew);
         bone.localTransform.getTranslation(bone.translation); bone.localTransform.getRotation(bone.rotation, true); bone.localTransform.getScale(bone.scale);
         inst.calculateTransforms();
+    }
+
+    /** Rotates a bone about its own joint (model-space axis). */
+    private void rotateBone(Node bone, float ax, float ay, float az, float rad) {
+        bone.globalTransform.getTranslation(pB);
+        part.setFromAxisRad(ax, ay, az, rad);
+        rot.setToTranslation(pB).rotate(part).translate(-pB.x, -pB.y, -pB.z);
+        wNew.set(rot).mul(bone.globalTransform);
+        Node par = bone.getParent();
+        if (par != null) parInv.set(par.globalTransform).inv(); else parInv.idt();
+        bone.localTransform.set(parInv).mul(wNew);
+        bone.localTransform.getTranslation(bone.translation); bone.localTransform.getRotation(bone.rotation, true); bone.localTransform.getScale(bone.scale);
+        inst.calculateTransforms();
+    }
+
+    /** Frantic leg kicks while dangling from a ledge; intensity grows the longer he hangs. */
+    private void flail(float t) {
+        if (ulL == null || ulR == null) return;
+        float amp = 0.45f + Math.min(0.55f, hangT * 0.3f), w = 15f + Math.min(6f, hangT * 3f);
+        rotateBone(ulL, 1f, 0f, 0f, MathUtils.sin(t * w) * amp);
+        rotateBone(ulR, 1f, 0f, 0f, MathUtils.sin(t * w + 3.1f) * amp);
+        if (llL != null) rotateBone(llL, 1f, 0f, 0f, 0.45f + 0.35f * MathUtils.sin(t * w + 1.2f));
+        if (llR != null) rotateBone(llR, 1f, 0f, 0f, 0.45f + 0.35f * MathUtils.sin(t * w + 4.3f));
     }
 
     private void raiseArms(float weight, float forward) {
@@ -184,15 +209,18 @@ public final class HeroRig implements Disposable {
         inst.transform.idt().translate(wx, wy, wz).rotate(0, 1, 0, phi * MathUtils.radiansToDegrees + yaw).scale(sxz, sy, sxz);
         ac.update(reduced ? Math.min(dt, 1f / 30f) : dt);
         // gripping poses: both arms up on the ledge / rope / cable, hands snapped to the sim's grip point
+        hangT = sim.mode == Sim.Mode.LEDGE ? hangT + dt : 0f;
         float grip = 0f;
         if (sim.mode == Sim.Mode.LEDGE || sim.mode == Sim.Mode.CABLE || sim.mode == Sim.Mode.ROPE) grip = 1f;
         else if (sim.mode == Sim.Mode.PULLUP) grip = Math.max(0f, 1f - sim.pullT / sim.T.pullUpTime * 1.25f);
         if (grip > 0.01f) {
             raiseArms(grip, (sim.mode == Sim.Mode.LEDGE || sim.mode == Sim.Mode.PULLUP) ? 1.0f : 0.12f);
+            if (sim.mode == Sim.Mode.LEDGE && !reduced) flail(time);
             if (fiL != null && fiR != null) {
                 float handWorld = wy + handModelY() * sy;
                 float shift = (sim.y + sim.T.handHeight) - handWorld;
-                inst.transform.idt().translate(wx, wy + shift * grip, wz).rotate(0, 1, 0, phi * MathUtils.radiansToDegrees + yaw).scale(sxz, sy, sxz);
+                float tremble = sim.mode == Sim.Mode.LEDGE && !reduced ? MathUtils.sin(time * 38f) * (1.2f + Math.min(2f, hangT)) : 0f;
+                inst.transform.idt().translate(wx, wy + shift * grip, wz).rotate(0, 1, 0, phi * MathUtils.radiansToDegrees + yaw).rotate(0, 0, 1, tremble).scale(sxz, sy, sxz);
             }
         }
     }

@@ -38,7 +38,8 @@ public final class PlayScreen extends ScreenAdapter {
     private boolean confirmRestart;
     private static final class Pop { final String t; final Color c; float age; Pop(String t, Color c) { this.t = t; this.c = c; } }
     private final java.util.ArrayList<Pop> pops = new java.util.ArrayList<>();
-    private float hitstop, confettiT; private int milestone;
+    private float hitstop, confettiT, gruntT; private int milestone, gruntN;
+    private static final String[] STRAIN = {"UNGH!", "HNNG!", "AGH!", "NOPE NOPE NOPE!", "HOLD ON!", "NOT TODAY!"};
     private static final String[] CATCH = {"NICE CATCH!", "FINGERTIPS!", "CLUTCH!", "HANG ON!"}, CLOSE = {"JUST MADE IT!", "CLOSE ONE!", "WHEW!", "THAT WAS TIGHT!"};
 
     private void pop(String t, Color c) { if (pops.size() > 3) pops.remove(0); pops.add(new Pop(t, c)); }
@@ -194,6 +195,15 @@ public final class PlayScreen extends ScreenAdapter {
     }
 
     private void ambientSounds(float dt) {
+        if (sim.mode == Sim.Mode.LEDGE) {   // he is really trying not to fall
+            gruntT -= dt;
+            if (gruntT <= 0) {
+                gruntT = 0.55f + MathUtils.random(0.4f); gruntN++;
+                g.audio.play("grunt" + (1 + MathUtils.random(2)), 0.9f, 0.93f + MathUtils.random(0.16f));
+                if (gruntN % 2 == 0) pop(STRAIN[MathUtils.random(STRAIN.length - 1)], Color.WHITE);
+                say("[STRAINING]"); vibrate(8, 2);
+            }
+        } else gruntT = 0.35f;
         if (sim.mode == Sim.Mode.GROUND && Math.abs(sim.vx) > 2f) { stepT -= dt; if (stepT <= 0) { stepT = 0.27f; g.audio.play("step", 0.35f, 0.9f + MathUtils.random(0.2f)); world.particles.burst(sim.s - sim.facing * 0.3f, sim.y + 0.05f, 2, dust, 0.5f, 0.7f, 0.09f, 3f, 0.35f); } }
         if (sim.mode == Sim.Mode.ROPE && Math.abs(in.moveY) > 0.3f) { ropeT -= dt; if (ropeT <= 0) { ropeT = 0.32f; g.audio.play("rope", 0.4f, 0.9f + MathUtils.random(0.2f)); } }
     }
@@ -218,7 +228,9 @@ public final class PlayScreen extends ScreenAdapter {
         }
         if ((ev & Sim.EV_JUMP) != 0) world.kick(0.8f);
         if ((ev & Sim.EV_BOUNCE) != 0) { world.kick(4f); pop("BOING!", cyan); }
-        if ((ev & Sim.EV_GRAB) != 0 && sim.mode == Sim.Mode.LEDGE) { pop(CATCH[MathUtils.random(CATCH.length - 1)], gold); freeze(0.08f); world.shake(0.4f); }
+        if ((ev & Sim.EV_PULL) != 0) { g.audio.play("effort", 0.9f, 1f); pop("HUP!", gold); vibrate(20, 2); }
+        if ((ev & Sim.EV_GRAB) != 0 && sim.mode == Sim.Mode.LEDGE) {
+            gruntT = 0.35f; pop(CATCH[MathUtils.random(CATCH.length - 1)], gold); freeze(0.08f); world.shake(0.4f); }
         if ((ev & Sim.EV_JUMP) != 0) { g.audio.play("jump", 0.7f, 0.95f + MathUtils.random(0.1f)); world.particles.burst(s, y, 4, dust, 1.4f, 1.2f, 0.12f, 6f, 0.4f); vibrate(8, 2); }
         if ((ev & Sim.EV_LAND) != 0) {
             float k = MathUtils.clamp(sim.landSpeed / 16f, 0.3f, 1f);
@@ -304,15 +316,15 @@ public final class PlayScreen extends ScreenAdapter {
         if (zoneT > 0) {
             zoneT -= Gdx.graphics.getDeltaTime();
             float a = Math.min(1f, zoneT);
-            ui.textC(Palette.NAMES[zone], W / 2, H - 150, 7f, new Color(1f, 0.95f, 0.8f, a));
+            ui.textC(Palette.NAMES[zone], W / 2, H - 70, 7f, new Color(1f, 0.95f, 0.8f, a));
         }
-        if (toastT > 0) ui.textC(toast, W / 2, H * 0.62f, 6f, new Color(1f, 0.9f, 0.4f, Math.min(1f, toastT)));
+        if (toastT > 0) ui.textC(toast, W / 2, H - 125f, 6f, new Color(1f, 0.9f, 0.4f, Math.min(1f, toastT)));
         if (captionT > 0 && g.settings.captions) { float cw = ui.font.width(caption, 4f * tm); ui.rect(W / 2 - cw / 2 - 14, 28, cw + 28, 44 * tm, new Color(0, 0, 0, 0.6f)); ui.text(caption, W / 2 - cw / 2, 40, 4f * tm, Ui.TEXT); }
         if (!tip.isEmpty() && state == State.PLAYING) {
-            float px2 = 3.6f * tm; float maxW = W * 0.62f;
+            float px2 = 3.4f * tm; float maxW = W * 0.5f;
             String[] lines = wrap(tip, px2, maxW);
             float bh = lines.length * (PixelFont_H * px2 + 10) + 24;
-            float by = H * 0.45f;
+            float by = H - 150f - bh;          // top of the screen, under the HUD row, clear of the action
             ui.panel(W / 2 - maxW / 2 - 20, by, maxW + 40, bh);
             for (int i = 0; i < lines.length; i++) ui.textC(lines[i], W / 2, by + bh - 24 - (i + 1) * (PixelFont_H * px2 + 10) + 10, px2, Ui.TEXT);
         }
@@ -333,7 +345,7 @@ public final class PlayScreen extends ScreenAdapter {
         for (Pop p : pops) {
             float k = p.age / 1.1f, grow = 1f + Math.max(0f, 1f - p.age * 7f) * 0.7f;
             float a = Math.min(1f, (1f - k) * 3f);
-            g.ui.textC(p.t, headPos[0], headPos[1] + 70f + p.age * 90f, 5.5f * grow, new Color(p.c.r, p.c.g, p.c.b, a));
+            g.ui.textC(p.t, headPos[0], headPos[1] + 52f + p.age * 55f, 5.5f * grow, new Color(p.c.r, p.c.g, p.c.b, a));
         }
     }
 

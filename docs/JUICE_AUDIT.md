@@ -16,4 +16,6 @@
 | One summit burst | rolling confetti while the summit panel is up |
 (Hit-stop, shake, FOV kick and camera lead are off when Reduced Motion is on.)
 
+**Ledge strain (follow-up):** while hanging he kicks his legs (faster and wilder the longer he hangs), trembles, grunts (three synthesised variants, haptic tick, "[STRAINING]" caption) and shouts "UNGH!/NOPE NOPE NOPE!"; the pull-up has a rising "HUP!". Tip boxes, toasts and zone banners moved to the top of the screen so they no longer cover the action.
+
 **Still open:** screen-to-screen transitions, per-zone music variation, a dedicated hang/pull-up/rope animation set, trail/wind lines at pad-launch speed, UI button hover/idle animation, combo-style pitch rise on rapid landings.

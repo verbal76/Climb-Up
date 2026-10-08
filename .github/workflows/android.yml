@@ -3,6 +3,7 @@ name: Android build
 on:
   workflow_dispatch: {}
   push:
+    branches: [ccr-cb458cd1-w4dh5c]
     tags: ['v*']
 jobs:
   build:

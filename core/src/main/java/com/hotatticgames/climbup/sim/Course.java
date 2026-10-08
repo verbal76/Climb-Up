@@ -11,10 +11,39 @@ public final class Course {
 
     public Course(long seed, float circumference) { this.seed = seed; this.circumference = circumference; }
 
+    /** Elements [0, routeCount) are the solvable route; anything after is decoy scenery (dead ends, lures), sorted by anchor. */
+    public int routeCount = -1;
+    private int[] decoyFrom = new int[0], decoyTo = new int[0];
+
+    public int routeSize() { return routeCount < 0 ? elements.size() : routeCount; }
+    public void finishRoute() { routeCount = elements.size(); indexDecoys(); }
+
+    public void indexDecoys() {
+        int rs = routeSize();
+        decoyFrom = new int[rs]; decoyTo = new int[rs];
+        java.util.Arrays.fill(decoyFrom, -1);
+        for (int i = rs; i < elements.size(); i++) {
+            int a = elements.get(i).anchor;
+            if (a < 0 || a >= rs) continue;
+            if (decoyFrom[a] < 0) decoyFrom[a] = i;
+            decoyTo[a] = i + 1;
+        }
+    }
+
+    /** Contiguous [from,to) range of decoy indices anchored to route elements aLo..aHi (empty if none). */
+    public int[] decoyRange(int aLo, int aHi) {
+        int from = Integer.MAX_VALUE, to = -1;
+        for (int a = Math.max(0, aLo); a <= Math.min(decoyFrom.length - 1, aHi); a++) {
+            if (decoyFrom[a] < 0) continue;
+            from = Math.min(from, decoyFrom[a]); to = Math.max(to, decoyTo[a]);
+        }
+        return to < 0 ? new int[]{0, 0} : new int[]{from, to};
+    }
+
     public int add(Element e) { elements.add(e); return elements.size() - 1; }
     public Element get(int i) { return elements.get(i); }
     public int size() { return elements.size(); }
-    public int goalIndex() { return elements.size() - 1; }
+    public int goalIndex() { return routeSize() - 1; }
 
     /** Signed shortest arc difference a-b on the ring. */
     public float dsWrap(float a, float b) {

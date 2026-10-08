@@ -9,6 +9,7 @@ public final class Element {
     public float s, y, w;
     public float amp, period = 4f, phase, len;
     public boolean checkpoint;
+    public int anchor = -1;       // decoys only: route element this dead end / lure hangs off (-1 = part of the route)
 
     public Element(Type type, float s, float y, float w) { this.type = type; this.s = s; this.y = y; this.w = w; }
 

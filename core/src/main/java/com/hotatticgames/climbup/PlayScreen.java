@@ -36,6 +36,13 @@ public final class PlayScreen extends ScreenAdapter {
     private String toast = "", tip = "", caption = ""; private float captionT;
     private int lastZone = -1, shots;
     private boolean confirmRestart;
+    private static final class Pop { final String t; final Color c; float age; Pop(String t, Color c) { this.t = t; this.c = c; } }
+    private final java.util.ArrayList<Pop> pops = new java.util.ArrayList<>();
+    private float hitstop, confettiT; private int milestone;
+    private static final String[] CATCH = {"NICE CATCH!", "FINGERTIPS!", "CLUTCH!", "HANG ON!"}, CLOSE = {"JUST MADE IT!", "CLOSE ONE!", "WHEW!", "THAT WAS TIGHT!"};
+
+    private void pop(String t, Color c) { if (pops.size() > 3) pops.remove(0); pops.add(new Pop(t, c)); }
+    private void freeze(float s) { if (!g.settings.reducedMotion) hitstop = Math.max(hitstop, s); }
     private com.badlogic.gdx.Screen next; private boolean disposeOnLeave;   // applied at the end of render(), after the batch is closed
 
     // ---- touch state
@@ -66,7 +73,7 @@ public final class PlayScreen extends ScreenAdapter {
         Gdx.input.setInputProcessor(mux);
         Gdx.input.setCatchKey(Input.Keys.BACK, true);
         g.audio.music("music_game");
-        runTime = 0;
+        runTime = 0; milestone = (int) (sim.maxHeight / 50f);
     }
 
     private void applySettings() {
@@ -143,7 +150,7 @@ public final class PlayScreen extends ScreenAdapter {
         boolean play = state == State.PLAYING;
         if (play) {
             float speed = g.settings.assistSlow ? g.tuning.assistSlowFactor : 1f;
-            acc += dt * speed;
+            if (hitstop > 0) hitstop -= dt; else acc += dt * speed;
             int steps = 0;
             while (acc >= Sim.DT && steps < 6) {
                 if (demo) { driver[0].drive(sim, in); } else readInput();
@@ -156,11 +163,23 @@ public final class PlayScreen extends ScreenAdapter {
             if (steps == 6) acc = 0;
             g.save.playSeconds += dt;
             if (sim.maxHeight > g.save.bestHeight) g.save.bestHeight = sim.maxHeight;
+            int ms = (int) (sim.maxHeight / 50f);
+            if (ms > milestone) { milestone = ms; toast = ms * 50 + " M!"; toastT = 1.6f; g.audio.play("checkpoint", 0.55f, 1.35f); world.particles.burst(sim.s, sim.y + 1f, 12, gold, 2.6f, 3.2f, 0.1f, -0.5f, 1f); }
+            for (int pi = pops.size() - 1; pi >= 0; pi--) { Pop pp = pops.get(pi); pp.age += dt; if (pp.age > 1.1f) pops.remove(pi); }
             autosaveT += dt; if (autosaveT > 8f) { autosaveT = 0; g.persist(); }
             ambientSounds(dt);
             updateTips(dt);
         }
         if (fade > 0) fade = Math.max(0, fade - dt * 2.2f);
+        if (state == State.WON) {
+            confettiT -= dt;
+            if (confettiT <= 0) {
+                confettiT = 0.16f;
+                Color[] pal = {gold, cyan, new Color(1f, 0.45f, 0.7f, 1f), new Color(0.5f, 1f, 0.5f, 1f)};
+                world.particles.burst(sim.s + MathUtils.random(-3f, 3f), sim.y + MathUtils.random(1.5f, 4.5f), 6, pal[MathUtils.random(3)], 3.5f, 4f, 0.14f, 6f, 1.4f);
+            }
+            world.particles.update(dt);
+        }
         world.particles.update(play ? dt : 0f);
         world.render(sim, play ? acc / Sim.DT : 1f, dt, time, true);
         drawHud();
@@ -169,7 +188,7 @@ public final class PlayScreen extends ScreenAdapter {
     }
 
     private void ambientSounds(float dt) {
-        if (sim.mode == Sim.Mode.GROUND && Math.abs(sim.vx) > 2f) { stepT -= dt; if (stepT <= 0) { stepT = 0.27f; g.audio.play("step", 0.35f, 0.9f + MathUtils.random(0.2f)); } }
+        if (sim.mode == Sim.Mode.GROUND && Math.abs(sim.vx) > 2f) { stepT -= dt; if (stepT <= 0) { stepT = 0.27f; g.audio.play("step", 0.35f, 0.9f + MathUtils.random(0.2f)); world.particles.burst(sim.s - sim.facing * 0.3f, sim.y + 0.05f, 2, dust, 0.5f, 0.7f, 0.09f, 3f, 0.35f); } }
         if (sim.mode == Sim.Mode.ROPE && Math.abs(in.moveY) > 0.3f) { ropeT -= dt; if (ropeT <= 0) { ropeT = 0.32f; g.audio.play("rope", 0.4f, 0.9f + MathUtils.random(0.2f)); } }
     }
 
@@ -184,6 +203,16 @@ public final class PlayScreen extends ScreenAdapter {
     private void handleEvents(int ev) {
         if (ev == 0) return;
         float s = sim.s, y = sim.y;
+        world.heroEvents(ev, sim.landSpeed);
+        if ((ev & Sim.EV_LAND) != 0 && sim.onElem >= 0) {
+            world.platformLanded(sim.onElem, sim.landSpeed);
+            Element le = course.get(sim.onElem);
+            float edge = Math.abs(course.dsWrap(sim.s, sim.es1[sim.onElem])) - le.halfW();
+            if (le.isPlatform() && edge > 0.06f && sim.landSpeed > 5f) { pop(CLOSE[MathUtils.random(CLOSE.length - 1)], gold); freeze(0.07f); world.shake(0.5f); vibrate(25, 1); }
+        }
+        if ((ev & Sim.EV_JUMP) != 0) world.kick(0.8f);
+        if ((ev & Sim.EV_BOUNCE) != 0) { world.kick(4f); pop("BOING!", cyan); }
+        if ((ev & Sim.EV_GRAB) != 0 && sim.mode == Sim.Mode.LEDGE) { pop(CATCH[MathUtils.random(CATCH.length - 1)], gold); freeze(0.08f); world.shake(0.4f); }
         if ((ev & Sim.EV_JUMP) != 0) { g.audio.play("jump", 0.7f, 0.95f + MathUtils.random(0.1f)); world.particles.burst(s, y, 4, dust, 1.4f, 1.2f, 0.12f, 6f, 0.4f); vibrate(8, 2); }
         if ((ev & Sim.EV_LAND) != 0) {
             float k = MathUtils.clamp(sim.landSpeed / 16f, 0.3f, 1f);
@@ -199,6 +228,7 @@ public final class PlayScreen extends ScreenAdapter {
             toast = "CHECKPOINT"; toastT = 2f; g.save.checkpoint = sim.checkpoint; g.persist(); say("[CHECKPOINT]");
         }
         if ((ev & Sim.EV_RESPAWN) != 0) {
+            world.particles.burst(sim.s, sim.y + 0.6f, 18, cyan, 3f, 3.2f, 0.1f, 2f, 0.7f);
             g.audio.play("respawn", 0.8f, 1f); fade = 1f; g.save.falls++; vibrate(40, 1); world.shake(0.5f);
             toast = "BACK TO CHECKPOINT"; toastT = 1.6f; g.persist();
         }
@@ -223,7 +253,7 @@ public final class PlayScreen extends ScreenAdapter {
         if (tipT > 0) { tipT -= dt; if (tipT <= 0) tip = ""; return; }
         if (!g.settings.tips || demo) return;
         // look for the next element of an unseen kind within 8 units ahead
-        for (int i = Math.max(0, sim.bestElem - 1); i < Math.min(course.size(), sim.bestElem + 5); i++) {
+        for (int i = Math.max(0, sim.bestElem - 1); i < Math.min(course.routeSize(), sim.bestElem + 5); i++) {
             Element e = course.get(i);
             String key = null;
             switch (e.type) {
@@ -281,6 +311,7 @@ public final class PlayScreen extends ScreenAdapter {
             for (int i = 0; i < lines.length; i++) ui.textC(lines[i], W / 2, by + bh - 24 - (i + 1) * (PixelFont_H * px2 + 10) + 10, px2, Ui.TEXT);
         }
         drawHeroBubble();
+        drawPops();
         if (state == State.PLAYING) drawControls();
         if (fade > 0) ui.rect(0, 0, W, H, new Color(0, 0, 0, fade));
         if (state == State.PAUSED) pauseMenu();
@@ -289,6 +320,16 @@ public final class PlayScreen extends ScreenAdapter {
     }
     private static final float PixelFont_H = 7f;
     private final float[] headPos = new float[2];
+
+    private void drawPops() {
+        if (pops.isEmpty() || state != State.PLAYING) return;
+        world.heroHeadScreen(g.ui.w(), g.ui.h(), headPos);
+        for (Pop p : pops) {
+            float k = p.age / 1.1f, grow = 1f + Math.max(0f, 1f - p.age * 7f) * 0.7f;
+            float a = Math.min(1f, (1f - k) * 3f);
+            g.ui.textC(p.t, headPos[0], headPos[1] + 70f + p.age * 90f, 5.5f * grow, new Color(p.c.r, p.c.g, p.c.b, a));
+        }
+    }
 
     private void drawHeroBubble() {
         String b = world.heroBubble();

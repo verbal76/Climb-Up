@@ -26,6 +26,16 @@ public final class HeroRig implements Disposable {
     private String current = "";
     public float yaw, landT;
 
+    // squash & stretch (spring) driven by gameplay events fed from the play screen
+    private float sq, sqV, landSpd; private int pendingEv;
+    public void events(int ev, float landSpeed) {
+        pendingEv |= ev; landSpd = landSpeed;
+        if ((ev & Sim.EV_JUMP) != 0) sqV += 5f;
+        if ((ev & Sim.EV_LAND) != 0) sqV -= 4f + Math.min(16f, landSpeed) * 0.45f;
+        if ((ev & Sim.EV_BOUNCE) != 0) sqV += 9f;
+        if ((ev & Sim.EV_GRAB) != 0) sqV -= 5f;
+    }
+
     // ---- idle director: after a few still seconds he turns to the camera and does a bit (sometimes with a speech bubble)
     private static final class Beat { final String anim; final boolean toCamera; Beat(String a, boolean c) { anim = a; toCamera = c; } }
     private static final Beat[] BEATS = {new Beat("Wave", true), new Beat("No", true), new Beat("Yes", true), new Beat("Duck", false), new Beat("Punch", false), new Beat("No", true)};
@@ -75,7 +85,9 @@ public final class HeroRig implements Disposable {
             case CABLE: targetYaw = sim.facing * 18f; break;
             default: targetYaw = sim.facing * 68f;   // clearly faces the direction of travel
         }
-        if ((sim.events & Sim.EV_LAND) != 0) landT = 0.30f;
+        if ((pendingEv & Sim.EV_LAND) != 0) landT = 0.30f;
+        pendingEv = 0;
+        sqV += (-140f * sq - 13f * sqV) * dt; sq = Math.max(-0.45f, Math.min(0.40f, sq + sqV * dt));
         if (landT > 0) landT -= dt;
 
         boolean still = sim.mode == Sim.Mode.GROUND && speed < 0.4f && landT <= 0 && !sim.won;
@@ -109,7 +121,7 @@ public final class HeroRig implements Disposable {
         }
         if (sim.won) play("Wave", -1, 1f, 0.2f);
 
-        inst.transform.idt().translate(wx, wy, wz).rotate(0, 1, 0, phi * MathUtils.radiansToDegrees + yaw).scale(SCALE, SCALE, SCALE);
+        inst.transform.idt().translate(wx, wy, wz).rotate(0, 1, 0, phi * MathUtils.radiansToDegrees + yaw).scale(SCALE * (1f - 0.5f * sq), SCALE * (1f + sq), SCALE * (1f - 0.5f * sq));
         ac.update(reduced ? Math.min(dt, 1f / 30f) : dt);
     }
 

@@ -123,51 +123,67 @@ public final class Autopilot {
     // ------------------------------------------------------------------ planning
 
     static boolean movingNear(Course c, int a) {
-        for (int i = a; i <= Math.min(c.size() - 1, a + 2); i++) if (c.get(i).isMoving()) return true;
+        for (int i = a; i <= Math.min(c.routeSize() - 1, a + 2); i++) if (c.get(i).isMoving()) return true;
         return false;
     }
 
     static float maxPeriod(Course c, int a) {
         float p = 0;
-        for (int i = a; i <= Math.min(c.size() - 1, a + 2); i++) if (c.get(i).isMoving()) p = Math.max(p, c.get(i).period);
+        for (int i = a; i <= Math.min(c.routeSize() - 1, a + 2); i++) if (c.get(i).isMoving()) p = Math.max(p, c.get(i).period);
         return p;
     }
 
     static boolean succeeded(Sim s, int a) {
         switch (s.mode) {
             case GROUND: case LEDGE: case PULLUP: case ROPE: case CABLE:
-                return s.onElem > a && (s.mode != Sim.Mode.GROUND || !s.gone[s.onElem]);
-            default: return s.lastPad > a;
+                return s.onElem > a && s.onElem < s.course.routeSize() && (s.mode != Sim.Mode.GROUND || !s.gone[s.onElem]);
+            default: return s.lastPad > a && s.lastPad < s.course.routeSize();
         }
     }
 
     /** Runs a policy on a copy of the state; true if it attaches to a later element without falling. */
-    static boolean trial(Sim base, int a, PolicyFactory f, float limit) {
+    static boolean trial(Sim base, int a, PolicyFactory f, float limit) { return trialEnd(base, a, f, limit) != null; }
+
+    /** Like {@link #trial} but returns the state at the moment of success (null on failure). */
+    static Sim trialEnd(Sim base, int a, PolicyFactory f, float limit) {
         Sim s = base.copy();
-        s.winLo = Math.max(0, a - 1); s.winHi = Math.min(s.course.size() - 1, a + 6);
+        s.setWindow(a - 1, a + 6);
         Policy p = f.create();
         InputState in = new InputState();
         int fallsBefore = s.falls;
-        float floorY = Math.min(s.course.get(a).y, s.course.get(Math.min(s.course.size() - 1, a + 1)).y) - 4.5f;
+        float floorY = Math.min(s.course.get(a).y, s.course.get(Math.min(s.course.routeSize() - 1, a + 1)).y) - 4.5f;
         int n = (int) (limit / Sim.DT);
         for (int i = 0; i < n; i++) {
             in.clear();
             p.act(s, in);
             s.step(in);
-            if (s.falls != fallsBefore) return false;
-            if (succeeded(s, a)) return true;
-            if (s.mode == Sim.Mode.GROUND && s.onElem < a && s.onElem >= 0) return false;
-            if (s.mode == Sim.Mode.AIR && s.vy < 0 && s.y < floorY) return false;
+            if (s.falls != fallsBefore) return null;
+            if (succeeded(s, a)) return s;
+            if (s.mode == Sim.Mode.GROUND && s.onElem >= 0 && (s.onElem < a || s.onElem >= s.course.routeSize())) return null;   // fell back, or onto a dead end
+            if (s.mode == Sim.Mode.AIR && s.vy < 0 && s.y < floorY) return null;
         }
-        return false;
+        return null;
+    }
+
+    /** True if, after finishing a pull-up, the planner can also solve the next link from this state. */
+    static boolean leavesGoodState(Sim end, int a) {
+        Sim s = end.copy();
+        InputState in = new InputState(); Policy pull = new PullPolicy();
+        for (int g = 0; g < 120 && (s.mode == Sim.Mode.LEDGE || s.mode == Sim.Mode.PULLUP); g++) { in.clear(); pull.act(s, in); s.step(in); }
+        int na = s.mode == Sim.Mode.AIR ? s.lastPad : s.onElem;
+        if (na < 0 || na >= s.course.goalIndex()) return true;
+        return plan(s, na, false, false).ok;
     }
 
     /** Plan the next link from the state in {@code base} where the player is attached to route element a. */
-    public static Result plan(Sim base, int a, boolean measureMargin) {
+    public static Result plan(Sim base, int a, boolean measureMargin) { return plan(base, a, measureMargin, false); }
+
+    /** With lookahead, prefers moves that leave a state from which the next link is also solvable (used when actually playing the course). */
+    public static Result plan(Sim base, int a, boolean measureMargin, boolean lookahead) {
         Course c = base.course;
         Result r = new Result();
         int b = a + 1;
-        if (b >= c.size()) { r.ok = true; return r; }
+        if (b >= c.routeSize()) { r.ok = true; return r; }
         List<PolicyFactory> cands = new ArrayList<>();
         int dir = c.dsWrap(base.es1[b], base.es1[a]) >= 0 ? 1 : -1;
         if (c.get(a).type == Element.Type.ROPE) {
@@ -190,14 +206,24 @@ public final class Autopilot {
                 }
             }
         }
+        PolicyFactory firstOk = null;
         for (PolicyFactory f : cands) {
             r.trials++;
-            if (trial(base, a, f, 4.5f + (c.get(a).type == Element.Type.CRUMBLE ? 0 : 6f))) {
+            float limit = 4.5f + (c.get(a).type == Element.Type.CRUMBLE ? 0 : 6f);
+            if (lookahead) {
+                Sim end = trialEnd(base, a, f, limit);
+                if (end == null) continue;
+                r.successes++;
+                if (firstOk == null) firstOk = f;
+                if (!r.ok && leavesGoodState(end, a)) { r.ok = true; r.factory = f; }
+                if (r.ok && !measureMargin) break;
+            } else if (trial(base, a, f, limit)) {
                 r.successes++;
                 if (!r.ok) { r.ok = true; r.factory = f; }
                 if (!measureMargin) break;
             }
         }
+        if (lookahead && !r.ok && firstOk != null) { r.ok = true; r.factory = firstOk; }   // nothing good follows: fall back to any working move
         return r;
     }
 
@@ -209,12 +235,12 @@ public final class Autopilot {
         int a = 0;
         InputState in = new InputState();
         while (!real.won && real.time < maxSimSeconds) {
-            Result r = plan(real, a, false);
+            Result r = plan(real, a, false, true);
             rep.links++;
             if (!r.ok) { rep.failedLink = a; rep.simTime = real.time; return rep; }
             Policy p = r.factory.create();
             int fallsBefore = real.falls;
-            real.winLo = 0; real.winHi = Integer.MAX_VALUE;
+            real.act = null;
             int guard = (int) (20f / Sim.DT);
             while (guard-- > 0 && !succeeded(real, a)) {
                 in.clear(); p.act(real, in); real.step(in);
@@ -263,9 +289,9 @@ public final class Autopilot {
             }
             if (p == null) {
                 if (s.mode == Sim.Mode.AIR && s.lastPad != a && s.lastPad > a) a = s.lastPad;
-                int win0 = s.winLo, win1 = s.winHi;
-                Result r = plan(s, a, false);
-                s.winLo = win0; s.winHi = win1;
+                int[] win0 = s.act;
+                Result r = plan(s, a, false, true);
+                s.act = win0;
                 if (!r.ok) { failed = true; return; }
                 p = r.factory.create();
             }

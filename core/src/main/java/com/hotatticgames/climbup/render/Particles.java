@@ -12,7 +12,7 @@ import com.hotatticgames.climbup.sim.Tuning;
 
 /** Small cube particles in arc/height space (landing dust, bounce rings, crumble debris, checkpoint sparkle). */
 public final class Particles {
-    private static final int MAX = 56;
+    private static final int MAX = 96;
     private final float[] s = new float[MAX], y = new float[MAX], vs = new float[MAX], vy = new float[MAX], life = new float[MAX], max = new float[MAX], size = new float[MAX], g = new float[MAX];
     private final Color[] col = new Color[MAX];
     private final ModelInstance[] inst = new ModelInstance[MAX];
@@ -38,6 +38,12 @@ public final class Particles {
             life[i] = max[i] = life0 * MathUtils.random(0.7f, 1.2f); size[i] = sz * MathUtils.random(0.7f, 1.3f); g[i] = gravity;
             col[i].set(c);
         }
+    }
+
+    /** One particle with explicit velocity (ambient motes, snow, embers). */
+    public void spawn(float arc, float yy, float vS, float vY, Color c, float sz, float grav, float life0) {
+        int i = next; next = (next + 1) % MAX;
+        s[i] = arc; y[i] = yy; vs[i] = vS; vy[i] = vY; life[i] = max[i] = life0; size[i] = sz; g[i] = grav; col[i].set(c);
     }
 
     public void update(float dt) {

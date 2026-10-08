@@ -26,6 +26,7 @@ public final class CourseGenerator {
     public static Course generate(long seed, Tuning t) {
         CourseGenerator g = new CourseGenerator(seed, t);
         g.build();
+        lastForDebug = g;
         return g.c;
     }
 
@@ -75,6 +76,88 @@ public final class CourseGenerator {
         Element goal = plat(Element.Type.GOAL, last.s + last.w / 2 + 1.6f + 3f, last.y + 0.6f, 6f, 3);
         goal.checkpoint = true;
         if (!commit(listOf(goal), 0.0f)) throw new IllegalStateException("goal link failed");
+        addDecoys();
+    }
+
+    // ------------------------------------------------------------------ decoys: dead ends and lures that mislead without ever blocking the route
+
+    public int decoys, decoyTried, decoyGeoFail, decoyPlanFail;
+    public static CourseGenerator lastForDebug;
+
+    private void addDecoys() {
+        c.finishRoute();
+        Random dr = new Random(c.seed * 0x2545F4914F6CDD1DL + 99);
+        int rs = c.routeSize();
+        for (int a = 3; a < rs - 4; a++) {
+            Element p = c.get(a);
+            if (p.type != Element.Type.STATIC || p.w < 3f) continue;
+            if (dr.nextFloat() > 0.30f + 0.08f * p.zone) continue;
+            List<Element> es = buildDecoy(p, a, dr);
+            if (tryDecoy(es, a)) decoys += es.size();
+        }
+    }
+
+    /** Dead-end spurs (forward and gently down, or backward and up), crumbling lures, and unreachable "stepping stones" above earlier ground. */
+    private List<Element> buildDecoy(Element p, int a, Random dr) {
+        List<Element> l = new ArrayList<>();
+        int kind = dr.nextInt(10);
+        if (kind < 7) {
+            boolean forward = kind < 4;
+            float edge = forward ? p.s + p.w / 2f : p.s - p.w / 2f, y = p.y;
+            int n = 2 + dr.nextInt(2);
+            for (int k = 0; k < n; k++) {
+                float dy = forward ? -(0.35f + dr.nextFloat() * 0.35f) : 0.3f + dr.nextFloat() * 0.8f;
+                float gap = reach(Math.max(dy, 0f)) * (0.40f + 0.2f * dr.nextFloat());
+                float w = k == n - 1 ? 1f : 1f + dr.nextInt(2);
+                float s = forward ? edge + gap + w / 2f : edge - gap - w / 2f; y += dy;
+                boolean trap = k == n - 1 && dr.nextInt(10) < 3;
+                Element d = plat(trap ? Element.Type.CRUMBLE : Element.Type.STATIC, s, y, w, p.zone); d.anchor = a;
+                l.add(d); edge = forward ? s + w / 2f : s - w / 2f;
+            }
+        } else {                                         // lures: scattered blocks that look like stepping stones but lead nowhere
+            int n = 2 + dr.nextInt(2); float s = p.s - p.w / 2f - 3f;
+            for (int k = 0; k < n; k++) {
+                float w = 1f + dr.nextInt(2), yy = p.y + 3.2f + dr.nextFloat() * 2.4f;
+                Element d = plat(Element.Type.STATIC, s - w / 2f, yy, w, p.zone); d.anchor = a;
+                l.add(d); s -= w + 2.4f + dr.nextFloat() * 2.6f;
+            }
+        }
+        return l;
+    }
+
+    private boolean decoyOk(Element d, int a) {
+        int rs = c.routeSize();
+        for (int i = 0; i < c.size(); i++) {
+            Element e = c.get(i);
+            if (e == d) continue;
+            if (Math.abs(d.s - e.s) < c.circumference * 0.5f) {
+                float gap = Math.abs(d.s - e.s) - d.w / 2f - arcHalf(e);
+                if (gap < 1.0f && d.y - 0.6f < vHi(e) - 1.6f && d.y + 1.6f > vLo(e) + 0.8f) return false;   // overlapping / touching
+            } else if (layersClash(c, d, e)) return false;
+        }
+        for (int j = a + 2; j < rs; j++) {                 // never a stepping stone toward later route
+            Element e = c.get(j);
+            if (!e.isPlatform()) continue;
+            float gap = Math.max(0f, Math.abs(c.dsWrap(d.s, e.s)) - d.w / 2f - e.halfW());
+            if (gap < 6.5f && e.y - d.y > -7f && e.y - d.y < 3.6f) return false;
+        }
+        return true;
+    }
+
+    private boolean tryDecoy(List<Element> es, int a) {
+        int n0 = c.size();
+        boolean ok = true; decoyTried++;
+        for (Element d : es) { c.add(d); if (!decoyOk(d, a)) { ok = false; decoyGeoFail++; break; } }
+        if (ok) {
+            c.indexDecoys();
+            int rs = c.routeSize();
+            for (int r = Math.max(0, a - 7); r <= Math.min(rs - 2, a + 5) && ok; r++) {
+                Autopilot.Result res = Autopilot.plan(Sim.startOn(c, T, r), r, false);
+                if (!res.ok) { ok = false; decoyPlanFail++; }
+            }
+        }
+        if (!ok) { while (c.size() > n0) c.elements.remove(c.size() - 1); c.indexDecoys(); }
+        return ok;
     }
 
     private List<Element> listOf(Element... es) { List<Element> l = new ArrayList<>(); for (Element e : es) l.add(e); return l; }

@@ -65,7 +65,7 @@ public final class WorldRenderer implements Disposable {
     public WorldRenderer(Tuning t, Course c, Models models, int quality) {
         this.T = t; this.course = c; this.models = models; this.quality = quality;
         hero = new HeroRig();
-        vis = new Vis[c.size()];
+        vis = new Vis[c.size()]; dip = new float[c.size()]; dipV = new float[c.size()];
         for (int i = 0; i < vis.length; i++) { vis[i] = new Vis(); vis[i].e = c.get(i); }
         env.set(new ColorAttribute(ColorAttribute.AmbientLight, 0.62f, 0.62f, 0.66f, 1f));
         sun.set(1f, 0.97f, 0.9f, -0.5f, -0.9f, -0.6f);
@@ -233,7 +233,8 @@ public final class WorldRenderer implements Disposable {
         renderS = ps; renderY = py;
         lastCamS = ps;
         // vertical camera: follow with smoothing, snap on respawn
-        float target = py + 0.3f;
+        float lead = reducedMotion ? 0f : MathUtils.clamp(sim.vy * 0.10f, -2.2f, 1.8f);   // camera leads fast rises and drops
+        float target = py + 0.3f + lead;
         if (sim.teleported) camY = target;
         else camY += (target - camY) * Math.min(1f, (target > camY ? 7f : 10f) * dt);
         float zoneF = Math.min(3.999f, Math.max(0f, camY / T.courseHeight * 4f));
@@ -245,6 +246,9 @@ public final class WorldRenderer implements Disposable {
         // camera
         float sh = 0;
         if (shakeT > 0 && !reducedMotion) { shakeT -= dt; sh = camShake * MathUtils.sin(time * 70f) * (shakeT / 0.25f); } else camShake = 0;
+        fovV += (-90f * fovK - 11f * fovV) * dt; fovK += fovV * dt; cam.fieldOfView = 40f + (reducedMotion ? 0f : fovK);
+        for (int di = 0; di < dip.length; di++) if (dip[di] != 0 || dipV[di] != 0) { dipV[di] += (-160f * dip[di] - 12f * dipV[di]) * dt; dip[di] += dipV[di] * dt; if (Math.abs(dip[di]) < 0.002f && Math.abs(dipV[di]) < 0.02f) { dip[di] = 0; dipV[di] = 0; } }
+        if (quality > 0 && !reducedMotion) ambientMotes(dt, zoneF, ps);
         cam.position.set(sh * 0.1f, camY + (CAM_DIST < 6f ? -0.6f : 2.2f) + sh * 0.1f, CAM_DIST);
         cam.lookAt(0f, camY + (CAM_DIST < 6f ? -1.15f : 1.15f), -0.4f);
         cam.up.set(0, 1, 0);
@@ -281,7 +285,7 @@ public final class WorldRenderer implements Disposable {
         float crumble = sim.crumbleT[i];
         for (Part p : v.parts) {
             float du = p.du, dy = p.dy, extraYaw = 0f; float sy = p.sy;
-            float y = ey;
+            float y = e.isPlatform() ? ey - Math.max(-0.1f, Math.min(0.22f, dip[i])) : ey;
             switch (e.type) {
                 case ROPE: y = e.y; break;
                 case SWING: {
@@ -384,6 +388,12 @@ public final class WorldRenderer implements Disposable {
     }
 
     private float heroY;
+    private float[] dip, dipV; private float fovK, fovV, ambientAcc;
+    private final Color ambCol = new Color();
+
+    public void heroEvents(int ev, float landSpeed) { hero.events(ev, landSpeed); }
+    public void platformLanded(int idx, float speed) { if (dip != null && idx >= 0 && idx < dip.length) dipV[idx] += Math.min(14f, speed) * 0.9f; }
+    public void kick(float deg) { if (!reducedMotion) fovV += deg * 14f; }
     private final com.badlogic.gdx.math.Vector3 headTmp = new com.badlogic.gdx.math.Vector3();
     public String heroBubble() { return hero.bubble(); }
     public float heroBubbleAlpha() { return hero.bubbleAlpha(); }
@@ -394,6 +404,22 @@ public final class WorldRenderer implements Disposable {
         cam.project(headTmp, 0, 0, Gdx.graphics.getBackBufferWidth(), Gdx.graphics.getBackBufferHeight());
         out[0] = headTmp.x * uiW / Gdx.graphics.getBackBufferWidth();
         out[1] = headTmp.y * uiH / Gdx.graphics.getBackBufferHeight();
+    }
+
+    /** Zone-flavoured drifting specks: pollen (meadow), snow (frost), embers (dusk), fireflies (night). */
+    private void ambientMotes(float dt, float zoneF, float camS) {
+        ambientAcc += dt * (quality >= 2 ? 7f : 3.5f);
+        while (ambientAcc >= 1f) {
+            ambientAcc -= 1f;
+            int z = Math.min(3, (int) zoneF);
+            float arc = camS + MathUtils.random(-9f, 9f), yy = camY + MathUtils.random(-4f, 6f);
+            switch (z) {
+                case 0: ambCol.set(1f, 0.97f, 0.7f, 1f); particles.spawn(arc, yy, MathUtils.random(-0.3f, 0.3f), MathUtils.random(0.2f, 0.6f), ambCol, 0.07f, 0f, 4.5f); break;
+                case 1: ambCol.set(1f, 1f, 1f, 1f); particles.spawn(arc, camY + 6f, MathUtils.random(-0.5f, 0.1f), -MathUtils.random(0.8f, 1.5f), ambCol, 0.09f, 0f, 6f); break;
+                case 2: ambCol.set(1f, 0.55f, 0.2f, 1f); particles.spawn(arc, camY - 4f, MathUtils.random(-0.4f, 0.4f), MathUtils.random(0.9f, 1.8f), ambCol, 0.07f, 0f, 5f); break;
+                default: ambCol.set(0.7f, 1f, 0.8f, 1f); particles.spawn(arc, yy, MathUtils.random(-0.6f, 0.6f), MathUtils.random(-0.3f, 0.4f), ambCol, 0.08f, 0f, 4f);
+            }
+        }
     }
 
     /** World position (relative to the screen centre) for effects; arc coordinate -> x,z. */

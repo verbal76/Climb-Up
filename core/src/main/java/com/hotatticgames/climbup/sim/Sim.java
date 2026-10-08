@@ -44,7 +44,21 @@ public final class Sim {
     public final boolean[] gone;
     public final float[] goneT;
     public final float[] padSquash;
-    public int winLo = 0, winHi = Integer.MAX_VALUE; // planner window (index range simulated)
+    public int[] act;                // planner window: element indices simulated (null = everything)
+
+    /** Restrict simulation to route elements rLo..rHi plus the decoys anchored near them (used by the planner for speed). */
+    public void setWindow(int rLo, int rHi) {
+        int rs = course.routeSize();
+        int lo = Math.max(0, rLo), hi = Math.min(rs - 1, rHi);
+        int[] d = course.decoyRange(lo - 4, hi + 1);
+        int n = Math.max(0, hi - lo + 1) + (d[1] - d[0]);
+        int[] a = new int[n]; int k = 0;
+        for (int i = lo; i <= hi; i++) a[k++] = i;
+        for (int i = d[0]; i < d[1]; i++) a[k++] = i;
+        act = a;
+    }
+
+    private void progress(int i) { if (i < course.routeSize() && i > bestElem) bestElem = i; }
 
     public Sim(Course c, Tuning t) {
         this.course = c; this.T = t;
@@ -66,7 +80,7 @@ public final class Sim {
         landSpeed = o.landSpeed; events = o.events; assistForgive = o.assistForgive; ps0 = o.ps0; py0 = o.py0; teleported = o.teleported;
         es0 = o.es0.clone(); ey0 = o.ey0.clone(); es1 = o.es1.clone(); ey1 = o.ey1.clone();
         crumbleT = o.crumbleT.clone(); gone = o.gone.clone(); goneT = o.goneT.clone(); padSquash = o.padSquash.clone();
-        winLo = o.winLo; winHi = o.winHi;
+        act = o.act;
     }
 
     public Sim copy() { return new Sim(this); }
@@ -90,7 +104,7 @@ public final class Sim {
         s = course.wrap(es1[idx]); y = ey1[idx]; vx = vy = 0;
         mode = Mode.GROUND; onElem = idx; lastGroundY = y; coyote = 0; jumpBuf = 0; lockout = 0.1f;
         jumpedUp = false; facing = 1;
-        if (idx > bestElem) bestElem = idx;
+        progress(idx);
     }
 
     /** Start state used by planners: standing/attached on element idx at the current time. */
@@ -129,8 +143,6 @@ public final class Sim {
 
     // ---------------------------------------------------------------- helpers
 
-    private boolean active(int i) { return i >= winLo && i <= winHi; }
-
     private float dsTo(int i) { return course.dsWrap(es1[i], s); }  // element - player
 
     public float platformVy(int i) { return (ey1[i] - ey0[i]) / DT; }
@@ -148,8 +160,9 @@ public final class Sim {
         ps0 = s; py0 = y; teleported = false;
         time += dt;
         int n = course.size();
-        int lo = Math.max(0, winLo), hi = Math.min(n - 1, winHi);
-        for (int i = lo; i <= hi; i++) {
+        int cnt0 = act == null ? n : act.length;
+        for (int k0 = 0; k0 < cnt0; k0++) {
+            int i = act == null ? k0 : act[k0];
             es0[i] = es1[i]; ey0[i] = ey1[i];
             Element e = course.get(i);
             if (e.isMoving()) { es1[i] = e.sAt(time); ey1[i] = e.yAt(time); }
@@ -217,7 +230,7 @@ public final class Sim {
         // checkpoint / win
         if (el.checkpoint && e > checkpoint) { checkpoint = e; events |= EV_CHECKPOINT; }
         if (el.type == Element.Type.GOAL && !won) { won = true; events |= EV_WIN; }
-        if (e > bestElem) bestElem = e;
+        progress(e);
     }
 
     private void stepAir(InputState in, float dt) {
@@ -240,7 +253,8 @@ public final class Sim {
         s += vx * dt; y += vy * dt;
         // landing
         int best = -1; float bestTop = -1e9f;
-        for (int i = winLo; i <= Math.min(winHi, course.size() - 1); i++) {
+        for (int k1 = 0, cnt1 = act == null ? course.size() : act.length; k1 < cnt1; k1++) {
+            int i = act == null ? k1 : act[k1];
             Element el = course.get(i);
             if (!el.isPlatform() || gone[i]) continue;
             if (Math.abs(ey1[i] - y) > 8f) continue;
@@ -264,7 +278,7 @@ public final class Sim {
             vy = in.jumpHeld ? T.padBounceHeld : T.padBounce;
             jumpedUp = false; mode = Mode.AIR; onElem = -1; lastPad = i; padSquash[i] = 0.25f;
             events |= EV_BOUNCE;
-            if (i > bestElem) bestElem = i;
+            progress(i);
             return;
         }
         vy = 0; mode = Mode.GROUND; onElem = i; jumpedUp = false; coyote = T.coyote + assistForgive;
@@ -272,7 +286,7 @@ public final class Sim {
         if (el.checkpoint && i > checkpoint) { checkpoint = i; events |= EV_CHECKPOINT; }
         if (el.type == Element.Type.CRUMBLE && crumbleT[i] < 0) crumbleT[i] = 0;
         if (el.type == Element.Type.GOAL && !won) { won = true; events |= EV_WIN; }
-        if (i > bestElem) bestElem = i;
+        progress(i);
         // buffered jump on landing
         if (jumpBuf > 0) { vx += platformVs(i) * 0.6f; doJump(Math.max(0, platformVy(i)) * 0.6f); }
     }
@@ -281,14 +295,14 @@ public final class Sim {
 
     private boolean tryGrab(InputState in) {
         float hand = y + T.handHeight;
-        int hi = Math.min(winHi, course.size() - 1);
         // ropes
-        for (int i = winLo; i <= hi; i++) {
+        for (int k2 = 0, cnt2 = act == null ? course.size() : act.length; k2 < cnt2; k2++) {
+            int i = act == null ? k2 : act[k2];
             Element el = course.get(i);
             if (el.type == Element.Type.ROPE) {
                 if (Math.abs(course.dsWrap(es1[i], s)) <= T.ropeGrabRadius && hand <= el.y + 0.1f && hand >= el.yBottom()) {
                     mode = Mode.ROPE; onElem = i; vx = vy = 0; s = es1[i]; events |= EV_GRAB | EV_ROPE;
-                    if (i > bestElem) bestElem = i;
+                    progress(i);
                     return true;
                 }
             } else if (el.type == Element.Type.CABLE) {
@@ -296,14 +310,15 @@ public final class Sim {
                 float d = course.dsWrap(s, es1[i]);
                 if (Math.abs(d) <= half && hand >= el.y - 0.45f && hand <= el.y + 0.15f && vy < 4f) {
                     mode = Mode.CABLE; onElem = i; vx = vy = 0; y = el.y - T.handHeight; events |= EV_GRAB | EV_CABLE;
-                    if (i > bestElem) bestElem = i;
+                    progress(i);
                     return true;
                 }
             }
         }
         // ledges
         if (vy > 3.5f) return false;
-        for (int i = winLo; i <= hi; i++) {
+        for (int k3 = 0, cnt3 = act == null ? course.size() : act.length; k3 < cnt3; k3++) {
+            int i = act == null ? k3 : act[k3];
             Element el = course.get(i);
             if (!el.isPlatform() || el.type == Element.Type.PAD || gone[i]) continue;
             float top = ey1[i];
@@ -385,7 +400,7 @@ public final class Sim {
             if (el.checkpoint && i > checkpoint) { checkpoint = i; events |= EV_CHECKPOINT; }
             if (el.type == Element.Type.CRUMBLE && crumbleT[i] < 0) crumbleT[i] = 0;
             if (el.type == Element.Type.GOAL && !won) { won = true; events |= EV_WIN; }
-            if (i > bestElem) bestElem = i;
+            progress(i);
         }
     }
 

@@ -42,29 +42,22 @@ jobs:
         with:
           name: climb-up-debug-apk-${{ github.run_number }}
           path: android/build/outputs/apk/debug/*.apk
-      - name: Release diagnostics (temporary)
-        continue-on-error: true
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          curl -sS -i -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" https://api.github.com/repos/${{ github.repository }}/releases -d '{"tag_name":"v0.0.0-diag","target_commitish":"${{ github.sha }}","name":"diag","draft":true}' | head -40
-          echo ---; curl -sS -H "Authorization: Bearer $GH_TOKEN" https://api.github.com/repos/${{ github.repository }}/actions/permissions/workflow
-          echo ---; curl -sS -i -H "Authorization: Bearer $GH_TOKEN" https://api.github.com/repos/${{ github.repository }}/releases | head -20
-      - name: One-time - publish the already-built build 4 APK as its own release
-        continue-on-error: true
-        if: github.run_number == 6
+      - name: One-time - publish the exact build 4 APK as the release (tag cannot target the older commit with the workflow token)
+        if: github.run_number == 7
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -e
+          gh api -X DELETE repos/${{ github.repository }}/releases/407114120 || true   # leftover diagnostic draft
+          gh release delete v0.1.0-build6 --yes --cleanup-tag || true                   # duplicate; build 4 is the test APK
           gh run download 37736651485 -n climb-up-debug-apk-4 -D prev
           APK=$(ls prev/*.apk)
           SHA=$(sha256sum "$APK" | cut -d' ' -f1)
           test "$SHA" = "b022f18a0fbf3c9b474c0cef733c7bd9f98aecc77825fe2ee16b4cc6aeb20638"
-          printf 'Physical-test build 4 (debug-signed, sideload).\n\nSource: de5521f3aebe89c1ee74ec0ae3062284df54aa1b\nPackage: com.hotatticgames.climbup, versionName 0.1.0, versionCode 4, minSdk 26, targetSdk 35\nSHA-256: %s\n' "$SHA" > notes4.md
-          gh release create v0.1.0-build4 "$APK" --target de5521f3aebe89c1ee74ec0ae3062284df54aa1b --title "Climb up v0.1.0 (build 4)" --notes-file notes4.md --latest=false
+          printf 'Physical-test build 4 (debug-signed, sideload).\n\nBuilt from source commit de5521f3aebe89c1ee74ec0ae3062284df54aa1b (game code identical to b31a009; later commits only change CI/README, which is why this tag points at a newer commit).\nPackage: com.hotatticgames.climbup, versionName 0.1.0, versionCode 4, minSdk 26, targetSdk 35\nSHA-256: %s\n' "$SHA" > notes4.md
+          gh release create v0.1.0-build4 "$APK" --target ${{ github.sha }} --title "Climb up v0.1.0 (build 4)" --notes-file notes4.md --latest
       - name: Publish GitHub Release
-        continue-on-error: true
+        if: github.run_number != 7
         env:
           GH_TOKEN: ${{ github.token }}
         run: |

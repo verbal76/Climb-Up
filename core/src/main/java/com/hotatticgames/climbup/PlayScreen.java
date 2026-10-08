@@ -213,6 +213,7 @@ public final class PlayScreen extends ScreenAdapter {
                 if (state != State.PLAYING) break;
             }
             if (steps == 6) acc = 0;
+            if (world.takeWhoosh()) g.audio.play("whoosh", 0.6f, 1f);
             g.save.playSeconds += dt;
             if (sim.maxHeight > g.save.bestHeight) g.save.bestHeight = sim.maxHeight;
             int ms = (int) (sim.maxHeight / 50f);

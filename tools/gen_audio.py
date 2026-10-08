@@ -131,4 +131,9 @@ save('poof', lp(noise2(d), 0.12) * (1 - np.exp(-t * 60)) * np.exp(-t * 7) * 0.9 
 d = 0.4; t = t_arr(d)
 buzz = sq(np.cumsum(190 + 14 * np.sin(2 * np.pi * 30 * t)) / SR, 0.5) * 0.35 + 0.15 * np.sin(2 * np.pi * 380 * t)
 save('buzz', lp(buzz, 0.5) * env(len(t), 0.03, 0.12))
+d = 1.6; t = t_arr(d)
+# spaceship fly-by: a doppler-ish sweep (pitch falls as it passes) over a swell of filtered noise
+doppler = sq(np.cumsum(260 - 160 * (t / d) ** 1.4) / SR, 0.5) * 0.18 + sweep(520, 130, d, np.sin) * 0.2
+rush = lp(noise2(d), 0.25) * np.sin(np.pi * np.clip(t / d, 0, 1)) ** 2.2 * 0.9
+save('whoosh', (doppler + rush) * np.sin(np.pi * np.clip(t / d, 0, 1)) ** 0.8)
 print('ok')

@@ -26,7 +26,7 @@ Local APK builds need the Android SDK (`ANDROID_HOME`) and access to Google's Ma
 ./gradlew :desktop:run                    # run the game in a window (needs OpenGL; xvfb-run works for headless screenshots)
 ./gradlew :android:assembleDebug -PwithAndroid   # Android APK (needs the Android SDK)
 ```
-Test hooks (system properties): `-Dclimb.demo=true` (autopilot plays), `-Dclimb.start=title|settings|credits|play`, `-Dclimb.seed=N -Dclimb.startHeight=M` (begin partway up), `-Dclimb.hazard=CANNON|SAW_V|SPIKE_TRAP|SPIKE_DROP|SPRING|GATE|KEY|CRAB|CLUB` (start beside the first one),
+Test hooks (system properties): `-Dclimb.demo=true` (autopilot plays), `-Dclimb.start=title|settings|credits|play`, `-Dclimb.seed=N -Dclimb.startHeight=M` (begin partway up), `-Dclimb.hazard=CANNON|SAW_V|SPIKE_TRAP|SPIKE_DROP|SPRING|GATE|KEY|CRAB|CLUB|SEESAW|BRIDGE|RAMP` (`-Dclimb.rampSkin=0..3`, `-Dclimb.spaceFast=true`, `-Dclimb.spaceFreeze=0..1`) (start beside the first one),
 `-Dclimb.shots=DIR -Dclimb.shotCount=N` (numbered PNG screenshots), `-Dclimb.overlay=pause`, `-Dclimb.camDist=4.2` (close-up camera), `-Dclimb.w/-Dclimb.h`.
 
 ## Layout

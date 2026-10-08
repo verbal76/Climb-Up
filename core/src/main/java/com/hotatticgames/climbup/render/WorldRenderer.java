@@ -43,6 +43,11 @@ public final class WorldRenderer implements Disposable {
     private final SpriteBatch sb = new SpriteBatch();
     private HeroRig hero;
     private int character;
+    private SpaceScene space;
+    private com.badlogic.gdx.graphics.PerspectiveCamera farCam;
+    private boolean whooshPending;
+    /** True once after a spaceship has flown past the player (the play screen plays the sound). */
+    public boolean takeWhoosh() { boolean w = whooshPending; whooshPending = false; return w; }
     private final java.util.ArrayList<Vis> vis = new java.util.ArrayList<>();
     private int pruneCursor;
     private final Background bg = new Background();
@@ -325,6 +330,15 @@ public final class WorldRenderer implements Disposable {
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT | GL20.GL_DEPTH_BUFFER_BIT);
         bg.render(sb, shapes, skyTop, skyBot, ps, camY, zoneF, T.circumference(), reducedMotion, time);
         Gdx.gl.glClear(GL20.GL_DEPTH_BUFFER_BIT);
+        if (quality > 0) {                 // planets and sky ships far behind the tower (wide-range camera, drawn first)
+            if (space == null) { farCam = new com.badlogic.gdx.graphics.PerspectiveCamera(40f, cam.viewportWidth, cam.viewportHeight); farCam.near = 1f; farCam.far = 2500f; space = new SpaceScene(models, farCam, T.radius); }
+            space.update(frameDt, py, reducedMotion);
+            if (space.whoosh) whooshPending = true;
+            farCam.viewportWidth = cam.viewportWidth; farCam.viewportHeight = cam.viewportHeight; farCam.fieldOfView = cam.fieldOfView;
+            farCam.position.set(cam.position); farCam.direction.set(cam.direction); farCam.up.set(cam.up); farCam.update();
+            batch.begin(farCam); space.renderFar(batch, ps, camY, zoneF); batch.end();
+            Gdx.gl.glClear(GL20.GL_DEPTH_BUFFER_BIT);
+        }
 
         batch.begin(cam);
         syncVis();
@@ -345,6 +359,7 @@ public final class WorldRenderer implements Disposable {
             drawElement(sim, i, v, es, ey, ps, time);
         }
         for (int k = 0, cnt = sim.hz == null ? course.hazards.size() : sim.hz.length; k < cnt; k++) { int hi2 = sim.hz == null ? k : sim.hz[k]; drawHazard(course.hazards.get(hi2), sim.time + alpha * Sim.DT, ps, time, hi2 < sim.featDone.length && sim.featDone[hi2]); }
+        if (space != null && quality > 0) space.renderNear(batch, env, (inst, arc, yy, dz, sx, sy, sz, yaw) -> place(inst, arc, yy, dz, ps, sx, sy, sz, yaw), ps, camY, py, 0f, reducedMotion);
         for (int q = 0; q < 24 && pruneCursor < lo; q++, pruneCursor++) { Vis pv = vis.get(pruneCursor); pv.parts = null; pv.built = false; }
         drawFlung(dt, ps);
         if (showPlayer) drawPlayer(sim, dt, time, ps, py, alpha);

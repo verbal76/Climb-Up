@@ -37,7 +37,11 @@ public final class Audio implements Disposable {
         if (current != null) current.stop();
         Music m = tracks.get(name);
         if (m == null) {
-            try { m = Gdx.audio.newMusic(Gdx.files.internal("audio/" + name + ".wav")); } catch (Exception e) { return; }
+            try {
+                com.badlogic.gdx.files.FileHandle f = Gdx.files.internal("audio/" + name + ".ogg");
+                if (!f.exists()) f = Gdx.files.internal("audio/" + name + ".wav");
+                m = Gdx.audio.newMusic(f);
+            } catch (Exception e) { return; }
             m.setLooping(true); tracks.put(name, m);
         }
         current = m; currentName = name; applyVolume(); if (settings.music > 0) m.play();

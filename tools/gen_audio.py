@@ -95,5 +95,5 @@ def song(name, bpm, bars, prog, seed, bright):
     n = int(0.01 * SR); x[:n] *= np.linspace(0, 1, n); x[-n:] *= np.linspace(1, 0, n)
     save(name, x, 0.55)
 song('music_menu', 84, 8, [0, 5, 7, 2], 11, False)
-song('music_game', 112, 12, [0, 9, 5, 7], 21, True)
+#song('music_game', 112, 12, [0, 9, 5, 7], 21, True)
 print('ok')

@@ -117,6 +117,17 @@ public final class Autopilot {
         }
     }
 
+    /** Waits, then simply walks off the edge (no jump) and steers toward the target: the way down to a lower platform. */
+    static final class WalkOffPolicy implements Policy {
+        final int b, dir, steerMode; final float wait; float t;
+        WalkOffPolicy(int b, int dir, float wait, int steerMode) { this.b = b; this.dir = dir; this.wait = wait; this.steerMode = steerMode; }
+        public void act(Sim s, InputState in) {
+            if (s.mode == Sim.Mode.LEDGE || s.mode == Sim.Mode.PULLUP) { in.moveY = 1f; return; }
+            if (s.mode == Sim.Mode.GROUND) { if (t < wait) { t += Sim.DT; return; } in.moveX = dir; return; }
+            in.moveX = steerMode == 3 ? dir : steer(s, b, steerMode);
+        }
+    }
+
     /** Waits, runs across the platform, hops over the hazard in the middle ({@code hopDist} before it), then leaves like {@link GroundPolicy}. */
     static final class MidHopPolicy implements Policy {
         final int a, b, dir; final float wait, hopDist, hx; final GroundPolicy rest; float t; int phase;
@@ -153,14 +164,14 @@ public final class Autopilot {
 
     static boolean movingNear(Course c, int a) {
         for (int i = a; i <= Math.min(c.routeSize() - 1, a + 2); i++) if (c.get(i).isMoving()) return true;
-        for (Element h : c.hazards) if (h.anchor >= a && h.anchor <= a + 2 && h.isMoving()) return true;
+        int a0 = anchorIdx(c, a); for (Element h : c.hazards) if (h.anchor >= a0 && h.anchor <= a0 + 2 && h.isMoving()) return true;
         return false;
     }
 
     static float maxPeriod(Course c, int a) {
         float p = 0;
         for (int i = a; i <= Math.min(c.routeSize() - 1, a + 2); i++) if (c.get(i).isMoving()) p = Math.max(p, c.get(i).period);
-        for (Element h : c.hazards) if (h.anchor >= a && h.anchor <= a + 2 && h.isMoving()) p = Math.max(p, h.period);
+        int a0 = anchorIdx(c, a); for (Element h : c.hazards) if (h.anchor >= a0 && h.anchor <= a0 + 2 && h.isMoving()) p = Math.max(p, h.period);
         return p;
     }
 
@@ -172,25 +183,45 @@ public final class Autopilot {
         }
     }
 
+    /** Pair mode (key-room detours): success means attaching to exactly element {@code tgt}. */
+    static boolean succeededTo(Sim s, int tgt) {
+        switch (s.mode) {
+            case GROUND: case LEDGE: case PULLUP: case ROPE: case CABLE: return s.onElem == tgt && (s.mode != Sim.Mode.GROUND || !s.gone[tgt]);
+            default: return s.mode == Sim.Mode.AIR && s.lastPad == tgt;
+        }
+    }
+
+    /** Detour landings must be survivable: after touching down the player can brake (full stick against the motion) and still be on the platform. */
+    static boolean staysOn(Sim landed, int tgt) {
+        if (landed.mode != Sim.Mode.GROUND) return true;
+        Sim t = landed.copy(); InputState in = new InputState();
+        for (int i = 0; i < 40; i++) { in.clear(); t.step(in); if (t.mode != Sim.Mode.GROUND || t.onElem != tgt) return false; }
+        return true;
+    }
+
+    static int anchorIdx(Course c, int i) { return c.get(i).anchor < 0 ? i : c.get(i).anchor; }
+
     /** Runs a policy on a copy of the state; true if it attaches to a later element without falling. */
-    static boolean trial(Sim base, int a, PolicyFactory f, float limit) { return trialEnd(base, a, f, limit) != null; }
+    static boolean trial(Sim base, int a, PolicyFactory f, float limit) { return trialEnd(base, a, -1, f, limit) != null; }
 
     /** Like {@link #trial} but returns the state at the moment of success (null on failure). */
-    static Sim trialEnd(Sim base, int a, PolicyFactory f, float limit) {
+    static Sim trialEnd(Sim base, int a, PolicyFactory f, float limit) { return trialEnd(base, a, -1, f, limit); }
+
+    static Sim trialEnd(Sim base, int a, int tgt, PolicyFactory f, float limit) {
         Sim s = base.copy();
-        s.setWindow(a - 1, a + 6);
+        if (tgt >= 0) s.setWindow(anchorIdx(s.course, a) - 2, anchorIdx(s.course, a) + 6); else s.setWindow(a - 1, a + 6);
         Policy p = f.create();
         InputState in = new InputState();
         int fallsBefore = s.falls;
-        float floorY = Math.min(s.course.get(a).y, s.course.get(Math.min(s.course.routeSize() - 1, a + 1)).y) - 4.5f;
+        float floorY = (tgt >= 0 ? Math.min(s.course.get(a).y, s.course.get(tgt).y) : Math.min(s.course.get(a).y, s.course.get(Math.min(s.course.routeSize() - 1, a + 1)).y)) - 4.5f;
         int n = (int) (limit / Sim.DT);
         for (int i = 0; i < n; i++) {
             in.clear();
             p.act(s, in);
             s.step(in);
             if (s.falls != fallsBefore) return null;
-            if (succeeded(s, a)) return s;
-            if (s.mode == Sim.Mode.GROUND && s.onElem >= 0 && (s.onElem < a || s.onElem >= s.course.routeSize())) return null;   // fell back, or onto a dead end
+            if (tgt >= 0 ? succeededTo(s, tgt) : succeeded(s, a)) return tgt >= 0 && !staysOn(s, tgt) ? null : s;
+            if (tgt < 0 && s.mode == Sim.Mode.GROUND && s.onElem >= 0 && (s.onElem < a || s.onElem >= s.course.routeSize())) return null;   // fell back, or onto a dead end
             if (s.mode == Sim.Mode.AIR && s.vy < 0 && s.y < floorY) return null;
         }
         return null;
@@ -210,11 +241,16 @@ public final class Autopilot {
     public static Result plan(Sim base, int a, boolean measureMargin) { return plan(base, a, measureMargin, false); }
 
     /** With lookahead, prefers moves that leave a state from which the next link is also solvable (used when actually playing the course). */
-    public static Result plan(Sim base, int a, boolean measureMargin, boolean lookahead) {
+    public static Result plan(Sim base, int a, boolean measureMargin, boolean lookahead) { return planTo(base, a, a + 1, false, measureMargin, lookahead); }
+
+    /** Plans a link between any two elements (not just consecutive route elements): key-room detours. */
+    public static Result planPair(Sim base, int a, int b, boolean measureMargin) { return planTo(base, a, b, true, measureMargin, false); }
+
+    static Result planTo(Sim base, int a, int b, boolean pair, boolean measureMargin, boolean lookahead) {
         Course c = base.course;
         Result r = new Result();
-        int b = a + 1;
-        if (b >= c.routeSize()) { r.ok = true; return r; }
+        final int tgt = pair ? b : -1;
+        if (!pair && b >= c.routeSize()) { r.ok = true; return r; }
         List<PolicyFactory> cands = new ArrayList<>();
         List<Integer> group = new ArrayList<>();      // move-style id per candidate (offset x hold x steering), for the timing-window metric
         int[] groupWins = new int[32]; int nWaits = 1;
@@ -225,7 +261,7 @@ public final class Autopilot {
         } else if (c.get(a).type == Element.Type.CABLE) {
             float[] ks = {0f, 0.6f, 1.4f, 2.4f};
             for (float k : ks) { cands.add(() -> new CablePolicy(a, b, dir, k, false)); cands.add(() -> new CablePolicy(a, b, dir, k, true)); }
-        } else if (base.mode == Sim.Mode.AIR && c.get(a).type == Element.Type.PAD) {
+        } else if (base.mode == Sim.Mode.AIR && (c.get(a).type == Element.Type.PAD || c.get(a).type == Element.Type.SPRING)) {
             for (int m = 0; m < 3; m++) for (int h = 0; h < 2; h++) { final int mm = m; final boolean hh = h == 0; cands.add(() -> new AirPolicy(b, mm, hh)); }
         } else {
             boolean moving = movingNear(c, a);
@@ -241,9 +277,16 @@ public final class Autopilot {
                 }
             }
         }
+        if (base.mode == Sim.Mode.GROUND && c.get(a).isPlatform() && c.get(b).isPlatform() && c.get(b).y < c.get(a).y - 0.3f) {      // heading down: just walk off the edge
+            for (int w = 0; w < nWaits; w++) for (int sm : new int[]{0, 1, 3}) {
+                final float wt = w * 0.3f; final int fsm = sm;
+                cands.add(() -> new WalkOffPolicy(b, dir, wt, fsm));
+                group.add(24 + sm);
+            }
+        }
         if (base.mode == Sim.Mode.GROUND && c.get(a).isPlatform()) {      // a hazard in the middle of this platform: hop-over moves
             for (Element h : c.hazards) {
-                if (h.anchor != a || !(h.type == Element.Type.SAW_H || h.type == Element.Type.SPIKE_BLOCK || h.type == Element.Type.SPIKE_TRAP)) continue;
+                if (h.anchor != anchorIdx(c, a) || !(h.type == Element.Type.SAW_H || h.type == Element.Type.SPIKE_BLOCK || h.type == Element.Type.SPIKE_TRAP || h.type == Element.Type.CRAB)) continue;
                 if (Math.abs(c.dsWrap(h.s, base.es1[a])) >= c.get(a).halfW()) continue;
                 final float hx = base.es1[a] + c.dsWrap(h.s, base.es1[a]);
                 float[] hops = {1.0f, 1.5f, 2.0f, 2.5f};
@@ -261,13 +304,13 @@ public final class Autopilot {
             r.trials++;
             float limit = 4.5f + (c.get(a).type == Element.Type.CRUMBLE ? 0 : 6f);
             if (lookahead) {
-                Sim end = trialEnd(base, a, f, limit);
+                Sim end = trialEnd(base, a, tgt, f, limit);
                 if (end == null) continue;
                 r.successes++;
                 if (firstOk == null) firstOk = f;
                 if (!r.ok && leavesGoodState(end, a)) { r.ok = true; r.factory = f; }
                 if (r.ok && !measureMargin) break;
-            } else if (trial(base, a, f, limit)) {
+            } else if (trialEnd(base, a, tgt, f, limit) != null) {
                 r.successes++;
                 if (ci < group.size()) groupWins[group.get(ci)]++;
                 if (!r.ok) { r.ok = true; r.factory = f; }
@@ -279,16 +322,77 @@ public final class Autopilot {
         return r;
     }
 
+    static boolean hasMidHazard(Course c, int a) {
+        Element p = c.get(a);
+        if (!p.isPlatform()) return false;
+        for (Element h : c.hazards) {
+            if (h.anchor != a) continue;
+            switch (h.type) { case SPIKE_TRAP: case SAW_H: case SPIKE_BLOCK: case SPIKE_DROP: case GATE: case CRAB: if (Math.abs(c.dsWrap(h.s, p.s)) < p.halfW()) return true; break; default: break; }
+        }
+        return false;
+    }
+
+    // ------------------------------------------------------------------ key-room detours
+
+    /** Plans and executes one link between two arbitrary elements on the real sim; false if it cannot or the player falls/gets hurt. */
+    static boolean execLink(Sim real, int a, int b, InputState in) {
+        real.act = null; real.hz = null;
+        Result r = planPair(real, a, b, false);
+        if (!r.ok) return false;
+        Policy p = r.factory.create(); Policy pull = new PullPolicy();
+        int f0 = real.falls; int guard = (int) (14f / Sim.DT);
+        while (guard-- > 0 && !succeededTo(real, b)) { in.clear(); p.act(real, in); real.step(in); if (real.falls != f0) return false; }
+        if (!succeededTo(real, b)) return false;
+        for (int g = 0; g < 120 && (real.mode == Sim.Mode.LEDGE || real.mode == Sim.Mode.PULLUP); g++) { in.clear(); pull.act(real, in); real.step(in); }
+        return true;
+    }
+
+    /** Fetches the key of a key room and comes back to the anchor platform. */
+    static boolean detour(Sim real, int[] kr, InputState in) {
+        Course c = real.course; int r = kr[0], k = kr[1], pIdx = k + 1; boolean pad = kr[3] == 1;
+        Element key = c.hazards.get(kr[4]);
+        for (int q = 0; q < 24; q++) { in.clear(); real.step(in); }              // arrive, stop, then plan the detour from a standstill
+        if (!execLink(real, r, k, in)) return false;
+        for (int q = 0; q < 40 && Math.abs(real.vx) > 0.05f && real.mode == Sim.Mode.GROUND; q++) { in.clear(); real.step(in); }      // brake after landing
+        int f0 = real.falls; int guard = (int) (6f / Sim.DT);
+        while (guard-- > 0 && (real.keys & (1 << key.color)) == 0) {            // walk across the key platform to the key
+            in.clear(); float dx = c.dsWrap(key.s, real.s); in.moveX = Math.abs(dx) < 0.1f ? 0f : Math.signum(dx); real.step(in);
+            if (real.falls != f0) return false;
+        }
+        if ((real.keys & (1 << key.color)) == 0) return false;
+        for (int q = 0; q < 24; q++) { in.clear(); real.step(in); }          // come to a stop before heading back
+        boolean back = pad ? execLink(real, k, pIdx, in) && execLink(real, pIdx, r, in) : execLink(real, k, r, in);
+        if (!back) return false;
+        for (int q = 0; q < 180 && real.mode == Sim.Mode.GROUND && real.onElem == r; q++) {      // walk back to the middle of the platform and stop
+            float dx = c.dsWrap(real.es1[r], real.s); in.clear();
+            if (Math.abs(dx) < 0.25f) break;
+            in.moveX = Math.signum(dx) * 0.7f; real.step(in);
+        }
+        for (int q = 0; q < 24; q++) { in.clear(); real.step(in); }
+        return real.mode == Sim.Mode.GROUND && real.onElem == r;
+    }
+
     // ------------------------------------------------------------------ whole-course run
 
     public static Report run(Course c, Tuning t, float maxSimSeconds) {
         Report rep = new Report();
         Sim real = Sim.startOn(c, t, 0);
+        real.keysFree = false; real.keys = 0;       // the solver must fetch every key it needs
         int a = 0;
+        java.util.HashSet<Integer> visited = new java.util.HashSet<>();
         InputState in = new InputState();
         boolean endless = c.get(c.goalIndex()).type != Element.Type.GOAL;     // endless slices end on a rest platform, not a goal flag
         while (!real.won && real.time < maxSimSeconds) {
             if (endless && a >= c.goalIndex()) { rep.completed = true; rep.simTime = real.time; return rep; }
+            for (int[] kr : c.keyRooms) {
+                if (kr[0] != a || !visited.add(kr[0])) continue;
+                if (real.mode != Sim.Mode.GROUND || real.onElem != a) break;
+                if (!detour(real, kr, in)) { rep.failedLink = a; rep.simTime = real.time; return rep; }
+                a = real.onElem;
+            }
+            if (real.mode == Sim.Mode.GROUND && real.onElem == a && hasMidHazard(c, a)) {   // like a person would: stop in the safe pocket before sizing up the hazard
+                for (int q = 0; q < 40 && Math.abs(real.vx) > 0.05f && real.mode == Sim.Mode.GROUND; q++) { in.clear(); real.step(in); }
+            }
             Result r = plan(real, a, false, true);
             rep.links++;
             if (!r.ok) { rep.failedLink = a; rep.simTime = real.time; return rep; }

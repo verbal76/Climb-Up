@@ -114,4 +114,93 @@ public class EndlessTest {
         assertEquals(cn.sAt(t), cn.sAt(later), 1e-3f);
         assertFalse("ball is gone for part of every cycle", cn.lethalAt(cn.period * (Element.CANNON_FLIGHT + 0.1f)));
     }
+
+    @Test public void gateIsAWallUntilYouCarryItsKeyAndTheKeyIsOneUse() throws Exception {
+        Tuning t = TestUtil.tuning();
+        Course c = TestUtil.flat(t);
+        Element gate = new Element(Element.Type.GATE, 12f, 0f, 3.4f); gate.len = 7.5f; gate.color = 2; gate.anchor = 0; c.hazards.add(gate);
+        Element key = new Element(Element.Type.KEY, 7f, 1f, 0f); key.color = 2; key.anchor = 0; c.hazards.add(key);
+        Sim s = Sim.startOn(c, t, 0); s.keysFree = false; s.keys = 0; s.s = 9f; s.invuln = 0f;
+        InputState in = new InputState();
+        for (int i = 0; i < 90; i++) { in.clear(); in.moveX = 1f; s.step(in); }
+        assertTrue("stopped at the gate", s.s < 12f - 1.7f);
+        assertTrue((s.consumeEvents() & Sim.EV_BLOCKED) != 0);
+        for (int i = 0; i < 60; i++) { in.clear(); in.moveX = -1f; s.step(in); }          // walk back to the key
+        assertTrue("key picked up", (s.keys & (1 << 2)) != 0);
+        for (int i = 0; i < 120; i++) { in.clear(); in.moveX = 1f; s.step(in); }
+        assertTrue("walked through the opened gate", s.s > 13f);
+        assertEquals("the key is used up", 0, s.keys);
+        s.respawn();
+        assertEquals("a respawn never un-opens a gate or loses a key you hold", 0, s.keys);
+        assertTrue(s.featDone[0]);
+    }
+
+    @Test public void everyCastleHasAKeyRoomBeforeIt() throws Exception {
+        Tuning t = TestUtil.tuning();
+        int castles = 0;
+        for (long seed : SEEDS) {
+            Course prev = null;
+            for (int k = 0; k < 12; k++) {
+                Course c = CourseGenerator.chunk(seed, k, prev, t);
+                int gates = 0;
+                for (Element h : c.hazards) if (h.type == Element.Type.GATE) gates++;
+                assertEquals("each gate has exactly one key room", gates, c.keyRooms.size());
+                for (int[] kr : c.keyRooms) {
+                    Element key = c.hazards.get(kr[4]), gate = c.hazards.get(kr[5]);
+                    assertEquals(Element.Type.KEY, key.type); assertEquals(Element.Type.GATE, gate.type);
+                    assertEquals("key matches the castle colour", gate.color, key.color);
+                    assertTrue("the key room hangs off a route platform before the gate", kr[0] < gate.anchor && c.get(kr[0]).anchor < 0);
+                    assertTrue("room platforms are decoys, never route", c.get(kr[1]).anchor == kr[0]);
+                    castles++;
+                }
+                prev = c;
+            }
+        }
+        System.out.println("castles with key rooms: " + castles);
+        assertTrue("castles actually appear", castles >= 4);
+    }
+
+    @Test public void crabsShoveButNeverHurt_andAClubKnocksThemOff() throws Exception {
+        Tuning t = TestUtil.tuning();
+        Course c = TestUtil.flat(t);
+        Element crab = new Element(Element.Type.CRAB, 10f, 0f, 0f); crab.amp = 0.01f; crab.period = 4f; crab.anchor = 0; c.hazards.add(crab);
+        Element club = new Element(Element.Type.CLUB, 7f, 1f, 0f); club.anchor = 0; c.hazards.add(club);
+        Sim s = Sim.startOn(c, t, 0); s.keysFree = false; s.s = 8.5f; s.invuln = 0f;
+        InputState in = new InputState();
+        for (int i = 0; i < 40 && s.shoveCd <= 0f; i++) { in.clear(); in.moveX = 1f; s.step(in); }
+        assertTrue("a crab shoves you", (s.consumeEvents() & Sim.EV_SHOVE) != 0);
+        assertEquals("shoves never hurt", 0, s.hits);
+        assertEquals(0, s.falls);
+        // now with the club: walk to it, face the crab, swing
+        Sim w = Sim.startOn(c, t, 0); w.keysFree = false; w.s = 8.2f; w.invuln = 0f;
+        for (int i = 0; i < 60 && w.clubTime <= 0f; i++) { in.clear(); in.moveX = -1f; w.step(in); }
+        assertTrue("club picked up", w.clubTime > 0f);
+        for (int i = 0; i < 20; i++) { in.clear(); w.step(in); }
+        w.s = 8.9f; w.vx = 0f; w.facing = 1; w.shoveCd = 0f;
+        in.clear(); in.swingPressed = true; w.step(in);
+        for (int i = 0; i < 25; i++) { in.clear(); w.step(in); }
+        assertTrue("the crab is gone", w.featDone[1]);
+        assertEquals("and never touched you", 0, w.hits);
+        // without a club, swinging does nothing
+        Sim n = Sim.startOn(c, t, 0); n.keysFree = false; n.s = 8.9f; n.invuln = 0f; n.facing = 1;
+        in.clear(); in.swingPressed = true; n.step(in);
+        assertEquals(0f, n.swingT, 0f);
+    }
+
+    @Test public void crabSlicesStillSolve() throws Exception {
+        Tuning t = TestUtil.tuning();
+        int crabs = 0, clubs = 0;
+        for (long seed : new long[]{31, 32, 33, 34, 35}) {
+            Course prev = null;
+            for (int k = 0; k < 10; k++) {
+                Course c = CourseGenerator.chunk(seed, k, prev, t);
+                for (Element h : c.hazards) { if (h.type == Element.Type.CRAB) crabs++; if (h.type == Element.Type.CLUB) clubs++; }
+                Autopilot.Report r = Autopilot.run(c, t, 4000f);
+                assertTrue("seed " + seed + " slice " + k + " link " + r.failedLink, r.completed);
+                prev = c;
+            }
+        }
+        System.out.println("crabs=" + crabs + " clubs=" + clubs);
+        assertTrue("crabs appear", crabs > 0);
+    }
 }

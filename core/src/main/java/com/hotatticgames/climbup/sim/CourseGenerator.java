@@ -14,7 +14,7 @@ import java.util.Random;
  * from a saved slice without regenerating anything below it.
  */
 public final class CourseGenerator {
-    enum Kind { HOP, STAIRS, CRUMBLE, MOVER_H, MOVER_V, PAD, ROPE, CABLE, SWING, GRAB, HAZ, TRAP }
+    enum Kind { HOP, STAIRS, CRUMBLE, MOVER_H, MOVER_V, PAD, ROPE, CABLE, SWING, GRAB, HAZ, TRAP, SPRING }
 
     private final Tuning T;
     private final Random rnd;
@@ -105,6 +105,7 @@ public final class CourseGenerator {
         goal.checkpoint = true;
         if (!commit(listOf(goal), 0.0f)) throw new IllegalStateException("goal link failed");
         addDecoys(3, c.size() - 4);
+        finalizeRooms();
     }
 
     private void buildChunk(Course prev) {
@@ -128,11 +129,12 @@ public final class CourseGenerator {
         addRest(theme(c.get(c.size() - 1).y));
         c.get(c.size() - 1).checkpoint = true;
         addDecoys(Math.max(3, ctx + 2), c.size() - 11);
+        finalizeRooms();
     }
 
     private static Element copyOf(Element e, int anchor) {
         Element n = new Element(e.type, e.s, e.y, e.w);
-        n.zone = e.zone; n.amp = e.amp; n.period = e.period; n.phase = e.phase; n.len = e.len; n.checkpoint = e.checkpoint; n.dir = e.dir; n.anchor = anchor;
+        n.zone = e.zone; n.amp = e.amp; n.period = e.period; n.phase = e.phase; n.len = e.len; n.checkpoint = e.checkpoint; n.dir = e.dir; n.color = e.color; n.anchor = anchor;
         return n;
     }
 
@@ -144,7 +146,12 @@ public final class CourseGenerator {
             Element e = copyOf(c.get(i), c.get(i).anchor < 0 ? -1 : c.get(i).anchor - off);
             out.add(e);
         }
-        for (Element h : c.hazards) if (h.anchor >= off) out.hazards.add(copyOf(h, h.anchor - off));
+        int[] newHz = new int[c.hazards.size()];
+        for (int i = 0; i < c.hazards.size(); i++) {
+            Element h = c.hazards.get(i);
+            if (h.anchor >= off) { newHz[i] = out.hazards.size(); out.hazards.add(copyOf(h, h.anchor - off)); } else newHz[i] = -1;
+        }
+        for (int[] k : c.keyRooms) out.keyRooms.add(new int[]{k[0] - off, k[1] - off, k[2], k[3], newHz[k[4]], newHz[k[5]]});
         out.routeCount = rs - off;
         out.indexDecoys();
         return out;
@@ -158,7 +165,7 @@ public final class CourseGenerator {
             float d = diff(last.y);
             int zone = tier(last.y), th = theme(last.y);
             int restEvery = T.restEvery + Math.round(3f * intensity(last.y));
-            if (sinceRest >= restEvery) { addRest(th); sinceRest = 0; continue; }
+            if (sinceRest >= restEvery) { addRest(th); sinceRest = 0; maybeCastle(th); continue; }
             Kind k = pick(zone, last);
             if (!tryModule(k, d, th)) {
                 rejected++;
@@ -170,12 +177,146 @@ public final class CourseGenerator {
         }
     }
 
+
+    // ------------------------------------------------------------------ castles: a coloured gate across the route, and a key room that is proven reachable (and returnable)
+
+    private final List<int[]> pendingCastles = new ArrayList<>();   // {rest platform index, gate index in c.hazards}
+    private int castlesThisCourse;
+    public int castleDue, castleBuilt, roomFailed, roomOk; public int[] roomWhy = new int[5], roomWhyD = new int[5];
+
+    private int sliceNo() { return (int) ((salt - 1) % 1000003L); }
+
+    private void maybeCastle(int th) {
+        Element last = c.get(c.size() - 1);
+        boolean due = endless ? (sliceNo() % 2 == 1 && castlesThisCourse == 0 && c.size() - ctx > 6)
+                              : (last.y > 70f && castlesThisCourse < (int) (last.y / 150f) && castlesThisCourse < 3);
+        if (due) castleDue++;
+        if (!due || !last.checkpoint || last.type != Element.Type.STATIC || last.w < 5f || rnd.nextInt(4) == 0) return;
+        if (endless && last.y > c.get(ctx - 1).y + T.chunkHeight - 12f) return;           // keep the whole castle inside this slice
+        tryCastle(th);
+    }
+
+    private boolean tryCastle(int th) {
+        int n0 = c.size(), h0 = c.hazards.size();
+        int rIdx = n0 - 1;
+        float d = diff(c.get(rIdx).y);
+        int mods = 1 + rnd.nextInt(2);
+        for (int i = 0; i < mods; i++) {
+            if (!tryModule(rnd.nextBoolean() ? Kind.HOP : Kind.STAIRS, d, th)) { rollbackTo(n0, h0); return false; }
+        }
+        Element u = c.get(c.size() - 1);
+        for (int attempt = 0; attempt < 6; attempt++) {
+            float dy = r(0f, 0.5f), gap = reach(dy) * lerp(0.5f, 0.8f, d) * (1f - 0.04f * attempt);
+            Element g = plat(Element.Type.STATIC, u.s + u.w / 2f + gap + 4.5f, u.y + dy, 9f, th);
+            Element gate = hz(Element.Type.GATE, g.s, g.y, 3.4f, th);
+            gate.len = 7.5f; gate.color = rnd.nextInt(Element.KEY_COUNT); gate.anchor = c.size();
+            if (!commit(listOf(g), listOf(gate), T.minLinkMargin)) continue;
+            int gateIdx = c.hazards.size() - 1;
+            addRest(th);
+            pendingCastles.add(new int[]{rIdx, gateIdx});
+            castlesThisCourse++; castleBuilt++;
+            return true;
+        }
+        rollbackTo(n0, h0);
+        return false;
+    }
+
+    private void rollbackTo(int n0, int h0) {
+        while (c.size() > n0) c.elements.remove(c.size() - 1);
+        while (c.hazards.size() > h0) c.hazards.remove(c.hazards.size() - 1);
+    }
+
+    private final List<Element[]> builtRooms = new ArrayList<>();     // {key, gate}
+    private final List<int[]> roomIdx = new ArrayList<>();            // {anchor, first decoy, nOut, pad}
+
+    /** Builds a key room for every castle (in the decoy phase, after the route is final). A castle whose key cannot be placed provably is removed instead, so a locked door can never be unopenable. */
+    private void addKeyRooms() {
+        List<Element> removeGates = new ArrayList<>();
+        for (int[] pc : pendingCastles) {
+            Element gate = c.hazards.get(pc[1]);
+            boolean ok = false;
+            int gIdx = gate.anchor;
+            for (int anchor = pc[0]; anchor < gIdx && !ok; anchor++) {          // the rest platform first, then any plain platform between it and the gate
+                Element pl = c.get(anchor);
+                if (pl.type != Element.Type.STATIC || (anchor != pc[0] && pl.w < 3f)) continue;
+                for (int attempt = 0; attempt < 14 && !ok; attempt++) ok = tryKeyRoom(anchor, gate, attempt);
+            }
+            if (!ok) { removeGates.add(gate); roomFailed++; } else roomOk++;
+        }
+        for (Element g : removeGates) c.hazards.remove(g);
+    }
+
+    private boolean tryKeyRoom(int rIdx, Element gate, int attempt) {
+        Element R = c.get(rIdx);
+        boolean pad = attempt % 2 == 1;
+        int side = (attempt / 2) % 3 == 2 ? -1 : 1;     // mostly under the route ahead (it is higher there, so the room rarely collides with it), sometimes behind
+        float gap = r(0.4f, 1.3f), edge = side < 0 ? R.s - R.w / 2f : R.s + R.w / 2f;
+        List<Element> es = new ArrayList<>();
+        Element K, P = null;
+        if (!pad) {
+            float ky = R.y - r(1.25f, 1.65f);
+            K = plat(Element.Type.STATIC, edge + side * (gap + 1.5f), ky, 3f, R.zone);
+        } else {
+            float ky = R.y - r(3.6f, 5.6f);
+            P = plat(Element.Type.PAD, edge + side * 1.6f, ky, 2f, R.zone);
+            K = plat(Element.Type.STATIC, P.s + side * 2.8f, ky, 3f, R.zone);
+        }
+        K.anchor = rIdx; es.add(K);
+        if (P != null) { P.anchor = rIdx; es.add(P); }
+        Element key = new Element(Element.Type.KEY, K.s + side * 0.8f, K.y + 0.95f, 0f);
+        key.zone = R.zone; key.color = gate.color; key.anchor = rIdx;
+        int n0 = c.size(), h0 = c.hazards.size();
+        boolean ok = true;
+        for (Element e : es) { c.add(e); if (!decoyOk(e, rIdx)) { ok = false; roomWhy[0]++; roomWhyD[decoyWhy]++; break; } }
+        if (ok) c.hazards.add(key);
+        int first = n0, kIdx = n0, pIdx = n0 + 1;
+        if (ok) {
+            c.indexDecoys();
+            boolean a1 = pairOk(rIdx, kIdx), a2 = a1 && (P == null ? pairOk(kIdx, rIdx) : pairOk(kIdx, pIdx)), a3 = a2 && (P == null || pairOkAir(pIdx, rIdx));
+            if (!a1) roomWhy[1]++; else if (!a2) roomWhy[2]++; else if (!a3) roomWhy[3]++;
+            ok = a3;
+        }
+        if (ok) {                                                           // the detour must not break any route link nearby
+            int rs = c.routeSize();
+            for (int q = Math.max(0, rIdx - 7); q <= Math.min(rs - 2, rIdx + 5) && ok; q++) ok = Autopilot.plan(Sim.startOn(c, T, q), q, false).ok;
+            if (!ok) roomWhy[4]++;
+        }
+        if (!ok) { while (c.size() > n0) c.elements.remove(c.size() - 1); while (c.hazards.size() > h0) c.hazards.remove(c.hazards.size() - 1); c.indexDecoys(); return false; }
+        builtRooms.add(new Element[]{key, gate});
+        roomIdx.add(new int[]{rIdx, first, 1, P == null ? 0 : 1});
+        return true;
+    }
+
+    /** A detour link must work from several standing spots, not just the platform centre (a human never stands exactly there). */
+    private boolean pairOk(int a, int b) {
+        float hwd = Math.max(0.3f, c.get(a).halfW() - 0.4f);
+        for (float dx : new float[]{-hwd, -0.75f * hwd, -hwd / 2f, -hwd / 4f, 0f, hwd / 4f, hwd / 2f, 0.75f * hwd, hwd}) {
+            Sim base = Sim.startOn(c, T, a);
+            if (base.mode == Sim.Mode.GROUND) base.s = c.wrap(base.s + dx);
+            else if (dx != 0f) continue;
+            Autopilot.Result res = Autopilot.planPair(base, a, b, true);
+            if (!res.ok || res.margin() < Math.min(T.minLinkMargin, 0.05f)) return false;
+        }
+        return true;
+    }
+    private boolean pairOkAir(int a, int b) { return pairOk(a, b); }
+
     // ------------------------------------------------------------------ decoys: dead ends and lures that mislead without ever blocking the route
 
     public int decoys, decoyTried, decoyGeoFail, decoyPlanFail;
     public static CourseGenerator lastForDebug;
     private long salt;
     private List<Element> pendingHaz = new ArrayList<>();
+
+    private void finalizeRooms() {
+        c.keyRooms.clear();
+        for (int i = 0; i < builtRooms.size(); i++) {
+            Element[] kg = builtRooms.get(i);
+            if (!c.hazards.contains(kg[1])) continue;
+            int[] ri = roomIdx.get(i);
+            c.keyRooms.add(new int[]{ri[0], ri[1], ri[2], ri[3], c.hazards.indexOf(kg[0]), c.hazards.indexOf(kg[1])});
+        }
+    }
 
     private void addDecoys(int lo, int hi) {
         c.finishRoute();
@@ -189,6 +330,7 @@ public final class CourseGenerator {
             List<Element> es = buildDecoy(p, a, dr);
             if (tryDecoy(es, pendingHaz, a)) decoys += es.size();
         }
+        addKeyRooms();          // last, so every key-room link is proven against the final geometry
     }
 
     /** Dead-end spurs (forward and gently down, or backward and up), crumbling lures, unreachable stepping stones, and trapped ledges guarded by hazards. */
@@ -245,6 +387,8 @@ public final class CourseGenerator {
         return false;
     }
 
+    public int decoyWhy;      // diagnostics: why decoyOk last said no (1 overlap, 2 other layer, 3 ghost layer, 4 stepping stone)
+
     private boolean decoyOk(Element d, int a) {
         int rs = c.routeSize();
         for (int i = 0; i < c.size(); i++) {
@@ -252,15 +396,15 @@ public final class CourseGenerator {
             if (e == d) continue;
             if (Math.abs(d.s - e.s) < c.circumference * 0.5f) {
                 float gap = Math.abs(d.s - e.s) - d.w / 2f - arcHalf(e);
-                if (gap < 1.0f && d.y - 0.6f < vHi(e) - 1.6f && d.y + 1.6f > vLo(e) + 0.8f) return false;   // overlapping / touching
-            } else if (layersClash(c, d, e)) return false;
+                if (gap < 1.0f && d.y - 0.6f < vHi(e) - 1.6f && d.y + 1.6f > vLo(e) + 0.8f) { decoyWhy = 1; return false; }   // overlapping / touching
+            } else if (layersClash(c, d, e)) { decoyWhy = 2; return false; }
         }
-        for (Element g : ghostElems) if (layersClash(c, d, g)) return false;
+        for (Element g : ghostElems) if (layersClash(c, d, g)) { decoyWhy = 3; return false; }
         for (int j = a + 2; j < rs; j++) {                 // never a stepping stone toward later route
             Element e = c.get(j);
             if (!e.isPlatform()) continue;
             float gap = Math.max(0f, Math.abs(c.dsWrap(d.s, e.s)) - d.w / 2f - e.halfW());
-            if (gap < 6.5f && e.y - d.y > -7f && e.y - d.y < 3.6f) return false;
+            if (gap < 6.5f && e.y - d.y > -7f && e.y - d.y < 3.6f) { decoyWhy = 4; return false; }
         }
         return true;
     }
@@ -349,6 +493,7 @@ public final class CourseGenerator {
     private static float hzHalf(Element h) {
         switch (h.type) {
             case SAW_H: return h.amp + Element.SAW_R;
+            case CRAB: return h.amp + 0.6f;
             case SAW_V: return Element.SAW_R;
             case PENDULUM: return h.len * (float) Math.sin(h.amp) + Element.BALL_R;
             case CANNON: return h.len * 0.5f + Element.SHOT_R;
@@ -365,6 +510,9 @@ public final class CourseGenerator {
             case PENDULUM: return h.y + h.len * (1f - (float) Math.cos(h.amp)) + Element.BALL_R;
             case CANNON: return h.y + Element.SHOT_R;
             case SPIKE_TRAP: return h.y + 0.7f;
+            case SPIKE_DROP: return h.y + h.amp + Element.DROP_H;
+            case GATE: return h.y + h.len;
+            case CRAB: return h.y + 0.7f;
             default: return h.y + h.len;
         }
     }
@@ -393,7 +541,7 @@ public final class CourseGenerator {
     private int ownerOf(Element h) {
         if (h.anchor < 0 || h.anchor >= c.size()) return -1;
         Element o = c.get(h.anchor);
-        boolean on = (h.type == Element.Type.SPIKE_TRAP || h.type == Element.Type.SAW_H || h.type == Element.Type.SPIKE_BLOCK) && o.isPlatform() && Math.abs(hzS(h) - o.s) < o.w * 0.5f;
+        boolean on = (h.type == Element.Type.SPIKE_TRAP || h.type == Element.Type.SAW_H || h.type == Element.Type.SPIKE_BLOCK || h.type == Element.Type.SPIKE_DROP || h.type == Element.Type.GATE || h.type == Element.Type.CRAB) && o.isPlatform() && Math.abs(hzS(h) - o.s) < o.w * 0.5f;
         return on ? h.anchor : -1;
     }
 
@@ -409,7 +557,7 @@ public final class CourseGenerator {
         boolean ok = true;
         for (int i = n0; i < c.size() && ok; i++) ok = clearOfOtherLayers(i);
         if (!ok) failLayer++;
-        for (Element h : hz) { if (!ok) break; ok = hazardOk(h, ownerOf(h)); if (!ok) failHaz++; }
+        for (Element h : hz) { if (!ok) break; if (h.type == Element.Type.CLUB) continue; ok = hazardOk(h, ownerOf(h)); if (!ok) failHaz++; }
         for (int i = n0 - 1; i < c.size() - 1 && ok; i++) {
             Sim sim = Sim.startOn(c, T, i);
             Autopilot.Result res = Autopilot.plan(sim, i, true);
@@ -436,7 +584,7 @@ public final class CourseGenerator {
                     w[Kind.MOVER_V.ordinal()] = 2; w[Kind.CABLE.ordinal()] = 2; w[Kind.SWING.ordinal()] = 3; w[Kind.GRAB.ordinal()] = 3;
         }
         float inten = intensity(last.y);
-        if (inten > 0f || (!endless && last.y > T.courseHeight * 0.18f)) { w[Kind.HAZ.ordinal()] = 2f + 7f * inten; w[Kind.TRAP.ordinal()] = 1f + 4f * inten; }
+        if (inten > 0f || (!endless && last.y > T.courseHeight * 0.18f)) { w[Kind.HAZ.ordinal()] = 3f + 9f * inten; if (zone >= 1) w[Kind.SPRING.ordinal()] = 2f + 2f * inten; w[Kind.TRAP.ordinal()] = 2f + 5f * inten; }
         // keep the spiral pitch healthy: if climbing lags the arc travelled, prefer vertical modules
         // spiral pitch controller: track y = pitch * (arc travelled / circumference) so successive revolutions stay a fixed distance apart
         float guide = T.spiralPitch * (last.s - 4f) / c.circumference;
@@ -495,7 +643,7 @@ public final class CourseGenerator {
             int anchor = (j == 0) ? c.size() - 1 : base + j - 1;      // the platform the gap starts at
             float top = Math.max(cur.y, v.y), mid = uR + g / 2f;
             // pick a hazard that fits this gap
-            boolean cannonOk = cur.w >= 3.5f && cur.type == Element.Type.STATIC;
+            boolean cannonOk = cur.w >= 3f && cur.type == Element.Type.STATIC;
             int roll = rnd.nextInt(cannonOk ? 4 : 3);
             Element h;
             if (roll == 0) {
@@ -524,7 +672,7 @@ public final class CourseGenerator {
         float inten = intensity(last.y);
         float uR = last.s + last.w / 2f, dy = r(0f, 0.6f);
         float gapIn = reach(dy) * lerp(0.5f, 0.85f, d) * (1f - 0.03f * attempt);
-        int roll = rnd.nextInt(3);
+        int roll = rnd.nextInt(5);
         float w = 8f;
         Element p = plat(Element.Type.STATIC, uR + gapIn + w / 2f, last.y + dy, w, z);
         List<Element> es = new ArrayList<>(); es.add(p);
@@ -535,9 +683,19 @@ public final class CourseGenerator {
         } else if (roll == 1) {         // a sawblade sliding along the floor: hop it
             h = hz(Element.Type.SAW_H, p.s, p.y + 0.62f, 0f, z);
             h.amp = 1.4f; h.period = r(3.0f, 4.0f) - 0.5f * inten;
-        } else {                        // a spiked stone block in the way: hop it
+        } else if (roll == 2) {         // a spiked stone block in the way: hop it
             h = hz(Element.Type.SPIKE_BLOCK, p.s, p.y - 0.1f, 1.3f, z);
             h.len = 1.0f; h.period = 4f;
+        } else if (roll == 3) {         // a spiked stone slab on a chain that slams down on the middle of the platform: slip under it while it is raised
+            h = hz(Element.Type.SPIKE_DROP, p.s, p.y, 1.8f, z);
+            h.amp = 3.3f; h.period = r(3.4f, 4.4f) - 0.4f * inten;
+        } else {                        // a crab patrols the middle and shoves you around; a spiked club floats on the platform before it, if you want to clear it
+            h = hz(Element.Type.CRAB, p.s, p.y, 0f, z);
+            h.amp = 1.8f; h.period = r(3.0f, 4.2f) - 0.4f * inten;
+            if (last.w >= 3f && last.isPlatform() && rnd.nextInt(3) > 0) {
+                Element club = hz(Element.Type.CLUB, last.s, last.y + 1.0f, 0f, z); club.anchor = c.size() - 1; club.phase = r(0f, 6.28f);
+                hzOut.add(club);
+            }
         }
         h.phase = r(0f, 6.28f); h.anchor = c.size();      // the platform being added (first appended element)
         hzOut.add(h);
@@ -631,6 +789,20 @@ public final class CourseGenerator {
                 sw.len = len; sw.amp = th; sw.period = r(3.6f, 4.4f); sw.phase = r(0f, 6.28f);
                 l.add(sw);
                 l.add(plat(S, sw.s + ext + wm / 2 + gapOut + 1.5f, y0 + r(0.5f, 1.0f), 3f, z));
+                break;
+            }
+            case SPRING: {
+                float ang = r(0.32f, 0.62f) * (1f - 0.04f * attempt);
+                float v = T.padBounce, vy0 = v * (float) Math.cos(ang), vx0 = v * (float) Math.sin(ang);
+                float gap = lerp(1.0f, 1.8f, d) * r(0.9f, 1.1f);
+                float sS = eR + gap + 1f;
+                float dy = r(-0.8f, 2.8f);
+                float disc = vy0 * vy0 - 2 * T.gravity * dy;
+                if (disc < 1f) dy = 0f;
+                float tf = (vy0 + (float) Math.sqrt(Math.max(1f, vy0 * vy0 - 2 * T.gravity * dy))) / T.gravity;
+                Element sp = plat(Element.Type.SPRING, sS, y0, 2f, z); sp.amp = ang;
+                l.add(sp);
+                l.add(plat(S, sS + vx0 * tf * r(0.86f, 0.97f) + 1.2f, y0 + dy, 3.5f, z));
                 break;
             }
             case GRAB: {

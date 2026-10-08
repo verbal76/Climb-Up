@@ -20,6 +20,12 @@
 
 * Decoys: all six towers (51-87 decoys each) still complete start to goal with decoys active; decoy structure/anchoring and 'dead end is not progress' covered by tests; tap sweep (14 taps across title/pause/settings/credits) clean after the juice pass.
 
+## Endless climb (builds 17+)
+* `:core:test` now also covers the endless tower (`EndlessTest`): 6 seeds x 10 slices are completed by the solver (including fetching every key and returning before each castle gate); slice = pure function of (seed, index, previous slice) and identical after a JSON save/restore; the tower grows and resumes from a saved slice; hazards are absent in the first 70 m, rise with height and all kinds appear; hazard hit sends you back with grace and never from another layer; cannon balls are pure functions of time; a gate is a wall until its key is carried and keys are one-use; every gate has a key room of the same colour that hangs off a route platform before it; crabs shove but never hurt and a club knocks them off.
+* Stress runs (not unit tests): about 560 slices (33 km of tower) from 40 seeds, 173 castles with key rooms: 0 generation failures; solver failures were found and fixed one by one (spike trap lethal from other layers, ring-wide pull-up, platform-edge landings, key-room return tolerance, stale validation after later decoys). Final stress results are in the PR description.
+* Desktop screenshots reviewed for: cannon + spiked ball, spike block, spike slab, saw, spring + arrow, castle in key colour, crab, floating club, endless HUD.
+* Known weak spots: crab and key visuals are small at gameplay distance; the solver models perfect play, not human timing, so the hazards' timing windows (>= 14-20% of a cycle) are the fairness guard; nothing here has been played on a phone yet.
+
 ## NOT run / unknown
 * **No APK was built, installed or run.** `dl.google.com` (Android SDK + AGP) is blocked in this sandbox. The Android module, manifest, icons, resources and CI workflow are untested; first CI run may need small fixes.
 * No real touch input, haptics, audio output (no sound device), on-device frame rate, memory, thermals, notch/cutout behaviour, background/kill-and-relaunch on a phone.

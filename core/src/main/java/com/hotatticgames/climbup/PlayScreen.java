@@ -45,12 +45,17 @@ public final class PlayScreen extends ScreenAdapter {
     private static final String[] STRAIN = {"UNGH!", "HNNG!", "AGH!", "NOPE NOPE NOPE!", "HOLD ON!", "NOT TODAY!"};
     private static final String[] CATCH = {"NICE CATCH!", "FINGERTIPS!", "CLUTCH!", "HANG ON!"}, CLOSE = {"JUST MADE IT!", "CLOSE ONE!", "WHEW!", "THAT WAS TIGHT!"};
 
+    private static final String[] KEY_NAMES = {"RED", "BLUE", "GREEN", "GOLD"};
+    private static final float[][] KEY_RGB = {{0.95f, 0.22f, 0.20f}, {0.25f, 0.55f, 1f}, {0.30f, 0.85f, 0.35f}, {1f, 0.82f, 0.18f}};
+    private float lockedT;
+
     private void pop(String t, Color c) { if (pops.size() > 3) pops.remove(0); pops.add(new Pop(t, c)); }
     private void freeze(float s) { if (!g.settings.reducedMotion) hitstop = Math.max(hitstop, s); }
     private com.badlogic.gdx.Screen next; private boolean disposeOnLeave;   // applied at the end of render(), after the batch is closed
 
     // ---- touch state
-    private int stickPtr = -1, jumpPtr = -1;
+    private int stickPtr = -1, jumpPtr = -1, swingPtr = -1;
+    private boolean swingLatch, kSwing;
     private final Vector2 stickBase = new Vector2(), stickKnob = new Vector2();
     private boolean jumpLatch, jumpHeldTouch;
     private float kx, ky; private boolean kJump, kJumpHeld;
@@ -77,14 +82,15 @@ public final class PlayScreen extends ScreenAdapter {
             String hzType = System.getProperty("climb.hazard");              // test hook: start beside the first hazard of this type (e.g. CANNON)
             if (hzType != null) {
                 for (int tries = 0; tries < 40; tries++) {
-                    for (Element h : course.hazards) if (h.type.name().equals(hzType) && h.anchor > 2 && course.get(h.anchor).anchor < 0) { run.startIdx = Math.max(0, h.anchor - Integer.getInteger("climb.hazardBack", 1)); break; }
+                    for (int q = 3; q < course.size(); q++) { Element e = course.get(q); if (e.anchor < 0 && e.type.name().equals(hzType)) { run.startIdx = Math.max(0, q - Integer.getInteger("climb.hazardBack", 1)); break; } }
+                    for (Element h : course.hazards) if (run.startIdx == 0 && h.type.name().equals(hzType) && h.anchor > 2 && course.get(h.anchor).anchor < 0) { run.startIdx = Math.max(0, h.anchor - Integer.getInteger("climb.hazardBack", 1)); break; }
                     if (run.startIdx > 0) break;
                     tower.extend();
                 }
             }
             sim = Sim.startOn(course, g.tuning, run.startIdx);
-            sim.checkpoint = run.startIdx;
-            if (hStart > 0) { int i = 0; while (i < course.size() - 1 && course.get(i + 1).y < hStart) i++; while (i > 0 && course.get(i).anchor >= 0) i--; sim = Sim.startOn(course, g.tuning, i); sim.checkpoint = i; }
+            sim.checkpoint = run.startIdx; sim.keysFree = false; sim.keys = 0;
+            if (hStart > 0) { int i = 0; while (i < course.size() - 1 && course.get(i + 1).y < hStart) i++; while (i > 0 && course.get(i).anchor >= 0) i--; sim = Sim.startOn(course, g.tuning, i); sim.checkpoint = i; sim.keysFree = false; sim.keys = 0; }
             updateWindow(true);
         }
         world = new WorldRenderer(g.tuning, course, g.models, g.settings.quality);
@@ -134,6 +140,10 @@ public final class PlayScreen extends ScreenAdapter {
             Vector2 u = un(sx, sy);
             if (u.x > g.ui.w() - 150 && u.y > g.ui.h() - 150) return false; // pause button (handled via tap)
             if (u.x < 150 && u.y > g.ui.h() - 150 && g.settings.leftHanded) return false;
+            if (sim.clubTime > 0f) {                                             // the swing button sits above the jump button while you carry the club
+                float sbx = g.settings.leftHanded ? 230 : g.ui.w() - 230, sby = 190 + 230;
+                if (Math.hypot(u.x - sbx, u.y - sby) < 105) { swingPtr = p; swingLatch = true; return false; }
+            }
             if (stickSide(u.x)) {
                 if (stickPtr < 0 && u.y < g.ui.h() * 0.85f) { stickPtr = p; stickBase.set(u); stickKnob.set(u); }
             } else if (jumpPtr < 0) { jumpPtr = p; jumpLatch = true; jumpHeldTouch = true; }
@@ -146,10 +156,12 @@ public final class PlayScreen extends ScreenAdapter {
         @Override public boolean touchUp(int sx, int sy, int p, int b) {
             if (p == stickPtr) stickPtr = -1;
             if (p == jumpPtr) { jumpPtr = -1; jumpHeldTouch = false; }
+            if (p == swingPtr) swingPtr = -1;
             return false;
         }
         @Override public boolean keyDown(int k) {
             if (k == Input.Keys.SPACE || k == Input.Keys.Z || k == Input.Keys.K || k == Input.Keys.UP && false) { kJump = true; kJumpHeld = true; }
+            if (k == Input.Keys.X || k == Input.Keys.J) kSwing = true;
             if (k == Input.Keys.ESCAPE || k == Input.Keys.BACK || k == Input.Keys.P) { if (state == State.PLAYING) pauseGame(); else if (state == State.PAUSED) resumePlay(); }
             return false;
         }
@@ -176,6 +188,7 @@ public final class PlayScreen extends ScreenAdapter {
         if (kyv != 0) in.moveY = kyv;
         in.jumpHeld = jumpHeldTouch || kJumpHeld;
         in.jumpPressed = jumpLatch || kJump;
+        in.swingPressed = swingLatch || kSwing;
     }
 
     // ------------------------------------------------------------------ frame
@@ -193,7 +206,7 @@ public final class PlayScreen extends ScreenAdapter {
             while (acc >= Sim.DT && steps < 6) {
                 if (demo) { driver[0].drive(sim, in); } else readInput();
                 sim.step(in);
-                in.jumpPressed = false; jumpLatch = false; kJump = false;
+                in.jumpPressed = false; jumpLatch = false; kJump = false; in.swingPressed = false; swingLatch = false; kSwing = false;
                 runTime += Sim.DT; handleEvents(sim.consumeEvents());
                 acc -= Sim.DT; steps++;
                 if (state != State.PLAYING) break;
@@ -304,6 +317,30 @@ public final class PlayScreen extends ScreenAdapter {
             if ((ev & Sim.EV_HIT) == 0) { toast = "BACK TO CHECKPOINT"; toastT = 1.6f; }
             g.persist();
         }
+        if ((ev & Sim.EV_CLUB) != 0) {
+            g.audio.play("key", 0.9f, 0.8f); world.particles.burst(s, y + 1f, 14, gold, 3f, 3.2f, 0.12f, -1f, 0.9f); vibrate(25, 1);
+            toast = "SPIKED CLUB! TAP SWING TO KNOCK CRABS OFF"; toastT = 3f; say("[CLUB]");
+        }
+        if ((ev & Sim.EV_SWING) != 0) { g.audio.play("swing", 0.8f, 0.95f + MathUtils.random(0.1f)); vibrate(10, 2); }
+        if ((ev & Sim.EV_SHOVE) != 0) { g.audio.play("bonk", 0.9f, 0.9f + MathUtils.random(0.2f)); world.shake(0.4f); freeze(0.05f); vibrate(25, 1); pop("OOF!", Color.WHITE); say("[BONK]"); }
+        if ((ev & Sim.EV_CRAB_OFF) != 0) {
+            g.audio.play("squeak", 0.9f, 0.9f + MathUtils.random(0.3f)); world.crabFlung(sim.crabS, sim.crabY, sim.facing); freeze(0.07f); world.shake(0.4f); vibrate(30, 1);
+            pop("BONK!", gold); world.particles.burst(sim.crabS, sim.crabY + 0.4f, 12, red, 3.5f, 3.5f, 0.12f, 6f, 0.6f);
+        }
+        if ((ev & Sim.EV_KEY) != 0) {
+            float[] kc = KEY_RGB[sim.lastKeyColor];
+            g.audio.play("key", 1f, 1f); world.particles.burst(s, y + 1f, 16, new Color(kc[0], kc[1], kc[2], 1f), 3f, 3.5f, 0.12f, -1f, 1.0f); vibrate(25, 1); freeze(0.06f);
+            toast = KEY_NAMES[sim.lastKeyColor] + " KEY! NOW BACK TO THE " + KEY_NAMES[sim.lastKeyColor] + " CASTLE"; toastT = 3f; say("[KEY]");
+        }
+        if ((ev & Sim.EV_DOOR) != 0) {
+            float[] kc = KEY_RGB[sim.lastGateColor];
+            g.audio.play("door", 1f, 1f); world.particles.burst(s + sim.facing * 1.4f, y + 1.2f, 22, new Color(kc[0], kc[1], kc[2], 1f), 3.5f, 3.5f, 0.14f, 0f, 1.0f); world.shake(0.5f); vibrate(40, 1);
+            toast = KEY_NAMES[sim.lastGateColor] + " CASTLE OPENED!"; toastT = 2.4f; say("[DOOR OPENS]");
+        }
+        if ((ev & Sim.EV_BLOCKED) != 0 && lockedT <= 0f) {
+            lockedT = 1.6f; g.audio.play("locked", 0.8f, 1f); vibrate(15, 2);
+            toast = "LOCKED. FIND THE " + KEY_NAMES[sim.lastGateColor] + " KEY"; toastT = 2.6f; say("[LOCKED]");
+        }
         if ((ev & Sim.EV_HIT) != 0) {
             world.particles.burst(sim.hitS, sim.hitY + 0.7f, 22, red, 4f, 4f, 0.13f, 8f, 0.7f);
             g.audio.play("hit", 1f, 1f); world.shake(0.9f); freeze(0.09f); vibrate(60, 1); say("[OUCH]");
@@ -325,10 +362,16 @@ public final class PlayScreen extends ScreenAdapter {
         {"cannon", "CANNONS FIRE SPIKED BALLS. WAIT FOR ONE TO PASS, THEN LEAP."},
         {"trap", "SPIKES POP UP ON A BEAT. WAIT IN THE SAFE PATCH, THEN RUN ACROSS WHEN THEY ARE DOWN."},
         {"block", "STONE SPIKE BLOCKS: HOP OVER THEM, AND DON'T DROP INTO ONE."},
+        {"crab", "CRABS SHOVE YOU AROUND. TIME YOUR RUN, HOP OVER, OR SWING A SPIKED CLUB AT THEM."},
+        {"club", "A SPIKED CLUB! PRESS SWING TO KNOCK CRABS OFF THE PLATFORM. IT WEARS OFF AFTER A WHILE."},
+        {"drop", "SPIKED SLABS SLAM DOWN ON A BEAT. SLIP UNDER WHILE THEY ARE RAISED."},
+        {"spring", "SPRINGS LAUNCH YOU ALONG THE ARROW. STEER IN THE AIR TO LAND IT."},
+        {"gate", "A COLOURED CASTLE NEEDS THE KEY OF ITS COLOUR. THE KEY IS HIDDEN BELOW THE PATH BEFORE IT: DROP DOWN, FIND IT, CLIMB BACK."},
     };
 
     private void updateTips(float dt) {
         if (toastT > 0) toastT -= dt;
+        if (lockedT > 0) lockedT -= dt;
         if (captionT > 0) captionT -= dt;
         if (tipT > 0) { tipT -= dt; if (tipT <= 0) tip = ""; return; }
         if (!g.settings.tips || demo) return;
@@ -339,7 +382,7 @@ public final class PlayScreen extends ScreenAdapter {
             String key = null;
             switch (e.type) {
                 case PAD: key = "pad"; break; case ROPE: key = "rope"; break; case CRUMBLE: key = "crumble"; break;
-                case MOVE_H: case MOVE_V: key = "move"; break; case CABLE: key = "cable"; break; case SWING: key = "swing"; break;
+                case MOVE_H: case MOVE_V: key = "move"; break; case CABLE: key = "cable"; break; case SWING: key = "swing"; break; case SPRING: key = "spring"; break;
                 default: if (e.checkpoint && i > 0) key = "checkpoint";
             }
             if (key == null && i == 1) key = "jump";
@@ -352,7 +395,7 @@ public final class PlayScreen extends ScreenAdapter {
             String key = null;
             switch (h.type) {
                 case SAW_H: case SAW_V: key = "saw"; break; case CANNON: key = "cannon"; break;
-                case SPIKE_TRAP: key = "trap"; break; case SPIKE_BLOCK: key = "block"; break; default: break;
+                case SPIKE_TRAP: key = "trap"; break; case SPIKE_BLOCK: key = "block"; break; case SPIKE_DROP: key = "drop"; break; case GATE: key = "gate"; break; case CRAB: key = "crab"; break; case CLUB: key = "club"; break; default: break;
             }
             if (key == null || Math.abs(course.dsWrap(h.s, sim.s)) > 9f || Math.abs(h.y - sim.y) > 7f) continue;
             if (tipFor(key)) return;
@@ -385,6 +428,23 @@ public final class PlayScreen extends ScreenAdapter {
         ui.rect(m, barY, barW, 8, new Color(0.2f, 0.22f, 0.32f, 1f));
         for (int z = 0; z < 4; z++) { Color c = Palette.SKY_BOT[z]; ui.rect(m + z * barW / 4f + 1, barY + 1, barW / 4f - 2, 6, new Color(c.r, c.g, c.b, 0.9f)); }
         ui.rect(m + within * barW - 3, barY - 5, 6, 18, Ui.ACCENT);
+        // keys carried
+        float kx0 = m, ky0 = barY - 44 * zk;
+        for (int c = 0; c < 4; c++) {
+            if ((sim.keys & (1 << c)) == 0) continue;
+            Color kc = new Color(KEY_RGB[c][0], KEY_RGB[c][1], KEY_RGB[c][2], 1f);
+            float ks = 30f * zk;
+            ui.rect(kx0 - 3, ky0 - 3, ks * 1.9f + 6, ks + 6, new Color(0.05f, 0.07f, 0.14f, 0.7f));
+            ui.rect(kx0, ky0 + ks * 0.1f, ks * 0.7f, ks * 0.8f, kc); ui.rect(kx0 + ks * 0.18f, ky0 + ks * 0.3f, ks * 0.34f, ks * 0.4f, new Color(0.05f, 0.07f, 0.14f, 1f));
+            ui.rect(kx0 + ks * 0.7f, ky0 + ks * 0.4f, ks * 1.0f, ks * 0.2f, kc); ui.rect(kx0 + ks * 1.3f, ky0 + ks * 0.15f, ks * 0.18f, ks * 0.3f, kc); ui.rect(kx0 + ks * 1.6f, ky0 + ks * 0.15f, ks * 0.18f, ks * 0.3f, kc);
+            kx0 += ks * 2.1f + 10;
+        }
+        if (sim.clubTime > 0f) {                                       // club timer
+            float cw = 150 * zk, cx0 = m, cy0 = ky0 - 34 * zk;
+            ui.rect(cx0 - 3, cy0 - 3, cw + 6, 24 * zk + 6, new Color(0.05f, 0.07f, 0.14f, 0.7f));
+            ui.rect(cx0, cy0, cw * sim.clubTime / Sim.CLUB_SECONDS, 24 * zk, new Color(0.35f, 0.6f, 1f, 1f));
+            ui.text("CLUB", cx0 + 8, cy0 + 4 * zk, 2.6f * zk, Ui.TEXT);
+        }
         // pause button
         float pb = 96f; float px = g.settings.leftHanded ? m : W - m - pb, py = H - m - pb;
         ui.rect(px - 3, py - 3, pb + 6, pb + 6, Ui.EDGE); ui.rect(px, py, pb, pb, Ui.PANEL);
@@ -468,9 +528,20 @@ public final class PlayScreen extends ScreenAdapter {
         shapes.setColor(pressed ? 1f : 0.95f, pressed ? 0.75f : 0.5f, 0.12f, pressed ? 0.95f : (hc ? 0.85f : 0.55f)); shapes.circle(jx, jy, 104, 40);
         shapes.setColor(1f, 1f, 1f, 0.9f);
         shapes.triangle(jx - 46, jy - 18, jx + 46, jy - 18, jx, jy + 40);   // jump arrow
+        float sbx = jx, sby = jy + 230;
+        if (sim.clubTime > 0f) {                                           // swing button (only while carrying the club)
+            boolean sp = swingPtr >= 0 || kSwing;
+            shapes.setColor(1f, 1f, 1f, ab * 0.7f); shapes.circle(sbx, sby, 98, 36);
+            shapes.setColor(sp ? 0.5f : 0.3f, sp ? 0.75f : 0.55f, 1f, sp ? 0.95f : (hc ? 0.85f : 0.6f)); shapes.circle(sbx, sby, 90, 36);
+            shapes.setColor(0.1f, 0.12f, 0.2f, 0.95f);
+            shapes.rect(sbx - 8, sby - 46, 16, 70);                                        // club handle
+            shapes.circle(sbx, sby + 34, 24, 16);                                          // spiked head
+            for (int sp2 = 0; sp2 < 6; sp2++) { float a = sp2 * 1.047f; shapes.triangle(sbx + 20 * (float) Math.cos(a), sby + 34 + 20 * (float) Math.sin(a), sbx + 36 * (float) Math.cos(a + 0.2f), sby + 34 + 36 * (float) Math.sin(a + 0.2f), sbx + 36 * (float) Math.cos(a - 0.2f), sby + 34 + 36 * (float) Math.sin(a - 0.2f)); }
+        }
         shapes.end();
         ui.batch.begin();
         ui.textC("JUMP", jx, jy - 78, 3.2f, new Color(1, 1, 1, hc ? 1f : 0.8f));
+        if (sim.clubTime > 0f) ui.textC("SWING", sbx, sby - 74, 3f, new Color(1, 1, 1, hc ? 1f : 0.85f));
     }
 
     private void pauseMenu() {

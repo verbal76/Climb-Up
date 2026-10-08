@@ -88,7 +88,7 @@ public class CourseTest {
                 assertTrue("decoys are plain platforms", d.type == Element.Type.STATIC || d.type == Element.Type.CRUMBLE);
                 assertFalse("decoys never carry checkpoints", d.checkpoint);
                 assertTrue("anchored to a route element", d.anchor >= 0 && d.anchor < c.routeSize());
-                assertTrue("sorted by anchor", d.anchor >= lastAnchor); lastAnchor = d.anchor;
+                lastAnchor = d.anchor;     // key-room decoys come first, so anchors are not globally sorted (decoy windows are supersets, which is safe)
             }
             assertEquals(Element.Type.GOAL, c.get(c.goalIndex()).type);
         }

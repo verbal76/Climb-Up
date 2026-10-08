@@ -42,6 +42,12 @@ public final class Course {
         return to < 0 ? new int[]{0, 0} : new int[]{from, to};
     }
 
+    /**
+     * Key rooms: {anchor route platform, first decoy index, decoys on the way out (ending at the key platform), 1 if a return pad follows them, key hazard-list index, gate hazard-list index}.
+     * The solver uses them to fetch the key before the matching castle gate.
+     */
+    public final List<int[]> keyRooms = new ArrayList<>();
+
     /** Indices of hazards anchored to route/decoy elements aLo..aHi (inclusive). */
     public int[] hazardsFor(int aLo, int aHi) {
         int n = 0;

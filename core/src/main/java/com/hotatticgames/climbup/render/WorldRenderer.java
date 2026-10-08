@@ -28,7 +28,7 @@ import com.hotatticgames.climbup.sim.Tuning;
  */
 public final class WorldRenderer implements Disposable {
     private static final class Part {
-        ModelInstance inst; float du, dy, dz, sx = 1, sy = 1, sz = 1, yaw; Color color; boolean fall; boolean tinted = true; ColorAttribute tintAttr;
+        ModelInstance inst; float du, dy, dz, sx = 1, sy = 1, sz = 1, yaw, roll; Color color; boolean fall; boolean tinted = true; ColorAttribute tintAttr;
     }
     private static final class Vis { Part[] parts; Element e; boolean built; }
 
@@ -178,6 +178,16 @@ public final class WorldRenderer implements Disposable {
                 Part c = boxPart(0, -0.10f, 0, 0.5f, 0.1f, 0.5f, coil); ps.add(c);
                 break;
             }
+            case SPRING: {
+                float a = e.amp, sa = (float) Math.sin(a), ca = (float) Math.cos(a), deg = -a * MathUtils.radiansToDegrees;
+                Color plate = new Color(0.25f, 0.27f, 0.34f, 1f), coil = new Color(0.78f, 0.80f, 0.86f, 1f), cap = new Color(0.85f, 0.16f, 0.16f, 1f);
+                ps.add(boxPart(0, -0.12f, 0, 1.9f, 0.14f, 1.3f, plate));
+                float[] hs = {0.12f, 0.30f, 0.48f};
+                for (float h : hs) { Part c1 = boxPart(h * sa, -0.0f + h * ca, 0, 0.62f, 0.09f, 0.62f, coil); c1.roll = deg; ps.add(c1); }
+                Part cp = boxPart(0.66f * sa, 0.66f * ca, 0, 1.2f, 0.26f, 1.1f, cap); cp.roll = deg; ps.add(cp);
+                Part arrow = part(models.pack("arrow_up"), 1.3f * sa, 1.6f * ca, 0.2f, 0.33f, 0.33f, 0.33f); arrow.roll = deg; arrow.tinted = false; ps.add(arrow);
+                break;
+            }
             case ROPE: {
                 Color rope = new Color(0.86f, 0.70f, 0.42f, 1f), beam = new Color(0.45f, 0.30f, 0.18f, 1f);
                 ps.add(boxPart(0, -e.len * 0.5f, 0, 0.11f, e.len, 0.11f, rope));
@@ -222,11 +232,13 @@ public final class WorldRenderer implements Disposable {
 
     private float wrapDiff(float a, float b) { return course.dsWrap(a, b); }
 
-    private void place(ModelInstance inst, float arc, float y, float dz, float camS, float sx, float sy, float sz, float yawExtraDeg) {
+    private void place(ModelInstance inst, float arc, float y, float dz, float camS, float sx, float sy, float sz, float yawExtraDeg) { place(inst, arc, y, dz, camS, sx, sy, sz, yawExtraDeg, 0f); }
+
+    private void place(ModelInstance inst, float arc, float y, float dz, float camS, float sx, float sy, float sz, float yawExtraDeg, float rollDeg) {
         float phi = wrapDiff(arc, camS) / T.radius;
         float r = T.radius - dz;
         inst.transform.idt().translate(r * MathUtils.sin(phi), y, -T.radius + r * MathUtils.cos(phi))
-                .rotate(0, 1, 0, phi * MathUtils.radiansToDegrees + yawExtraDeg).scale(sx, sy, sz);
+                .rotate(0, 1, 0, phi * MathUtils.radiansToDegrees + yawExtraDeg).rotate(0, 0, 1, rollDeg).scale(sx, sy, sz);
     }
 
     private boolean visible(float arc, float y, float camS, float margin) {
@@ -283,8 +295,9 @@ public final class WorldRenderer implements Disposable {
             if (!v.built) build(i);
             drawElement(sim, i, v, es, ey, ps, time);
         }
-        for (int k = 0, cnt = sim.hz == null ? course.hazards.size() : sim.hz.length; k < cnt; k++) drawHazard(course.hazards.get(sim.hz == null ? k : sim.hz[k]), sim.time + alpha * Sim.DT, ps, time);
+        for (int k = 0, cnt = sim.hz == null ? course.hazards.size() : sim.hz.length; k < cnt; k++) { int hi2 = sim.hz == null ? k : sim.hz[k]; drawHazard(course.hazards.get(hi2), sim.time + alpha * Sim.DT, ps, time, hi2 < sim.featDone.length && sim.featDone[hi2]); }
         for (int q = 0; q < 24 && pruneCursor < lo; q++, pruneCursor++) { Vis pv = vis.get(pruneCursor); pv.parts = null; pv.built = false; }
+        drawFlung(dt, ps);
         if (showPlayer) drawPlayer(sim, dt, time, ps, py, alpha);
         particles.render(batch, env, ps, T, course);
         batch.end();
@@ -324,7 +337,7 @@ public final class WorldRenderer implements Disposable {
                 else if (p.tinted) p.tintAttr.color.set(tint);
                 else p.tintAttr.color.set(Color.WHITE);
             }
-            place(p.inst, es + du + shakeX, y + dy + fallY, p.dz, camS, p.sx, sy, p.sz, extraYaw);
+            place(p.inst, es + du + shakeX, y + dy + fallY, p.dz, camS, p.sx, sy, p.sz, extraYaw, p.roll);
             batch.render(p.inst, env);
         }
         if (e.type == Element.Type.SWING) drawSwingRopes(e, es, ey, camS);
@@ -353,6 +366,24 @@ public final class WorldRenderer implements Disposable {
         batch.render(m, env);
     }
 
+    static final float[][] KEY_RGB = {{0.95f, 0.22f, 0.20f}, {0.25f, 0.55f, 1f}, {0.30f, 0.85f, 0.35f}, {1f, 0.82f, 0.18f}};
+    private final java.util.HashMap<String, ModelInstance> colorInst = new java.util.HashMap<>();
+
+    /** A pack model with its flag / key material recoloured for one of the four key colours. */
+    private ModelInstance colored(String name, int color) {
+        String k = name + color;
+        ModelInstance m = colorInst.get(k);
+        if (m == null) {
+            m = new ModelInstance(models.pack(name));
+            float[] c = KEY_RGB[color];
+            for (com.badlogic.gdx.graphics.g3d.Material mat : m.materials) {
+                if (mat.id.contains("Flag") || mat.id.contains("Gold") || (name.equals("tower") && mat.id.contains("Wood"))) { mat.set(ColorAttribute.createDiffuse(c[0], c[1], c[2], 1f)); mat.set(ColorAttribute.createEmissive(c[0] * 0.25f, c[1] * 0.25f, c[2] * 0.25f, 1f)); }
+            }
+            colorInst.put(k, m);
+        }
+        return m;
+    }
+
     private ModelInstance stone;
     private void drawBox(float arc, float y, float dz, float camS, float w, float h, float d, float cr, float cg, float cb) {
         if (stone == null) stone = new ModelInstance(models.box);
@@ -361,7 +392,7 @@ public final class WorldRenderer implements Disposable {
         batch.render(stone, env);
     }
 
-    private void drawHazard(Element h, float t, float camS, float time) {
+    private void drawHazard(Element h, float t, float camS, float time, boolean done) {
         float cs = h.type == Element.Type.CANNON ? h.s + h.dir * h.len * 0.5f : h.s;
         float half = h.type == Element.Type.CANNON ? h.len * 0.5f + 1.5f : (h.type == Element.Type.SAW_H ? h.amp + 1.5f : 2f);
         float cy = h.type == Element.Type.SAW_V ? h.y + h.amp * 0.5f : h.y;
@@ -392,6 +423,46 @@ public final class WorldRenderer implements Disposable {
                     float hk = sp / (3.4f * 0.37f);
                     for (int k = -1; k <= 1; k++) drawPack("spikes", h.s + k * h.w * 0.32f, h.y, 0f, camS, 0.3f, 0.37f * hk * 1.3f, 0.3f, 0f, 0f);
                 }
+                break;
+            }
+            case KEY: {
+                if (done) break;
+                ModelInstance k = colored("key", h.color);
+                float bob = 0.12f * MathUtils.sin(time * 3f);
+                float phi = wrapDiff(h.s, camS) / T.radius;
+                k.transform.idt().translate(T.radius * MathUtils.sin(phi), h.y + bob, -T.radius + T.radius * MathUtils.cos(phi))
+                        .rotate(0, 1, 0, phi * MathUtils.radiansToDegrees + time * 140f).rotate(0, 0, 1, 25f).scale(0.5f, 0.5f, 0.5f).translate(-0.45f, 0f, 0f);
+                batch.render(k, env);
+                break;
+            }
+            case GATE: {
+                ModelInstance g = colored("tower", h.color);
+                float phi = wrapDiff(h.s, camS) / T.radius;
+                g.transform.idt().translate(T.radius * MathUtils.sin(phi), h.y, -T.radius + T.radius * MathUtils.cos(phi))
+                        .rotate(0, 1, 0, phi * MathUtils.radiansToDegrees).scale(0.4f, 0.4f, 0.4f);
+                batch.render(g, env);
+                break;
+            }
+            case CRAB: {
+                if (done) break;
+                float crabX = h.sAt(t), vel = h.amp * (float) Math.cos(2 * Math.PI * t / h.period + h.phase);
+                drawPack("crab", crabX, h.y, 0f, camS, 0.34f, 0.34f, 0.34f, vel >= 0 ? 28f : -28f, 5f * MathUtils.sin(time * 15f + h.phase));
+                break;
+            }
+            case CLUB: {
+                if (done) break;
+                drawPack("hazard_cylinder", h.s, h.y + 0.12f * MathUtils.sin(time * 2.6f + h.phase), 0f, camS, 0.28f, 0.28f, 0.28f, time * 90f, 12f);
+                if (quality > 0 && MathUtils.randomBoolean(0.06f)) { ambCol.set(1f, 0.95f, 0.5f, 1f); particles.spawn(h.s + MathUtils.random(-0.4f, 0.4f), h.y + MathUtils.random(0f, 1.1f), 0f, 0.4f, ambCol, 0.06f, 0f, 0.8f); }
+                break;
+            }
+            case SPIKE_DROP: {
+                float b = h.dropBottom(t), top = h.y + h.amp + Element.DROP_H;
+                drawBox(h.s - h.w * 0.5f - 0.1f, h.y, 0.2f, camS, 0.1f, h.amp + Element.DROP_H + 0.6f, 0.14f, 0.3f, 0.32f, 0.4f);
+                drawBox(h.s + h.w * 0.5f + 0.1f, h.y, 0.2f, camS, 0.1f, h.amp + Element.DROP_H + 0.6f, 0.14f, 0.3f, 0.32f, 0.4f);
+                drawBox(h.s, top + 0.5f, 0.2f, camS, h.w + 0.5f, 0.14f, 0.3f, 0.3f, 0.32f, 0.4f);
+                drawBox(h.s, b + 0.5f, 0f, camS, h.w, 0.5f, 1.3f, 0.42f, 0.38f, 0.5f);
+                drawBox(h.s, b + 0.5f, 0.1f, camS, 0.08f, top + 0.5f - (b + 1.0f), 0.1f, 0.5f, 0.45f, 0.35f);
+                for (int k = -1; k <= 1; k += 2) drawPack("spikes", h.s + k * h.w * 0.25f, b + 0.5f, 0f, camS, h.w * 0.22f, 0.5f / 3.4f, 0.3f, 0f, 180f);
                 break;
             }
             case SPIKE_BLOCK: {
@@ -456,6 +527,14 @@ public final class WorldRenderer implements Disposable {
         float wy = py; heroY = py;
         hero.update(sim, dt, time, 0f, wy, 0f, phi, reducedMotion);
         hero.render(batch, env);
+        if (sim.clubTime > 0f) {
+            float k = sim.swingT > 0f ? 1f - sim.swingT / Sim.SWING_TIME : -1f;
+            float ang = k < 0f ? 35f + 5f * MathUtils.sin(time * 5f) : MathUtils.lerp(-70f, 110f, Math.min(1f, k * 1.25f));       // degrees forward of straight up
+            ModelInstance cl = pack("hazard_cylinder");
+            cl.transform.idt().translate(sim.facing * 0.45f, wy + 0.8f, 0.2f).rotate(0, 0, 1, -sim.facing * ang).scale(0.3f, 0.3f, 0.3f);
+            batch.render(cl, env);
+            if (k >= 0f && k > 0.25f && k < 0.75f && quality > 0) particles.burst(renderS + sim.facing * 1.2f, wy + 0.6f, 1, ambCol.set(1f, 1f, 1f, 1f), 1.2f, 0.4f, 0.07f, 0f, 0.25f);
+        }
     }
 
     private float groundBelow(Sim sim, float ps, float py) {
@@ -474,6 +553,19 @@ public final class WorldRenderer implements Disposable {
     private float heroY;
     private float[] dip, dipV; private float fovK, fovV, ambientAcc;
     private final Color ambCol = new Color();
+
+    private static final class Flung { float s, y, vx, vy, rot, age; }
+    private final java.util.ArrayList<Flung> flung = new java.util.ArrayList<>();
+    /** A crab was knocked off its platform: it tumbles away (purely visual). */
+    public void crabFlung(float s, float y, int dir) { Flung f = new Flung(); f.s = s; f.y = y; f.vx = dir * 6f; f.vy = 7f; flung.add(f); }
+
+    private void drawFlung(float dt, float camS) {
+        for (int i = flung.size() - 1; i >= 0; i--) {
+            Flung f = flung.get(i); f.age += dt; f.vy -= 30f * dt; f.s += f.vx * dt; f.y += f.vy * dt; f.rot += 540f * dt;
+            if (f.age > 2f) { flung.remove(i); continue; }
+            drawPack("crab", f.s, f.y, 0f, camS, 0.34f, 0.34f, 0.34f, 0f, f.rot);
+        }
+    }
 
     public void heroEvents(int ev, float landSpeed) { hero.events(ev, landSpeed); }
     public void platformLanded(int idx, float speed) { syncVis(); if (dip != null && idx >= 0 && idx < dip.length) dipV[idx] += Math.min(14f, speed) * 0.9f; }

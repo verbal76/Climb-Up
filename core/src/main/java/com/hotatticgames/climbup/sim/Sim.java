@@ -7,10 +7,10 @@ package com.hotatticgames.climbup.sim;
 public final class Sim {
     public enum Mode { GROUND, AIR, ROPE, CABLE, LEDGE, PULLUP }
 
-    public static final float DT = 1f / 60f;
+    public static final float DT = 1f / 60f, SWING_TIME = 0.34f;
     // event bits
     public static final int EV_JUMP = 1, EV_LAND = 2, EV_BOUNCE = 4, EV_GRAB = 8, EV_PULL = 16, EV_CRUMBLE = 32,
-            EV_CHECKPOINT = 64, EV_RESPAWN = 128, EV_WIN = 256, EV_ROPE = 512, EV_CABLE = 1024, EV_FALL_NEAR = 2048, EV_HIT = 4096;
+            EV_CHECKPOINT = 64, EV_RESPAWN = 128, EV_WIN = 256, EV_ROPE = 512, EV_CABLE = 1024, EV_FALL_NEAR = 2048, EV_HIT = 4096, EV_KEY = 8192, EV_DOOR = 16384, EV_BLOCKED = 32768, EV_CLUB = 65536, EV_SWING = 131072, EV_SHOVE = 262144, EV_CRAB_OFF = 524288;
 
     public final Course course;
     public final Tuning T;
@@ -46,6 +46,12 @@ public final class Sim {
     public float[] padSquash;
     public float invuln;                          // brief grace after a respawn so a hazard can never chain-kill
     public int hits;                              // hazard hits so far
+    public int keys;                              // bit per colour of the keys carried
+    public boolean keysFree;                      // planners/demos: every gate simply opens on touch
+    public boolean[] featDone = new boolean[0];   // per feature (Course.hazards index): key taken / gate opened
+    public int lastKeyColor, lastGateColor;
+    public float clubTime, swingT, shoveCd;       // spiked club carried (seconds left), swing animation clock, grace between shoves
+    public float crabS, crabY;                    // where the last crab was knocked off (effects)
     public Element hitBy;
     public float hitS, hitY;                      // where the last hit happened (effects)
     public int[] act;                // planner window: element indices simulated (null = everything)
@@ -83,6 +89,7 @@ public final class Sim {
 
     /** The course grew (endless mode): extend the per-element state arrays. */
     public void ensureCapacity() {
+        if (featDone.length < course.hazards.size()) featDone = java.util.Arrays.copyOf(featDone, Math.max(course.hazards.size(), featDone.length * 3 / 2 + 8));
         int n = course.size();
         if (n <= es0.length) return;
         int m = Math.max(n, es0.length * 3 / 2 + 16), o = es0.length;
@@ -98,6 +105,7 @@ public final class Sim {
         es0 = new float[n]; ey0 = new float[n]; es1 = new float[n]; ey1 = new float[n];
         crumbleT = new float[n]; gone = new boolean[n]; goneT = new float[n]; padSquash = new float[n];
         java.util.Arrays.fill(crumbleT, -1f);
+        featDone = new boolean[c.hazards.size() + 8];
         refreshElements();
         spawnAtCheckpoint(0);
     }
@@ -112,6 +120,7 @@ public final class Sim {
         landSpeed = o.landSpeed; events = o.events; assistForgive = o.assistForgive; ps0 = o.ps0; py0 = o.py0; teleported = o.teleported;
         es0 = o.es0.clone(); ey0 = o.ey0.clone(); es1 = o.es1.clone(); ey1 = o.ey1.clone();
         crumbleT = o.crumbleT.clone(); gone = o.gone.clone(); goneT = o.goneT.clone(); padSquash = o.padSquash.clone();
+        clubTime = o.clubTime; swingT = o.swingT; shoveCd = o.shoveCd; crabS = o.crabS; crabY = o.crabY; keys = o.keys; keysFree = o.keysFree; featDone = o.featDone.clone(); lastKeyColor = o.lastKeyColor; lastGateColor = o.lastGateColor;
         act = o.act; hz = o.hz; winLo = o.winLo; winHi = o.winHi; invuln = o.invuln; hits = o.hits; hitS = o.hitS; hitY = o.hitY;
     }
 
@@ -142,11 +151,13 @@ public final class Sim {
     /** Start state used by planners: standing/attached on element idx at the current time. */
     public static Sim startOn(Course c, Tuning t, int idx) {
         Sim m = new Sim(c, t);
+        m.keysFree = true;      // planners assume the key is in hand; the solver proves separately that the key can be fetched
         Element e = c.get(idx);
         m.checkpoint = 0;
         switch (e.type) {
-            case PAD:
-                m.s = c.wrap(m.es1[idx]); m.y = m.ey1[idx]; m.vx = 0; m.vy = t.padBounce; m.mode = Mode.AIR;
+            case PAD: case SPRING:
+                m.s = c.wrap(m.es1[idx]); m.y = m.ey1[idx];
+                m.vx = e.type == Element.Type.SPRING ? t.padBounce * (float) Math.sin(e.amp) : 0f; m.vy = e.type == Element.Type.SPRING ? t.padBounce * (float) Math.cos(e.amp) : t.padBounce; m.mode = Mode.AIR;
                 m.onElem = -1; m.lastPad = idx; m.lastGroundY = m.y; m.bestElem = idx;
                 break;
             case ROPE:
@@ -160,7 +171,7 @@ public final class Sim {
             default:
                 m.spawnAtCheckpoint(idx); m.checkpoint = 0; m.bestElem = idx;
                 for (Element h : c.hazards) {      // platforms with a hazard in the middle: start in the safe pocket at the back, as a real landing would
-                    if (h.anchor == idx && (h.type == Element.Type.SPIKE_TRAP || h.type == Element.Type.SAW_H || h.type == Element.Type.SPIKE_BLOCK) && Math.abs(c.dsWrap(h.s, e.s)) < e.halfW()) {
+                    if (h.anchor == idx && (h.type == Element.Type.SPIKE_TRAP || h.type == Element.Type.SAW_H || h.type == Element.Type.SPIKE_BLOCK || h.type == Element.Type.SPIKE_DROP || h.type == Element.Type.CRAB) && Math.abs(c.dsWrap(h.s, e.s)) < e.halfW()) {
                         m.s = c.wrap(m.es1[idx] - e.halfW() + 1.0f); break;
                     }
                 }
@@ -196,7 +207,7 @@ public final class Sim {
         float dt = DT;
         ps0 = s; py0 = y; teleported = false;
         time += dt;
-        if (course.size() > es0.length) ensureCapacity();
+        if (course.size() > es0.length || course.hazards.size() > featDone.length) ensureCapacity();
         int n = course.size();
         int cnt0 = act == null ? n : act.length;
         for (int k0 = 0; k0 < cnt0; k0++) {
@@ -226,12 +237,65 @@ public final class Sim {
         s = course.wrap(s);
         if (y > maxHeight) maxHeight = y;
 
+        if (shoveCd > 0) shoveCd = Math.max(0f, shoveCd - dt);
+        if (clubTime > 0) clubTime = Math.max(0f, clubTime - dt);
+        if (swingT > 0) swingT = Math.max(0f, swingT - dt);
+        else if (in.swingPressed && clubTime > 0f && (mode == Mode.GROUND || mode == Mode.AIR)) { swingT = SWING_TIME; events |= EV_SWING; }
+        stepFeatures();
         if (invuln > 0) invuln = Math.max(0f, invuln - dt);
         else if (hazardHit()) { hits++; events |= EV_HIT; hitS = s; hitY = y; respawn(); return; }
 
         if (mode != Mode.AIR) lastGroundY = y;
         else if (y > lastGroundY && mode == Mode.AIR && vy <= 0) { /* keep */ }
         if (y < lastGroundY - T.fallRespawnDepth) respawn();
+    }
+
+    private void stepClubCrab(Element e, int idx, float hw) {
+        if (idx < featDone.length && featDone[idx]) return;
+        if (e.type == Element.Type.CLUB) {
+            float dx = course.dsWrap(s, e.s);
+            if (Math.abs(dx) < 0.95f && e.y > y - 0.4f && e.y < y + T.height + 0.4f) { featDone[idx] = true; clubTime = CLUB_SECONDS; events |= EV_CLUB; }
+            return;
+        }
+        float cs = e.sAt(time), dx = course.dsWrap(s, cs);
+        if (swingT > 0.06f && swingT < 0.28f) {                       // the club is on its way through: anything in front of you and within reach goes flying
+            float ahead = -dx * facing;
+            if (ahead > -0.3f && ahead < 2.2f && Math.abs(e.y - y) < 1.5f) { featDone[idx] = true; crabS = cs; crabY = e.y; events |= EV_CRAB_OFF; return; }
+        }
+        if (shoveCd <= 0f && invuln <= 0f && Math.abs(dx) < 0.55f + hw && y < e.y + 0.62f && y + T.height > e.y + 0.05f && (mode == Mode.GROUND || mode == Mode.AIR)) {
+            float side = Math.signum(dx); if (side == 0f) side = -facing;
+            vx = side * 9f; vy = Math.max(vy, 6f); mode = Mode.AIR; onElem = -1; lockout = 0.3f; jumpedUp = false; shoveCd = 0.9f; events |= EV_SHOVE;
+        }
+    }
+    public static final float CLUB_SECONDS = 18f;
+
+    /** Keys are picked up by touching them; a closed castle gate is a wall until you carry its colour. */
+    private void stepFeatures() {
+        final float hw = T.halfWidth, lo = y, hi = y + T.height;
+        for (int k = 0, cnt = hz == null ? course.hazards.size() : hz.length; k < cnt; k++) {
+            int hi_ = hz == null ? k : hz[k];
+            Element e = course.hazards.get(hi_);
+            if (e.type == Element.Type.CLUB || e.type == Element.Type.CRAB) { stepClubCrab(e, hi_, hw); continue; }
+            if (e.type != Element.Type.KEY && e.type != Element.Type.GATE) continue;
+            if (hi_ < featDone.length && featDone[hi_]) continue;
+            float dx = course.dsWrap(s, e.s);
+            if (e.type == Element.Type.KEY) {
+                float ky = e.y + 0.05f * (float) Math.sin(time * 3f);
+                if (Math.abs(dx) < 0.95f && ky > lo - 0.6f && ky < hi + 0.4f) { featDone[hi_] = true; keys |= 1 << e.color; lastKeyColor = e.color; events |= EV_KEY; }
+            } else {
+                float half = e.w * 0.5f + hw;
+                if (Math.abs(dx) >= half || hi <= e.y - 1f || lo >= e.y + e.len) continue;
+                if (keysFree || (keys & (1 << e.color)) != 0) {
+                    featDone[hi_] = true; if (!keysFree) keys &= ~(1 << e.color);
+                    lastGateColor = e.color; events |= EV_DOOR;
+                } else {
+                    float side = Math.signum(course.dsWrap(ps0, e.s)); if (side == 0f) side = Math.signum(dx) == 0f ? 1f : Math.signum(dx);
+                    s = course.wrap(e.s + side * (half + 0.01f));
+                    if (vx * side < 0f) vx = 0f;
+                    events |= EV_BLOCKED; lastGateColor = e.color;
+                }
+            }
+        }
     }
 
     /** True if the player's body overlaps any lethal hazard right now. */
@@ -249,6 +313,9 @@ public final class Sim {
                 if (ddx * ddx + ddy * ddy < r * r) return true;
             } else if (e.type == Element.Type.SPIKE_TRAP) {
                 if (dx < e.w * 0.5f + hw && y > e.y - 0.5f && y < e.y + e.spikeHeight(time) - 0.08f) return true;
+            } else if (e.type == Element.Type.SPIKE_DROP) {
+                float b = e.dropBottom(time);
+                if (dx < e.w * 0.5f + hw && hi > b && lo < b + Element.DROP_H) return true;
             } else {   // spike block: a solid lethal box [y, y+len]
                 if (dx < e.w * 0.5f + hw && hi > e.y && lo < e.y + e.len) return true;
             }
@@ -299,8 +366,8 @@ public final class Sim {
     private void stepAir(InputState in, float dt) {
         // horizontal
         float target = in.moveX * T.runSpeed;
-        if (Math.abs(in.moveX) > 0.05f) vx = approach(vx, target, T.airAccel * dt);
-        else vx = approach(vx, 0, T.airDrag * dt);
+        if (Math.abs(in.moveX) > 0.05f && !(Math.abs(vx) > Math.abs(target) && Math.signum(vx) == Math.signum(target))) vx = approach(vx, target, T.airAccel * dt);
+        else vx = approach(vx, 0, T.airDrag * dt);      // launched faster than you can run (spring, moving platform): keep it, only drag eases it
         if (Math.abs(in.moveX) > 0.15f) facing = in.moveX > 0 ? 1 : -1;
         // vertical
         vy -= T.gravity * dt;
@@ -337,8 +404,10 @@ public final class Sim {
         Element el = course.get(i);
         y = ey1[i];
         landSpeed = -vy;
-        if (el.type == Element.Type.PAD) {
-            vy = in.jumpHeld ? T.padBounceHeld : T.padBounce;
+        if (el.type == Element.Type.PAD || el.type == Element.Type.SPRING) {
+            float v = in.jumpHeld ? T.padBounceHeld : T.padBounce;
+            if (el.type == Element.Type.SPRING) { vy = v * (float) Math.cos(el.amp); vx = v * (float) Math.sin(el.amp); if (Math.abs(vx) > 0.5f) facing = vx > 0 ? 1 : -1; }
+            else vy = v;
             jumpedUp = false; mode = Mode.AIR; onElem = -1; lastPad = i; padSquash[i] = 0.25f;
             events |= EV_BOUNCE;
             progress(i);
@@ -383,7 +452,7 @@ public final class Sim {
         for (int k3 = 0, cnt3 = act == null ? course.size() : act.length; k3 < cnt3; k3++) {
             int i = act == null ? k3 : act[k3];
             Element el = course.get(i);
-            if (!el.isPlatform() || el.type == Element.Type.PAD || gone[i]) continue;
+            if (!el.isPlatform() || el.type == Element.Type.PAD || el.type == Element.Type.SPRING || gone[i]) continue;
             float top = ey1[i];
             if (hand < top - T.ledgeReachBelow || hand > top + T.ledgeReachAbove) continue;
             if (y >= top - 0.1f) continue;           // feet above the top: would have landed

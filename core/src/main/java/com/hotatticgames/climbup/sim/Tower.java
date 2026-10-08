@@ -55,7 +55,9 @@ public final class Tower {
             e.anchor = d.get(i).anchor < 0 ? -1 : sl.toWorld(d.get(i).anchor);
             world.add(e);
         }
+        int hz0 = world.hazards.size();
         for (Element h : d.hazards) { Element e = copy(h, -1); e.anchor = sl.toWorld(h.anchor); world.hazards.add(e); }
+        for (int[] k : d.keyRooms) world.keyRooms.add(new int[]{sl.toWorld(k[0]), sl.toWorld(k[1]), k[2], k[3], hz0 + k[4], hz0 + k[5]});
         int last = sl.toWorld(d.routeSize() - 1);
         Slice done = new Slice(index, d, sl.base, first, last);
         slices.add(done);
@@ -64,7 +66,7 @@ public final class Tower {
 
     private static Element copy(Element e, int anchor) {
         Element n = new Element(e.type, e.s, e.y, e.w);
-        n.zone = e.zone; n.amp = e.amp; n.period = e.period; n.phase = e.phase; n.len = e.len; n.checkpoint = e.checkpoint; n.dir = e.dir; n.anchor = anchor;
+        n.zone = e.zone; n.amp = e.amp; n.period = e.period; n.phase = e.phase; n.len = e.len; n.checkpoint = e.checkpoint; n.dir = e.dir; n.color = e.color; n.anchor = anchor;
         return n;
     }
 

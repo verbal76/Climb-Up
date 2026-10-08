@@ -4,7 +4,13 @@ package com.hotatticgames.climbup.sim;
 public final class Element {
     public enum Type { STATIC, CRUMBLE, MOVE_H, MOVE_V, SWING, PAD, ROPE, CABLE, GOAL,
         /** Environmental hazards (touching one sends the player back to the last checkpoint; no health, no enemies). */
-        SAW_H, SAW_V, PENDULUM, CANNON, SPIKE_TRAP, SPIKE_BLOCK }
+        SAW_H, SAW_V, PENDULUM, CANNON, SPIKE_TRAP, SPIKE_BLOCK, SPIKE_DROP,
+        /** Platform that launches you at an angle (amp = angle from vertical in radians, + toward +s). */
+        SPRING,
+        /** Features (kept in Course.hazards, never lethal): a coloured key to pick up, and the castle gate that needs the same colour. */
+        KEY, GATE,
+        /** Crab: patrols a platform and shoves you (never hurts). A floating spiked club lets you knock crabs off. */
+        CRAB, CLUB }
 
     public Type type;
     public int zone;
@@ -12,17 +18,19 @@ public final class Element {
     public float amp, period = 4f, phase, len;
     public boolean checkpoint;
     public int dir = 1;           // cannon firing direction (+1 / -1)
+    public int color = 0;         // key / gate colour index (see KEY_COLORS)
+    public static final int KEY_COUNT = 4;   // red, blue, green, gold
     public int anchor = -1;       // decoys only: route element this dead end / lure hangs off (-1 = part of the route)
 
     public Element(Type type, float s, float y, float w) { this.type = type; this.s = s; this.y = y; this.w = w; }
 
     public boolean isHazard() {
-        switch (type) { case SAW_H: case SAW_V: case PENDULUM: case CANNON: case SPIKE_TRAP: case SPIKE_BLOCK: return true; default: return false; }
+        switch (type) { case SAW_H: case SAW_V: case PENDULUM: case CANNON: case SPIKE_TRAP: case SPIKE_BLOCK: case SPIKE_DROP: return true; default: return false; }
     }
     public boolean isPlatform() { return type != Type.ROPE && type != Type.CABLE && !isHazard(); }
     /** True for anything that changes with time (planner sweeps its phase). */
     public boolean isMoving() {
-        switch (type) { case MOVE_H: case MOVE_V: case SWING: case SAW_H: case SAW_V: case PENDULUM: case CANNON: case SPIKE_TRAP: return true; default: return false; }
+        switch (type) { case MOVE_H: case MOVE_V: case SWING: case SAW_H: case SAW_V: case PENDULUM: case CANNON: case SPIKE_TRAP: case SPIKE_DROP: case CRAB: return true; default: return false; }
     }
 
     public static final float CANNON_FLIGHT = 0.7f;      // fraction of the cycle a ball is in the air
@@ -45,12 +53,23 @@ public final class Element {
         return 0.62f * (1f - (c - st - d) / 0.04f);
     }
 
+    /** Spiked stone block on a chain: hovers at y+amp, shakes, slams down to y, rests, rises. Returns the height of its spiked underside. */
+    public float dropBottom(float t) {
+        float c = cyc(t), hi = y + amp, lo = y;
+        if (c < 0.50f) return hi;
+        if (c < 0.62f) return hi + 0.05f * (float) Math.sin(c * 220f);              // telegraph: it trembles
+        if (c < 0.68f) { float k = (c - 0.62f) / 0.06f; return hi + (lo - hi) * k * k; }
+        if (c < 0.80f) return lo;
+        return lo + (hi - lo) * (c - 0.80f) / 0.20f;
+    }
+    public static final float DROP_H = 1.0f;
+
     /** Whether the hazard can hurt at time t. */
     public boolean lethalAt(float t) {
         switch (type) {
             case SPIKE_TRAP: { float c = cyc(t); return c >= 0.55f + 0.02f && c < 0.55f + amp; }
             case CANNON: return cyc(t) < CANNON_FLIGHT;
-            case SPIKE_BLOCK: case SAW_H: case SAW_V: case PENDULUM: return true;
+            case SPIKE_BLOCK: case SPIKE_DROP: case SAW_H: case SAW_V: case PENDULUM: return true;
             default: return false;
         }
     }
@@ -62,7 +81,7 @@ public final class Element {
         switch (type) {
             case MOVE_H: return s + amp * (float) Math.sin(ang(t));
             case SWING: case PENDULUM: return s + len * (float) Math.sin(amp * Math.sin(ang(t)));
-            case SAW_H: return s + amp * (float) Math.sin(ang(t));
+            case SAW_H: case CRAB: return s + amp * (float) Math.sin(ang(t));
             case CANNON: { float c = cyc(t); return c < CANNON_FLIGHT ? s + dir * len * (c / CANNON_FLIGHT) : s; }
             default: return s;
         }

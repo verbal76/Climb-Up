@@ -12,7 +12,9 @@ public final class Element {
         /** Crab: patrols a platform and shoves you (never hurts). A floating spiked club lets you knock crabs off. */
         CRAB, CLUB,
         /** Bee: flies in, hovers and dives around a spot to bump you (never hurts), then flies away until its next visit. */
-        BEE }
+        BEE,
+        /** Wooden bridge balanced on a pivot in its middle: tips toward whoever stands on it, so keep running. (tilt state lives in the Sim) */
+        SEESAW }
 
     public Type type;
     public int zone;
@@ -20,6 +22,7 @@ public final class Element {
     public float amp, period = 4f, phase, len;
     public boolean checkpoint;
     public int dir = 1;           // cannon firing direction (+1 / -1)
+    public int skin = 0;          // platform look: 0 = stone/grass block, 1 = wooden bridge
     public int color = 0;         // key / gate colour index (see KEY_COLORS)
     public static final int KEY_COUNT = 4;   // red, blue, green, gold
     public int anchor = -1;       // decoys only: route element this dead end / lure hangs off (-1 = part of the route)

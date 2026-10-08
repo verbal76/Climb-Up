@@ -14,6 +14,7 @@ public class Tuning {
     public float ledgeReachX = 0.4f, ledgeReachBelow = 0.9f, ledgeReachAbove = 0.15f, pullUpTime = 0.32f;
     public float crumbleDelay = 0.7f, crumbleRespawn = 3.4f;
     public float fallRespawnDepth = 12f;
+    public float seesawMaxTilt = 0.55f, seesawRate = 1.0f, seesawRelax = 1.0f, seesawSlide = 5f, seesawUphill = 0.45f;   // seesaw bridge: slope (height per metre), tip / relax speed, downhill slide, uphill slow-down
     public float courseHeight = 520f;        // finite test towers only; the shipped game is endless
     public float rampHeight = 520f;          // height over which base difficulty (gap sizes, mover amplitude) ramps up in the endless climb
     public float chunkHeight = 60f;          // the endless tower is generated in chunks of about this height

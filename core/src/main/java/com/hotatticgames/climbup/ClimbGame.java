@@ -53,6 +53,8 @@ public class ClimbGame extends Game {
 
     private int shotCount;
     private float shotClock;
+    @Override public void render() { super.render(); if (audio != null) audio.update(Math.min(Gdx.graphics.getDeltaTime(), 0.25f)); }
+
     /** Desktop test hook: -Dclimb.shots=DIR writes a numbered screenshot about every 1.5s and exits after climb.shotCount frames. */
     public void autoShot(String prefix, float dt) {
         if (shotDir == null) return;

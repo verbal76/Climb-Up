@@ -14,7 +14,7 @@ import java.util.Random;
  * from a saved slice without regenerating anything below it.
  */
 public final class CourseGenerator {
-    enum Kind { HOP, STAIRS, CRUMBLE, MOVER_H, MOVER_V, PAD, ROPE, CABLE, SWING, GRAB, HAZ, TRAP, SPRING }
+    enum Kind { HOP, STAIRS, CRUMBLE, MOVER_H, MOVER_V, PAD, ROPE, CABLE, SWING, GRAB, HAZ, TRAP, SPRING, SEESAW, BRIDGE }
 
     private final Tuning T;
     private final Random rnd;
@@ -134,7 +134,7 @@ public final class CourseGenerator {
 
     private static Element copyOf(Element e, int anchor) {
         Element n = new Element(e.type, e.s, e.y, e.w);
-        n.zone = e.zone; n.amp = e.amp; n.period = e.period; n.phase = e.phase; n.len = e.len; n.checkpoint = e.checkpoint; n.dir = e.dir; n.color = e.color; n.anchor = anchor;
+        n.zone = e.zone; n.amp = e.amp; n.period = e.period; n.phase = e.phase; n.len = e.len; n.checkpoint = e.checkpoint; n.dir = e.dir; n.color = e.color; n.skin = e.skin; n.anchor = anchor;
         return n;
     }
 
@@ -465,7 +465,7 @@ public final class CourseGenerator {
         }
     }
     private static float vLo(Element e) {
-        switch (e.type) { case ROPE: return e.y - e.len; case CABLE: return e.y - 2.4f; default: return e.y - 0.8f; }
+        switch (e.type) { case ROPE: return e.y - e.len; case CABLE: return e.y - 2.4f; case SEESAW: return e.y - 2.8f; default: return e.y - 0.8f; }
     }
     private static float vHi(Element e) {
         switch (e.type) {
@@ -592,6 +592,8 @@ public final class CourseGenerator {
                     w[Kind.MOVER_V.ordinal()] = 2; w[Kind.CABLE.ordinal()] = 2; w[Kind.SWING.ordinal()] = 3; w[Kind.GRAB.ordinal()] = 3;
         }
         float inten = intensity(last.y);
+        if (zone >= 1) { w[Kind.SEESAW.ordinal()] = 4f; w[Kind.BRIDGE.ordinal()] = 4f; }
+        else w[Kind.BRIDGE.ordinal()] = 2f;
         if (inten > 0f || (!endless && last.y > T.courseHeight * 0.18f)) { w[Kind.HAZ.ordinal()] = 3f + 9f * inten; if (zone >= 1) w[Kind.SPRING.ordinal()] = 2f + 2f * inten; w[Kind.TRAP.ordinal()] = 2f + 5f * inten; }
         // keep the spiral pitch healthy: if climbing lags the arc travelled, prefer vertical modules
         // spiral pitch controller: track y = pitch * (arc travelled / circumference) so successive revolutions stay a fixed distance apart
@@ -814,6 +816,33 @@ public final class CourseGenerator {
                 Element sp = plat(Element.Type.SPRING, sS, y0, 2f, z); sp.amp = ang;
                 l.add(sp);
                 l.add(plat(S, sS + vx0 * tf * r(0.86f, 0.97f) + 1.2f, y0 + dy, 3.5f, z));
+                break;
+            }
+            case SEESAW: {
+                // a wooden plank balanced on a pivot: it tips toward you, so run across; the far side is a short hop to the next block
+                float w = 7f + rnd.nextInt(2), dyIn = r(-0.4f, 0.3f);
+                float gapIn = reach(dyIn) * lerp(0.5f, 0.85f, d) * r(0.92f, 1f) * (1f - 0.03f * attempt);
+                Element sw = plat(Element.Type.SEESAW, eR + gapIn + w / 2f, y0 + dyIn, w, z); sw.skin = 1;
+                l.add(sw);
+                float gapOut = lerp(0.5f, 1.3f, d) * r(0.9f, 1.1f) * (1f - 0.05f * attempt);
+                l.add(plat(S, sw.s + w / 2f + gapOut + 1.5f, sw.y + r(-0.5f, 0.6f), 3f, z));
+                break;
+            }
+            case BRIDGE: {
+                // a floating wooden bridge; sometimes a rope hangs above its middle to climb off to a higher block
+                float w = 6f + rnd.nextInt(3), dy = r(0f, 0.9f);
+                float gapIn = reach(dy) * lerp(0.45f, 0.85f, d) * r(0.9f, 1f) * (1f - 0.03f * attempt);
+                Element br = plat(S, eR + gapIn + w / 2f, y0 + dy, w, z); br.skin = 1;
+                l.add(br);
+                if (z >= 1 && rnd.nextInt(5) < 3) {
+                    float L = r(4.5f, 6f);
+                    Element rope = plat(Element.Type.ROPE, br.s + (rnd.nextBoolean() ? 1f : -1f) * r(0.7f, 1.5f), br.y + 0.7f + L, 0f, z);
+                    rope.len = L;
+                    l.add(rope);
+                    l.add(plat(S, rope.s + lerp(1.0f, 2.2f, d) + 1.5f, rope.y - T.handHeight + 0.4f, 3f, z));
+                } else {
+                    l.add(plat(S, br.s + w / 2f + reach(0.6f) * lerp(0.4f, 0.8f, d) * (1f - 0.04f * attempt) + 1.5f, br.y + 0.6f, 3f, z));
+                }
                 break;
             }
             case GRAB: {

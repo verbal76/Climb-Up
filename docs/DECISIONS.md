@@ -34,3 +34,10 @@
 * **Bunny:** Quaternius clips (Idle, Walk, Run, Jump, Jump_Idle, Jump_Land, HitReact, Wave/No/Yes/Duck/Punch) for the body; hang/climb arms and legs are bone overrides in code (the pack has no hang or climb clips).
 * **Hamster:** body, arms, feet and ears are separate rigid parts (no skeleton in the supplied model), each posed per state in `updateHam`.
 * Test hook: `-Dclimb.animCycle=true -Dclimb.character=0|1` cycles every state for contact-sheet screenshots.
+
+## Falling, bridges, audio watchdog, title hero picker (owner request)
+- **Falling:** a fall no longer ends at a fixed depth. In the endless climb the player respawns only when below the lowest platform of the simulated window (`Sim.floorY`); until then he can land on any lower level and carry on. Finite/planner sims keep the old depth rule.
+- **Wooden bridges:** `SEESAW` element (plank on a central pivot; tilt state per element in the Sim, tips toward the player at `seesawRate`, slows uphill running and slides you downhill, levels out when empty) and a floating `STATIC` bridge look (`Element.skin = 1`), optionally with a rope hanging near its middle. Both are generator modules (`SEESAW`, `BRIDGE`) validated by the same planner. Bridge geometry is built from planks (the pack's bridge models are arched, which would not match the flat collision). All numbers in `tuning.json`.
+- **Audio:** `Audio.update` watchdog restarts music that silently stopped and rebuilds the player. The 4-5 s dropout seen on a phone could not be reproduced on desktop; the watchdog is a mitigation, not a confirmed fix.
+- **Title screen:** hero (bunny/hamster) button next to the menu.
+- Finite test towers moved to seeds 200+; the finite-tower solver run still fails ~1 in 30 seeds (arrival-momentum plans, bee timing) while 500+ endless slices solve cleanly.

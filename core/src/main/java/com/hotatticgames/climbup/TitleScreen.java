@@ -78,6 +78,12 @@ public final class TitleScreen extends ScreenAdapter {
         if (ui.button("SETTINGS", bx, yy, bw, bh)) { g.audio.play("click"); next = new SettingsScreen(g, this); }
         yy -= 88;
         if (ui.button("CREDITS", bx, yy, bw, bh)) { g.audio.play("click"); next = new CreditsScreen(g, this); }
+        float cx = Math.min(W - bw - 40f, W / 2 + 240f);
+        ui.textC("HERO: TAP TO CHANGE", cx + bw / 2, y0 + bh + 14, 3.2f, Ui.TEXT);
+        if (ui.button((g.settings.character == 1 ? "HAMSTER" : "BUNNY"), cx, y0, bw, bh)) {
+            g.settings.character = g.settings.character == 1 ? 0 : 1;
+            world.setCharacter(g.settings.character); g.persist(); g.audio.play("click");
+        }
         String stat = "BEST " + (int) g.save.bestHeight + " M   V" + ClimbGame.VERSION;
         ui.rect(0, 0, W, 54, new Color(0.05f, 0.07f, 0.14f, 0.7f)); ui.textC(stat, W / 2, 18, 3f, Ui.TEXT);
         ui.end();

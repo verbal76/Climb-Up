@@ -22,7 +22,7 @@ public final class CourseIO {
     private static void row(StringBuilder sb, Element e) {
         sb.append('[').append(e.type.ordinal()).append(',').append(e.zone).append(',').append(f(e.s)).append(',').append(f(e.y)).append(',')
           .append(f(e.w)).append(',').append(f(e.amp)).append(',').append(f(e.period)).append(',').append(f(e.phase)).append(',')
-          .append(f(e.len)).append(',').append(e.checkpoint ? 1 : 0).append(',').append(e.anchor).append(',').append(e.dir).append(',').append(e.color).append(']');
+          .append(f(e.len)).append(',').append(e.checkpoint ? 1 : 0).append(',').append(e.anchor).append(',').append(e.dir).append(',').append(e.color).append(',').append(e.skin).append(']');
     }
 
     private static String f(float v) { return Float.toString(v); }       // exact round trip: a restored slice regenerates the very same tower above it
@@ -31,7 +31,7 @@ public final class CourseIO {
         Element.Type t = Element.Type.values()[a.getInt(0)];
         Element e = new Element(t, a.getFloat(2), a.getFloat(3), a.getFloat(4));
         e.zone = a.getInt(1); e.amp = a.getFloat(5); e.period = a.getFloat(6); e.phase = a.getFloat(7); e.len = a.getFloat(8);
-        e.checkpoint = a.getInt(9) == 1; e.anchor = a.size > 10 ? a.getInt(10) : -1; e.dir = a.size > 11 ? a.getInt(11) : 1; e.color = a.size > 12 ? a.getInt(12) : 0;
+        e.checkpoint = a.getInt(9) == 1; e.anchor = a.size > 10 ? a.getInt(10) : -1; e.dir = a.size > 11 ? a.getInt(11) : 1; e.color = a.size > 12 ? a.getInt(12) : 0; e.skin = a.size > 13 ? a.getInt(13) : 0;
         return e;
     }
 

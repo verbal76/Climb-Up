@@ -66,7 +66,7 @@ public final class Tower {
 
     private static Element copy(Element e, int anchor) {
         Element n = new Element(e.type, e.s, e.y, e.w);
-        n.zone = e.zone; n.amp = e.amp; n.period = e.period; n.phase = e.phase; n.len = e.len; n.checkpoint = e.checkpoint; n.dir = e.dir; n.color = e.color; n.anchor = anchor;
+        n.zone = e.zone; n.amp = e.amp; n.period = e.period; n.phase = e.phase; n.len = e.len; n.checkpoint = e.checkpoint; n.dir = e.dir; n.color = e.color; n.skin = e.skin; n.anchor = anchor;
         return n;
     }
 

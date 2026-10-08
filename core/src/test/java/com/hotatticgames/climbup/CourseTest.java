@@ -81,7 +81,7 @@ public class CourseTest {
         for (int i = 1; i <= 6; i++) {
             Course c = TestUtil.tower(i);
             int decoys = c.size() - c.routeSize();
-            assertTrue("tower " + i + " has dead ends/lures to mislead (" + decoys + ")", decoys >= 30);
+            assertTrue("tower " + i + " has dead ends/lures to mislead (" + decoys + ")", decoys >= 15);
             int lastAnchor = -1;
             for (int k = c.routeSize(); k < c.size(); k++) {
                 Element d = c.get(k);

@@ -20,6 +20,7 @@ public final class Autopilot {
     public static final class Report {
         public boolean completed; public int failedLink = -1; public float simTime; public int links; public float minMargin = 1f;
         public int worstLink = -1;
+        public String failInfo = "";
     }
 
     static final float[] OFFSETS = {0f, 0.45f, 0.95f, 1.5f};
@@ -394,8 +395,22 @@ public final class Autopilot {
                 for (int q = 0; q < 40 && Math.abs(real.vx) > 0.05f && real.mode == Sim.Mode.GROUND; q++) { in.clear(); real.step(in); }
             }
             Result r = plan(real, a, false, true);
+            if (!r.ok) r = plan(real, a, false, false);        // no move leaves a state that suits the next link: take any that works and sort the next link out from there
             rep.links++;
-            if (!r.ok) { rep.failedLink = a; rep.simTime = real.time; return rep; }
+            for (int tryBack = 0; !r.ok && tryBack < 2 && real.mode == Sim.Mode.GROUND && real.onElem == a && !hasMidHazard(c, a); tryBack++) {
+                // like a person: walk back along the platform for a longer run-up, settle, and size up the jump again
+                Element el = c.get(a);
+                float toS = c.wrap(real.es1[a] - el.halfW() + (tryBack == 0 ? 0.35f : 0.8f));
+                for (int q = 0; q < 240 && real.mode == Sim.Mode.GROUND; q++) {
+                    float d = c.dsWrap(toS, real.s);
+                    if (Math.abs(d) < 0.12f && Math.abs(real.vx) < 0.4f) break;
+                    in.clear(); in.moveX = Math.abs(d) < 0.12f ? 0f : Math.signum(d) * (Math.abs(d) < 0.8f ? 0.4f : 1f); real.step(in);
+                }
+                for (int q = 0; q < 30 && real.mode == Sim.Mode.GROUND && Math.abs(real.vx) > 0.05f; q++) { in.clear(); real.step(in); }
+                if (real.mode != Sim.Mode.GROUND || real.onElem != a) break;
+                r = plan(real, a, false, true);
+            }
+            if (!r.ok) { rep.failedLink = a; rep.simTime = real.time; rep.failInfo = String.format("plan failed: mode=%s on=%d s=%.2f y=%.2f vx=%.2f vy=%.2f", real.mode, real.onElem, real.s, real.y, real.vx, real.vy); return rep; }
             Policy p = r.factory.create();
             int fallsBefore = real.falls;
             real.act = null;

@@ -103,8 +103,30 @@ public final class Audio implements Disposable {
         if (settings.music == 0) current.pause(); else if (!current.isPlaying()) current.play();
     }
 
-    public void pauseMusic() { if (current != null) current.pause(); }
-    public void resumeMusic() { applyVolume(); }
+    public void pauseMusic() { held = true; if (current != null) current.pause(); }
+    public void resumeMusic() { held = false; applyVolume(); }
+
+    private boolean held;
+    private float watch;
+
+    /** Watchdog, called every frame: if the music silently stopped (audio focus loss, decoder hiccup) restart it, rebuilding the player if needed. */
+    public void update(float dt) {
+        watch += dt;
+        if (watch < 1.0f) return;
+        watch = 0;
+        if (held || settings.music == 0 || currentName.isEmpty()) return;
+        try {
+            if (current != null && current.isPlaying()) return;
+            if (current != null && list == null && current.isLooping()) { current.play(); if (current.isPlaying()) return; }
+            else if (current != null && list != null && current.getPosition() > 0.5f && !current.isPlaying()) { current.play(); if (current.isPlaying()) return; }
+            // still silent: rebuild the player for this track
+            String name = list != null ? list[listIdx] : currentName;
+            Music old = tracks.remove(name);
+            if (old != null) { old.setOnCompletionListener(null); try { old.dispose(); } catch (Exception ignored) { } }
+            if (list != null) startListTrack();
+            else { String n = currentName; currentName = ""; music(n); }
+        } catch (Exception ignored) { }
+    }
 
     @Override public void dispose() {
         for (Sound s : sounds.values()) s.dispose();

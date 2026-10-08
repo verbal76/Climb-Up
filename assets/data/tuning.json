@@ -9,6 +9,7 @@
   "ledgeReachX": 0.4, "ledgeReachBelow": 0.9, "ledgeReachAbove": 0.15, "pullUpTime": 0.32,
   "crumbleDelay": 0.7, "crumbleRespawn": 3.4,
   "fallRespawnDepth": 12.0,
+  "seesawMaxTilt": 0.55, "seesawRate": 1.0, "seesawRelax": 1.0, "seesawSlide": 5.0, "seesawUphill": 0.45,
   "courseHeight": 520.0, "rampHeight": 520.0, "chunkHeight": 60.0,
   "hazardStartY": 70.0, "hazardRampY": 1100.0, "minTimingWindow": 0.2, "spiralPitch": 24.0, "restEvery": 5, "checkpointEveryRests": 1,
   "minLinkMargin": 0.07,

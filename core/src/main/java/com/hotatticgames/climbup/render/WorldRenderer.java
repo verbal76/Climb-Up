@@ -28,7 +28,7 @@ import com.hotatticgames.climbup.sim.Tuning;
  */
 public final class WorldRenderer implements Disposable {
     private static final class Part {
-        ModelInstance inst; float du, dy, dz, sx = 1, sy = 1, sz = 1, yaw, roll; Color color; boolean fall; boolean tinted = true; ColorAttribute tintAttr;
+        ModelInstance inst; float du, dy, dz, sx = 1, sy = 1, sz = 1, yaw, roll; Color color; boolean fall; boolean tinted = true; boolean fixed; ColorAttribute tintAttr;
     }
     private static final class Vis { Part[] parts; Element e; boolean built; }
 
@@ -129,7 +129,9 @@ public final class WorldRenderer implements Disposable {
         boolean snow = e.zone == 1 || e.zone == 3;
         String base = snow ? "block-snow" : "block-grass";
         switch (e.type) {
+            case SEESAW: bridgeParts(ps, e.w, true); break;
             case STATIC: case GOAL: case CRUMBLE: {
+                if (e.skin == 1 && e.type == Element.Type.STATIC) { bridgeParts(ps, e.w, false); break; }
                 int w = Math.max(1, Math.round(e.w));
                 boolean thick = w >= 5 || e.type == Element.Type.GOAL;
                 String name = thick ? base : base + "-low";
@@ -220,6 +222,31 @@ public final class WorldRenderer implements Disposable {
         }
         v.parts = new Part[ps.size];
         for (int i = 0; i < ps.size; i++) v.parts[i] = ps.get(i);
+    }
+
+    /** Wooden bridge: plank deck on two beams, back rail with posts; the seesaw also gets a stone fulcrum and red end caps. */
+    private void bridgeParts(Array<Part> ps, float w, boolean seesaw) {
+        Color wood1 = new Color(0.66f, 0.47f, 0.26f, 1f), wood2 = new Color(0.58f, 0.40f, 0.22f, 1f), beam = new Color(0.36f, 0.24f, 0.14f, 1f), rope = new Color(0.62f, 0.50f, 0.30f, 1f);
+        int n = Math.max(4, Math.round(w / 0.5f)); float pl = w / n;
+        for (int i = 0; i < n; i++) ps.add(boxPart(-w / 2f + (i + 0.5f) * pl, -0.10f, 0f, pl * 0.92f, 0.16f, 1.5f, i % 2 == 0 ? wood1 : wood2));
+        ps.add(boxPart(0f, -0.26f, 0.45f, w, 0.16f, 0.2f, beam));
+        ps.add(boxPart(0f, -0.26f, -0.45f, w, 0.16f, 0.2f, beam));
+        int posts = Math.max(2, Math.round(w / 1.75f) + 1);
+        for (int i = 0; i < posts; i++) {
+            float x = -w / 2f + 0.15f + i * (w - 0.3f) / (posts - 1);
+            ps.add(boxPart(x, 0.38f, 0.62f, 0.14f, 0.92f, 0.14f, beam));
+        }
+        ps.add(boxPart(0f, 0.78f, 0.62f, w, 0.09f, 0.11f, rope));
+        ps.add(boxPart(0f, 0.38f, 0.62f, w, 0.05f, 0.07f, rope));
+        if (seesaw) {
+            Color cap = new Color(0.85f, 0.18f, 0.16f, 1f), stone = new Color(0.46f, 0.47f, 0.52f, 1f), dark = new Color(0.30f, 0.31f, 0.36f, 1f);
+            ps.add(boxPart(-w / 2f + 0.15f, -0.08f, 0f, 0.3f, 0.2f, 1.55f, cap));
+            ps.add(boxPart(w / 2f - 0.15f, -0.08f, 0f, 0.3f, 0.2f, 1.55f, cap));
+            Part[] f = {
+                boxPart(0f, -2.3f, 0f, 2.6f, 0.5f, 1.5f, dark), boxPart(0f, -1.85f, 0f, 1.9f, 0.5f, 1.4f, stone),
+                boxPart(0f, -1.4f, 0f, 1.3f, 0.5f, 1.3f, dark), boxPart(0f, -0.95f, 0f, 0.8f, 0.5f, 1.2f, stone), boxPart(0f, -0.52f, 0f, 0.45f, 0.4f, 1.1f, dark)};
+            for (Part q : f) { q.fixed = true; ps.add(q); }
+        }
     }
 
     private void decorate(Array<Part> ps, Element e, int idx, int w, boolean snow) {
@@ -322,8 +349,15 @@ public final class WorldRenderer implements Disposable {
         boolean gone = sim.gone[i];
         float crumble = sim.crumbleT[i];
         for (Part p : v.parts) {
-            float du = p.du, dy = p.dy, extraYaw = 0f; float sy = p.sy;
+            float du = p.du, dy = p.dy, extraYaw = 0f; float sy = p.sy, roll = p.roll;
             float y = e.isPlatform() ? ey - Math.max(-0.1f, Math.min(0.22f, dip[i])) : ey;
+            if (e.type == Element.Type.SEESAW) {
+                y = e.y - Math.max(-0.1f, Math.min(0.22f, dip[i]));
+                if (!p.fixed) {         // tilt the plank about its pivot
+                    float th = (float) Math.atan(sim.tilt[i]), c = (float) Math.cos(th), sn = (float) Math.sin(th);
+                    du = p.du * c - p.dy * sn; dy = p.du * sn + p.dy * c; roll = th * MathUtils.radiansToDegrees;
+                }
+            }
             switch (e.type) {
                 case ROPE: y = e.y; break;
                 case SWING: {
@@ -350,7 +384,7 @@ public final class WorldRenderer implements Disposable {
                 else if (p.tinted) p.tintAttr.color.set(tint);
                 else p.tintAttr.color.set(Color.WHITE);
             }
-            place(p.inst, es + du + shakeX, y + dy + fallY, p.dz, camS, p.sx, sy, p.sz, extraYaw, p.roll);
+            place(p.inst, es + du + shakeX, y + dy + fallY, p.dz, camS, p.sx, sy, p.sz, extraYaw, roll);
             batch.render(p.inst, env);
         }
         if (e.type == Element.Type.SWING) drawSwingRopes(e, es, ey, camS);

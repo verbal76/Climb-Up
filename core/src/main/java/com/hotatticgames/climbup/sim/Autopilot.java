@@ -339,31 +339,54 @@ public final class Autopilot {
     static boolean execLink(Sim real, int a, int b, InputState in) {
         real.act = null; real.hz = null;
         Result r = planPair(real, a, b, false);
-        if (!r.ok) return false;
+        if (!r.ok && real.mode == Sim.Mode.GROUND && real.onElem == a) {       // like a person: shuffle along the platform and size the move up again from another spot
+            Course c = real.course; float room = c.get(a).halfW() - 0.4f;
+            for (float off : new float[]{-0.3f, 0.3f, -0.6f, 0.6f, -0.9f, 0.9f, -1.3f, 1.3f}) {
+                if (Math.abs(off) > room) continue;
+                float toS = c.wrap(real.es1[a] + off);
+                for (int q = 0; q < 240 && real.mode == Sim.Mode.GROUND; q++) {
+                    float d = c.dsWrap(toS, real.s);
+                    if (Math.abs(d) < 0.08f && Math.abs(real.vx) < 0.4f) break;
+                    in.clear(); in.moveX = Math.abs(d) < 0.08f ? 0f : Math.signum(d) * (Math.abs(d) < 0.8f ? 0.4f : 1f); real.step(in);
+                }
+                for (int q = 0; q < 40 && real.mode == Sim.Mode.GROUND && Math.abs(real.vx) > 0.05f; q++) { in.clear(); real.step(in); }
+                if (real.mode != Sim.Mode.GROUND || real.onElem != a) break;
+                r = planPair(real, a, b, false);
+                if (r.ok) break;
+            }
+        }
+        if (!r.ok) { if (Boolean.getBoolean("dbg")) System.out.printf("execLink %d->%d plan failed at t=%.2f s=%.2f y=%.2f keys=%d%n", a, b, real.time, real.s, real.y, real.keys); return false; }
         Policy p = r.factory.create(); Policy pull = new PullPolicy();
         int f0 = real.falls; int guard = (int) (14f / Sim.DT);
         while (guard-- > 0 && !succeededTo(real, b)) { in.clear(); p.act(real, in); real.step(in); if (real.falls != f0) return false; }
-        if (!succeededTo(real, b)) return false;
+        if (!succeededTo(real, b)) { if (Boolean.getBoolean("dbg")) System.out.printf("execLink %d->%d exec failed mode=%s s=%.2f y=%.2f falls=%d%n", a, b, real.mode, real.s, real.y, real.falls - f0); return false; }
         for (int g = 0; g < 120 && (real.mode == Sim.Mode.LEDGE || real.mode == Sim.Mode.PULLUP); g++) { in.clear(); pull.act(real, in); real.step(in); }
         return true;
     }
 
     /** Fetches the key of a key room and comes back to the anchor platform. */
+    static String why = "";
     static boolean detour(Sim real, int[] kr, InputState in) {
         Course c = real.course; int r = kr[0], k = kr[1], pIdx = k + 1; boolean pad = kr[3] == 1;
         Element key = c.hazards.get(kr[4]);
         for (int q = 0; q < 24; q++) { in.clear(); real.step(in); }              // arrive, stop, then plan the detour from a standstill
-        if (!execLink(real, r, k, in)) return false;
+        for (int q = 0; q < 180 && real.mode == Sim.Mode.GROUND && real.onElem == r; q++) {      // settle in the middle of the platform first, like a person lining up the move
+            float dx = c.dsWrap(real.es1[r], real.s); in.clear();
+            if (Math.abs(dx) < 0.25f && Math.abs(real.vx) < 0.3f) break;
+            in.moveX = Math.abs(dx) < 0.25f ? 0f : Math.signum(dx) * 0.7f; real.step(in);
+        }
+        for (int q = 0; q < 24; q++) { in.clear(); real.step(in); }
+        why = "out"; if (!execLink(real, r, k, in)) return false;
         for (int q = 0; q < 40 && Math.abs(real.vx) > 0.05f && real.mode == Sim.Mode.GROUND; q++) { in.clear(); real.step(in); }      // brake after landing
         int f0 = real.falls; int guard = (int) (6f / Sim.DT);
         while (guard-- > 0 && (real.keys & (1 << key.color)) == 0) {            // walk across the key platform to the key
             in.clear(); float dx = c.dsWrap(key.s, real.s); in.moveX = Math.abs(dx) < 0.1f ? 0f : Math.signum(dx); real.step(in);
-            if (real.falls != f0) return false;
+            if (real.falls != f0) { why = "fell on key platform"; return false; }
         }
-        if ((real.keys & (1 << key.color)) == 0) return false;
+        if ((real.keys & (1 << key.color)) == 0) { why = "key not taken"; return false; }
         for (int q = 0; q < 24; q++) { in.clear(); real.step(in); }          // come to a stop before heading back
         boolean back = pad ? execLink(real, k, pIdx, in) && execLink(real, pIdx, r, in) : execLink(real, k, r, in);
-        if (!back) return false;
+        if (!back) { why = "back"; return false; }
         for (int q = 0; q < 180 && real.mode == Sim.Mode.GROUND && real.onElem == r; q++) {      // walk back to the middle of the platform and stop
             float dx = c.dsWrap(real.es1[r], real.s); in.clear();
             if (Math.abs(dx) < 0.25f) break;
@@ -388,7 +411,7 @@ public final class Autopilot {
             for (int[] kr : c.keyRooms) {
                 if (kr[0] != a || !visited.add(kr[0])) continue;
                 if (real.mode != Sim.Mode.GROUND || real.onElem != a) break;
-                if (!detour(real, kr, in)) { rep.failedLink = a; rep.simTime = real.time; return rep; }
+                if (!detour(real, kr, in)) { rep.failedLink = a; rep.simTime = real.time; rep.failInfo = "detour " + why + String.format(" mode=%s on=%d s=%.2f y=%.2f t=%.2f", real.mode, real.onElem, real.s, real.y, real.time); return rep; }
                 a = real.onElem;
             }
             if (real.mode == Sim.Mode.GROUND && real.onElem == a && hasMidHazard(c, a)) {   // like a person would: stop in the safe pocket before sizing up the hazard

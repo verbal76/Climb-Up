@@ -171,10 +171,7 @@ public final class WorldRenderer implements Disposable {
                 if (orbit) { /* decorated by spacePlatform */ }
                 else if (thick && e.type != Element.Type.GOAL && quality > 0) decorate(ps, e, idx, w, snow);
                 else if (!thick && e.type == Element.Type.STATIC && quality > 0 && hash(idx, 7) % 3 == 0) decorate(ps, e, idx, w, snow);
-                if (e.checkpoint) {
-                    Model f = models.obj("flag");
-                    Part fp = part(f, -(w / 2f) + 0.55f, 0f, 0.3f, 1.6f, 1.6f, 1.6f); fp.tinted = false; ps.add(fp);
-                }
+                // checkpoints are marked by a hovering red gem (drawn every frame in drawGem), not baked into the platform
                 if (e.type == Element.Type.GOAL) {
                     Part fp = part(models.obj("flag"), 0f, 0f, 0.2f, 4.2f, 4.2f, 4.2f); fp.tinted = false; ps.add(fp);
                     Part c1 = part(models.obj("chest"), 1.8f, 0f, 0.2f, 1.4f, 1.4f, 1.4f); c1.tinted = false; ps.add(c1);
@@ -447,11 +444,60 @@ public final class WorldRenderer implements Disposable {
             place(p.inst, es + du + shakeX, y + dy + fallY, p.dz, camS, p.sx, sy, p.sz, extraYaw, roll);
             batch.render(p.inst, env);
         }
+        if (e.checkpoint && i > 0 && e.type == Element.Type.STATIC) drawGem(sim, i, es, ey, camS, time);
         if (e.type == Element.Type.SWING) drawSwingRopes(e, es, ey, camS);
         if (e.type == Element.Type.MOVE_V) drawRail(e, camS, true);
         if (e.type == Element.Type.MOVE_H) drawRail(e, camS, false);
     }
 
+
+    // ------------------------------------------------------------------ checkpoint gems
+    private ModelInstance gem, gemGlow;
+    private ColorAttribute gemDiff, gemEmis, glowEmis;
+    private BlendingAttribute gemBlend, glowBlend;
+    private final java.util.HashMap<Integer, Float> gemAct = new java.util.HashMap<>();
+    private final Color gemRed = new Color(1f, 0.12f, 0.16f, 1f);
+
+    private void initGem() {
+        gem = new ModelInstance(models.pack("gem_pink")); gemGlow = new ModelInstance(models.pack("gem_pink"));
+        for (com.badlogic.gdx.graphics.g3d.Material m : gem.materials) { gemDiff = ColorAttribute.createDiffuse(1f, 0.1f, 0.15f, 1f); gemEmis = ColorAttribute.createEmissive(0.6f, 0.05f, 0.08f, 1f); gemBlend = new BlendingAttribute(true, 1f); m.set(gemDiff, gemEmis, gemBlend); }
+        for (com.badlogic.gdx.graphics.g3d.Material m : gemGlow.materials) { glowEmis = ColorAttribute.createEmissive(1f, 0.1f, 0.12f, 1f); glowBlend = new BlendingAttribute(true, 0.15f); m.set(ColorAttribute.createDiffuse(1f, 0.1f, 0.12f, 1f), glowEmis, glowBlend); }
+    }
+
+    /** A red gem hovers above every checkpoint platform: it bobs, wobbles and glows until the checkpoint is reached, pops, and then stays as a small dim marker. */
+    private void drawGem(Sim sim, int i, float es, float ey, float camS, float time) {
+        if (gem == null) initGem();
+        boolean active = sim.checkpoint >= i;
+        Float t0 = gemAct.get(i);
+        if (active && t0 == null) {
+            if (sim.checkpoint > i) t0 = -1000f; else { t0 = time; particles.burst(es, ey + 1.7f, 16, gemRed, 2.6f, 3.4f, 0.1f, -1f, 1.1f); }
+            gemAct.put(i, t0);
+        } else if (!active && t0 != null) { gemAct.remove(i); t0 = null; }      // respawned behind a gem that was reached: the world was reset
+        float ph = i * 1.7f, base = 0.46f;
+        float yy = ey + 1.7f + (reducedMotion ? 0f : 0.13f * MathUtils.sin(time * 2.1f + ph));
+        float roll = reducedMotion ? 0f : 9f * MathUtils.sin(time * 1.7f + ph), yaw = reducedMotion ? 0f : time * 55f + ph * 40f;
+        float pulse = 0.5f + 0.5f * MathUtils.sin(time * 2.6f + ph);
+        if (t0 == null) {                       // waiting to be reached
+            gemEmis.color.set(0.45f + 0.35f * pulse, 0.04f, 0.07f, 1f); gemDiff.color.set(1f, 0.1f, 0.15f, 1f); gemBlend.opacity = 1f;
+            place(gem, es, yy, 0f, camS, base, base, base, yaw, roll); batch.render(gem, env);
+            glowBlend.opacity = 0.10f + 0.07f * pulse; glowEmis.color.set(1f, 0.1f, 0.12f, 1f);
+            float gs = base * (1.7f + 0.15f * pulse);
+            place(gemGlow, es, yy, 0f, camS, gs, gs, gs, yaw, roll); batch.render(gemGlow, env);
+            if (!reducedMotion && quality > 0 && MathUtils.random() < frameDt * 2.5f)
+                particles.spawn(es + MathUtils.random(-0.25f, 0.25f), yy - 0.2f, MathUtils.random(-0.1f, 0.1f), MathUtils.random(0.25f, 0.55f), gemRed, 0.05f, 0f, 1.1f);
+        } else {
+            float age = time - t0;
+            if (age < 0.55f) {                  // pop
+                float k = age / 0.55f, sc = base * (1f + 1.2f * k);
+                gemEmis.color.set(1f, 0.3f, 0.3f, 1f); gemBlend.opacity = 1f - k;
+                place(gem, es, yy + 0.4f * k, 0f, camS, sc, sc, sc, yaw * 3f, roll); batch.render(gem, env);
+            } else {                            // spent: a small, dim marker on the platform
+                gemDiff.color.set(0.42f, 0.07f, 0.1f, 1f); gemEmis.color.set(0.05f, 0f, 0.01f, 1f); gemBlend.opacity = 1f;
+                float sc = base * 0.5f;
+                place(gem, es, ey + 0.62f, 0f, camS, sc, sc, sc, reducedMotion ? 0f : time * 20f + ph * 40f, 0f); batch.render(gem, env);
+            }
+        }
+    }
 
     // ------------------------------------------------------------------ hazards (Quaternius Ultimate Platformer Pack, CC0)
 

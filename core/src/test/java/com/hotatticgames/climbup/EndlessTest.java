@@ -80,7 +80,7 @@ public class EndlessTest {
 
     private int countBelow(Tuning t, float y) {
         int n = 0;
-        for (long seed : SEEDS) { Course c = CourseGenerator.chunk(seed, 0, null, t); for (Element h : c.hazards) if (h.y < y) n++; }
+        for (long seed : SEEDS) { Course c = CourseGenerator.chunk(seed, 0, null, t); for (Element h : c.hazards) if (h.y < y && (h.isHazard() || h.type == Element.Type.CRAB || h.type == Element.Type.BEE)) n++; }       // castle gates and keys are fine early
         return n;
     }
 

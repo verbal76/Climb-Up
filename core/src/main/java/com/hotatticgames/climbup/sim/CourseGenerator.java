@@ -129,8 +129,19 @@ public final class CourseGenerator {
         extend(startY + T.chunkHeight);
         addRest(theme(c.get(c.size() - 1).y));
         c.get(c.size() - 1).checkpoint = true;
+        thinCheckpoints();
         addDecoys(Math.max(3, ctx + 2), c.size() - 11);
         finalizeRooms();
+    }
+
+    /** Castle attempts that were dropped can leave a second checkpoint right behind another one: keep the red gems evenly spread (the slice's closing one always stays). */
+    private void thinCheckpoints() {
+        float lastY = c.get(ctx - 1).y;
+        for (int i = ctx; i < c.size() - 1; i++) {
+            Element e = c.get(i);
+            if (!e.checkpoint) continue;
+            if (e.y - lastY < 0.45f * T.gemSpacing) e.checkpoint = false; else lastY = e.y;
+        }
     }
 
     private static Element copyOf(Element e, int anchor) {
@@ -161,12 +172,14 @@ public final class CourseGenerator {
     /** Appends modules until the last platform reaches height {@code targetY}. */
     private void extend(float targetY) {
         int sinceRest = 0;
+        float lastRestY = c.get(c.size() - 1).y, nextGap = T.gemSpacing * r(0.85f, 1.15f);      // red-gem checkpoints at even stretches of height, each with a little random give
         while (c.get(c.size() - 1).y < targetY) {
             Element last = c.get(c.size() - 1);
             float d = diff(last.y);
             int zone = tier(last.y), th = theme(last.y);
-            int restEvery = T.restEvery + Math.round(3f * intensity(last.y));
-            if (sinceRest >= restEvery) { addRest(th); sinceRest = 0; maybeCastle(th); continue; }
+            if (last.y - lastRestY >= nextGap && targetY - last.y > 0.4f * T.gemSpacing) {      // (not right before the slice's own closing rest)
+                addRest(th); sinceRest = 0; lastRestY = c.get(c.size() - 1).y; nextGap = T.gemSpacing * r(0.85f, 1.15f); maybeCastle(th); continue;
+            }
             Kind k = pick(zone, last);
             if (!tryModule(k, d, th)) {
                 rejected++;
@@ -189,11 +202,11 @@ public final class CourseGenerator {
 
     private void maybeCastle(int th) {
         Element last = c.get(c.size() - 1);
-        boolean due = endless ? (sliceNo() % 2 == 1 && castlesThisCourse == 0 && c.size() - ctx > 6)
+        boolean due = endless ? (castlesThisCourse == 0 && c.size() - ctx > 6)
                               : (last.y > 70f && castlesThisCourse < (int) (last.y / 150f) && castlesThisCourse < 3);
         if (due) castleDue++;
-        if (!due || !last.checkpoint || last.type != Element.Type.STATIC || last.w < 5f || rnd.nextInt(4) == 0) return;
-        if (endless && last.y > c.get(ctx - 1).y + T.chunkHeight - 12f) return;           // keep the whole castle inside this slice
+        if (!due || !last.checkpoint || last.type != Element.Type.STATIC || last.w < 4f) return;
+        if (endless && last.y > c.get(ctx - 1).y + T.chunkHeight - 8f) return;           // keep the whole castle inside this slice
         tryCastle(th);
     }
 

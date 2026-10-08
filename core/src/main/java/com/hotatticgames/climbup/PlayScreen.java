@@ -82,7 +82,7 @@ public final class PlayScreen extends ScreenAdapter {
             String hzType = System.getProperty("climb.hazard");              // test hook: start beside the first hazard of this type (e.g. CANNON)
             if (hzType != null) {
                 for (int tries = 0; tries < 40; tries++) {
-                    for (int q = 3; q < course.size(); q++) { Element e = course.get(q); if (e.anchor < 0 && ((e.type.name().equals(hzType) && (e.type != Element.Type.RAMP || Integer.getInteger("climb.rampSkin", -1) < 0 || e.skin == Integer.getInteger("climb.rampSkin", -1))) || (hzType.equals("BRIDGE") && e.skin == 1 && e.type == Element.Type.STATIC))) { run.startIdx = Math.max(0, q - Integer.getInteger("climb.hazardBack", 1)); break; } }
+                    for (int q = 3; q < course.size(); q++) { Element e = course.get(q); if (e.anchor < 0 && ((e.type.name().equals(hzType) && (e.type != Element.Type.RAMP || Integer.getInteger("climb.rampSkin", -1) < 0 || e.skin == Integer.getInteger("climb.rampSkin", -1))) || (hzType.equals("BRIDGE") && e.skin == 1 && e.type == Element.Type.STATIC) || (hzType.equals("CHECKPOINT") && e.checkpoint && q > 2))) { run.startIdx = Math.max(0, q - Integer.getInteger("climb.hazardBack", 1)); break; } }
                     for (Element h : course.hazards) if (run.startIdx == 0 && h.type.name().equals(hzType) && h.anchor > 2 && course.get(h.anchor).anchor < 0) { run.startIdx = Math.max(0, h.anchor - Integer.getInteger("climb.hazardBack", 1)); break; }
                     if (run.startIdx > 0) break;
                     tower.extend();
@@ -314,7 +314,7 @@ public final class PlayScreen extends ScreenAdapter {
         if ((ev & Sim.EV_PULL) != 0) { g.audio.play("pull", 0.7f, 1f); }
         if ((ev & Sim.EV_CRUMBLE) != 0) { g.audio.play("crumble", 0.7f, 1f); world.particles.burst(s, y - 0.2f, 12, brown, 2.2f, 1f, 0.16f, 12f, 0.8f); say("[CRUMBLE]"); }
         if ((ev & Sim.EV_CHECKPOINT) != 0) {
-            g.audio.play("checkpoint", 0.8f, 1f); world.particles.burst(s, y + 0.8f, 14, gold, 2.5f, 3.5f, 0.12f, -1f, 1.1f);
+            g.audio.play("checkpoint", 0.8f, 1f);
             toast = "CHECKPOINT"; toastT = 2f; if (tower != null) g.rememberCheckpoint(tower, sim.checkpoint); g.persist(); say("[CHECKPOINT]");
         }
         if ((ev & Sim.EV_RESPAWN) != 0) {
@@ -363,7 +363,7 @@ public final class PlayScreen extends ScreenAdapter {
         {"move", "RIDE MOVING PLATFORMS, OR WAIT FOR THE RIGHT MOMENT TO JUMP."},
         {"cable", "JUMP UP TO CABLES AND HANG. STICK LEFT/RIGHT SHIMMIES. DOWN OR JUMP DROPS."},
         {"swing", "TIME YOUR LEAP ONTO THE SWINGING PLATFORM."},
-        {"checkpoint", "FLAGS ARE CHECKPOINTS. FALL FAR AND YOU RESTART FROM THE LAST ONE."},
+        {"checkpoint", "RED GEMS ARE CHECKPOINTS. REACH ONE AND YOU RESTART FROM IT WHEN YOU FALL."},
         {"saw", "SAWBLADES SLIDE BACK AND FORTH. WATCH THE RHYTHM, THEN GO. A HIT SENDS YOU BACK TO THE CHECKPOINT."},
         {"cannon", "CANNONS FIRE SPIKED BALLS. WAIT FOR ONE TO PASS, THEN LEAP."},
         {"trap", "SPIKES POP UP ON A BEAT. WAIT IN THE SAFE PATCH, THEN RUN ACROSS WHEN THEY ARE DOWN."},

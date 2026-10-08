@@ -42,7 +42,7 @@ public final class SpaceScene {
     private float buzzT = -1, buzzDir, buzzY, nextBuzz = 30f, clock; private int buzzShip;
     private static final float BUZZ_TIME = 2.8f, FREEZE = Float.parseFloat(System.getProperty("climb.spaceFreeze", "-1"));   // FREEZE: test hook that parks both ships at that point of their flight
     private boolean buzzSounded;
-    private float spaceW;                  // how deep in the space world we are (0..1)
+    private float spaceW, zoneNow;                  // how deep in the space world we are (0..1)
     public boolean whoosh;                 // set for one frame when the close ship passes the player (the play screen plays the sound)
 
     private final Vector3 tmp = new Vector3(), right = new Vector3(), up = new Vector3(), fwd = new Vector3();
@@ -83,9 +83,10 @@ public final class SpaceScene {
 
     /** Planets and sky ships, drawn with the wide-range camera before the tower. */
     public void renderFar(ModelBatch batch, float camS, float camY, float zoneF) {
+        zoneNow = zoneF;
         float wrap = MathUtils.clamp((zoneF - Palette.ZONES + 0.25f) / 0.25f, 0f, 1f);
         spaceW = MathUtils.clamp((zoneF - 3.6f) / 0.5f, 0f, 1f) * (1f - wrap);       // 1 inside the Deep Space world: bigger, brighter, busier
-        float a = MathUtils.lerp(MathUtils.lerp(0.5f, 0.85f, MathUtils.clamp(zoneF / 2.4f, 0f, 1f)), 1f, spaceW);
+        float a = MathUtils.lerp(MathUtils.lerp(0.3f, 0.85f, MathUtils.clamp(zoneF / 2.4f, 0f, 1f)), 1f, spaceW);
         fwd.set(far.direction).nor(); right.set(fwd).crs(far.up).nor(); up.set(right).crs(fwd).nor();
         for (Far f : farPlanets) {
             float W = 1.7f * f.dist, H = 1.2f * f.dist;
@@ -113,13 +114,15 @@ public final class SpaceScene {
         int b0 = (int) Math.floor((camY - 40f) / 70f), b1 = (int) Math.floor((camY + 40f) / 70f);
         for (int band = b0; band <= b1; band++) {
             long h = mixSeed(band);
-            // one planet per band, inside the cylinder
+            // one planet per band, inside the cylinder (only from dusk onward; the sunny worlds keep the view clear)
+            if (zoneNow >= 1.8f) {
             ModelInstance pl = planets[(int) ((h >>> 3) % PLANETS)];
             float arc = ((h >>> 10) % 1000) / 1000f * circumference, y = band * 70f + ((h >>> 20) % 1000) / 1000f * 60f, r = 3.2f + ((h >>> 30) % 1000) / 1000f * 4.5f;
             float sc = 0.45f + ((h >>> 40) % 1000) / 1000f * 0.8f;
             alpha(pl, 1f);
             placer.place(pl, arc, y, radius - r, sc, sc, sc, reduced ? 0f : clock * (6f + (h % 7)));
             batch.render(pl, mainEnv);
+            }
             if (spaceW > 0.3f) {            // deep space: a second planet per band
                 ModelInstance p2 = planets[(int) ((h >>> 5) % PLANETS)];
                 float a2 = ((h >>> 12) % 1000) / 1000f * circumference, y2 = band * 70f + ((h >>> 22) % 1000) / 1000f * 60f, r2 = 3.5f + ((h >>> 32) % 1000) / 1000f * 4f, s2 = 0.5f + ((h >>> 42) % 1000) / 1000f * 0.9f;
@@ -130,9 +133,10 @@ public final class SpaceScene {
             // two drifting rocks (three in deep space)
             for (int k = 0; k < (spaceW > 0.3f ? 3 : 2); k++) {
                 long g = mixSeed(band * 31 + k + 977);
+                if ((g >>> 50) % 100 >= 20 + 80 * MathUtils.clamp(zoneNow / 3f, 0f, 1f)) continue;       // fewer rocks in the sunny worlds
                 ModelInstance rk = rocks[(int) ((g >>> 4) % ROCKS)];
                 float ra = ((g >>> 12) % 1000) / 1000f * circumference, ry = band * 70f + ((g >>> 22) % 1000) / 1000f * 70f, rr = 2.5f + ((g >>> 32) % 1000) / 1000f * 5.5f;
-                float rs = 0.35f + ((g >>> 42) % 1000) / 1000f * 0.8f;
+                float rs = 0.3f + ((g >>> 42) % 1000) / 1000f * 0.6f;
                 placer.place(rk, ra, ry + (reduced ? 0f : 0.4f * MathUtils.sin(clock * 0.6f + k)), radius - rr, rs, rs, rs, reduced ? 0f : clock * (8f + (g % 9)));
                 batch.render(rk, mainEnv);
             }

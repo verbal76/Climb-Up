@@ -26,16 +26,16 @@ public class CourseTest {
             Course c = TestUtil.tower(i);
             assertEquals(Element.Type.GOAL, c.get(c.goalIndex()).type);
             assertTrue(c.get(0).checkpoint);
-            float prevTop = -1; int cps = 0, gap = 0, maxGap = 0;
+            float prevTop = -1, lastCpY = 0, maxGapY = 0; int cps = 0;
             for (int k = 0; k < c.routeSize(); k++) {
                 Element e = c.get(k);
                 seen.merge(e.type, 1, Integer::sum);
                 if (e.isPlatform()) { assertTrue("unbroken overall ascent", e.y > prevTop - 0.01f || e.type == Element.Type.CRUMBLE); prevTop = Math.max(prevTop, e.y - 3f); }
-                if (e.checkpoint) { cps++; maxGap = Math.max(maxGap, gap); gap = 0; } else gap++;
+                if (e.checkpoint) { cps++; maxGapY = Math.max(maxGapY, e.y - lastCpY); lastCpY = e.y; }
                 assertTrue(Float.isFinite(e.s) && Float.isFinite(e.y));
             }
-            assertTrue("checkpoints exist regularly (every <= 22 route elements) but was " + maxGap, maxGap <= 22);
-            assertTrue(cps >= 15);
+            assertTrue("a red gem about every 30 m (never more than 50 m apart) but was " + maxGapY, maxGapY <= 50f);
+            assertTrue(cps >= 10);
             // spiral layers must never overlap: non-neighbouring elements at the same angle need real vertical separation
             for (int a = 0; a < c.size(); a++) for (int b = a + 1; b < c.size(); b++) {
                 Element ea = c.get(a), eb = c.get(b);

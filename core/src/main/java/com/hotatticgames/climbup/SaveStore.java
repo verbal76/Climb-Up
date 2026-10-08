@@ -79,6 +79,7 @@ public final class SaveStore {
             if (!v.has("courseIndex")) v.addChild("courseIndex", new JsonValue(0L));
             if (!v.has("completions")) v.addChild("completions", new JsonValue(0L));
         }
+        // v2 -> v3: finite towers became the endless climb; there is no seed yet, so the next Play starts a fresh climb (best height and stats are kept)
         if (v.has("version")) v.remove("version");
         v.addChild("version", new JsonValue((long) SaveData.CURRENT_VERSION));
         return v;

@@ -42,7 +42,8 @@ public final class WorldRenderer implements Disposable {
     private final ShapeRenderer shapes = new ShapeRenderer();
     private final SpriteBatch sb = new SpriteBatch();
     private final HeroRig hero;
-    private final Vis[] vis;
+    private final java.util.ArrayList<Vis> vis = new java.util.ArrayList<>();
+    private int pruneCursor;
     private final Background bg = new Background();
     public final Particles particles;
     private static final float CAM_DIST = Float.parseFloat(System.getProperty("climb.camDist", "9.6"));
@@ -65,8 +66,8 @@ public final class WorldRenderer implements Disposable {
     public WorldRenderer(Tuning t, Course c, Models models, int quality) {
         this.T = t; this.course = c; this.models = models; this.quality = quality;
         hero = new HeroRig();
-        vis = new Vis[c.size()]; dip = new float[c.size()]; dipV = new float[c.size()];
-        for (int i = 0; i < vis.length; i++) { vis[i] = new Vis(); vis[i].e = c.get(i); }
+        dip = new float[Math.max(16, c.size())]; dipV = new float[Math.max(16, c.size())];
+        syncVis();
         env.set(new ColorAttribute(ColorAttribute.AmbientLight, 0.62f, 0.62f, 0.66f, 1f));
         sun.set(1f, 0.97f, 0.9f, -0.5f, -0.9f, -0.6f);
         env.add(sun);
@@ -79,6 +80,13 @@ public final class WorldRenderer implements Disposable {
         shadow = new ModelInstance(models.disc);
         shadow.materials.get(0).set(ColorAttribute.createDiffuse(0f, 0f, 0f, 1f), new BlendingAttribute(0.28f));
         shadow.materials.get(0).set(ColorAttribute.createEmissive(0, 0, 0, 1));
+    }
+
+    /** The course grows while climbing (endless mode): keep per-element visuals and spring state in step with it. */
+    private void syncVis() {
+        int n = course.size();
+        while (vis.size() < n) { Vis v = new Vis(); v.e = course.get(vis.size()); vis.add(v); }
+        if (dip.length < n) { int m = Math.max(n, dip.length * 3 / 2); dip = java.util.Arrays.copyOf(dip, m); dipV = java.util.Arrays.copyOf(dipV, m); }
     }
 
     public void resize(int w, int h) { cam.viewportWidth = w; cam.viewportHeight = h; cam.update(); bg.resize(w, h); }
@@ -108,7 +116,7 @@ public final class WorldRenderer implements Disposable {
     private static int hash(int a, int b) { int h = a * 73856093 ^ b * 19349663; h ^= h >>> 13; h *= 0x5bd1e995; h ^= h >>> 15; return h & 0x7fffffff; }
 
     private void build(int idx) {
-        Vis v = vis[idx]; Element e = v.e; v.built = true;
+        Vis v = vis.get(idx); Element e = v.e; v.built = true;
         Array<Part> ps = new Array<>();
         boolean snow = e.zone == 1 || e.zone == 3;
         String base = snow ? "block-snow" : "block-grass";
@@ -237,7 +245,8 @@ public final class WorldRenderer implements Disposable {
         float target = py + 0.3f + lead;
         if (sim.teleported) camY = target;
         else camY += (target - camY) * Math.min(1f, (target > camY ? 7f : 10f) * dt);
-        float zoneF = Math.min(3.999f, Math.max(0f, camY / T.courseHeight * 4f));
+        float zf = camY / (T.rampHeight / 4f);
+        float zoneF = Math.min(3.999f, ((zf % 4f) + 4f) % 4f);        // the four worlds repeat for ever
         Palette.blend(Palette.SKY_TOP, zoneF, skyTop); Palette.blend(Palette.SKY_BOT, zoneF, skyBot);
         Palette.blend(Palette.TINT, zoneF, tint); Palette.blend(Palette.AMBIENT, zoneF, amb);
         ((ColorAttribute) env.get(ColorAttribute.AmbientLight)).color.set(amb);
@@ -261,9 +270,10 @@ public final class WorldRenderer implements Disposable {
         Gdx.gl.glClear(GL20.GL_DEPTH_BUFFER_BIT);
 
         batch.begin(cam);
-        int n = vis.length;
-        for (int i = 0; i < n; i++) {
-            Vis v = vis[i]; Element e = v.e;
+        syncVis();
+        int lo = Math.max(0, sim.winLo), hi = Math.min(vis.size() - 1, sim.winHi);
+        for (int i = lo; i <= hi; i++) {
+            Vis v = vis.get(i); Element e = v.e;
             float es = sim.es1[i] , ey = sim.ey1[i];
             if (e.isMoving()) { // interpolate moving platforms
                 es = sim.es0[i] + course.dsWrap(sim.es1[i], sim.es0[i]) * alpha; ey = sim.ey0[i] + (sim.ey1[i] - sim.ey0[i]) * alpha;
@@ -273,6 +283,8 @@ public final class WorldRenderer implements Disposable {
             if (!v.built) build(i);
             drawElement(sim, i, v, es, ey, ps, time);
         }
+        for (int k = 0, cnt = sim.hz == null ? course.hazards.size() : sim.hz.length; k < cnt; k++) drawHazard(course.hazards.get(sim.hz == null ? k : sim.hz[k]), sim.time + alpha * Sim.DT, ps, time);
+        for (int q = 0; q < 24 && pruneCursor < lo; q++, pruneCursor++) { Vis pv = vis.get(pruneCursor); pv.parts = null; pv.built = false; }
         if (showPlayer) drawPlayer(sim, dt, time, ps, py, alpha);
         particles.render(batch, env, ps, T, course);
         batch.end();
@@ -318,6 +330,78 @@ public final class WorldRenderer implements Disposable {
         if (e.type == Element.Type.SWING) drawSwingRopes(e, es, ey, camS);
         if (e.type == Element.Type.MOVE_V) drawRail(e, camS, true);
         if (e.type == Element.Type.MOVE_H) drawRail(e, camS, false);
+    }
+
+
+    // ------------------------------------------------------------------ hazards (Quaternius Ultimate Platformer Pack, CC0)
+
+    private static final float PK = 0.37f;                    // pack units -> game units (same scale as the hero)
+    private final java.util.HashMap<String, ModelInstance> packInst = new java.util.HashMap<>();
+    private static final float CANNON_YAW = -90f;
+
+    private ModelInstance pack(String name) {
+        ModelInstance m = packInst.get(name);
+        if (m == null) { m = new ModelInstance(models.pack(name)); packInst.put(name, m); }
+        return m;
+    }
+
+    private void drawPack(String name, float arc, float y, float dz, float camS, float sx, float sy, float sz, float yaw, float roll) {
+        ModelInstance m = pack(name);
+        float phi = wrapDiff(arc, camS) / T.radius, r = T.radius - dz;
+        m.transform.idt().translate(r * MathUtils.sin(phi), y, -T.radius + r * MathUtils.cos(phi))
+                .rotate(0, 1, 0, phi * MathUtils.radiansToDegrees + yaw).rotate(0, 0, 1, roll).scale(sx, sy, sz);
+        batch.render(m, env);
+    }
+
+    private ModelInstance stone;
+    private void drawBox(float arc, float y, float dz, float camS, float w, float h, float d, float cr, float cg, float cb) {
+        if (stone == null) stone = new ModelInstance(models.box);
+        stone.materials.get(0).set(ColorAttribute.createDiffuse(cr, cg, cb, 1f));
+        place(stone, arc, y + h * 0.5f, dz, camS, w, h, d, 0f);
+        batch.render(stone, env);
+    }
+
+    private void drawHazard(Element h, float t, float camS, float time) {
+        float cs = h.type == Element.Type.CANNON ? h.s + h.dir * h.len * 0.5f : h.s;
+        float half = h.type == Element.Type.CANNON ? h.len * 0.5f + 1.5f : (h.type == Element.Type.SAW_H ? h.amp + 1.5f : 2f);
+        float cy = h.type == Element.Type.SAW_V ? h.y + h.amp * 0.5f : h.y;
+        if (!visible(cs, cy, camS, half)) return;
+        switch (h.type) {
+            case SAW_H: {
+                drawBox(h.s, h.y - 0.05f, 0.25f, camS, h.amp * 2f + 1.2f, 0.1f, 0.14f, 0.3f, 0.32f, 0.4f);
+                drawPack("hazard_saw", h.sAt(t), h.yAt(t), 0.25f, camS, PK, PK, PK, 0f, -time * 600f);
+                break;
+            }
+            case SAW_V: {
+                drawBox(h.s, h.y - 0.6f, 0.25f, camS, 0.12f, h.amp + 1.2f, 0.14f, 0.3f, 0.32f, 0.4f);
+                drawPack("hazard_saw", h.s, h.yAt(t), 0.25f, camS, PK, PK, PK, 0f, -time * 600f);
+                break;
+            }
+            case CANNON: {
+                float base = h.y - 2.35f;
+                drawBox(h.s, base, 0f, camS, 1.25f, 1.5f, 1.25f, 0.42f, 0.38f, 0.5f);
+                drawBox(h.s, base + 1.5f, 0f, camS, 1.45f, 0.16f, 1.45f, 0.3f, 0.27f, 0.36f);
+                drawPack("cannon", h.s, base + 1.66f + 0.12f, 0f, camS, PK, PK, PK, h.dir > 0 ? CANNON_YAW : -CANNON_YAW, 0f);
+                if (h.lethalAt(t)) drawPack("spikyball", h.sAt(t), h.yAt(t), 0f, camS, 0.55f, 0.55f, 0.55f, 0f, -h.sAt(t) * 160f);
+                break;
+            }
+            case SPIKE_TRAP: {
+                float sp = h.spikeHeight(t);
+                drawBox(h.s, h.y - 0.04f, 0f, camS, h.w + 0.3f, 0.07f, 1.5f, 0.55f, 0.2f, 0.18f);
+                if (sp > 0.02f) {
+                    float hk = sp / (3.4f * 0.37f);
+                    for (int k = -1; k <= 1; k++) drawPack("spikes", h.s + k * h.w * 0.32f, h.y, 0f, camS, 0.3f, 0.37f * hk * 1.3f, 0.3f, 0f, 0f);
+                }
+                break;
+            }
+            case SPIKE_BLOCK: {
+                float base = Math.min(0.5f, h.len * 0.5f), sh = Math.max(0.3f, h.len - base);
+                drawBox(h.s, h.y, 0f, camS, h.w, base, 1.3f, 0.42f, 0.38f, 0.5f);
+                drawPack("spikes", h.s, h.y + base, 0f, camS, h.w * 0.46f, sh / 3.4f, h.w * 0.46f, 0f, 0f);
+                break;
+            }
+            default: break;
+        }
     }
 
     private ModelInstance railInst, ropeInst;
@@ -376,8 +460,8 @@ public final class WorldRenderer implements Disposable {
 
     private float groundBelow(Sim sim, float ps, float py) {
         float best = -1e9f;
-        for (int i = 0; i < vis.length; i++) {
-            Element e = vis[i].e;
+        for (int i = Math.max(0, sim.winLo); i <= Math.min(vis.size() - 1, sim.winHi); i++) {
+            Element e = vis.get(i).e;
             if (!e.isPlatform() || sim.gone[i]) continue;
             float top = sim.ey1[i];
             if (top > py + 0.05f || py - top > 9f) continue;
@@ -392,7 +476,7 @@ public final class WorldRenderer implements Disposable {
     private final Color ambCol = new Color();
 
     public void heroEvents(int ev, float landSpeed) { hero.events(ev, landSpeed); }
-    public void platformLanded(int idx, float speed) { if (dip != null && idx >= 0 && idx < dip.length) dipV[idx] += Math.min(14f, speed) * 0.9f; }
+    public void platformLanded(int idx, float speed) { syncVis(); if (dip != null && idx >= 0 && idx < dip.length) dipV[idx] += Math.min(14f, speed) * 0.9f; }
     public void kick(float deg) { if (!reducedMotion) fovV += deg * 14f; }
     private final com.badlogic.gdx.math.Vector3 headTmp = new com.badlogic.gdx.math.Vector3();
     public String heroBubble() { return hero.bubble(); }

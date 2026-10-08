@@ -37,7 +37,7 @@ jobs:
           sha256sum "$OUT"
           "$BT/aapt2" dump badging "$OUT" | grep -E "^package|sdkVersion|targetSdkVersion|uses-permission|launchable-activity|native-code"
           "$BT/apksigner" verify --verbose "$OUT" | head -5
-          unzip -l "$OUT" | grep -E "\.so$|classes.*dex|assets/courses" | head -20
+          unzip -l "$OUT" | grep -E "\.so$|classes.*dex|assets/pack" | head -20
       - uses: actions/upload-artifact@v4
         with:
           name: climb-up-debug-apk-${{ github.run_number }}

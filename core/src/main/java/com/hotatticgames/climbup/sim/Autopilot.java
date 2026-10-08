@@ -13,6 +13,7 @@ public final class Autopilot {
 
     public static final class Result {
         public boolean ok; public PolicyFactory factory; public int trials, successes;
+        public float window = 1f;     // best fraction of wait-phases a single move style succeeds at (timing tolerance; 1 = timing irrelevant)
         public float margin() { return trials == 0 ? 0 : successes / (float) trials; }
     }
 
@@ -116,6 +117,34 @@ public final class Autopilot {
         }
     }
 
+    /** Waits, runs across the platform, hops over the hazard in the middle ({@code hopDist} before it), then leaves like {@link GroundPolicy}. */
+    static final class MidHopPolicy implements Policy {
+        final int a, b, dir; final float wait, hopDist, hx; final GroundPolicy rest; float t; int phase;
+        MidHopPolicy(int a, int b, int dir, float wait, float hopDist, float hx, float offset, int steerMode) {
+            this.a = a; this.b = b; this.dir = dir; this.wait = wait; this.hopDist = hopDist; this.hx = hx;
+            rest = new GroundPolicy(a, b, dir, 0f, offset, 0.9f, steerMode);
+        }
+        public void act(Sim s, InputState in) {
+            if (s.mode == Sim.Mode.LEDGE || s.mode == Sim.Mode.PULLUP) { in.moveY = 1f; return; }
+            if (phase == 0) {
+                if (s.mode != Sim.Mode.GROUND) { phase = 3; }
+                else if (t < wait) { t += Sim.DT; return; }
+                else phase = 1;
+            }
+            if (phase == 1) {
+                float ahead = s.course.dsWrap(hx, s.s) * dir;
+                in.moveX = dir;
+                if (ahead <= hopDist) { in.jumpPressed = true; in.jumpHeld = true; phase = 2; }
+                return;
+            }
+            if (phase == 2) {
+                in.moveX = dir; in.jumpHeld = s.vy > 0f && s.mode == Sim.Mode.AIR;
+                if (s.mode == Sim.Mode.GROUND) phase = 3; else return;
+            }
+            rest.act(s, in);
+        }
+    }
+
     static final class PullPolicy implements Policy {
         public void act(Sim s, InputState in) { in.moveY = 1f; }
     }
@@ -124,12 +153,14 @@ public final class Autopilot {
 
     static boolean movingNear(Course c, int a) {
         for (int i = a; i <= Math.min(c.routeSize() - 1, a + 2); i++) if (c.get(i).isMoving()) return true;
+        for (Element h : c.hazards) if (h.anchor >= a && h.anchor <= a + 2 && h.isMoving()) return true;
         return false;
     }
 
     static float maxPeriod(Course c, int a) {
         float p = 0;
         for (int i = a; i <= Math.min(c.routeSize() - 1, a + 2); i++) if (c.get(i).isMoving()) p = Math.max(p, c.get(i).period);
+        for (Element h : c.hazards) if (h.anchor >= a && h.anchor <= a + 2 && h.isMoving()) p = Math.max(p, h.period);
         return p;
     }
 
@@ -185,6 +216,8 @@ public final class Autopilot {
         int b = a + 1;
         if (b >= c.routeSize()) { r.ok = true; return r; }
         List<PolicyFactory> cands = new ArrayList<>();
+        List<Integer> group = new ArrayList<>();      // move-style id per candidate (offset x hold x steering), for the timing-window metric
+        int[] groupWins = new int[32]; int nWaits = 1;
         int dir = c.dsWrap(base.es1[b], base.es1[a]) >= 0 ? 1 : -1;
         if (c.get(a).type == Element.Type.ROPE) {
             float[] deltas = {0f, 0.5f, 1.0f, 1.6f, 2.4f, 3.4f};
@@ -197,17 +230,34 @@ public final class Autopilot {
         } else {
             boolean moving = movingNear(c, a);
             int waits = moving ? Math.min(24, (int) Math.ceil(maxPeriod(c, a) / 0.3f) + 1) : 1;
+            nWaits = waits;
             for (int w = 0; w < waits; w++) {
                 final float wt = w * 0.3f;
-                for (float o : OFFSETS) for (float h : HOLDS) for (int sm = 0; sm < 4; sm += 1) {
+                for (int oi = 0; oi < OFFSETS.length; oi++) for (int hi = 0; hi < HOLDS.length; hi++) for (int sm = 0; sm < 4; sm += 1) {
                     if (sm == 2) continue;
-                    final float fo = o, fh = h; final int fsm = sm;
+                    final float fo = OFFSETS[oi], fh = HOLDS[hi]; final int fsm = sm;
                     cands.add(() -> new GroundPolicy(a, b, dir, wt, fo, fh, fsm));
+                    group.add(oi * 8 + hi * 4 + sm);
                 }
             }
         }
+        if (base.mode == Sim.Mode.GROUND && c.get(a).isPlatform()) {      // a hazard in the middle of this platform: hop-over moves
+            for (Element h : c.hazards) {
+                if (h.anchor != a || !(h.type == Element.Type.SAW_H || h.type == Element.Type.SPIKE_BLOCK || h.type == Element.Type.SPIKE_TRAP)) continue;
+                if (Math.abs(c.dsWrap(h.s, base.es1[a])) >= c.get(a).halfW()) continue;
+                final float hx = base.es1[a] + c.dsWrap(h.s, base.es1[a]);
+                float[] hops = {1.0f, 1.5f, 2.0f, 2.5f};
+                for (int w = 0; w < nWaits; w++) for (float hd : hops) for (int sm = 0; sm < 2; sm++) {
+                    final float wt = w * 0.3f, fhd = hd; final int fsm = sm == 0 ? 0 : 3;
+                    cands.add(() -> new MidHopPolicy(a, b, dir, wt, fhd, hx, 0f, fsm));
+                    group.add(16 + (int) (hd * 2f) % 8 + sm * 0);
+                }
+                break;
+            }
+        }
         PolicyFactory firstOk = null;
-        for (PolicyFactory f : cands) {
+        for (int ci = 0; ci < cands.size(); ci++) {
+            PolicyFactory f = cands.get(ci);
             r.trials++;
             float limit = 4.5f + (c.get(a).type == Element.Type.CRUMBLE ? 0 : 6f);
             if (lookahead) {
@@ -219,10 +269,12 @@ public final class Autopilot {
                 if (r.ok && !measureMargin) break;
             } else if (trial(base, a, f, limit)) {
                 r.successes++;
+                if (ci < group.size()) groupWins[group.get(ci)]++;
                 if (!r.ok) { r.ok = true; r.factory = f; }
                 if (!measureMargin) break;
             }
         }
+        if (measureMargin && !group.isEmpty()) { int best = 0; for (int gw : groupWins) best = Math.max(best, gw); r.window = best / (float) nWaits; }
         if (lookahead && !r.ok && firstOk != null) { r.ok = true; r.factory = firstOk; }   // nothing good follows: fall back to any working move
         return r;
     }
@@ -234,7 +286,9 @@ public final class Autopilot {
         Sim real = Sim.startOn(c, t, 0);
         int a = 0;
         InputState in = new InputState();
+        boolean endless = c.get(c.goalIndex()).type != Element.Type.GOAL;     // endless slices end on a rest platform, not a goal flag
         while (!real.won && real.time < maxSimSeconds) {
+            if (endless && a >= c.goalIndex()) { rep.completed = true; rep.simTime = real.time; return rep; }
             Result r = plan(real, a, false, true);
             rep.links++;
             if (!r.ok) { rep.failedLink = a; rep.simTime = real.time; return rep; }

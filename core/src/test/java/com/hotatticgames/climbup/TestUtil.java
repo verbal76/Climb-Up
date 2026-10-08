@@ -7,8 +7,12 @@ final class TestUtil {
     static Tuning tuning() throws Exception {
         return Tuning.parse(new String(Files.readAllBytes(Paths.get("../assets/data/tuning.json"))));
     }
-    static Course tower(int i) throws Exception {
-        return CourseIO.fromJson(new String(Files.readAllBytes(Paths.get(String.format("../assets/courses/tower%02d.json", i)))));
+    private static final java.util.Map<Integer, Course> TOWERS = new java.util.HashMap<>();
+    /** A finite, validated test tower (seed 100 + i) built by the same generator that feeds the endless climb. */
+    static synchronized Course tower(int i) throws Exception {
+        Course c = TOWERS.get(i);
+        if (c == null) { c = CourseGenerator.generate(100 + i, tuning()); TOWERS.put(i, c); }
+        return c;
     }
     /** Flat test world: a long platform plus helpers. */
     static Course flat(Tuning t, Element... extra) {

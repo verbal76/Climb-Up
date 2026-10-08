@@ -8,6 +8,8 @@ public final class Course {
     public final long seed;
     public final float circumference;
     public final List<Element> elements = new ArrayList<>();
+    /** Environmental hazards (saws, cannons, spike traps...). Kept apart from the route so the route stays a simple ascending chain; each is anchored to a route element. */
+    public final List<Element> hazards = new ArrayList<>();
 
     public Course(long seed, float circumference) { this.seed = seed; this.circumference = circumference; }
 
@@ -38,6 +40,15 @@ public final class Course {
             from = Math.min(from, decoyFrom[a]); to = Math.max(to, decoyTo[a]);
         }
         return to < 0 ? new int[]{0, 0} : new int[]{from, to};
+    }
+
+    /** Indices of hazards anchored to route/decoy elements aLo..aHi (inclusive). */
+    public int[] hazardsFor(int aLo, int aHi) {
+        int n = 0;
+        for (Element h : hazards) if (h.anchor >= aLo && h.anchor <= aHi) n++;
+        int[] r = new int[n]; int k = 0;
+        for (int i = 0; i < hazards.size(); i++) { int a = hazards.get(i).anchor; if (a >= aLo && a <= aHi) r[k++] = i; }
+        return r;
     }
 
     public int add(Element e) { elements.add(e); return elements.size() - 1; }

@@ -18,7 +18,7 @@ public final class Palette {
         int z = Math.min(3, (int) zoneF);
         float f = zoneF - z;
         float t = MathUtils.clamp((f - 0.8f) / 0.2f, 0f, 1f);
-        Color a = arr[z], b = arr[Math.min(3, z + 1)];
+        Color a = arr[z], b = arr[(z + 1) % 4];      // themes repeat for ever: after Night Summit comes Meadow Base again
         out.set(a).lerp(b, t);
     }
 }

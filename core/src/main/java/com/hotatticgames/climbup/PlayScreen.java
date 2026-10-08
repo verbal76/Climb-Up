@@ -22,11 +22,13 @@ import java.io.File;
 
 /** The climb itself: fixed-step simulation, touch controls, HUD, pause/summit overlays, contextual tips. */
 public final class PlayScreen extends ScreenAdapter {
-    private enum State { PLAYING, PAUSED, WON }
+    private enum State { PLAYING, PAUSED }
 
     private final ClimbGame g;
     private final boolean demo;
     private Course course;
+    private Tower tower;                 // null only in the scripted demo, which plays one fixed slice
+    private int winCenter = Integer.MIN_VALUE, winSize;
     private Sim sim;
     private WorldRenderer world;
     private final InputState in = new InputState();
@@ -64,9 +66,27 @@ public final class PlayScreen extends ScreenAdapter {
             g.audio.playlist(Audio.GAME_TRACKS);
             return;
         }
-        course = g.loadCourse(g.save.courseIndex);
-        sim = Sim.startOn(course, g.tuning, Math.min(g.save.checkpoint, course.goalIndex()));
-        sim.checkpoint = Math.min(g.save.checkpoint, course.goalIndex());
+        if (demo) {                                       // scripted attract/screenshot run: one fixed, validated slice
+            course = CourseGenerator.chunk(Long.getLong("climb.seed", 11L), Integer.getInteger("climb.slice", 4), null, g.tuning);
+            sim = Sim.startOn(course, g.tuning, 0);
+        } else {
+            ClimbGame.Run run = g.openRun(g.runFresh); g.runFresh = false;
+            tower = run.tower; course = tower.world;
+            int hStart = Integer.getInteger("climb.startHeight", 0);              // test hook: begin partway up
+            while (hStart > 0 && tower.topY() < hStart + 80f) tower.extend();
+            String hzType = System.getProperty("climb.hazard");              // test hook: start beside the first hazard of this type (e.g. CANNON)
+            if (hzType != null) {
+                for (int tries = 0; tries < 40; tries++) {
+                    for (Element h : course.hazards) if (h.type.name().equals(hzType) && h.anchor > 2 && course.get(h.anchor).anchor < 0) { run.startIdx = Math.max(0, h.anchor - Integer.getInteger("climb.hazardBack", 1)); break; }
+                    if (run.startIdx > 0) break;
+                    tower.extend();
+                }
+            }
+            sim = Sim.startOn(course, g.tuning, run.startIdx);
+            sim.checkpoint = run.startIdx;
+            if (hStart > 0) { int i = 0; while (i < course.size() - 1 && course.get(i + 1).y < hStart) i++; while (i > 0 && course.get(i).anchor >= 0) i--; sim = Sim.startOn(course, g.tuning, i); sim.checkpoint = i; }
+            updateWindow(true);
+        }
         world = new WorldRenderer(g.tuning, course, g.models, g.settings.quality);
         applySettings();
         world.snapCamera(sim);
@@ -82,6 +102,15 @@ public final class PlayScreen extends ScreenAdapter {
             sim.s = course.wrap(sim.es1[e] - (el.halfW() + 0.24f)); sim.y = sim.ey1[e] - g.tuning.handHeight + 0.08f;
             world.snapCamera(sim);
         }
+    }
+
+    /** Endless climb: only the part of the world around the player is simulated. */
+    private void updateWindow(boolean force) {
+        int idx = Math.max(Math.max(sim.bestElem, sim.onElem), sim.checkpoint);
+        boolean grew = course.size() > winSize && winCenter + 160 > winSize;
+        if (!force && !grew && Math.abs(idx - winCenter) < 30) return;
+        winCenter = idx; winSize = course.size();
+        sim.setRange(idx - 120, idx + 160);
     }
 
     private void applySettings() {
@@ -154,11 +183,12 @@ public final class PlayScreen extends ScreenAdapter {
     @Override public void render(float dt) {
         dt = Math.min(dt, 0.1f);
         time += dt;
-        if (OVERLAY != null && time > 0.8f && state == State.PLAYING) { if (OVERLAY.equals("pause")) pauseGame(); else if (OVERLAY.equals("win")) { runTime = 734f; sim.falls = 5; state = State.WON; } }
+        if (OVERLAY != null && time > 0.8f && state == State.PLAYING) { if (OVERLAY.equals("pause")) pauseGame(); }
         boolean play = state == State.PLAYING;
         if (play) {
             float speed = g.settings.assistSlow ? g.tuning.assistSlowFactor : 1f;
             if (hitstop > 0) hitstop -= dt; else acc += dt * speed;
+            if (tower != null) { if (tower.poll()) sim.ensureCapacity(); tower.ensureAbove(sim.maxHeight, 75f); updateWindow(false); }
             int steps = 0;
             while (acc >= Sim.DT && steps < 6) {
                 if (demo) { driver[0].drive(sim, in); } else readInput();
@@ -179,15 +209,6 @@ public final class PlayScreen extends ScreenAdapter {
             updateTips(dt);
         }
         if (fade > 0) fade = Math.max(0, fade - dt * 2.2f);
-        if (state == State.WON) {
-            confettiT -= dt;
-            if (confettiT <= 0) {
-                confettiT = 0.16f;
-                Color[] pal = {gold, cyan, new Color(1f, 0.45f, 0.7f, 1f), new Color(0.5f, 1f, 0.5f, 1f)};
-                world.particles.burst(sim.s + MathUtils.random(-3f, 3f), sim.y + MathUtils.random(1.5f, 4.5f), 6, pal[MathUtils.random(3)], 3.5f, 4f, 0.14f, 6f, 1.4f);
-            }
-            world.particles.update(dt);
-        }
         world.particles.update(play ? dt : 0f);
         world.render(sim, play ? acc / Sim.DT : 1f, dt, time, true);
         drawHud();
@@ -215,7 +236,7 @@ public final class PlayScreen extends ScreenAdapter {
 
     private void say(String s) { if (g.settings.captions) { caption = s; captionT = 1.4f; } }
 
-    private final Color dust = new Color(0.9f, 0.88f, 0.8f, 1f), gold = new Color(1f, 0.85f, 0.25f, 1f), brown = new Color(0.55f, 0.4f, 0.28f, 1f), cyan = new Color(0.4f, 0.9f, 1f, 1f);
+    private final Color red = new Color(1f, 0.3f, 0.25f, 1f), dust = new Color(0.9f, 0.88f, 0.8f, 1f), gold = new Color(1f, 0.85f, 0.25f, 1f), brown = new Color(0.55f, 0.4f, 0.28f, 1f), cyan = new Color(0.4f, 0.9f, 1f, 1f);
 
     private void handleEvents(int ev) {
         if (ev == 0) return;
@@ -244,14 +265,19 @@ public final class PlayScreen extends ScreenAdapter {
         if ((ev & Sim.EV_CRUMBLE) != 0) { g.audio.play("crumble", 0.7f, 1f); world.particles.burst(s, y - 0.2f, 12, brown, 2.2f, 1f, 0.16f, 12f, 0.8f); say("[CRUMBLE]"); }
         if ((ev & Sim.EV_CHECKPOINT) != 0) {
             g.audio.play("checkpoint", 0.8f, 1f); world.particles.burst(s, y + 0.8f, 14, gold, 2.5f, 3.5f, 0.12f, -1f, 1.1f);
-            toast = "CHECKPOINT"; toastT = 2f; g.save.checkpoint = sim.checkpoint; g.persist(); say("[CHECKPOINT]");
+            toast = "CHECKPOINT"; toastT = 2f; if (tower != null) g.rememberCheckpoint(tower, sim.checkpoint); g.persist(); say("[CHECKPOINT]");
         }
         if ((ev & Sim.EV_RESPAWN) != 0) {
             world.particles.burst(sim.s, sim.y + 0.6f, 18, cyan, 3f, 3.2f, 0.1f, 2f, 0.7f);
             g.audio.play("respawn", 0.8f, 1f); fade = 1f; g.save.falls++; vibrate(40, 1); world.shake(0.5f);
-            toast = "BACK TO CHECKPOINT"; toastT = 1.6f; g.persist();
+            if ((ev & Sim.EV_HIT) == 0) { toast = "BACK TO CHECKPOINT"; toastT = 1.6f; }
+            g.persist();
         }
-        if ((ev & Sim.EV_WIN) != 0) { g.audio.play("win", 1f, 1f); state = State.WON; g.save.completions++; if (g.save.bestTime <= 0 || runTime < g.save.bestTime) g.save.bestTime = runTime; world.particles.burst(s, y + 1f, 24, gold, 4f, 5f, 0.16f, 3f, 1.6f); g.persist(); }
+        if ((ev & Sim.EV_HIT) != 0) {
+            world.particles.burst(sim.hitS, sim.hitY + 0.7f, 22, red, 4f, 4f, 0.13f, 8f, 0.7f);
+            g.audio.play("hit", 1f, 1f); world.shake(0.9f); freeze(0.09f); vibrate(60, 1); say("[OUCH]");
+            toast = "OUCH! BACK TO CHECKPOINT"; toastT = 1.8f;
+        }
     }
 
     private static final String[][] TIPS = {
@@ -264,6 +290,10 @@ public final class PlayScreen extends ScreenAdapter {
         {"cable", "JUMP UP TO CABLES AND HANG. STICK LEFT/RIGHT SHIMMIES. DOWN OR JUMP DROPS."},
         {"swing", "TIME YOUR LEAP ONTO THE SWINGING PLATFORM."},
         {"checkpoint", "FLAGS ARE CHECKPOINTS. FALL FAR AND YOU RESTART FROM THE LAST ONE."},
+        {"saw", "SAWBLADES SLIDE BACK AND FORTH. WATCH THE RHYTHM, THEN GO. A HIT SENDS YOU BACK TO THE CHECKPOINT."},
+        {"cannon", "CANNONS FIRE SPIKED BALLS. WAIT FOR ONE TO PASS, THEN LEAP."},
+        {"trap", "SPIKES POP UP ON A BEAT. WAIT IN THE SAFE PATCH, THEN RUN ACROSS WHEN THEY ARE DOWN."},
+        {"block", "STONE SPIKE BLOCKS: HOP OVER THEM, AND DON'T DROP INTO ONE."},
     };
 
     private void updateTips(float dt) {
@@ -271,9 +301,10 @@ public final class PlayScreen extends ScreenAdapter {
         if (captionT > 0) captionT -= dt;
         if (tipT > 0) { tipT -= dt; if (tipT <= 0) tip = ""; return; }
         if (!g.settings.tips || demo) return;
-        // look for the next element of an unseen kind within 8 units ahead
-        for (int i = Math.max(0, sim.bestElem - 1); i < Math.min(course.routeSize(), sim.bestElem + 5); i++) {
+        // look for the next element of an unseen kind within 9 units
+        for (int i = Math.max(0, sim.bestElem - 1); i < Math.min(course.size(), sim.bestElem + 8); i++) {
             Element e = course.get(i);
+            if (e.anchor >= 0) continue;                       // decoys never teach anything
             String key = null;
             switch (e.type) {
                 case PAD: key = "pad"; break; case ROPE: key = "rope"; break; case CRUMBLE: key = "crumble"; break;
@@ -282,12 +313,26 @@ public final class PlayScreen extends ScreenAdapter {
             }
             if (key == null && i == 1) key = "jump";
             if (key == null) continue;
-            if (Math.abs(course.dsWrap(e.s, sim.s)) > 9f) continue;
-            if (g.save.shownTips.contains(key)) continue;
-            g.save.shownTips.add(key);
-            for (String[] t : TIPS) if (t[0].equals(key)) { tip = t[1]; tipT = 5f; }
-            return;
+            if (Math.abs(course.dsWrap(e.s, sim.s)) > 9f || Math.abs(e.y - sim.y) > 9f) continue;
+            if (tipFor(key)) return;
         }
+        for (int k = 0, cnt = sim.hz == null ? course.hazards.size() : sim.hz.length; k < cnt; k++) {
+            Element h = course.hazards.get(sim.hz == null ? k : sim.hz[k]);
+            String key = null;
+            switch (h.type) {
+                case SAW_H: case SAW_V: key = "saw"; break; case CANNON: key = "cannon"; break;
+                case SPIKE_TRAP: key = "trap"; break; case SPIKE_BLOCK: key = "block"; break; default: break;
+            }
+            if (key == null || Math.abs(course.dsWrap(h.s, sim.s)) > 9f || Math.abs(h.y - sim.y) > 7f) continue;
+            if (tipFor(key)) return;
+        }
+    }
+
+    private boolean tipFor(String key) {
+        if (g.save.shownTips.contains(key)) return false;
+        g.save.shownTips.add(key);
+        for (String[] t : TIPS) if (t[0].equals(key)) { tip = t[1]; tipT = 5f; }
+        return true;
     }
 
     // ------------------------------------------------------------------ HUD & overlays
@@ -297,27 +342,30 @@ public final class PlayScreen extends ScreenAdapter {
         ui.begin();
         float W = ui.w(), H = ui.h(), m = 28f;
         float tm = ui.tm();
-        // progress meter (top-left): height and zone
-        int zone = Math.min(3, (int) (sim.y / g.tuning.courseHeight * 4f));
-        String hs = (int) Math.max(0, sim.y) + " / " + (int) g.tuning.courseHeight + " M";
-        ui.rect(m - 6, H - m - 62 * Math.min(tm, 1.3f) - 18, 360 * Math.min(tm, 1.3f) + 12, 62 * Math.min(tm, 1.3f) + 18 + 6, new Color(0.05f, 0.07f, 0.14f, 0.55f));
-        ui.text(hs, m, H - m - 30 * Math.min(tm, 1.3f), 4f * Math.min(tm, 1.3f), Ui.TEXT);
-        float barW = 340 * Math.min(tm, 1.3f), barY = H - m - 56 * Math.min(tm, 1.3f) - 6;
-        ui.rect(m, barY, barW, 12, new Color(0.2f, 0.22f, 0.32f, 1f));
-        for (int z = 0; z < 4; z++) { Color c = Palette.SKY_BOT[z]; ui.rect(m + z * barW / 4f + 1, barY + 1, barW / 4f - 2, 10, new Color(c.r, c.g, c.b, 0.9f)); }
-        float prog = MathUtils.clamp(sim.y / g.tuning.courseHeight, 0, 1);
-        ui.rect(m + prog * barW - 4, barY - 6, 8, 24, Ui.ACCENT);
+        // height meter (top-left): current height, best height, and where we are in the repeating worlds
+        float zk = Math.min(tm, 1.3f);
+        int zone = Math.min(3, (int) (((sim.y / (g.tuning.rampHeight / 4f)) % 4f + 4f) % 4f)), lap = (int) (sim.y / g.tuning.rampHeight);
+        String hs = (int) Math.max(0, sim.y) + " M";
+        ui.rect(m - 6, H - m - 62 * zk - 18, 360 * zk + 12, 62 * zk + 18 + 6, new Color(0.05f, 0.07f, 0.14f, 0.55f));
+        ui.text(hs, m, H - m - 30 * zk, 4f * zk, Ui.TEXT);
+        ui.text("BEST " + (int) Math.max(g.save.bestHeight, sim.maxHeight), m, H - m - 56 * zk, 2.6f * zk, Ui.DIM);
+        float barW = 340 * zk, barY = H - m - 70 * zk - 6;
+        float within = ((sim.y / (g.tuning.rampHeight / 4f)) % 4f + 4f) % 4f / 4f;
+        ui.rect(m, barY, barW, 8, new Color(0.2f, 0.22f, 0.32f, 1f));
+        for (int z = 0; z < 4; z++) { Color c = Palette.SKY_BOT[z]; ui.rect(m + z * barW / 4f + 1, barY + 1, barW / 4f - 2, 6, new Color(c.r, c.g, c.b, 0.9f)); }
+        ui.rect(m + within * barW - 3, barY - 5, 6, 18, Ui.ACCENT);
         // pause button
         float pb = 96f; float px = g.settings.leftHanded ? m : W - m - pb, py = H - m - pb;
         ui.rect(px - 3, py - 3, pb + 6, pb + 6, Ui.EDGE); ui.rect(px, py, pb, pb, Ui.PANEL);
         ui.rect(px + 28, py + 24, 14, 48, Ui.TEXT); ui.rect(px + 54, py + 24, 14, 48, Ui.TEXT);
         if (state == State.PLAYING && ui.tappedIn(px - 10, py - 10, pb + 20, pb + 20)) pauseGame();
         // zone banner
-        if (zone != lastZone) { lastZone = zone; zoneT = 3f; }
+        int zoneKey = zone + 4 * lap;
+        if (zoneKey != lastZone) { lastZone = zoneKey; zoneT = 3f; }
         if (zoneT > 0) {
             zoneT -= Gdx.graphics.getDeltaTime();
             float a = Math.min(1f, zoneT);
-            ui.textC(Palette.NAMES[zone], W / 2, H - 70, 7f, new Color(1f, 0.95f, 0.8f, a));
+            ui.textC(Palette.NAMES[zone] + (lap > 0 ? " " + (lap + 1) : ""), W / 2, H - 70, 7f, new Color(1f, 0.95f, 0.8f, a));
         }
         if (toastT > 0) ui.textC(toast, W / 2, H - 125f, 6f, new Color(1f, 0.9f, 0.4f, Math.min(1f, toastT)));
         if (captionT > 0 && g.settings.captions) { float cw = ui.font.width(caption, 4f * tm); ui.rect(W / 2 - cw / 2 - 14, 28, cw + 28, 44 * tm, new Color(0, 0, 0, 0.6f)); ui.text(caption, W / 2 - cw / 2, 40, 4f * tm, Ui.TEXT); }
@@ -334,7 +382,6 @@ public final class PlayScreen extends ScreenAdapter {
         if (state == State.PLAYING) drawControls();
         if (fade > 0) ui.rect(0, 0, W, H, new Color(0, 0, 0, fade));
         if (state == State.PAUSED) pauseMenu();
-        if (state == State.WON) winMenu();
         ui.end();
     }
     private static final float PixelFont_H = 7f;
@@ -408,22 +455,6 @@ public final class PlayScreen extends ScreenAdapter {
         }
         if (ui.button("SETTINGS", bx, y + ph - 408, bw, bh)) { g.audio.play("click"); g.persist(); next = new SettingsScreen(g, this); disposeOnLeave = false; }
         if (ui.button("MAIN MENU", bx, y + ph - 512, bw, bh)) { g.audio.play("click"); g.persist(); next = new TitleScreen(g); disposeOnLeave = true; }
-    }
-
-    private void winMenu() {
-        Ui ui = g.ui; float W = ui.w(), H = ui.h();
-        ui.rect(0, 0, W, H, new Color(0, 0, 0, 0.5f));
-        float pw = 860, ph = 560, x = W / 2 - pw / 2, y = H / 2 - ph / 2;
-        ui.panel(x, y, pw, ph);
-        ui.textC("SUMMIT REACHED!", W / 2, y + ph - 90, 8f, Ui.GOOD);
-        int mins = (int) (runTime / 60), secs = (int) (runTime % 60);
-        ui.textC("CLIMB TIME " + mins + ":" + (secs < 10 ? "0" : "") + secs, W / 2, y + ph - 170, 4.5f, Ui.TEXT);
-        ui.textC("FALLS BACK TO CHECKPOINT " + sim.falls, W / 2, y + ph - 225, 4f, Ui.DIM);
-        float bw = 520, bh = 84, bx = W / 2 - bw / 2;
-        if (ui.button("CLIMB A NEW TOWER", bx, y + 190, bw, bh, true)) {
-            g.audio.play("click"); g.save.courseIndex++; g.save.checkpoint = 0; g.persist(); next = new PlayScreen(g, false); disposeOnLeave = true;
-        }
-        if (ui.button("MAIN MENU", bx, y + 70, bw, bh)) { g.audio.play("click"); g.save.courseIndex++; g.save.checkpoint = 0; g.persist(); next = new TitleScreen(g); disposeOnLeave = true; }
     }
 
     // ------------------------------------------------------------------ lifecycle

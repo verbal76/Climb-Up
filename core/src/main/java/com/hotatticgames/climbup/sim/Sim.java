@@ -10,7 +10,7 @@ public final class Sim {
     public static final float DT = 1f / 60f;
     // event bits
     public static final int EV_JUMP = 1, EV_LAND = 2, EV_BOUNCE = 4, EV_GRAB = 8, EV_PULL = 16, EV_CRUMBLE = 32,
-            EV_CHECKPOINT = 64, EV_RESPAWN = 128, EV_WIN = 256, EV_ROPE = 512, EV_CABLE = 1024, EV_FALL_NEAR = 2048;
+            EV_CHECKPOINT = 64, EV_RESPAWN = 128, EV_WIN = 256, EV_ROPE = 512, EV_CABLE = 1024, EV_FALL_NEAR = 2048, EV_HIT = 4096;
 
     public final Course course;
     public final Tuning T;
@@ -39,12 +39,18 @@ public final class Sim {
     public float assistForgive;      // extra coyote/buffer seconds from assists
 
     // element dynamic state
-    public final float[] es0, ey0, es1, ey1;      // previous/current positions
-    public final float[] crumbleT;                // <0 idle, >=0 counting, set to +big when gone
-    public final boolean[] gone;
-    public final float[] goneT;
-    public final float[] padSquash;
+    public float[] es0, ey0, es1, ey1;            // previous/current positions
+    public float[] crumbleT;                      // <0 idle, >=0 counting, set to +big when gone
+    public boolean[] gone;
+    public float[] goneT;
+    public float[] padSquash;
+    public float invuln;                          // brief grace after a respawn so a hazard can never chain-kill
+    public int hits;                              // hazard hits so far
+    public Element hitBy;
+    public float hitS, hitY;                      // where the last hit happened (effects)
     public int[] act;                // planner window: element indices simulated (null = everything)
+    public int[] hz;                 // hazard indices simulated (null = every hazard)
+    public int winLo = 0, winHi = Integer.MAX_VALUE;   // element index range covered by the window (renderers iterate just this)
 
     /** Restrict simulation to route elements rLo..rHi plus the decoys anchored near them (used by the planner for speed). */
     public void setWindow(int rLo, int rHi) {
@@ -56,9 +62,35 @@ public final class Sim {
         for (int i = lo; i <= hi; i++) a[k++] = i;
         for (int i = d[0]; i < d[1]; i++) a[k++] = i;
         act = a;
+        hz = course.hazardsFor(lo - 3, hi + 3);
     }
 
-    private void progress(int i) { if (i < course.routeSize() && i > bestElem) bestElem = i; }
+    private void progress(int i) { if (i > bestElem && course.get(i).anchor < 0 && i < course.routeSize()) bestElem = i; }
+
+    /** Endless worlds: simulate only elements lo..hi (inclusive); refreshes positions of elements that newly enter the window. */
+    public void setRange(int lo, int hi) {
+        lo = Math.max(0, lo); hi = Math.min(course.size() - 1, hi);
+        ensureCapacity();
+        int[] a = new int[Math.max(0, hi - lo + 1)];
+        for (int i = lo; i <= hi; i++) a[i - lo] = i;
+        if (act == null || act.length == 0 || act[0] > lo || act[act.length - 1] < hi) {
+            int oldLo = act == null || act.length == 0 ? Integer.MAX_VALUE : act[0], oldHi = act == null || act.length == 0 ? -1 : act[act.length - 1];
+            for (int i = lo; i <= hi; i++) if (i < oldLo || i > oldHi) { Element e = course.get(i); es0[i] = es1[i] = e.sAt(time); ey0[i] = ey1[i] = e.yAt(time); }
+        }
+        act = a; winLo = lo; winHi = hi;
+        hz = course.hazardsFor(lo - 6, hi + 6);
+    }
+
+    /** The course grew (endless mode): extend the per-element state arrays. */
+    public void ensureCapacity() {
+        int n = course.size();
+        if (n <= es0.length) return;
+        int m = Math.max(n, es0.length * 3 / 2 + 16), o = es0.length;
+        es0 = java.util.Arrays.copyOf(es0, m); ey0 = java.util.Arrays.copyOf(ey0, m); es1 = java.util.Arrays.copyOf(es1, m); ey1 = java.util.Arrays.copyOf(ey1, m);
+        crumbleT = java.util.Arrays.copyOf(crumbleT, m); gone = java.util.Arrays.copyOf(gone, m); goneT = java.util.Arrays.copyOf(goneT, m); padSquash = java.util.Arrays.copyOf(padSquash, m);
+        java.util.Arrays.fill(crumbleT, o, m, -1f);
+        for (int i = o; i < n; i++) { Element e = course.get(i); es0[i] = es1[i] = e.sAt(time); ey0[i] = ey1[i] = e.yAt(time); }
+    }
 
     public Sim(Course c, Tuning t) {
         this.course = c; this.T = t;
@@ -80,7 +112,7 @@ public final class Sim {
         landSpeed = o.landSpeed; events = o.events; assistForgive = o.assistForgive; ps0 = o.ps0; py0 = o.py0; teleported = o.teleported;
         es0 = o.es0.clone(); ey0 = o.ey0.clone(); es1 = o.es1.clone(); ey1 = o.ey1.clone();
         crumbleT = o.crumbleT.clone(); gone = o.gone.clone(); goneT = o.goneT.clone(); padSquash = o.padSquash.clone();
-        act = o.act;
+        act = o.act; hz = o.hz; winLo = o.winLo; winHi = o.winHi; invuln = o.invuln; hits = o.hits; hitS = o.hitS; hitY = o.hitY;
     }
 
     public Sim copy() { return new Sim(this); }
@@ -127,13 +159,18 @@ public final class Sim {
                 break;
             default:
                 m.spawnAtCheckpoint(idx); m.checkpoint = 0; m.bestElem = idx;
+                for (Element h : c.hazards) {      // platforms with a hazard in the middle: start in the safe pocket at the back, as a real landing would
+                    if (h.anchor == idx && (h.type == Element.Type.SPIKE_TRAP || h.type == Element.Type.SAW_H || h.type == Element.Type.SPIKE_BLOCK) && Math.abs(c.dsWrap(h.s, e.s)) < e.halfW()) {
+                        m.s = c.wrap(m.es1[idx] - e.halfW() + 1.0f); break;
+                    }
+                }
                 if (e.type == Element.Type.CRUMBLE) m.crumbleT[idx] = 0;
         }
         return m;
     }
 
     public void respawn() {
-        falls++;
+        falls++; invuln = 0.7f;
         events |= EV_RESPAWN; teleported = true;
         // restore crumbled platforms so a retry is never stale or soft-locked
         java.util.Arrays.fill(crumbleT, -1f);
@@ -159,6 +196,7 @@ public final class Sim {
         float dt = DT;
         ps0 = s; py0 = y; teleported = false;
         time += dt;
+        if (course.size() > es0.length) ensureCapacity();
         int n = course.size();
         int cnt0 = act == null ? n : act.length;
         for (int k0 = 0; k0 < cnt0; k0++) {
@@ -188,9 +226,34 @@ public final class Sim {
         s = course.wrap(s);
         if (y > maxHeight) maxHeight = y;
 
+        if (invuln > 0) invuln = Math.max(0f, invuln - dt);
+        else if (hazardHit()) { hits++; events |= EV_HIT; hitS = s; hitY = y; respawn(); return; }
+
         if (mode != Mode.AIR) lastGroundY = y;
         else if (y > lastGroundY && mode == Mode.AIR && vy <= 0) { /* keep */ }
         if (y < lastGroundY - T.fallRespawnDepth) respawn();
+    }
+
+    /** True if the player's body overlaps any lethal hazard right now. */
+    private boolean hazardHit() {
+        final float hw = T.halfWidth - 0.03f, lo = y + 0.12f, hi = y + T.height - 0.1f;
+        for (int k = 0, cnt = hz == null ? course.hazards.size() : hz.length; k < cnt; k++) {
+            Element e = course.hazards.get(hz == null ? k : hz[k]);
+            hitBy = e;
+            if (!e.lethalAt(time)) continue;
+            float dx = Math.abs(course.dsWrap(e.sAt(time), s));
+            float r = e.discR();
+            if (r > 0f) {
+                float ddx = Math.max(0f, dx - hw), cy = e.yAt(time);
+                float ddy = cy < lo ? lo - cy : (cy > hi ? cy - hi : 0f);
+                if (ddx * ddx + ddy * ddy < r * r) return true;
+            } else if (e.type == Element.Type.SPIKE_TRAP) {
+                if (dx < e.w * 0.5f + hw && y > e.y - 0.5f && y < e.y + e.spikeHeight(time) - 0.08f) return true;
+            } else {   // spike block: a solid lethal box [y, y+len]
+                if (dx < e.w * 0.5f + hw && hi > e.y && lo < e.y + e.len) return true;
+            }
+        }
+        return false;
     }
 
     private void doJump(float boost) {
@@ -389,8 +452,8 @@ public final class Sim {
         int i = onElem; Element el = course.get(i);
         pullT += dt;
         float k = Math.min(1f, pullT / T.pullUpTime);
-        float toS = es1[i] - ledgeSide * (el.halfW() - 0.35f);
         float fromS = course.wrap(es1[i] - ledgeSide * (el.halfW() + 0.24f));
+        float toS = fromS + course.dsWrap(es1[i] - ledgeSide * (el.halfW() - 0.35f), fromS);   // short way round the ring
         // easing: up first, then forward
         float up = Math.min(1f, k * 1.6f), fw = Math.max(0f, (k - 0.45f) / 0.55f);
         y = (ey1[i] - T.handHeight + 0.08f) + (T.handHeight - 0.08f) * up;

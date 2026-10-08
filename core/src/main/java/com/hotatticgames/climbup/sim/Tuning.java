@@ -14,7 +14,11 @@ public class Tuning {
     public float ledgeReachX = 0.4f, ledgeReachBelow = 0.9f, ledgeReachAbove = 0.15f, pullUpTime = 0.32f;
     public float crumbleDelay = 0.7f, crumbleRespawn = 3.4f;
     public float fallRespawnDepth = 12f;
-    public float courseHeight = 520f;
+    public float courseHeight = 520f;        // finite test towers only; the shipped game is endless
+    public float rampHeight = 520f;          // height over which base difficulty (gap sizes, mover amplitude) ramps up in the endless climb
+    public float chunkHeight = 60f;          // the endless tower is generated in chunks of about this height
+    public float hazardStartY = 90f, hazardRampY = 1400f;   // hazards appear from hazardStartY and reach full frequency hazardRampY later
+    public float minTimingWindow = 0.2f;     // fraction of a hazard's cycle that must leave a workable move at the start of the ramp (relaxes slightly at full intensity)
     public float spiralPitch = 24f;          // height gained per revolution, enforced by the generator
     public int restEvery = 5, checkpointEveryRests = 1;
     public float minLinkMargin = 0.07f;

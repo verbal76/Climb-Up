@@ -17,6 +17,7 @@ import java.util.Map;
 /** Loads the Kenney Platformer Kit OBJ models (CC0) once and builds the few procedural props (rope, cable, pad). */
 public final class Models implements Disposable {
     private final Map<String, Model> map = new HashMap<>();
+    private final Map<String, Model> pack = new HashMap<>();
     private final ObjLoader loader = new ObjLoader();
     public final Model box, disc;
     private final Texture[] sharedTex = new Texture[1];
@@ -42,7 +43,18 @@ public final class Models implements Disposable {
         return m;
     }
 
+    /** Quaternius Ultimate Platformer Pack model (CC0), converted to g3dj by tools/gltf_static_to_g3dj.py. */
+    public Model pack(String name) {
+        Model m = pack.get(name);
+        if (m == null) {
+            m = new com.badlogic.gdx.graphics.g3d.loader.G3dModelLoader(new com.badlogic.gdx.utils.JsonReader()).loadModel(Gdx.files.internal("pack/" + name + ".g3dj"));
+            pack.put(name, m);
+        }
+        return m;
+    }
+
     @Override public void dispose() {
+        for (Model m : pack.values()) m.dispose();
         for (Model m : map.values()) m.dispose();
         box.dispose(); disc.dispose();
     }

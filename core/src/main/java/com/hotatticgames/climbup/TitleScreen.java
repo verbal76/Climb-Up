@@ -80,8 +80,8 @@ public final class TitleScreen extends ScreenAdapter {
         if (ui.button("CREDITS", bx, yy, bw, bh)) { g.audio.play("click"); next = new CreditsScreen(g, this); }
         float cx = Math.min(W - bw - 40f, W / 2 + 240f);
         ui.textC("HERO: TAP TO CHANGE", cx + bw / 2, y0 + bh + 14, 3.2f, Ui.TEXT);
-        if (ui.button((g.settings.character == 1 ? "HAMSTER" : "BUNNY"), cx, y0, bw, bh)) {
-            g.settings.character = g.settings.character == 1 ? 0 : 1;
+        if (ui.button(com.hotatticgames.climbup.render.Characters.name(g.settings.character), cx, y0, bw, bh)) {
+            g.settings.character = com.hotatticgames.climbup.render.Characters.next(g.settings.character);
             world.setCharacter(g.settings.character); g.persist(); g.audio.play("click");
         }
         String stat = "BEST " + (int) g.save.bestHeight + " M   V" + ClimbGame.VERSION;

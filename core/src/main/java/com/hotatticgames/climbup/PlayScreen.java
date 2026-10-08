@@ -270,7 +270,7 @@ public final class PlayScreen extends ScreenAdapter {
             gruntT -= dt;
             if (gruntT <= 0) {
                 gruntT = 0.55f + MathUtils.random(0.4f); gruntN++;
-                g.audio.play("grunt" + (1 + MathUtils.random(2)), 0.9f, 0.93f + MathUtils.random(0.16f));
+                g.audio.play("grunt" + (1 + MathUtils.random(2)), 0.9f, (0.93f + MathUtils.random(0.16f)) * com.hotatticgames.climbup.render.Characters.voice(g.settings.character));
                 if (gruntN % 2 == 0) pop(STRAIN[MathUtils.random(STRAIN.length - 1)], Color.WHITE);
                 say("[STRAINING]"); vibrate(8, 2);
             }
@@ -299,7 +299,7 @@ public final class PlayScreen extends ScreenAdapter {
         }
         if ((ev & Sim.EV_JUMP) != 0) world.kick(0.8f);
         if ((ev & Sim.EV_BOUNCE) != 0) { world.kick(4f); pop("BOING!", cyan); }
-        if ((ev & Sim.EV_PULL) != 0) { g.audio.play("effort", 0.9f, 1f); pop("HUP!", gold); vibrate(20, 2); }
+        if ((ev & Sim.EV_PULL) != 0) { g.audio.play("effort", 0.9f, com.hotatticgames.climbup.render.Characters.voice(g.settings.character)); pop("HUP!", gold); vibrate(20, 2); }
         if ((ev & Sim.EV_GRAB) != 0 && sim.mode == Sim.Mode.LEDGE) {
             gruntT = 0.35f; pop(CATCH[MathUtils.random(CATCH.length - 1)], gold); freeze(0.08f); world.shake(0.4f); }
         if ((ev & Sim.EV_JUMP) != 0) { g.audio.play("jump", 0.7f, 0.95f + MathUtils.random(0.1f)); world.particles.burst(s, y, 4, dust, 1.4f, 1.2f, 0.12f, 6f, 0.4f); vibrate(8, 2); }
@@ -348,7 +348,7 @@ public final class PlayScreen extends ScreenAdapter {
         }
         if ((ev & Sim.EV_HIT) != 0) {
             world.particles.burst(sim.hitS, sim.hitY + 0.7f, 22, red, 4f, 4f, 0.13f, 8f, 0.7f);
-            g.audio.play("hit", 1f, 1f); world.shake(0.9f); freeze(0.09f); vibrate(60, 1); say("[OUCH]");
+            g.audio.play("hit", 1f, com.hotatticgames.climbup.render.Characters.voice(g.settings.character)); world.shake(0.9f); freeze(0.09f); vibrate(60, 1); say("[OUCH]");
             toast = "OUCH! BACK TO CHECKPOINT"; toastT = 1.8f;
         }
     }

@@ -51,7 +51,7 @@ public final class SettingsScreen extends ScreenAdapter {
         if (ui.button("CONTROLS + ACCESS", W / 2 + 12, H - 168, tw + 40, 60, page == 1)) page = 1;
         rowY = H - 176 - 64;
         if (page == 0) {
-            row("CHARACTER", s.character == 0 ? "BUNNY" : "HAMSTER", null, null, () -> s.character = (s.character + 1) % 2);
+            row("CHARACTER", com.hotatticgames.climbup.render.Characters.name(s.character), null, null, () -> s.character = com.hotatticgames.climbup.render.Characters.next(s.character));
             row("MUSIC VOLUME", String.valueOf(s.music), () -> s.music = Math.max(0, s.music - 1), () -> s.music = Math.min(10, s.music + 1), null);
             row("EFFECTS VOLUME", String.valueOf(s.sfx), () -> s.sfx = Math.max(0, s.sfx - 1), () -> s.sfx = Math.min(10, s.sfx + 1), null);
             row("GRAPHICS QUALITY", Q[s.quality], null, null, () -> s.quality = (s.quality + 1) % 3);

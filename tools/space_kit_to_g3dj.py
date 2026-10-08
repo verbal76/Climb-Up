@@ -61,6 +61,22 @@ def convert(src, out_dir):
             t, q, s = decompose(np.linalg.inv(ibm[j]))
             bones.append({'node': nid(node), 'translation': r(t), 'rotation': r(q), 'scale': r(s)})
 
+    # drop the finger bones (the game never poses them and the shader allows 32 bones): their vertices follow the nearest kept ancestor
+    parent = {}
+    def mark(i, par):
+        parent[i] = par
+        for c in nodes[i].get('children', []): mark(c, i)
+    for rt in g['scenes'][g.get('scene', 0)]['nodes']: mark(rt, None)
+    def pruned(node): return any(k in nodes[node].get('name', '') for k in ('Pinky', 'Middle', 'Index', 'Thumb', 'Pistol'))
+    keep = [n for n in joints if not pruned(n)]
+    newidx = {n: k for k, n in enumerate(keep)}
+    def remap(j):
+        n = joints[j]
+        while n is not None and n not in newidx: n = parent.get(n)
+        return newidx[n] if n is not None else 0
+    jmap = [remap(j) for j in range(len(joints))]
+    bones = [bones[joints.index(n)] for n in keep] if skin else []
+
     meshes = []
     materials = [{'id': 'mat0_atlas', 'diffuse': [1.0, 1.0, 1.0]}]
 
@@ -74,7 +90,13 @@ def convert(src, out_dir):
             for k in range(len(pos)):
                 verts += r(pos[k]) + r(nor[k]) + r(col[k], 4)
                 if skinned:
-                    for slot in range(4): verts += [float(jt[k][slot]), round(float(wt[k][slot]), 5)]
+                    acc_w = {}
+                    for slot in range(4):
+                        if wt[k][slot] > 0: acc_w[jmap[int(jt[k][slot])]] = acc_w.get(jmap[int(jt[k][slot])], 0.0) + float(wt[k][slot])
+                    items = sorted(acc_w.items(), key=lambda kv: -kv[1])[:4]
+                    for slot in range(4):
+                        j, w_ = items[slot] if slot < len(items) else (0, 0.0)
+                        verts += [float(j), round(w_, 5)]
             attrs = ['POSITION', 'NORMAL', 'COLOR'] + (['BLENDWEIGHT0', 'BLENDWEIGHT1', 'BLENDWEIGHT2', 'BLENDWEIGHT3'] if skinned else [])
             pid = 'p%d_%d' % (i, pi)
             meshes.append({'attributes': attrs, 'vertices': verts, 'parts': [{'id': pid, 'type': 'TRIANGLES', 'indices': acc(p['indices']).flatten().astype(int).tolist()}]})

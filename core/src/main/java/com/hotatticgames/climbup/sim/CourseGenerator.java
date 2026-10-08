@@ -673,7 +673,7 @@ public final class CourseGenerator {
         float uR = last.s + last.w / 2f, dy = r(0f, 0.6f);
         float gapIn = reach(dy) * lerp(0.5f, 0.85f, d) * (1f - 0.03f * attempt);
         int roll = rnd.nextInt(5);
-        float w = 8f;
+        float w = roll == 4 ? 9f : 8f;
         Element p = plat(Element.Type.STATIC, uR + gapIn + w / 2f, last.y + dy, w, z);
         List<Element> es = new ArrayList<>(); es.add(p);
         Element h;
@@ -691,7 +691,7 @@ public final class CourseGenerator {
             h.amp = 3.3f; h.period = r(3.4f, 4.4f) - 0.4f * inten;
         } else {                        // a crab patrols the middle and shoves you around; a spiked club floats on the platform before it, if you want to clear it
             h = hz(Element.Type.CRAB, p.s, p.y, 0f, z);
-            h.amp = 1.8f; h.period = r(3.0f, 4.2f) - 0.4f * inten;
+            h.amp = 1.4f; h.period = r(3.0f, 4.2f) - 0.4f * inten;
             if (last.w >= 3f && last.isPlatform() && rnd.nextInt(3) > 0) {
                 Element club = hz(Element.Type.CLUB, last.s, last.y + 1.0f, 0f, z); club.anchor = c.size() - 1; club.phase = r(0f, 6.28f);
                 hzOut.add(club);

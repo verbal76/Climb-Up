@@ -30,7 +30,8 @@ Asset sources in priority order: 1) appropriately licensed free assets (CC0/publ
 | File | Source URL | Creator | License | Downloaded |
 |---|---|---|---|---|
 | `assets/models/*.obj, *.mtl, Textures/colormap.png` (blocks, props, flag/chest/jewel; 40 models) | owner-supplied pack `kenney_platformer-kit.zip` (https://kenney.nl/assets/platformer-kit) | Kenney (www.kenney.nl) | CC0 1.0 (`assets/licenses/Kenney_PlatformerKit_License.txt`) | 2026-10-08 |
-| `assets/robot/*.png` (Body, Head, LeftArm, RightArm, LeftLeg, RightLeg + unused Eye/Knee parts; cropped from the 512px source parts) | owner-supplied pack `Foozle_2DC0001_Cute_Robot.zip` (https://www.foozle.io) | Foozle, commissioned from mayakhan95 | CC0 1.0 (`assets/licenses/Foozle_CuteRobot_License.txt`) | 2026-10-08 |
+| `assets/hero/hero.g3dj` (converted from `Character.gltf` by `tools/gltf_to_g3dj.py`) | owner-supplied pack `Ultimate Platformer Pack by Quaternius.zip` (https://quaternius.com / quaternius.itch.io) | Quaternius | CC0 1.0 (`assets/licenses/Quaternius_UltimatePlatformer_License.txt`) | 2026-10-08 |
+| `tools/legacy_robot/*.png` (no longer in the game; only the app-icon source) | owner-supplied pack `Foozle_2DC0001_Cute_Robot.zip` | Foozle, commissioned from mayakhan95 | CC0 1.0 (`tools/legacy_robot/Foozle_CuteRobot_License.txt`) | 2026-10-08 |
 | `assets/branding/studio_splash.png` | owner-supplied (`branding/master/studio_splash_e3d9bb56.png`) | Hot Attic Games | owner-supplied, unmodified | 2026-10-08 |
 | `assets/audio/*.wav` (12 effects, 2 music loops) | original - synthesised by `tools/gen_audio.py` | Hot Attic Games / this build | original, no third-party material | generated |
 | app icon (`android/src/main/res/mipmap-*`, `drawable-nodpi`, `docs/play_store_icon_512.png`) | original - `tools/gen_icon.py` (uses the CC0 robot head) | Hot Attic Games / this build | original + CC0 | generated |

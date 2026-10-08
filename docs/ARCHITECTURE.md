@@ -9,6 +9,6 @@
   minimum tolerance (`minLinkMargin` = fraction of the macro grid that succeeds). Towers ship as data (`assets/courses/*.json`, built by `CourseBank`).
 * **render/**: `WorldRenderer` places every element on a circle of radius R around a hidden axis, rotated so the player's arc position is always at screen
   centre (camera never moves sideways). Kenney OBJ blocks, procedural ropes/cables/pads, sky + parallax clouds/stars, fog, blob shadow, particles.
-  `RobotRig` extrudes the Foozle robot's sprite parts into voxel-style 3D meshes (`VoxelPart`) and animates them procedurally.
+  `HeroRig` plays the Quaternius "Character" (skinned g3dj converted from glTF by `tools/gltf_to_g3dj.py`) with libGDX's `AnimationController`: Idle/Walk/Run/Jump/Jump_Idle/Jump_Land by simulation state, Wave at the summit; hangs and ropes reuse the airborne/run poses.
 * **App:** `ClimbGame` -> `SplashScreen` (studio logo) -> `TitleScreen` -> `PlayScreen` (+ `SettingsScreen`, `CreditsScreen`). `Ui`/`PixelFont`: immediate-mode UI and an
   original 5x7 bitmap font. `SaveStore`: versioned, atomic JSON with corrupt-file recovery and migrations. `Audio`: procedurally synthesised effects and music.

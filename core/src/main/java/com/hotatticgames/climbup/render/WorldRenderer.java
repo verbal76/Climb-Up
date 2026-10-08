@@ -35,13 +35,13 @@ public final class WorldRenderer implements Disposable {
     private final Tuning T;
     private final Course course;
     private final Models models;
-    private final ModelBatch batch = new ModelBatch();
+    private final ModelBatch batch = new ModelBatch(new com.badlogic.gdx.graphics.g3d.utils.DefaultShaderProvider(boneConfig()));
     private final PerspectiveCamera cam = new PerspectiveCamera(40f, 16, 9);
     private final Environment env = new Environment();
     private final DirectionalLight sun = new DirectionalLight();
     private final ShapeRenderer shapes = new ShapeRenderer();
     private final SpriteBatch sb = new SpriteBatch();
-    private final RobotRig robot;
+    private final HeroRig hero;
     private final Vis[] vis;
     private final Background bg = new Background();
     public final Particles particles;
@@ -56,9 +56,15 @@ public final class WorldRenderer implements Disposable {
     public float lastCamS;
     private final Array<ModelInstance> tmp = new Array<>();
 
+    private static com.badlogic.gdx.graphics.g3d.shaders.DefaultShader.Config boneConfig() {
+        com.badlogic.gdx.graphics.g3d.shaders.DefaultShader.Config c = new com.badlogic.gdx.graphics.g3d.shaders.DefaultShader.Config();
+        c.numBones = 32;   // the hero rig has 29 bones
+        return c;
+    }
+
     public WorldRenderer(Tuning t, Course c, Models models, int quality) {
         this.T = t; this.course = c; this.models = models; this.quality = quality;
-        robot = new RobotRig(quality);
+        hero = new HeroRig();
         vis = new Vis[c.size()];
         for (int i = 0; i < vis.length; i++) { vis[i] = new Vis(); vis[i].e = c.get(i); }
         env.set(new ColorAttribute(ColorAttribute.AmbientLight, 0.62f, 0.62f, 0.66f, 1f));
@@ -361,8 +367,8 @@ public final class WorldRenderer implements Disposable {
         }
         float wy = py;
         if (sim.mode == Sim.Mode.CABLE) wy = py;
-        robot.update(sim, dt, time, 0f, wy, 0f, phi, reducedMotion);
-        robot.render(batch, env);
+        hero.update(sim, dt, time, 0f, wy, 0f, phi, reducedMotion);
+        hero.render(batch, env);
     }
 
     private float groundBelow(Sim sim, float ps, float py) {
@@ -382,6 +388,6 @@ public final class WorldRenderer implements Disposable {
     public float getCamY() { return camY; }
 
     @Override public void dispose() {
-        batch.dispose(); shapes.dispose(); sb.dispose(); robot.dispose(); bg.dispose();
+        batch.dispose(); shapes.dispose(); sb.dispose(); hero.dispose(); bg.dispose();
     }
 }

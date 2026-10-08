@@ -25,7 +25,7 @@
 * Colorblind palettes, over-the-air updates, 16 KB page-size verification of natives, release signing: not done.
 
 ## Known issues / risks
-* Robot is a voxel extrusion of 2D sprite parts; at some angles the shading looks noisy. Face is readable; limbs are simple.
+* Player is the Quaternius Character: no dedicated rope-climb or hang animations (Run / Jump_Idle are reused); 29 bones need a GLES2 device with >= 128 vertex uniform vectors (virtually all phones).
 * Kenney blocks are smooth/rounded rather than strictly "voxel-look"; robot, particles, clouds and font are voxel-styled.
 * One-way platform tops mean you can jump up through blocks (reads oddly on thick blocks).
 * Decor/trees can briefly overlap the robot when it stands beside them.

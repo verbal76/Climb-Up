@@ -7,7 +7,7 @@
 * **Movement:** run 5.6 u/s, jump apex 1.94 u (hold) with variable height, coyote 0.12 s, buffer 0.13 s, pad launch 21/24 u/s (apex 6.5/8.5 u). All in `tuning.json`.
 * **Controls:** floating stick (left) + jump anywhere on the right half; left-handed swap. No second button (grab is automatic).
 * **Content:** 4 zones (Meadow, Frost, Dusk, Night = grass/snow blocks with palette tints and sky blends), 9 element types + grab/pull/catch as player abilities, 6 pre-validated 520 m towers (~330 elements, ~6 min of perfect autopilot play, intended ~15-20 min for a person).
-* **Robot:** the supplied Cute Robot is 2D, the owner wants 3D: each part sprite is voxel-extruded at runtime; animation is procedural (idle, run, jump, fall, land squash, rope, cable, ledge hang, pull-up).
+* **Player model:** the owner supplied the Quaternius Ultimate Platformer Pack; its blue "Character" is a skinned 3D model with 18 animations and replaced the earlier voxel-extruded Foozle robot (kept under `tools/legacy_robot` only as the app-icon source). glTF -> g3dj conversion is a build script (gdx-gltf is not on Maven Central). Rope/cable/ledge hangs reuse the Run/Jump_Idle animations (no dedicated climb clips exist); the model has 29 bones, so `numBones` is 32 (GLES2 uniform budget is the risk on very old GPUs).
 * **Assets gaps filled originally:** audio (synth), font (5x7 bitmap), UI, VFX, title art, icon.
 * **Permissions:** `VIBRATE` only (normal permission). No INTERNET (OTA not implemented).
 * **Deferred / not in this candidate:** over-the-air updates; colorblind palette modes (HUD uses shapes+text, not color alone, but no palette option); grappling hook (named once in the owner's words, absent from the traversal grammar - cable implemented); Play-Store release signing.

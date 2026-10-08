@@ -4,7 +4,7 @@ import os
 from PIL import Image, ImageDraw
 ROOT = os.path.join(os.path.dirname(__file__), '..')
 RES = os.path.join(ROOT, 'android', 'src', 'main', 'res')
-head = Image.open(os.path.join(ROOT, 'assets', 'robot', 'Head.png')).convert('RGBA')
+head = Image.open(os.path.join(ROOT, 'tools', 'legacy_robot', 'Head.png')).convert('RGBA')
 
 def background(size):
     im = Image.new('RGBA', (size, size)); d = ImageDraw.Draw(im)

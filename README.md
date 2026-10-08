@@ -2,7 +2,7 @@
 
 A 2.5D skill-platformer by **Hot Attic Games**: climb a spiral tower that doesn't exist. The camera is anchored on the player and the whole
 course rotates around you as you climb. Ropes, cables, swinging and moving platforms, crumbling tiles, bounce pads and fingertip ledge grabs, in
-procedurally generated (and solver-validated) towers. No enemies, no upgrades: either you can make the jump or you can't.
+procedurally generated (and solver-validated) towers. You play Quaternius' blue bunny-eared "Character", a skinned and animated 3D model. No enemies, no upgrades: either you can make the jump or you can't.
 
 Status: **candidate build 0.1.0** produced from the Climb Up v6 design package (see `design-package/`, `CLAUDE.md`). Android target; desktop build included for testing.
 
@@ -31,5 +31,5 @@ Test hooks (system properties): `-Dclimb.demo=true` (autopilot plays), `-Dclimb.
 
 ## Layout
 `core/` game (sim = pure-Java rules, render = libGDX 3D, ui/audio/screens) · `desktop/` LWJGL3 launcher + content tools · `android/` launcher, manifest, icons ·
-`assets/` models, robot parts, audio, data (`data/tuning.json` holds every movement/generator number), pre-generated towers · `tools/` audio/icon generators · `docs/`.
+`assets/` models, the player model (hero), audio, data (`data/tuning.json` holds every movement/generator number), pre-generated towers · `tools/` audio/icon generators · `docs/`.
 Credits and licenses: `ASSETS.md`, `assets/licenses/`, in-game Credits screen.

@@ -11,7 +11,7 @@ import com.hotatticgames.climbup.sim.InputState;
 import com.hotatticgames.climbup.sim.Sim;
 import com.hotatticgames.climbup.ui.Ui;
 
-/** Title screen: the live tower with the robot waiting at the continue point, plus original voxel title lettering. */
+/** Title screen: the live tower with the hero waiting at the continue point, plus original voxel title lettering. */
 public final class TitleScreen extends ScreenAdapter {
     private final ClimbGame g;
     private Course course;

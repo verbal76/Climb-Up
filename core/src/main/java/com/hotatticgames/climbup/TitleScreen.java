@@ -50,6 +50,8 @@ public final class TitleScreen extends ScreenAdapter {
         ui.font.drawShadow(ui.batch, t1, tx + 6, ty - 8, px, new Color(0.35f, 0.12f, 0.02f, 1f), new Color(0, 0, 0, 0.6f));
         ui.font.drawShadow(ui.batch, t1, tx, ty, px, new Color(1f, 0.74f, 0.16f, 1f), new Color(0.2f, 0.07f, 0.0f, 0.9f));
         ui.textC("A TOWER THAT DOESN'T EXIST. A CLIMB THAT DOES.", W / 2, ty - 56, 3.4f, Ui.TEXT);
+        String bub = world.heroBubble();
+        if (bub != null) { float[] hp = new float[2]; world.heroHeadScreen(W, H, hp); ui.bubble(bub, hp[0], hp[1] + 6, world.heroBubbleAlpha()); }
         float bw = 400, bh = 76, bx = Math.max(40f, W / 2 - 640f + 40f);
         boolean has = g.save.bestHeight > 1f || g.save.checkpoint > 0;
         float y0 = H * 0.46f;

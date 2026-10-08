@@ -11,3 +11,4 @@
 * **Assets gaps filled originally:** audio (synth), font (5x7 bitmap), UI, VFX, title art, icon.
 * **Permissions:** `VIBRATE` only (normal permission). No INTERNET (OTA not implemented).
 * **Deferred / not in this candidate:** over-the-air updates; colorblind palette modes (HUD uses shapes+text, not color alone, but no palette option); grappling hook (named once in the owner's words, absent from the traversal grammar - cable implemented); Play-Store release signing.
+* **Idle personality:** after ~3.5 s standing still the hero runs random idle beats (Wave, head-shake No, nod Yes, Duck stretch, Punch), turning square to the camera for the fourth-wall ones, sometimes with a comic speech bubble (`HeroRig`, cosmetic RNG only, never affects the simulation). Resets the moment he moves.

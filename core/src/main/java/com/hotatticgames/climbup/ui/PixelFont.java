@@ -66,6 +66,8 @@ public final class PixelFont implements Disposable {
         }
     }
 
+    public void draw2(SpriteBatch b, String s, float x, float y, float scale, Color c) { b.setColor(c); draw(b, s, x, y, scale); b.setColor(Color.WHITE); }
+
     /** Draws with a 1-voxel drop shadow for readability on busy backgrounds. */
     public void drawShadow(SpriteBatch b, String s, float x, float y, float scale, Color c, Color shadow) {
         b.setColor(shadow); draw(b, s, x + scale, y - scale, scale);

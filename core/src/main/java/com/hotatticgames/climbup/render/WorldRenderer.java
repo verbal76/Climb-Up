@@ -365,8 +365,7 @@ public final class WorldRenderer implements Disposable {
                 batch.render(shadow, env);
             }
         }
-        float wy = py;
-        if (sim.mode == Sim.Mode.CABLE) wy = py;
+        float wy = py; heroY = py;
         hero.update(sim, dt, time, 0f, wy, 0f, phi, reducedMotion);
         hero.render(batch, env);
     }
@@ -382,6 +381,19 @@ public final class WorldRenderer implements Disposable {
             if (top > best) best = top;
         }
         return best;
+    }
+
+    private float heroY;
+    private final com.badlogic.gdx.math.Vector3 headTmp = new com.badlogic.gdx.math.Vector3();
+    public String heroBubble() { return hero.bubble(); }
+    public float heroBubbleAlpha() { return hero.bubbleAlpha(); }
+
+    /** Screen position of the hero's head in a virtual UI space of size (uiW, uiH), y up. */
+    public void heroHeadScreen(float uiW, float uiH, float[] out) {
+        headTmp.set(0f, heroY + 1.7f, 0f);
+        cam.project(headTmp, 0, 0, Gdx.graphics.getBackBufferWidth(), Gdx.graphics.getBackBufferHeight());
+        out[0] = headTmp.x * uiW / Gdx.graphics.getBackBufferWidth();
+        out[1] = headTmp.y * uiH / Gdx.graphics.getBackBufferHeight();
     }
 
     /** World position (relative to the screen centre) for effects; arc coordinate -> x,z. */

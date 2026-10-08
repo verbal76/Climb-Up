@@ -65,6 +65,16 @@ public final class Ui extends InputAdapter implements Disposable {
     public void text(String s, float x, float y, float px, Color c) {
         font.drawShadow(batch, s, x, y, px, c, SHADOW);
     }
+    /** Comic speech bubble centred above (cx, y). */
+    public void bubble(String s, float cx, float y, float alpha) {
+        float px = 3.2f * tm(); float w = font.width(s, px) + 36, h = font.height(px) + 28;
+        float x = Math.max(16, Math.min(w() - w - 16, cx - w / 2));
+        Color edge = new Color(0.08f, 0.08f, 0.14f, alpha), fill = new Color(1f, 1f, 1f, alpha);
+        rect(x - 4, y - 4, w + 8, h + 8, edge); rect(x, y, w, h, fill);
+        rect(cx - 8, y - 14, 16, 14, edge); rect(cx - 4, y - 8, 8, 10, fill);     // tail pointing down at him
+        font.draw2(batch, s, x + 18, y + 14, px, new Color(0.08f, 0.08f, 0.14f, alpha));
+    }
+
     public void textC(String s, float cx, float y, float px, Color c) { text(s, cx - font.width(s, px) / 2f, y, px, c); }
     public void textBody(String s, float cx, float y, float px, Color c) { textC(s, cx, y, px * tm(), c); }
 

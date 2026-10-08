@@ -280,6 +280,7 @@ public final class PlayScreen extends ScreenAdapter {
             ui.panel(W / 2 - maxW / 2 - 20, by, maxW + 40, bh);
             for (int i = 0; i < lines.length; i++) ui.textC(lines[i], W / 2, by + bh - 24 - (i + 1) * (PixelFont_H * px2 + 10) + 10, px2, Ui.TEXT);
         }
+        drawHeroBubble();
         if (state == State.PLAYING) drawControls();
         if (fade > 0) ui.rect(0, 0, W, H, new Color(0, 0, 0, fade));
         if (state == State.PAUSED) pauseMenu();
@@ -287,6 +288,14 @@ public final class PlayScreen extends ScreenAdapter {
         ui.end();
     }
     private static final float PixelFont_H = 7f;
+    private final float[] headPos = new float[2];
+
+    private void drawHeroBubble() {
+        String b = world.heroBubble();
+        if (b == null || state != State.PLAYING) return;
+        world.heroHeadScreen(g.ui.w(), g.ui.h(), headPos);
+        g.ui.bubble(b, headPos[0], headPos[1] + 6, world.heroBubbleAlpha());
+    }
 
     private String[] wrap(String s, float px, float maxW) {
         java.util.ArrayList<String> out = new java.util.ArrayList<>();

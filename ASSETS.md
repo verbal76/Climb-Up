@@ -45,3 +45,9 @@ Asset sources in priority order: 1) appropriately licensed free assets (CC0/publ
 | libGDX 1.14.2 (library) | https://libgdx.com | libGDX contributors | Apache-2.0 (`assets/licenses/libGDX_NOTICE.txt`) | via Maven Central |
 
 Gaps filled with original/procedural work (no external download was needed): audio, font, UI kit, VFX, title art, icon, materials (the Kenney palette texture covers surfaces).
+
+## Owner-supplied: Quaternius "Ultimate Space Kit" (astronaut animals, spaceships, planets, rocks, ramp) — NOT yet in the build
+- Files: Astronaut_/Spaceship_ {FinnTheFrog, RaeTheRedPanda, FernandoTheFlamingo, BarbaraTheBee}, Planet_1..11, Rock_1..4, Rock_Large_1..3, Ramp (.gltf + .blend each).
+- Source: Quaternius (quaternius.com), downloaded by the owner via the site's "Ultimate Space Collection" link; no licence file for this pack was in the download the owner uploaded (the uploaded License.txt is the Ultimate Platformer Pack's).
+- Licence: owner states Quaternius packs are CC0. A web search agrees (CC0, commercial use allowed) but one third-party listing (Sketchfab) shows "Creative Commons Attribution", and quaternius.com could not be reached from this environment. Status: **owner-confirmed, not independently verified**. Credit Quaternius in the credits screen regardless.
+- Date logged: 2026-10-08.

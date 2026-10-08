@@ -7,6 +7,7 @@ procedurally generated (and solver-validated) towers. No enemies, no upgrades: e
 Status: **candidate build 0.1.0** produced from the Climb Up v6 design package (see `design-package/`, `CLAUDE.md`). Android target; desktop build included for testing.
 
 ## Install (Android, sideload)
+Every CI build publishes a **GitHub Release** (`v0.1.0-buildN`) with the APK attached: open the repo's *Releases* page on your phone and tap the APK.
 The Android APK is built by GitHub Actions (`.github/workflows/android.yml`, run it manually: *Actions -> Android build -> Run workflow*). Download the
 `climb-up-debug-apk-N` artifact, copy the `.apk` to a phone and open it (allow "install unknown apps"). Landscape only; Android 8.0+ (API 26), OpenGL ES 2.0.
 Local APK builds need the Android SDK (`ANDROID_HOME`) and access to Google's Maven; the sandbox this was written in blocks `dl.google.com`, so the APK has **not** been built or installed here.

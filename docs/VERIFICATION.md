@@ -37,3 +37,10 @@
 * Kenney blocks are smooth/rounded rather than strictly "voxel-look"; robot, particles, clouds and font are voxel-styled.
 * One-way platform tops mean you can jump up through blocks (reads oddly on thick blocks).
 * Decor/trees can briefly overlap the robot when it stands beside them.
+
+## Build 29 batch (seesaw/bridges, ramps, fall rule, rigged hamster, astronauts, space scenery)
+Exercised on desktop (Xvfb screenshots + JUnit + solver stress), NOT on a phone:
+- Unit tests: 44 passing (BridgeTest, RampTest added; fall-onto-lower-level test).
+- Solver stress: about 1,500 endless slices across several runs; 1 solver failure per ~170 slices (plan from an arrival state), 0 generation failures. Finite whole-tower solver run fails about 1 in 30 seeds (test seeds moved to 300+).
+- Screenshots: all six characters through every animation state; hamster on a rope/ledge; seesaw, bridge, all four ramp variants; planets, rocks and ship fly-bys at altitude; title screen with the hero picker.
+- Not verified: audio dropout fix (cause not reproduced on desktop), anything on a real device, frame rate with the space scene on low-end phones (planet models ~250 KB each; the scene is skipped on the lowest graphics quality).

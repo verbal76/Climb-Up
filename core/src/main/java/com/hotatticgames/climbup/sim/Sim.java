@@ -503,14 +503,19 @@ public final class Sim {
             Element el = course.get(i);
             if (!el.isPlatform() || el.type == Element.Type.PAD || el.type == Element.Type.SPRING || gone[i]) continue;
             float top = ey1[i];
-            if (hand < top - T.ledgeReachBelow || hand > top + T.ledgeReachAbove) continue;
-            if (y >= top - 0.1f) continue;           // feet above the top: would have landed
+            if (hand < top - T.ledgeReachBelow) continue;
+            boolean mantle = hand > top + T.ledgeReachAbove;      // the hands are already above the top: the feet are only a little below it (walked or dropped off a nearby platform)
+            if (mantle ? (y >= top - 0.05f || y < top - T.handHeight) : y >= top - 0.1f) continue;           // feet at or above the top: would have landed
             float d = course.dsWrap(es1[i], s);      // + => platform ahead (to +s)
             float edgeDist = Math.abs(d) - el.halfW();   // distance from player center to the near vertical face
-            if (edgeDist > T.ledgeReachX || edgeDist < -0.12f) continue;
+            if (edgeDist > T.ledgeReachX || edgeDist < (mantle ? -0.45f : -0.12f)) continue;
             int side = d > 0 ? 1 : -1;
             boolean toward = (side > 0 ? (vx > 0.3f || in.moveX > 0.3f) : (vx < -0.3f || in.moveX < -0.3f));
             if (!toward) continue;
+            if (mantle) {          // a step-up: scramble straight onto the platform from where the feet are, no hang
+                ledgeSide = side; onElem = i; mode = Mode.PULLUP; pullT = 0; pullFromS = s; pullFromY = y; vx = vy = 0; facing = side; events |= EV_GRAB | EV_PULL;
+                return true;
+            }
             ledgeSide = side; onElem = i; mode = Mode.LEDGE; vx = vy = 0; facing = side; events |= EV_GRAB;
             s = course.wrap(es1[i] - side * (el.halfW() + 0.24f));
             y = top - T.handHeight + 0.08f;
@@ -570,11 +575,11 @@ public final class Sim {
         int i = onElem; Element el = course.get(i);
         pullT += dt;
         float k = Math.min(1f, pullT / T.pullUpTime);
-        float fromS = course.wrap(es1[i] - ledgeSide * (el.halfW() + 0.24f));
+        float fromS = pullFromS;       // where the pull began (the hang spot for a ledge grab, or the player's own position for a step-up)
         float toS = fromS + course.dsWrap(es1[i] - ledgeSide * (el.halfW() - 0.35f), fromS);   // short way round the ring
         // easing: up first, then forward
         float up = Math.min(1f, k * 1.6f), fw = Math.max(0f, (k - 0.45f) / 0.55f);
-        y = (ey1[i] - T.handHeight + 0.08f) + (T.handHeight - 0.08f) * up;
+        y = pullFromY + (ey1[i] - pullFromY) * up;
         s = course.wrap(fromS + (toS - fromS) * fw);
         if (k >= 1f) {
             s = course.wrap(toS); y = ey1[i]; vx = vy = 0; mode = Mode.GROUND; onElem = i; coyote = T.coyote;

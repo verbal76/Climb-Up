@@ -1,0 +1,15 @@
+{
+  "radius": 10.0,
+  "runSpeed": 5.6, "groundAccel": 48.0, "groundDecel": 60.0, "airAccel": 28.0, "airDrag": 3.0,
+  "gravity": 34.0, "jumpVel": 11.5, "jumpCutMul": 0.45, "maxFall": 24.0,
+  "coyote": 0.12, "jumpBuffer": 0.13,
+  "halfWidth": 0.28, "height": 1.25, "handHeight": 1.15, "edgeOverhang": 0.2,
+  "padBounce": 21.0, "padBounceHeld": 24.0,
+  "climbSpeed": 3.4, "ropeGrabRadius": 0.42, "cableShimmy": 3.6, "grabLockout": 0.28,
+  "ledgeReachX": 0.4, "ledgeReachBelow": 0.9, "ledgeReachAbove": 0.15, "pullUpTime": 0.32,
+  "crumbleDelay": 0.7, "crumbleRespawn": 3.4,
+  "fallRespawnDepth": 12.0,
+  "courseHeight": 520.0, "spiralPitch": 24.0, "restEvery": 5, "checkpointEveryRests": 1,
+  "minLinkMargin": 0.07,
+  "assistJumpForgiveness": 0.08, "assistSlowFactor": 0.8
+}

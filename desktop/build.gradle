@@ -1,0 +1,18 @@
+plugins { id 'application' }
+tasks.withType(JavaCompile).configureEach { options.release = 17 }
+application { mainClass = 'com.hotatticgames.climbup.desktop.DesktopLauncher' }
+dependencies {
+    implementation project(':core')
+    implementation "com.badlogicgames.gdx:gdx-backend-lwjgl3:$gdxVersion"
+    implementation "com.badlogicgames.gdx:gdx-platform:$gdxVersion:natives-desktop"
+}
+tasks.named('run') {
+    workingDir = file('../assets')
+    systemProperties System.properties.findAll { it.key.toString().startsWith('climb.') }
+}
+
+tasks.register('genCourses', JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'com.hotatticgames.climbup.sim.CourseBank'
+    args = [rootProject.file('assets').absolutePath]
+}

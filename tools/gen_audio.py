@@ -1,0 +1,85 @@
+#!/usr/bin/env python3
+"""Original procedural audio for Climb up (sfxr-style synth + small chord sequencer). Deterministic; output is committed to assets/audio."""
+import numpy as np, wave, os, sys
+SR = 22050
+OUT = os.path.join(os.path.dirname(__file__), '..', 'assets', 'audio')
+rng = np.random.default_rng(1234)
+
+def t_arr(d): return np.arange(int(SR * d)) / SR
+def env(n, a=0.005, r=0.05, curve=1.0):
+    e = np.ones(n); na = min(n, max(1, int(a * SR))); nr = min(n, max(1, int(r * SR)))
+    e[:na] = np.linspace(0, 1, na); e[-nr:] *= np.linspace(1, 0, nr) ** curve
+    return e
+def tri(ph): return 2 * np.abs(2 * (ph % 1) - 1) - 1
+def sq(ph, duty=0.5): return np.where((ph % 1) < duty, 1.0, -1.0)
+def sweep(f0, f1, d, wave_fn=np.sin, exp=True):
+    t = t_arr(d)
+    f = f0 * (f1 / f0) ** (t / d) if exp else np.linspace(f0, f1, len(t))
+    ph = np.cumsum(f) / SR
+    return wave_fn(2 * np.pi * ph) if wave_fn is np.sin else wave_fn(ph)
+def noise(d): return rng.uniform(-1, 1, int(SR * d))
+def lp(x, k):
+    y = np.zeros_like(x); a = k
+    for i in range(1, len(x)): y[i] = y[i - 1] + a * (x[i] - y[i - 1])
+    return y
+def save(name, x, vol=0.8):
+    x = x / (np.max(np.abs(x)) + 1e-9) * vol
+    with wave.open(os.path.join(OUT, name + '.wav'), 'wb') as w:
+        w.setnchannels(1); w.setsampwidth(2); w.setframerate(SR)
+        w.writeframes((x * 32767).astype('<i2').tobytes())
+
+def note(f, d, shape='tri', vol=1.0, a=0.01, r=0.1):
+    t = t_arr(d); ph = f * t
+    w = tri(ph) if shape == 'tri' else sq(ph, 0.4) if shape == 'sq' else np.sin(2 * np.pi * ph)
+    return w * env(len(t), a, r) * vol
+def mix(parts, total):
+    out = np.zeros(int(SR * total))
+    for start, x in parts:
+        i = int(start * SR); j = min(len(out), i + len(x))
+        if i < len(out): out[i:j] += x[:j - i]
+    return out
+N = lambda m: 440.0 * 2 ** ((m - 69) / 12)
+
+# ---------------- sfx
+save('jump', sweep(260, 640, 0.16, np.sin) * env(int(SR * 0.16), 0.003, 0.08))
+save('land', (lp(noise(0.1), 0.15) * 1.2 + note(80, 0.1, 'sin', 1.0, 0.002, 0.08)) * env(int(SR * 0.1), 0.001, 0.07))
+x = sweep(180, 820, 0.38, np.sin); x *= (1 + 0.25 * np.sin(2 * np.pi * 22 * t_arr(0.38))); save('bounce', x * env(len(x), 0.004, 0.2))
+save('grab', mix([(0, note(900, 0.05, 'sq', 0.5, 0.001, 0.04)), (0.05, note(1300, 0.08, 'sq', 0.5, 0.001, 0.07))], 0.14))
+save('pull', mix([(0, note(N(64), 0.08, 'tri')), (0.08, note(N(67), 0.08, 'tri')), (0.16, note(N(72), 0.14, 'tri'))], 0.3))
+c = lp(noise(0.55), 0.35) * env(int(SR * 0.55), 0.01, 0.4) ; c += (noise(0.55) * (rng.uniform(0, 1, int(SR * 0.55)) > 0.995)) * 0.8; save('crumble', c)
+save('checkpoint', mix([(i * 0.09, note(N(m), 0.3, 'tri', 0.8, 0.005, 0.2)) for i, m in enumerate([72, 76, 79, 84])], 0.7))
+save('respawn', sweep(700, 70, 0.45, np.sin) * env(int(SR * 0.45), 0.005, 0.2))
+fan = [(0, 67, .12), (.12, 72, .12), (.24, 76, .12), (.36, 79, .2), (.58, 76, .1), (.68, 79, .5)]
+save('win', mix([(s, note(N(m), d + 0.1, 'tri', 0.8, 0.005, 0.1) + 0.4 * note(N(m) * 2, d + 0.1, 'sq', 0.3, 0.005, 0.1)) for s, m, d in fan], 1.4))
+save('click', note(1200, 0.04, 'sq', 0.5, 0.001, 0.03))
+save('rope', lp(noise(0.07), 0.25) * env(int(SR * 0.07), 0.002, 0.05) + note(520, 0.07, 'tri', 0.2))
+save('step', lp(noise(0.05), 0.2) * env(int(SR * 0.05), 0.001, 0.04))
+
+# ---------------- music (chord sequencer, loops cleanly on a bar boundary)
+def song(name, bpm, bars, prog, seed, bright):
+    r = np.random.default_rng(seed); beat = 60.0 / bpm; total = bars * 4 * beat
+    parts = []
+    scale = [0, 2, 4, 7, 9]  # major pentatonic
+    for bar in range(bars):
+        root = prog[bar % len(prog)]
+        t0 = bar * 4 * beat
+        # pad
+        for k in (0, 7, 12 + 4 if bright else 12 + 3):
+            parts.append((t0, note(N(48 + root + k), 4 * beat, 'sin', 0.22, 0.4, 0.5)))
+        # bass
+        for b in range(4):
+            if b in (0, 2): parts.append((t0 + b * beat, note(N(36 + root), beat * 0.9, 'tri', 0.5, 0.01, 0.15)))
+        # arpeggio
+        for i in range(8):
+            deg = scale[int(r.integers(0, 5))] + (12 if r.random() < 0.35 else 0)
+            if r.random() < 0.78:
+                parts.append((t0 + i * beat / 2, note(N(60 + root + deg), beat * 0.45, 'sq' if bright else 'tri', 0.28 if bright else 0.34, 0.004, 0.12)))
+        # soft tick
+        for b in range(4): parts.append((t0 + b * beat, lp(noise(0.04), 0.3) * env(int(SR * 0.04), 0.001, 0.03) * 0.15))
+    x = mix(parts, total)
+    # make the loop seamless: apply tiny fade at the ends
+    n = int(0.01 * SR); x[:n] *= np.linspace(0, 1, n); x[-n:] *= np.linspace(1, 0, n)
+    save(name, x, 0.55)
+song('music_menu', 84, 8, [0, 5, 7, 2], 11, False)
+song('music_game', 112, 12, [0, 9, 5, 7], 21, True)
+print('ok')

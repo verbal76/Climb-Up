@@ -1,0 +1,49 @@
+plugins { id 'com.android.application' version '8.7.3' }
+
+def buildCode = (System.getenv('GITHUB_RUN_NUMBER') ?: (project.findProperty('buildCode') ?: '1')).toInteger()
+
+android {
+    namespace 'com.hotatticgames.climbup.android'
+    compileSdk 35
+    defaultConfig {
+        applicationId 'com.hotatticgames.climbup'
+        minSdk 26
+        targetSdk 35
+        versionCode buildCode
+        versionName rootProject.ext.appVersionName
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    sourceSets {
+        main {
+            assets.srcDirs = ['../assets']
+            jniLibs.srcDirs = ['libs']
+        }
+    }
+    packaging { jniLibs { useLegacyPackaging = false } }
+    buildTypes { release { minifyEnabled false } }
+    lint { abortOnError false }
+}
+
+configurations { natives }
+
+dependencies {
+    implementation project(':core')
+    implementation "com.badlogicgames.gdx:gdx-backend-android:${rootProject.ext.gdxVersion}"
+    natives "com.badlogicgames.gdx:gdx-platform:${rootProject.ext.gdxVersion}:natives-armeabi-v7a"
+    natives "com.badlogicgames.gdx:gdx-platform:${rootProject.ext.gdxVersion}:natives-arm64-v8a"
+    natives "com.badlogicgames.gdx:gdx-platform:${rootProject.ext.gdxVersion}:natives-x86_64"
+}
+
+tasks.register('copyAndroidNatives') {
+    doFirst {
+        ['armeabi-v7a', 'arm64-v8a', 'x86_64'].each { file("libs/$it").mkdirs() }
+        configurations.natives.copy().files.each { jar ->
+            def abi = ['armeabi-v7a', 'arm64-v8a', 'x86_64'].find { jar.name.endsWith("natives-${it}.jar") }
+            if (abi) copy { from zipTree(jar); into file("libs/$abi"); include '*.so' }
+        }
+    }
+}
+tasks.matching { it.name.contains('merge') && it.name.contains('JniLibFolders') }.configureEach { dependsOn 'copyAndroidNatives' }

@@ -17,6 +17,19 @@ jobs:
         run: ./gradlew :core:test --no-daemon
       - name: Assemble debug APK
         run: ./gradlew :android:assembleDebug --no-daemon -PwithAndroid
+      - name: Name, verify and fingerprint the APK
+        run: |
+          set -e
+          SRC=$(ls android/build/outputs/apk/debug/*.apk | head -1)
+          OUT=android/build/outputs/apk/debug/climb-up-0.1.0-build${{ github.run_number }}-debug.apk
+          cp "$SRC" "$OUT"; rm -f "$SRC"
+          BT=$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -1)
+          echo "SOURCE_SHA=${{ github.sha }}"
+          echo "APK=$(basename $OUT)"
+          sha256sum "$OUT"
+          "$BT/aapt2" dump badging "$OUT" | grep -E "^package|sdkVersion|targetSdkVersion|uses-permission|launchable-activity|native-code"
+          "$BT/apksigner" verify --verbose "$OUT" | head -5
+          unzip -l "$OUT" | grep -E "\.so$|classes.*dex|assets/courses" | head -20
       - uses: actions/upload-artifact@v4
         with:
           name: climb-up-debug-apk-${{ github.run_number }}

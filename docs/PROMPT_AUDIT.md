@@ -37,7 +37,7 @@ STYLE/UI
 10. Touch layout details (stick side, jump placement, left-handed option); HUD content (height, best, progress bar); pause/menu flow; title screen layout.
 11. Contextual tips ("tips as things appear") → one-shot toast per obstacle type.
 12. Accessibility list → text size, reduced motion, vibration, assists (several implemented; colourblind palette and subtitles *not* complete).
-13. Four visual "worlds" (scope table said 4 themes) → palette/tint per height band.
+13. Visual "worlds" (scope table said 4 themes; a fifth, Deep Space, was added at the owner's request) → palette/tint per height band.
 14. Character feel: facing, squash/stretch, landing dust, near-miss pose, wiggle, idle gags.
 15. Audio mix: music + SFX buses, volume sliders.
 16. Save format versioning/migration, atomic writes.

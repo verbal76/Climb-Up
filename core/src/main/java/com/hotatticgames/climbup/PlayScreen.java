@@ -430,15 +430,15 @@ public final class PlayScreen extends ScreenAdapter {
         float tm = ui.tm();
         // height meter (top-left): current height, best height, and where we are in the repeating worlds
         float zk = Math.min(tm, 1.3f);
-        int zone = Math.min(3, (int) (((sim.y / (g.tuning.rampHeight / 4f)) % 4f + 4f) % 4f)), lap = (int) (sim.y / g.tuning.rampHeight);
+        int Z = Palette.ZONES; int zone = Math.min(Z - 1, (int) (((sim.y / g.tuning.zoneHeight) % Z + Z) % Z)), lap = (int) (sim.y / (g.tuning.zoneHeight * Z));
         String hs = (int) Math.max(0, sim.y) + " M";
         ui.rect(m - 6, H - m - 62 * zk - 18, 360 * zk + 12, 62 * zk + 18 + 6, new Color(0.05f, 0.07f, 0.14f, 0.55f));
         ui.text(hs, m, H - m - 30 * zk, 4f * zk, Ui.TEXT);
         ui.text("BEST " + (int) Math.max(g.save.bestHeight, sim.maxHeight), m, H - m - 56 * zk, 2.6f * zk, Ui.DIM);
         float barW = 340 * zk, barY = H - m - 70 * zk - 6;
-        float within = ((sim.y / (g.tuning.rampHeight / 4f)) % 4f + 4f) % 4f / 4f;
+        float within = ((sim.y / g.tuning.zoneHeight) % Z + Z) % Z / Z;
         ui.rect(m, barY, barW, 8, new Color(0.2f, 0.22f, 0.32f, 1f));
-        for (int z = 0; z < 4; z++) { Color c = Palette.SKY_BOT[z]; ui.rect(m + z * barW / 4f + 1, barY + 1, barW / 4f - 2, 6, new Color(c.r, c.g, c.b, 0.9f)); }
+        for (int z = 0; z < Z; z++) { Color c = Palette.SKY_BOT[z]; ui.rect(m + z * barW / Z + 1, barY + 1, barW / Z - 2, 6, new Color(c.r, c.g, c.b, 0.9f)); }
         ui.rect(m + within * barW - 3, barY - 5, 6, 18, Ui.ACCENT);
         // keys carried
         float kx0 = m, ky0 = barY - 44 * zk;

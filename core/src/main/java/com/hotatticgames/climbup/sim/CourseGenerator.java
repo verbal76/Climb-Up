@@ -67,7 +67,7 @@ public final class CourseGenerator {
     private float diff(float y) { return Math.min(1f, Math.max(0f, y / rampH)); }
     private int tier(float y) { return Math.min(3, (int) (diff(y) * 4f)); }
     /** Visual theme of the platforms at height y: the four worlds repeat for ever in the endless climb. */
-    private int theme(float y) { return endless ? ((int) (y / (rampH / 4f))) % 4 : tier(y); }
+    private int theme(float y) { return endless ? ((int) (y / T.zoneHeight)) % T.zoneCount : tier(y); }
     /** 0 before the first hazards, ramping to 1 (finite towers ramp over their own height so tests exercise them too). */
     float intensity(float y) {
         float start = endless ? T.hazardStartY : T.courseHeight * 0.18f, ramp = endless ? T.hazardRampY : T.courseHeight * 0.7f;

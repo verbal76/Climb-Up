@@ -60,13 +60,19 @@ public final class Background implements Disposable {
         sb.enableBlending();
         sb.begin();
         // stars fade in toward the night zone
-        float starA = MathUtils.clamp((zoneF - 2.35f) / 0.7f, 0f, 1f);
+        float starA = Math.min(MathUtils.clamp((zoneF - 2.35f) / 0.7f, 0f, 1f), 1f - MathUtils.clamp((zoneF - Palette.ZONES + 0.25f) / 0.25f, 0f, 1f));   // from dusk to the end of deep space, fading out as the meadows return
+        float deep = MathUtils.clamp((zoneF - 3.5f) / 0.6f, 0f, 1f) * (1f - MathUtils.clamp((zoneF - Palette.ZONES + 0.25f) / 0.25f, 0f, 1f));   // deep space: brighter, denser stars
         if (starA > 0.01f) {
             sb.setColor(1f, 1f, 1f, starA);
             float sx = camS * 6f * (reduced ? 0f : 1f), sy = camY * 2f;
             sb.draw(stars, 0, 0, w, h, (int) sx % 512, -(int) sy % 512, w, h, false, false);
+            if (deep > 0.01f) {          // a second, slower star layer shifted over the first
+                sb.setColor(0.85f, 0.9f, 1f, deep);
+                sb.draw(stars, 0, 0, w, h, (int) (sx * 0.5f) % 512 + 200, -(int) (sy * 0.5f) % 512 + 90, w, h, false, false);
+            }
         }
-        float cloudA = 1f - MathUtils.clamp((zoneF - 2.4f) / 0.8f, 0f, 0.8f);
+        float wrap = MathUtils.clamp((zoneF - Palette.ZONES + 0.25f) / 0.25f, 0f, 1f);       // the last quarter-zone blends back to the meadows
+        float cloudA = (1f - 0.8f * MathUtils.clamp((zoneF - 2.4f) / 0.8f, 0f, 1f) * (1f - wrap)) * (1f - MathUtils.clamp((zoneF - 3.6f) / 0.5f, 0f, 1f) * (1f - wrap));      // fewer clouds at night, none in deep space
         float scale = h / 720f;
         for (int k = 0; k < 2; k++) {
             float par = k == 0 ? 7f : 13f;                   // pixels per arc unit: far layer slower

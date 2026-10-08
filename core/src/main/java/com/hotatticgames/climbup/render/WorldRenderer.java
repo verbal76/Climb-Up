@@ -86,6 +86,7 @@ public final class WorldRenderer implements Disposable {
         for (String n : new String[]{"block-grass", "block-grass-low", "block-grass-long", "block-grass-low-long", "block-snow", "block-snow-low", "block-snow-long", "block-snow-low-long",
                 "block-moving", "block-moving-blue", "platform-fortified", "flag", "chest", "jewel", "tree", "tree-pine-small", "flowers", "mushrooms", "rocks", "plant",
                 "tree-pine-snow-small", "tree-snow", "stones", "sign"}) models.obj(n);
+        for (String n : new String[]{"ramp", "rock_1", "rock_2", "rock_3", "rock_4", "rock_large_1", "rock_large_2", "rock_large_3"}) models.space(n);
         particles = new Particles(models);
         shadow = new ModelInstance(models.disc);
         shadow.materials.get(0).set(ColorAttribute.createDiffuse(0f, 0f, 0f, 1f), new BlendingAttribute(0.28f));
@@ -152,6 +153,8 @@ public final class WorldRenderer implements Disposable {
                 Model m = models.obj(name), ml = models.obj(name + "-long");
                 float h = thick ? 1f : 0.5f;
                 float left = -w / 2f; int pos = 0;
+                boolean orbit = e.zone == Palette.SPACE && e.type != Element.Type.GOAL;
+                if (orbit) { spacePlatform(ps, e, idx); pos = w; }          // deep space: a metal deck on a drifting asteroid
                 while (pos < w) {
                     boolean two = w - pos >= 2;
                     float cx = left + pos + (two ? 1f : 0.5f);
@@ -165,7 +168,8 @@ public final class WorldRenderer implements Disposable {
                     ps.add(boxPart(-0.35f, 0.02f, 0.2f, 0.22f, 0.05f, 0.18f, new Color(0.35f, 0.25f, 0.18f, 1f)));
                     ps.add(boxPart(0.4f, 0.02f, -0.1f, 0.18f, 0.05f, 0.22f, new Color(0.35f, 0.25f, 0.18f, 1f)));
                 }
-                if (thick && e.type != Element.Type.GOAL && quality > 0) decorate(ps, e, idx, w, snow);
+                if (orbit) { /* decorated by spacePlatform */ }
+                else if (thick && e.type != Element.Type.GOAL && quality > 0) decorate(ps, e, idx, w, snow);
                 else if (!thick && e.type == Element.Type.STATIC && quality > 0 && hash(idx, 7) % 3 == 0) decorate(ps, e, idx, w, snow);
                 if (e.checkpoint) {
                     Model f = models.obj("flag");
@@ -263,6 +267,31 @@ public final class WorldRenderer implements Disposable {
         }
     }
 
+    /** Space biome platform: a metal deck with beacon lights, hanging from a Space Kit asteroid. */
+    private void spacePlatform(Array<Part> ps, Element e, int idx) {
+        float w = e.w;
+        Color deck = new Color(0.30f, 0.33f, 0.43f, 1f), plate = new Color(0.17f, 0.19f, 0.26f, 1f), glow = new Color(0.35f, 0.92f, 1f, 1f);
+        if (e.type == Element.Type.CRUMBLE) { deck = new Color(0.52f, 0.40f, 0.34f, 1f); glow = new Color(1f, 0.55f, 0.25f, 1f); }
+        ps.add(boxPart(0f, -0.15f, 0f, w * 0.985f, 0.30f, 1.7f, deck));
+        ps.add(boxPart(0f, -0.36f, 0f, w * 0.90f, 0.12f, 1.5f, plate));
+        Part strip = boxPart(0f, -0.04f, -0.86f, w * 0.97f, 0.05f, 0.05f, glow); strip.tintAttr.color.set(glow); ps.add(strip);
+        for (int sd = -1; sd <= 1; sd += 2) {
+            float x = sd * (w / 2f - 0.18f);
+            ps.add(boxPart(x, 0.18f, 0.72f, 0.08f, 0.36f, 0.08f, plate));
+            ps.add(boxPart(x, 0.42f, 0.72f, 0.15f, 0.12f, 0.15f, glow));
+        }
+        if (quality > 0) {
+            int h = hash(idx, 23);
+            boolean big = w >= 4.5f;
+            String rock = big ? new String[]{"rock_large_1", "rock_large_2", "rock_large_3"}[h % 3] : new String[]{"rock_1", "rock_2", "rock_3", "rock_4"}[h % 4];
+            float sc = Math.max(0.35f, w * 1.1f / (big ? 7.6f : 3.0f)), top = big ? 0.3f : 0.4f;
+            Part rk = part(models.space(rock), ((h >> 5) % 5 - 2) * 0.1f * w, -0.42f - top * sc, ((h >> 9) % 3 - 1) * 0.2f, sc, sc, sc);
+            rk.roll = 180f; rk.yaw = (h >> 3) % 360; rk.tinted = false; ps.add(rk);
+            Part small = part(models.space("rock_" + (1 + (h >> 11) % 4)), -w * 0.25f + ((h >> 13) % 5) * w * 0.12f, 0f, 0.55f, 0.16f, 0.16f, 0.16f);
+            small.yaw = (h >> 17) % 360; small.tinted = false; ps.add(small);
+        }
+    }
+
     private void decorate(Array<Part> ps, Element e, int idx, int w, boolean snow) {
         int h = hash(idx, 11);
         String[] a = snow ? new String[]{"tree-pine-snow-small", "rocks", "stones", "tree-snow", "sign"} : new String[]{"tree", "tree-pine-small", "flowers", "mushrooms", "rocks", "plant"};
@@ -307,8 +336,8 @@ public final class WorldRenderer implements Disposable {
         float target = py + 0.3f + lead;
         if (sim.teleported) camY = target;
         else camY += (target - camY) * Math.min(1f, (target > camY ? 7f : 10f) * dt);
-        float zf = camY / (T.rampHeight / 4f);
-        float zoneF = Math.min(3.999f, ((zf % 4f) + 4f) % 4f);        // the four worlds repeat for ever
+        float zf = camY / T.zoneHeight;
+        float zoneF = Math.min(Palette.ZONES - 0.001f, ((zf % Palette.ZONES) + Palette.ZONES) % Palette.ZONES);        // the five worlds repeat for ever
         Palette.blend(Palette.SKY_TOP, zoneF, skyTop); Palette.blend(Palette.SKY_BOT, zoneF, skyBot);
         Palette.blend(Palette.TINT, zoneF, tint); Palette.blend(Palette.AMBIENT, zoneF, amb);
         ((ColorAttribute) env.get(ColorAttribute.AmbientLight)).color.set(amb);
@@ -344,9 +373,10 @@ public final class WorldRenderer implements Disposable {
         syncVis();
         int lo = Math.max(0, sim.winLo), hi = Math.min(vis.size() - 1, sim.winHi);
         if (clouds == null) clouds = new Clouds(models, T, course);
-        clouds.update(ps, camY, ps, py, lo, hi, dt, reducedMotion, quality);
-        cloudsBroken += clouds.brokenThisFrame;
-        clouds.render(batch, env, (inst, arc, yy, dz, sx, sy, sz, yaw) -> place(inst, arc, yy, dz, ps, sx, sy, sz, yaw), ps, camY);
+        boolean inSpace = zoneF >= 3.9f && zoneF < Palette.ZONES - 0.1f;           // no weather in deep space
+        if (!inSpace) clouds.update(ps, camY, ps, py, lo, hi, dt, reducedMotion, quality);
+        cloudsBroken += inSpace ? 0 : clouds.brokenThisFrame;
+        if (!inSpace) clouds.render(batch, env, (inst, arc, yy, dz, sx, sy, sz, yaw) -> place(inst, arc, yy, dz, ps, sx, sy, sz, yaw), ps, camY);
         for (int i = lo; i <= hi; i++) {
             Vis v = vis.get(i); Element e = v.e;
             float es = sim.es1[i] , ey = sim.ey1[i];
@@ -697,13 +727,14 @@ public final class WorldRenderer implements Disposable {
         ambientAcc += dt * (quality >= 2 ? 7f : 3.5f);
         while (ambientAcc >= 1f) {
             ambientAcc -= 1f;
-            int z = Math.min(3, (int) zoneF);
+            int z = Math.min(Palette.ZONES - 1, (int) zoneF);
             float arc = camS + MathUtils.random(-9f, 9f), yy = camY + MathUtils.random(-4f, 6f);
             switch (z) {
                 case 0: ambCol.set(1f, 0.97f, 0.7f, 1f); particles.spawn(arc, yy, MathUtils.random(-0.3f, 0.3f), MathUtils.random(0.2f, 0.6f), ambCol, 0.07f, 0f, 4.5f); break;
                 case 1: ambCol.set(1f, 1f, 1f, 1f); particles.spawn(arc, camY + 6f, MathUtils.random(-0.5f, 0.1f), -MathUtils.random(0.8f, 1.5f), ambCol, 0.09f, 0f, 6f); break;
                 case 2: ambCol.set(1f, 0.55f, 0.2f, 1f); particles.spawn(arc, camY - 4f, MathUtils.random(-0.4f, 0.4f), MathUtils.random(0.9f, 1.8f), ambCol, 0.07f, 0f, 5f); break;
-                default: ambCol.set(0.7f, 1f, 0.8f, 1f); particles.spawn(arc, yy, MathUtils.random(-0.6f, 0.6f), MathUtils.random(-0.3f, 0.4f), ambCol, 0.08f, 0f, 4f);
+                case 3: ambCol.set(0.7f, 1f, 0.8f, 1f); particles.spawn(arc, yy, MathUtils.random(-0.6f, 0.6f), MathUtils.random(-0.3f, 0.4f), ambCol, 0.08f, 0f, 4f); break;
+                default: ambCol.set(0.75f, 0.85f, 1f, 1f); particles.spawn(arc, yy, MathUtils.random(-0.2f, 0.2f), MathUtils.random(-0.15f, 0.25f), ambCol, 0.05f, 0f, 7f);       // space dust
             }
         }
     }

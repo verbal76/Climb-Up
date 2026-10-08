@@ -156,6 +156,10 @@ public final class HeroRig implements Disposable {
             if (ta != null) ta.textureDescription.texture.setFilter(com.badlogic.gdx.graphics.Texture.TextureFilter.Linear, com.badlogic.gdx.graphics.Texture.TextureFilter.Linear);
         }
         inst = new ModelInstance(model);
+        if (ham) {
+            hArmR = hamNode("armR", hPArmR); hArmL = hamNode("armL", hPArmL); hFootR = hamNode("footR", hPFootR); hFootL = hamNode("footL", hPFootL);
+            hEarR = hamNode("earR", hPEarR); hEarL = hamNode("earL", hPEarL);
+        }
         ac = ham ? null : new AnimationController(inst);
         play("Idle", -1, 1f, 0f);
     }
@@ -237,6 +241,39 @@ public final class HeroRig implements Disposable {
 
     private static final float HAM_SCALE = 1.25f / 3.25f, HAM_YAW_FIX = Float.parseFloat(System.getProperty("climb.hamYaw", "0"));
     private float runT, hamLean;
+    private Node hArmR, hArmL, hFootR, hFootL, hEarR, hEarL;
+    private final Vector3 hPArmR = new Vector3(), hPArmL = new Vector3(), hPFootR = new Vector3(), hPFootL = new Vector3(), hPEarR = new Vector3(), hPEarL = new Vector3();
+    private final Quaternion hq = new Quaternion(), hq2 = new Quaternion();
+    private float armR, armL, swingR, swingL, footLiftR, footLiftL, footFwdR, footFwdL, earFlop, earTwitch;
+
+    private Node hamNode(String id, Vector3 pivotOut) {
+        Node n = inst.getNode(id);
+        if (n != null) pivotOut.set(n.translation);
+        return n;
+    }
+
+    /** rest (Z): arm angle from straight out (degrees, + raises a right arm); swing (X): forward/back. Left arm mirrored. */
+    private void hamArm(Node n, Vector3 pivot, float restDeg, float swingDeg, boolean right) {
+        if (n == null) return;
+        hq.setFromAxis(0, 0, 1, right ? restDeg : -restDeg);
+        hq2.setFromAxis(1, 0, 0, swingDeg);
+        hq2.mul(hq);
+        n.translation.set(pivot); n.rotation.set(hq2);
+    }
+
+    private void hamFoot(Node n, Vector3 pivot, float lift, float fwd, float pitchDeg) {
+        if (n == null) return;
+        hq.setFromAxis(1, 0, 0, pitchDeg);
+        n.translation.set(pivot.x, pivot.y + lift, pivot.z + fwd); n.rotation.set(hq);
+    }
+
+    private void hamEar(Node n, Vector3 pivot, float outDeg, float backDeg, boolean right) {
+        if (n == null) return;
+        hq.setFromAxis(0, 0, 1, right ? -outDeg : outDeg);
+        hq2.setFromAxis(1, 0, 0, -backDeg);
+        hq2.mul(hq);
+        n.translation.set(pivot); n.rotation.set(hq2);
+    }
 
     /** The hamster has no skeleton, so everything is body language: breathing, run bounce + lean, jump stretch, landing squash, hang wiggle, idle gags. */
     private void updateHam(Sim sim, float dt, float time, float wx, float wy, float wz, float phi, boolean reduced, float speed) {
@@ -266,9 +303,52 @@ public final class HeroRig implements Disposable {
         }
         hangT = sim.mode == Sim.Mode.LEDGE ? hangT + dt : 0f;
         sxz *= 1f - 0.5f * sq; sy *= 1f + sq;
+        // ---- limbs: arms hang at the sides (not the T-pose of the model), swing with the run, go up to grab and wave
+        float ph = runT, sw = MathUtils.sin(ph) * 38f * run * k, rest = -68f, restR = rest, restL = rest, fl = 0f, fr = 0f, fwdL = 0f, fwdR = 0f, pitchF = 0f, earOut = 6f, earBack = 5f * run;
+        float armSwR = -sw, armSwL = sw;
+        switch (sim.mode) {
+            case GROUND:
+                fr = Math.max(0f, MathUtils.sin(ph)) * 0.30f * run; fl = Math.max(0f, MathUtils.sin(ph + MathUtils.PI)) * 0.30f * run;
+                fwdR = MathUtils.cos(ph) * 0.22f * run; fwdL = -MathUtils.cos(ph) * 0.22f * run;
+                pitchF = -MathUtils.sin(ph) * 20f * run;
+                earBack = 8f + 16f * run + 3f * MathUtils.sin(runT * 2f) * run;
+                earOut = 6f + 3f * MathUtils.sin(time * 1.7f);
+                if (speed < 0.4f) { restR += 4f * MathUtils.sin(time * 2.3f); restL += 4f * MathUtils.sin(time * 2.3f + 1f); }
+                if (beat != null && speed < 0.4f) {
+                    switch (beat.anim) {
+                        case "Wave": restR = 80f + 16f * MathUtils.sin(beatT * 12f); armSwR = 8f * MathUtils.sin(beatT * 12f + 1f); earOut = 14f; break;
+                        case "Yes": restR = -30f; restL = -30f; earBack = 18f * Math.abs(MathUtils.sin(beatT * 8f)); break;
+                        case "No": earOut = 18f * MathUtils.sin(beatT * 10f); earBack = 12f; break;
+                        case "Duck": restR = -20f; restL = -20f; fl = 0.1f; fr = 0.1f; break;
+                        default: restR = 5f; armSwR = -50f * Math.abs(MathUtils.sin(beatT * 11f)); restL = -50f; break;     // a little punch
+                    }
+                }
+                break;
+            case AIR: {
+                float up = MathUtils.clamp(sim.vy / 11f, -1f, 1f);
+                restR = restL = 74f + 30f * up; armSwR = armSwL = 0f;
+                fl = fr = 0.22f - 0.08f * up; fwdL = 0.22f; fwdR = -0.1f; pitchF = -25f;
+                earBack = -10f * up + 8f; earOut = 12f;
+                break;
+            }
+            case ROPE: case CABLE: restR = restL = -68f; armSwR = armSwL = -168f + 6f * MathUtils.sin(time * 6f); fl = 0.18f * Math.max(0f, MathUtils.sin(time * 5f)); fr = 0.18f * Math.max(0f, -MathUtils.sin(time * 5f)); earBack = 18f; break;
+            case LEDGE: {
+                float w = 16f + Math.min(6f, hangT * 3f);
+                restR = restL = -68f; armSwR = armSwL = -160f + 7f * MathUtils.sin(time * 22f);      // both arms reach up and forward to the ledge
+                fl = 0.30f * Math.max(0f, MathUtils.sin(time * w)); fr = 0.30f * Math.max(0f, MathUtils.sin(time * w + MathUtils.PI));
+                fwdL = MathUtils.sin(time * w) * 0.25f; fwdR = -MathUtils.sin(time * w) * 0.25f; pitchF = MathUtils.sin(time * w) * 30f;
+                earBack = 20f; earOut = 3f;
+                break;
+            }
+            case PULLUP: restR = restL = -68f; armSwR = armSwL = -110f * Math.max(0f, 1f - sim.pullT / sim.T.pullUpTime) - 20f; fl = fr = 0.2f; earBack = 10f; break;
+        }
+        hamArm(hArmR, hPArmR, restR, armSwR, true); hamArm(hArmL, hPArmL, restL, armSwL, false);
+        hamFoot(hFootR, hPFootR, fr, fwdR, pitchF); hamFoot(hFootL, hPFootL, fl, fwdL, -pitchF);
+        hamEar(hEarR, hPEarR, earOut, earBack, true); hamEar(hEarL, hPEarL, earOut, earBack, false);
         float s0 = HAM_SCALE;
         inst.transform.idt().translate(wx, wy + bob + lift, wz).rotate(0, 1, 0, phi * MathUtils.radiansToDegrees + yaw + yawAdd + HAM_YAW_FIX)
-                .rotate(0, 0, 1, roll).rotate(1, 0, 0, pitch + hamLean * 0f).scale(s0 * sxz, s0 * sy, s0 * sxz);
+                .rotate(0, 0, 1, roll).rotate(1, 0, 0, pitch).scale(s0 * sxz, s0 * sy, s0 * sxz);
+        inst.calculateTransforms();
     }
 
     public void render(ModelBatch batch, Environment env) { batch.render(inst, env); }

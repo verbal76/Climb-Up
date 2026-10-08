@@ -79,3 +79,7 @@
 - The clock counts only while playing (not paused, not in menus, not during hit-stop), starts on the first input of a climb, keeps running through falls and respawns, and survives quitting (it is part of the save). NEW CLIMB resets it.
 - Opening a castle records a **split** (time since the previous opening or the start) and the **total at that moment** (the last one is the total time to the last tower unlock), shown in a toast with "FASTEST TOWER!" / "PACE PB!" when beaten. Personal bests (fastest single tower, fastest clock at the Nth opening) persist across climbs. The pause menu lists the splits.
 - Climbs use a fresh random seed, so splits compare as pace, not as identical-route times; a fixed-seed "race" mode for runners is possible later (the generator is deterministic per seed).
+
+## Rope/cable grip and ledge dangle rework (owner feedback on build 33)
+- Rope and cable climbing now put **both hands on the line**: each arm is aimed from its shoulder at a point on the rope (one hand high, one low, swapping hand over hand while climbing; on a plain hang one hand sits a little higher), and the hero is drawn a little behind the line so his arms visibly reach forward and grip it. Legs draw their knees up alternately while climbing and dangle with a slow sway on a hang. (A bug where the aim target was overwritten by the bone's current direction had left the arms spread sideways.)
+- The ledge-hang leg flail and body tremble were far too violent (and looked broken on the long-legged astronauts): amplitude and speed cut to roughly a third.

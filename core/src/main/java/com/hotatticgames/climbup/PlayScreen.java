@@ -1,5 +1,6 @@
 package com.hotatticgames.climbup;
 
+import com.hotatticgames.climbup.audio.Audio;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Input;
 import com.badlogic.gdx.InputAdapter;
@@ -60,7 +61,7 @@ public final class PlayScreen extends ScreenAdapter {
         if (world != null) { // returning from the settings screen: keep the run exactly as it was
             applySettings();
             Gdx.input.setInputProcessor(new InputMultiplexer(g.ui, new Touch()));
-            g.audio.music("music_game");
+            g.audio.playlist(Audio.GAME_TRACKS);
             return;
         }
         course = g.loadCourse(g.save.courseIndex);
@@ -73,7 +74,7 @@ public final class PlayScreen extends ScreenAdapter {
         InputMultiplexer mux = new InputMultiplexer(g.ui, new Touch());
         Gdx.input.setInputProcessor(mux);
         Gdx.input.setCatchKey(Input.Keys.BACK, true);
-        g.audio.music("music_game");
+        g.audio.playlist(Audio.GAME_TRACKS);
         runTime = 0; milestone = (int) (sim.maxHeight / 50f);
         if (Boolean.getBoolean("climb.hang")) {   // test hook: hang from the left edge of the first platform ahead
             int e = 1; Element el = course.get(e);

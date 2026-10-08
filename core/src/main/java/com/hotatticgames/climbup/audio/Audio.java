@@ -16,6 +16,9 @@ public final class Audio implements Disposable {
     private final Settings settings;
     private Music current;
     private String currentName = "";
+    private String[] list;
+    private int listIdx;
+    public static final String[] GAME_TRACKS = {"music_game", "music_leaplike", "music_mountain_jig", "music_track4"};
     public static final String[] SFX = {"jump", "land", "bounce", "grab", "pull", "crumble", "checkpoint", "respawn", "win", "click", "rope", "step", "grunt1", "grunt2", "grunt3", "effort"};
 
     public Audio(Settings s) {
@@ -32,19 +35,47 @@ public final class Audio implements Disposable {
 
     public void play(String name) { play(name, 0.9f, 1f); }
 
-    public void music(String name) {
-        if (name.equals(currentName)) { applyVolume(); return; }
-        if (current != null) current.stop();
+    private Music load(String name) {
         Music m = tracks.get(name);
         if (m == null) {
             try {
                 com.badlogic.gdx.files.FileHandle f = Gdx.files.internal("audio/" + name + ".ogg");
                 if (!f.exists()) f = Gdx.files.internal("audio/" + name + ".wav");
                 m = Gdx.audio.newMusic(f);
-            } catch (Exception e) { return; }
-            m.setLooping(true); tracks.put(name, m);
+            } catch (Exception e) { return null; }
+            tracks.put(name, m);
         }
-        current = m; currentName = name; applyVolume(); if (settings.music > 0) m.play();
+        return m;
+    }
+
+    /** Looping single track (menu). */
+    public void music(String name) {
+        if (name.equals(currentName)) { applyVolume(); return; }
+        if (current != null) { current.setOnCompletionListener(null); current.stop(); }
+        Music m = load(name);
+        if (m == null) return;
+        m.setLooping(true); m.setOnCompletionListener(null);
+        current = m; currentName = name; list = null; applyVolume(); if (settings.music > 0) m.play();
+    }
+
+    /** Plays the tracks one after another, forever, starting at a random one. */
+    public void playlist(String... names) {
+        if (list != null && currentName.equals("playlist")) { applyVolume(); return; }
+        if (current != null) { current.setOnCompletionListener(null); current.stop(); }
+        list = names; listIdx = MathUtils.random(names.length - 1); currentName = "playlist";
+        startListTrack();
+    }
+
+    private void startListTrack() {
+        if (list == null) return;
+        Music m = load(list[listIdx]);
+        if (m == null) { current = null; return; }
+        m.setLooping(false);
+        m.setOnCompletionListener(done -> Gdx.app.postRunnable(() -> {
+            if (list == null || current != done) return;
+            listIdx = (listIdx + 1) % list.length; startListTrack();
+        }));
+        current = m; m.setPosition(0); applyVolume(); if (settings.music > 0) m.play();
     }
 
     public void applyVolume() {

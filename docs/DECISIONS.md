@@ -28,3 +28,9 @@
 * **Characters:** Settings -> CHARACTER switches between the Quaternius bunny (skinned, clips) and the owner-supplied chibi hamster (static model, so all of its life is body language in `HeroRig.updateHam`: breathing, run bounce and sway, jump stretch, landing squash, hang wiggle, idle gags). Applies live.
 * **Sounds:** the owner's retro pack is in `assets/audio/pack`; `assets/data/sfx.json` maps game sounds to files (random pick per play); entries can be edited or removed (falls back to the synthesized sound). The mapping was chosen from file names and lengths without listening, so expect to remap some.
 * **Unconfirmed licenses:** the music, the sound pack and the hamster were supplied by the owner without license text. They are credited as owner-supplied; confirm before any public release.
+
+## Animation set (builds 21+)
+* Both characters implement the same states (`HeroRig.Anim`): IDLE (with idle gags), RUN, JUMP, BIG_JUMP (pad/spring bounce: somersault), FALL (flailing), LAND, HANG, CLIMB (rope, hand over hand with kicking legs), SHIMMY (cable), PULLUP, HIT (shoved by a crab or bee, or hurt by a hazard: thrown back, arms and legs flung). The state is derived from the simulation (`pick`), not from the clip name.
+* **Bunny:** Quaternius clips (Idle, Walk, Run, Jump, Jump_Idle, Jump_Land, HitReact, Wave/No/Yes/Duck/Punch) for the body; hang/climb arms and legs are bone overrides in code (the pack has no hang or climb clips).
+* **Hamster:** body, arms, feet and ears are separate rigid parts (no skeleton in the supplied model), each posed per state in `updateHam`.
+* Test hook: `-Dclimb.animCycle=true -Dclimb.character=0|1` cycles every state for contact-sheet screenshots.

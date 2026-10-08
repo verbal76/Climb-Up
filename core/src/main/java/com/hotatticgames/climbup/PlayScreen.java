@@ -36,6 +36,7 @@ public final class PlayScreen extends ScreenAdapter {
     private String toast = "", tip = "", caption = ""; private float captionT;
     private int lastZone = -1, shots;
     private boolean confirmRestart;
+    private com.badlogic.gdx.Screen next; private boolean disposeOnLeave;   // applied at the end of render(), after the batch is closed
 
     // ---- touch state
     private int stickPtr = -1, jumpPtr = -1;
@@ -164,6 +165,7 @@ public final class PlayScreen extends ScreenAdapter {
         world.render(sim, play ? acc / Sim.DT : 1f, dt, time, true);
         drawHud();
         g.autoShot("play", dt);
+        if (next != null) { com.badlogic.gdx.Screen n = next; next = null; boolean d = disposeOnLeave; g.setScreen(n); if (d) dispose(); }
     }
 
     private void ambientSounds(float dt) {
@@ -335,8 +337,8 @@ public final class PlayScreen extends ScreenAdapter {
         if (ui.button(confirmRestart ? "TAP AGAIN TO CONFIRM" : "RETRY CHECKPOINT", bx, y + ph - 304, bw, bh)) {
             if (confirmRestart) { sim.respawn(); sim.consumeEvents(); world.snapCamera(sim); confirmRestart = false; resumePlay(); } else confirmRestart = true;
         }
-        if (ui.button("SETTINGS", bx, y + ph - 408, bw, bh)) { g.audio.play("click"); g.persist(); g.setScreen(new SettingsScreen(g, this)); }
-        if (ui.button("MAIN MENU", bx, y + ph - 512, bw, bh)) { g.audio.play("click"); g.persist(); g.setScreen(new TitleScreen(g)); }
+        if (ui.button("SETTINGS", bx, y + ph - 408, bw, bh)) { g.audio.play("click"); g.persist(); next = new SettingsScreen(g, this); disposeOnLeave = false; }
+        if (ui.button("MAIN MENU", bx, y + ph - 512, bw, bh)) { g.audio.play("click"); g.persist(); next = new TitleScreen(g); disposeOnLeave = true; }
     }
 
     private void winMenu() {
@@ -350,9 +352,9 @@ public final class PlayScreen extends ScreenAdapter {
         ui.textC("FALLS BACK TO CHECKPOINT " + sim.falls, W / 2, y + ph - 225, 4f, Ui.DIM);
         float bw = 520, bh = 84, bx = W / 2 - bw / 2;
         if (ui.button("CLIMB A NEW TOWER", bx, y + 190, bw, bh, true)) {
-            g.audio.play("click"); g.save.courseIndex++; g.save.checkpoint = 0; g.persist(); g.setScreen(new PlayScreen(g, false));
+            g.audio.play("click"); g.save.courseIndex++; g.save.checkpoint = 0; g.persist(); next = new PlayScreen(g, false); disposeOnLeave = true;
         }
-        if (ui.button("MAIN MENU", bx, y + 70, bw, bh)) { g.audio.play("click"); g.save.courseIndex++; g.save.checkpoint = 0; g.persist(); g.setScreen(new TitleScreen(g)); }
+        if (ui.button("MAIN MENU", bx, y + 70, bw, bh)) { g.audio.play("click"); g.save.courseIndex++; g.save.checkpoint = 0; g.persist(); next = new TitleScreen(g); disposeOnLeave = true; }
     }
 
     // ------------------------------------------------------------------ lifecycle

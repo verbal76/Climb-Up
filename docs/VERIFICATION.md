@@ -15,6 +15,9 @@
   screenshot flip, cloud art, shadow blob, settings layout overflow, title layout, win panel width, camera framing, robot arm poses/yaw.
 * `AndroidLauncher` compiles against gdx-backend-android 1.14.2 (checked with a stub android.jar).
 
+## Fixed after the first physical test (build 4)
+* Tapping PLAY / SETTINGS / CREDITS on the title screen crashed the app: the screen change happened mid-frame and `render()` returned before `ui.end()`, so the next screen's `SpriteBatch.begin()` threw. Screen changes are now applied after the batch closes (title and play screens). Reproduced on desktop with scripted taps (`-Dclimb.taps=...`), then verified: title -> Settings -> back -> Credits -> back -> Play -> pause -> Settings -> back -> resume -> pause -> Main Menu, no exceptions. This was missed earlier because no automated run exercised the buttons.
+
 ## NOT run / unknown
 * **No APK was built, installed or run.** `dl.google.com` (Android SDK + AGP) is blocked in this sandbox. The Android module, manifest, icons, resources and CI workflow are untested; first CI run may need small fixes.
 * No real touch input, haptics, audio output (no sound device), on-device frame rate, memory, thermals, notch/cutout behaviour, background/kill-and-relaunch on a phone.

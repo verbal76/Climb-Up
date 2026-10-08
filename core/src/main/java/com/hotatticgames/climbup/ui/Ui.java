@@ -30,7 +30,17 @@ public final class Ui extends InputAdapter implements Disposable {
     public float tm() { return settings.textMul(); }
 
     public void resize(int w, int h) { viewport.update(w, h, true); }
-    public void begin() { viewport.apply(); batch.setProjectionMatrix(viewport.getCamera().combined); batch.begin(); }
+    // Test hook: -Dclimb.taps="x,y@seconds;x,y@seconds" injects taps (virtual coords) through the normal button path, timed from startup.
+    private final String[] scriptedTaps = System.getProperty("climb.taps", "").isEmpty() ? new String[0] : System.getProperty("climb.taps").split(";");
+    private int nextTap; private float clock;
+
+    public void begin() {
+        clock += Gdx.graphics.getDeltaTime();
+        if (nextTap < scriptedTaps.length) {
+            String[] a = scriptedTaps[nextTap].split("[,@]");
+            if (clock >= Float.parseFloat(a[2])) { tapX = Float.parseFloat(a[0]); tapY = Float.parseFloat(a[1]); tapped = true; nextTap++; }
+        }
+        viewport.apply(); batch.setProjectionMatrix(viewport.getCamera().combined); batch.begin(); }
     public void end() { batch.end(); tapped = false; }
 
     // ---- input

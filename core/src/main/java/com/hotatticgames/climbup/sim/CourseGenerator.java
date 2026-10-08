@@ -494,6 +494,7 @@ public final class CourseGenerator {
         switch (h.type) {
             case SAW_H: return h.amp + Element.SAW_R;
             case CRAB: return h.amp + 0.6f;
+            case BEE: return h.amp + 0.6f;
             case SAW_V: return Element.SAW_R;
             case PENDULUM: return h.len * (float) Math.sin(h.amp) + Element.BALL_R;
             case CANNON: return h.len * 0.5f + Element.SHOT_R;
@@ -501,7 +502,7 @@ public final class CourseGenerator {
         }
     }
     private static float hzLo(Element h) {
-        switch (h.type) { case SAW_H: case SAW_V: return h.y - Element.SAW_R; case PENDULUM: return h.y - Element.BALL_R; case CANNON: return h.y - Element.SHOT_R; default: return h.y; }
+        switch (h.type) { case SAW_H: case SAW_V: return h.y - Element.SAW_R; case PENDULUM: return h.y - Element.BALL_R; case CANNON: return h.y - Element.SHOT_R; case BEE: return h.y - h.len - 1.4f; default: return h.y; }
     }
     private static float hzHi(Element h) {
         switch (h.type) {
@@ -513,6 +514,7 @@ public final class CourseGenerator {
             case SPIKE_DROP: return h.y + h.amp + Element.DROP_H;
             case GATE: return h.y + h.len;
             case CRAB: return h.y + 0.7f;
+            case BEE: return h.y + h.len + 0.6f;
             default: return h.y + h.len;
         }
     }
@@ -650,7 +652,7 @@ public final class CourseGenerator {
             float top = Math.max(cur.y, v.y), mid = uR + g / 2f;
             // pick a hazard that fits this gap
             boolean cannonOk = cur.w >= 3f && cur.type == Element.Type.STATIC;
-            int roll = rnd.nextInt(cannonOk ? 4 : 3);
+            int roll = rnd.nextInt(cannonOk ? 5 : 4);
             Element h;
             if (roll == 0) {
                 h = hz(Element.Type.SAW_V, mid + r(-0.1f, 0.1f), top + 0.35f, 0f, z);
@@ -658,6 +660,9 @@ public final class CourseGenerator {
             } else if (roll == 1 && g >= 2.6f) {
                 h = hz(Element.Type.SAW_H, mid, top + 0.95f + r(0f, 0.4f), 0f, z);
                 h.amp = Math.max(0.3f, Math.min(1.0f, g / 2f - 1.0f)); h.period = r(2.4f, 3.2f) - 0.4f * inten;
+            } else if (roll == 3) {
+                h = hz(Element.Type.BEE, mid, top + 1.1f, 0f, z);                  // a bee flies in, buzzes around the gap, dives at you, and leaves
+                h.amp = Math.max(0.15f, Math.min(0.8f, g / 2f - 0.95f)); h.len = 0.8f; h.period = r(7.0f, 9.5f) - 1.5f * inten;
             } else if (roll == 2 || (roll == 1)) {
                 h = hz(Element.Type.SPIKE_BLOCK, mid, top - 1.1f, r(0.9f, 1.3f), z);      // a spiked stone block in the gap: don't drop into it
                 h.len = 1.3f; h.period = 4f;

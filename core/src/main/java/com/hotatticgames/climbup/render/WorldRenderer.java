@@ -41,7 +41,8 @@ public final class WorldRenderer implements Disposable {
     private final DirectionalLight sun = new DirectionalLight();
     private final ShapeRenderer shapes = new ShapeRenderer();
     private final SpriteBatch sb = new SpriteBatch();
-    private final HeroRig hero;
+    private HeroRig hero;
+    private int character;
     private final java.util.ArrayList<Vis> vis = new java.util.ArrayList<>();
     private int pruneCursor;
     private final Background bg = new Background();
@@ -65,9 +66,11 @@ public final class WorldRenderer implements Disposable {
         return c;
     }
 
-    public WorldRenderer(Tuning t, Course c, Models models, int quality) {
+    public WorldRenderer(Tuning t, Course c, Models models, int quality) { this(t, c, models, quality, 0); }
+
+    public WorldRenderer(Tuning t, Course c, Models models, int quality, int character) {
         this.T = t; this.course = c; this.models = models; this.quality = quality;
-        hero = new HeroRig();
+        this.character = character; hero = new HeroRig(character);
         dip = new float[Math.max(16, c.size())]; dipV = new float[Math.max(16, c.size())];
         syncVis();
         env.set(new ColorAttribute(ColorAttribute.AmbientLight, 0.62f, 0.62f, 0.66f, 1f));
@@ -90,6 +93,9 @@ public final class WorldRenderer implements Disposable {
         while (vis.size() < n) { Vis v = new Vis(); v.e = course.get(vis.size()); vis.add(v); }
         if (dip.length < n) { int m = Math.max(n, dip.length * 3 / 2); dip = java.util.Arrays.copyOf(dip, m); dipV = java.util.Arrays.copyOf(dipV, m); }
     }
+
+    /** Switches the player model (Settings: CHARACTER) without rebuilding the world. */
+    public void setCharacter(int c) { if (c == character) return; character = c; hero.dispose(); hero = new HeroRig(c); }
 
     public void resize(int w, int h) { cam.viewportWidth = w; cam.viewportHeight = h; cam.update(); bg.resize(w, h); }
 
@@ -249,6 +255,7 @@ public final class WorldRenderer implements Disposable {
     }
 
     public void render(Sim sim, float alpha, float dt, float time, boolean showPlayer) {
+        frameDt = Math.min(dt, 0.05f);
         // interpolated player position (render only; simulation stays on the fixed step)
         float ps = sim.teleported ? sim.s : sim.ps0 + course.dsWrap(sim.s, sim.ps0) * alpha;
         float py = sim.teleported ? sim.y : sim.py0 + (sim.y - sim.py0) * alpha;
@@ -390,6 +397,33 @@ public final class WorldRenderer implements Disposable {
         return m;
     }
 
+    /** Animated pack creatures (crab walk cycle, bee flapping), one rig per element, created when first seen. */
+    private static final class Rig { ModelInstance inst; com.badlogic.gdx.graphics.g3d.utils.AnimationController ctrl; }
+    private final java.util.HashMap<Element, Rig> rigs = new java.util.HashMap<>();
+    private float frameDt = 1f / 60f;
+
+    private Rig rig(Element e, String model, String anim) {
+        Rig r = rigs.get(e);
+        if (r == null) {
+            if (rigs.size() > 48) rigs.clear();
+            r = new Rig(); r.inst = new ModelInstance(models.pack(model));
+            for (com.badlogic.gdx.graphics.g3d.Material m : r.inst.materials) m.set(ColorAttribute.createEmissive(0.22f, 0.22f, 0.2f, 1f));
+            r.ctrl = new com.badlogic.gdx.graphics.g3d.utils.AnimationController(r.inst);
+            r.ctrl.animate(anim, -1, 1f, null, 0f);
+            r.ctrl.update(MathUtils.random(2f));         // desynchronise the cycles
+            rigs.put(e, r);
+        }
+        return r;
+    }
+
+    private void drawRig(Rig r, float arc, float y, float dz, float camS, float scale, float yaw, float roll, float speed) {
+        r.ctrl.update(frameDt * speed);
+        float phi = wrapDiff(arc, camS) / T.radius, rr = T.radius - dz;
+        r.inst.transform.idt().translate(rr * MathUtils.sin(phi), y, -T.radius + rr * MathUtils.cos(phi))
+                .rotate(0, 1, 0, phi * MathUtils.radiansToDegrees + yaw).rotate(0, 0, 1, roll).scale(scale, scale, scale);
+        batch.render(r.inst, env);
+    }
+
     private ModelInstance stone;
     private void drawBox(float arc, float y, float dz, float camS, float w, float h, float d, float cr, float cg, float cb) {
         if (stone == null) stone = new ModelInstance(models.box);
@@ -452,7 +486,13 @@ public final class WorldRenderer implements Disposable {
             case CRAB: {
                 if (done) break;
                 float crabX = h.sAt(t), vel = h.amp * (float) Math.cos(2 * Math.PI * t / h.period + h.phase);
-                drawPack("crab", crabX, h.y, 0f, camS, 0.34f, 0.34f, 0.34f, vel >= 0 ? 28f : -28f, 5f * MathUtils.sin(time * 15f + h.phase));
+                drawRig(rig(h, "crab_anim", "Walk"), crabX, h.y, 0f, camS, 0.34f, vel >= 0 ? 90f : -90f, 0f, 1.6f);
+                break;
+            }
+            case BEE: {
+                if (done || !h.beePresent(t)) break;
+                float bs = h.beeS(t), by = h.beeY(t), vel = h.beeS(t + 0.05f) - bs;
+                drawRig(rig(h, "bee_anim", "Flying"), bs, by, 0f, camS, 0.36f, vel >= 0 ? 70f : -70f, MathUtils.clamp(vel * 120f, -25f, 25f) * (vel >= 0 ? -1f : 1f), 1f);
                 break;
             }
             case CLUB: {
@@ -537,7 +577,7 @@ public final class WorldRenderer implements Disposable {
             float k = sim.swingT > 0f ? 1f - sim.swingT / Sim.SWING_TIME : -1f;
             float ang = k < 0f ? 35f + 5f * MathUtils.sin(time * 5f) : MathUtils.lerp(-70f, 110f, Math.min(1f, k * 1.25f));       // degrees forward of straight up
             ModelInstance cl = pack("hazard_cylinder");
-            cl.transform.idt().translate(sim.facing * 0.45f, wy + 0.8f, 0.2f).rotate(0, 0, 1, -sim.facing * ang).scale(0.3f, 0.3f, 0.3f);
+            cl.transform.idt().translate(sim.facing * 0.4f, wy + 0.65f, 0.2f).rotate(0, 0, 1, -sim.facing * ang).scale(0.2f, 0.2f, 0.2f);
             batch.render(cl, env);
             if (k >= 0f && k > 0.25f && k < 0.75f && quality > 0) particles.burst(renderS + sim.facing * 1.2f, wy + 0.6f, 1, ambCol.set(1f, 1f, 1f, 1f), 1.2f, 0.4f, 0.07f, 0f, 0.25f);
         }
@@ -560,16 +600,16 @@ public final class WorldRenderer implements Disposable {
     private float[] dip, dipV; private float fovK, fovV, ambientAcc;
     private final Color ambCol = new Color();
 
-    private static final class Flung { float s, y, vx, vy, rot, age; }
+    private static final class Flung { float s, y, vx, vy, rot, age; boolean bee; }
     private final java.util.ArrayList<Flung> flung = new java.util.ArrayList<>();
     /** A crab was knocked off its platform: it tumbles away (purely visual). */
-    public void crabFlung(float s, float y, int dir) { Flung f = new Flung(); f.s = s; f.y = y; f.vx = dir * 6f; f.vy = 7f; flung.add(f); }
+    public void crabFlung(float s, float y, int dir, boolean bee) { Flung f = new Flung(); f.s = s; f.y = y; f.vx = dir * 6f; f.vy = bee ? 5f : 7f; f.bee = bee; flung.add(f); }
 
     private void drawFlung(float dt, float camS) {
         for (int i = flung.size() - 1; i >= 0; i--) {
             Flung f = flung.get(i); f.age += dt; f.vy -= 30f * dt; f.s += f.vx * dt; f.y += f.vy * dt; f.rot += 540f * dt;
             if (f.age > 2f) { flung.remove(i); continue; }
-            drawPack("crab", f.s, f.y, 0f, camS, 0.34f, 0.34f, 0.34f, 0f, f.rot);
+            drawPack(f.bee ? "bee_anim" : "crab", f.s, f.y, 0f, camS, f.bee ? 0.36f : 0.34f, f.bee ? 0.36f : 0.34f, f.bee ? 0.36f : 0.34f, 0f, f.rot);
         }
     }
 

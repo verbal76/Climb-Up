@@ -203,4 +203,18 @@ public class EndlessTest {
         System.out.println("crabs=" + crabs + " clubs=" + clubs);
         assertTrue("crabs appear", crabs > 0);
     }
+
+    @Test public void beesVisitBumpAndLeave_neverHurt() throws Exception {
+        Tuning t = TestUtil.tuning();
+        Element bee = new Element(Element.Type.BEE, 10f, 1f, 0f); bee.amp = 0.5f; bee.len = 0.8f; bee.period = 8f; bee.anchor = 0;
+        assertTrue("present during its visit", bee.beePresent(0.5f));
+        assertFalse("gone between visits", bee.beePresent(bee.period * (Element.BEE_VISIT + 0.1f)));
+        assertTrue("arrives from far away", Math.abs(bee.beeS(0.01f) - 10f) > 8f);
+        assertEquals("back in the middle at the peak of the visit", 10f, bee.beeS(bee.period * Element.BEE_VISIT * 0.5f), 1.2f);
+        Course c = TestUtil.flat(t); c.hazards.add(bee);
+        Sim s = Sim.startOn(c, t, 0); s.keysFree = false; s.invuln = 0f; s.s = 10f;
+        InputState in = new InputState(); int bumps = 0, ev = 0;
+        for (int i = 0; i < 60 * 24; i++) { in.clear(); s.step(in); ev |= s.consumeEvents(); }
+        assertEquals("a bee never hurts: the only consequence of a bump is where you end up", 0, s.hits);
+    }
 }

@@ -39,7 +39,7 @@ public final class TitleScreen extends ScreenAdapter {
         sim = Sim.startOn(course, g.tuning, idx);
         sim.setRange(idx - 60, idx + 120);
         for (int i = 0; i < 30; i++) sim.step(new InputState());
-        world = new WorldRenderer(g.tuning, course, g.models, g.settings.quality);
+        world = new WorldRenderer(g.tuning, course, g.models, g.settings.quality, g.settings.character);
         world.reducedMotion = g.settings.reducedMotion;
         world.snapCamera(sim);
         Gdx.input.setInputProcessor(new InputMultiplexer(g.ui));

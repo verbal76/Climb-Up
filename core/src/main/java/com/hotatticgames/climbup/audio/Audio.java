@@ -13,23 +13,42 @@ import java.util.Map;
 public final class Audio implements Disposable {
     private final Map<String, Sound> sounds = new HashMap<>();
     private final Map<String, Music> tracks = new HashMap<>();
+    private final Map<String, Sound[]> variants = new HashMap<>();     // owner-supplied sound pack, chosen per sound by assets/data/sfx.json
+    private final Map<String, Integer> lastVariant = new HashMap<>();
     private final Settings settings;
     private Music current;
     private String currentName = "";
     private String[] list;
     private int listIdx;
     public static final String[] GAME_TRACKS = {"music_game", "music_leaplike", "music_mountain_jig", "music_track4"};
-    public static final String[] SFX = {"jump", "land", "bounce", "grab", "pull", "crumble", "checkpoint", "respawn", "win", "click", "rope", "step", "grunt1", "grunt2", "grunt3", "effort", "hit", "cannon", "saw", "spikes", "key", "door", "locked", "swing", "bonk", "squeak", "poof"};
+    public static final String[] SFX = {"jump", "land", "bounce", "grab", "pull", "crumble", "checkpoint", "respawn", "win", "click", "rope", "step", "grunt1", "grunt2", "grunt3", "effort", "hit", "cannon", "saw", "spikes", "key", "door", "locked", "swing", "bonk", "squeak", "poof", "buzz"};
 
     public Audio(Settings s) {
         settings = s;
         for (String n : SFX) {
             try { sounds.put(n, Gdx.audio.newSound(Gdx.files.internal("audio/" + n + ".wav"))); } catch (Exception ignored) { }
         }
+        try {
+            com.badlogic.gdx.utils.JsonValue map = new com.badlogic.gdx.utils.JsonReader().parse(Gdx.files.internal("data/sfx.json"));
+            for (com.badlogic.gdx.utils.JsonValue e = map.child; e != null; e = e.next) {
+                if (e.name == null || e.name.startsWith("_") || !e.isArray()) continue;
+                java.util.ArrayList<Sound> list = new java.util.ArrayList<>();
+                for (com.badlogic.gdx.utils.JsonValue f = e.child; f != null; f = f.next) {
+                    try { list.add(Gdx.audio.newSound(Gdx.files.internal("audio/pack/" + f.asString() + ".ogg"))); } catch (Exception ignored) { }
+                }
+                if (!list.isEmpty()) variants.put(e.name, list.toArray(new Sound[0]));
+            }
+        } catch (Exception ignored) { }
     }
 
     public void play(String name, float vol, float pitch) {
         Sound s = sounds.get(name);
+        Sound[] v = variants.get(name);
+        if (v != null) {
+            int i = v.length == 1 ? 0 : MathUtils.random(v.length - 1);
+            if (v.length > 1 && lastVariant.getOrDefault(name, -1) == i) i = (i + 1) % v.length;
+            lastVariant.put(name, i); s = v[i];
+        }
         if (s != null && settings.sfx > 0) s.play(MathUtils.clamp(vol, 0, 1) * settings.sfx / 10f, pitch, 0f);
     }
 
@@ -89,6 +108,7 @@ public final class Audio implements Disposable {
 
     @Override public void dispose() {
         for (Sound s : sounds.values()) s.dispose();
+        for (Sound[] vs : variants.values()) for (Sound s : vs) s.dispose();
         for (Music m : tracks.values()) m.dispose();
     }
 }

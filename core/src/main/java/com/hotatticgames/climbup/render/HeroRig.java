@@ -28,6 +28,7 @@ public final class HeroRig implements Disposable {
     private final Model model;
     private final ModelInstance inst;
     private final AnimationController ac;
+    private final boolean ham;                       // the chibi hamster: a static model animated in code (squash, bob, sway, lean)
     private String current = "";
     public float yaw, landT;
 
@@ -144,15 +145,23 @@ public final class HeroRig implements Disposable {
         return (pB.y + pC.y) * 0.5f;
     }
 
-    public HeroRig() {
-        model = new G3dModelLoader(new JsonReader()).loadModel(Gdx.files.internal("hero/hero.g3dj"));
+    public HeroRig() { this(0); }
+
+    public HeroRig(int character) {
+        ham = character == 1;
+        model = new G3dModelLoader(new JsonReader()).loadModel(Gdx.files.internal(ham ? "hero/hamster.g3dj" : "hero/hero.g3dj"));
         for (com.badlogic.gdx.graphics.g3d.Material m : model.materials) m.set(ColorAttribute.createEmissive(0.10f, 0.10f, 0.12f, 1f));
+        if (ham) for (com.badlogic.gdx.graphics.g3d.Material m : model.materials) {
+            com.badlogic.gdx.graphics.g3d.attributes.TextureAttribute ta = (com.badlogic.gdx.graphics.g3d.attributes.TextureAttribute) m.get(com.badlogic.gdx.graphics.g3d.attributes.TextureAttribute.Diffuse);
+            if (ta != null) ta.textureDescription.texture.setFilter(com.badlogic.gdx.graphics.Texture.TextureFilter.Linear, com.badlogic.gdx.graphics.Texture.TextureFilter.Linear);
+        }
         inst = new ModelInstance(model);
-        ac = new AnimationController(inst);
+        ac = ham ? null : new AnimationController(inst);
         play("Idle", -1, 1f, 0f);
     }
 
     private void play(String id, int loops, float speed, float blend) {
+        if (ham) return;
         if (id.equals(current)) { if (ac.current != null) ac.current.speed = speed; return; }
         current = id;
         ac.animate(id, loops, speed, null, blend);
@@ -182,6 +191,7 @@ public final class HeroRig implements Disposable {
             if (beat != null && beat.toCamera) targetYaw = 0f;       // breaks the fourth wall: faces the player
         } else { idleT = 0; beat = null; bubbleT = 0; nextBeatAt = 3.5f; }
         yaw = smooth(yaw, targetYaw, 18f, dt);
+        if (ham) { updateHam(sim, dt, time, wx, wy, wz, phi, reduced, speed); return; }
         switch (sim.mode) {
             case GROUND:
                 if (landT > 0 && speed < 0.5f) play("Jump_Land", 1, 1.5f, 0.05f);
@@ -223,6 +233,42 @@ public final class HeroRig implements Disposable {
                 inst.transform.idt().translate(wx, wy + shift * grip, wz).rotate(0, 1, 0, phi * MathUtils.radiansToDegrees + yaw).rotate(0, 0, 1, tremble).scale(sxz, sy, sxz);
             }
         }
+    }
+
+    private static final float HAM_SCALE = 1.25f / 3.25f, HAM_YAW_FIX = Float.parseFloat(System.getProperty("climb.hamYaw", "0"));
+    private float runT, hamLean;
+
+    /** The hamster has no skeleton, so everything is body language: breathing, run bounce + lean, jump stretch, landing squash, hang wiggle, idle gags. */
+    private void updateHam(Sim sim, float dt, float time, float wx, float wy, float wz, float phi, boolean reduced, float speed) {
+        float k = reduced ? 0.4f : 1f;
+        float sxz = 1f, sy = 1f, bob = 0f, roll = 0f, pitch = 0f, yawAdd = 0f, lift = 0f;
+        float run = sim.mode == Sim.Mode.GROUND ? Math.min(1f, speed / 5.6f) : 0f;
+        runT += dt * (8f + 6f * run);
+        hamLean = smooth(hamLean, run * 9f, 10f, dt);
+        switch (sim.mode) {
+            case GROUND:
+                if (speed > 0.4f) { bob = Math.abs(MathUtils.sin(runT)) * 0.12f * run * k; roll = MathUtils.sin(runT) * 6f * run * k; sy += 0.04f * MathUtils.sin(runT * 2f) * run * k; }
+                else { sy += 0.022f * MathUtils.sin(time * 2.3f); sxz -= 0.012f * MathUtils.sin(time * 2.3f); }
+                if (beat != null && speed < 0.4f) {
+                    switch (beat.anim) {
+                        case "Wave": roll = MathUtils.sin(beatT * 9f) * 14f; break;
+                        case "No": yawAdd = MathUtils.sin(beatT * 10f) * 26f; break;
+                        case "Yes": pitch = MathUtils.sin(beatT * 8f) * 14f; bob = Math.abs(MathUtils.sin(beatT * 8f)) * 0.05f; break;
+                        case "Duck": sy *= 0.78f; sxz *= 1.1f; break;
+                        default: bob = Math.abs(MathUtils.sin(beatT * 11f)) * 0.22f; pitch = 10f; break;
+                    }
+                }
+                break;
+            case AIR: sy += MathUtils.clamp(sim.vy * 0.011f, -0.10f, 0.15f); sxz -= MathUtils.clamp(sim.vy * 0.006f, -0.05f, 0.07f); roll = -sim.vx * 1.4f * k; pitch = -4f; break;
+            case ROPE: case CABLE: sy += 0.14f; sxz -= 0.06f; roll = MathUtils.sin(time * 7f) * 5f * k; break;
+            case LEDGE: sy += 0.16f + 0.02f * MathUtils.sin(time * 20f); sxz -= 0.07f; roll = MathUtils.sin(time * 16f) * (9f + Math.min(8f, hangT * 4f)) * k; lift = MathUtils.sin(time * 33f) * 0.025f * k; break;
+            case PULLUP: sy += 0.08f; roll = MathUtils.sin(time * 18f) * 6f * k; break;
+        }
+        hangT = sim.mode == Sim.Mode.LEDGE ? hangT + dt : 0f;
+        sxz *= 1f - 0.5f * sq; sy *= 1f + sq;
+        float s0 = HAM_SCALE;
+        inst.transform.idt().translate(wx, wy + bob + lift, wz).rotate(0, 1, 0, phi * MathUtils.radiansToDegrees + yaw + yawAdd + HAM_YAW_FIX)
+                .rotate(0, 0, 1, roll).rotate(1, 0, 0, pitch + hamLean * 0f).scale(s0 * sxz, s0 * sy, s0 * sxz);
     }
 
     public void render(ModelBatch batch, Environment env) { batch.render(inst, env); }

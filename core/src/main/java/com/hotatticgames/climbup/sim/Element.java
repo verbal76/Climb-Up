@@ -10,7 +10,9 @@ public final class Element {
         /** Features (kept in Course.hazards, never lethal): a coloured key to pick up, and the castle gate that needs the same colour. */
         KEY, GATE,
         /** Crab: patrols a platform and shoves you (never hurts). A floating spiked club lets you knock crabs off. */
-        CRAB, CLUB }
+        CRAB, CLUB,
+        /** Bee: flies in, hovers and dives around a spot to bump you (never hurts), then flies away until its next visit. */
+        BEE }
 
     public Type type;
     public int zone;
@@ -30,7 +32,7 @@ public final class Element {
     public boolean isPlatform() { return type != Type.ROPE && type != Type.CABLE && !isHazard(); }
     /** True for anything that changes with time (planner sweeps its phase). */
     public boolean isMoving() {
-        switch (type) { case MOVE_H: case MOVE_V: case SWING: case SAW_H: case SAW_V: case PENDULUM: case CANNON: case SPIKE_TRAP: case SPIKE_DROP: case CRAB: return true; default: return false; }
+        switch (type) { case MOVE_H: case MOVE_V: case SWING: case SAW_H: case SAW_V: case PENDULUM: case CANNON: case SPIKE_TRAP: case SPIKE_DROP: case CRAB: case BEE: return true; default: return false; }
     }
 
     public static final float CANNON_FLIGHT = 0.7f;      // fraction of the cycle a ball is in the air
@@ -63,6 +65,24 @@ public final class Element {
         return lo + (hi - lo) * (c - 0.80f) / 0.20f;
     }
     public static final float DROP_H = 1.0f;
+
+    // ---- bee: a visit takes BEE_VISIT of the cycle; it enters high from one side, buzzes around (s, y) with amplitude amp (arc) and len (height), dives, and leaves high on the other side
+    public static final float BEE_VISIT = 0.58f, BEE_R = 0.5f;
+    private float beeU(float t) { return cyc(t) / BEE_VISIT; }
+    public boolean beePresent(float t) { return beeU(t) < 1f; }
+    private static float smooth(float x) { x = Math.max(0f, Math.min(1f, x)); return x * x * (3f - 2f * x); }
+    private float beeEnv(float u) { return smooth(u / 0.22f) * smooth((1f - u) / 0.22f); }
+    public float beeS(float t) {
+        float u = beeU(t); if (u >= 1f) return s;
+        float env = beeEnv(u), fly = (u < 0.5f ? -1f : 1f) * 14f * (1f - env);
+        return s + fly + amp * env * (float) Math.sin(2 * Math.PI * 2.3f * u);
+    }
+    public float beeY(float t) {
+        float u = beeU(t); if (u >= 1f) return y + 6f;
+        float env = beeEnv(u);
+        float dive = u > 0.38f && u < 0.62f ? 0.9f * (float) Math.sin((u - 0.38f) / 0.24f * Math.PI) : 0f;
+        return y + len * env * (float) Math.sin(2 * Math.PI * 3.1f * u + 1f) - dive + 4f * (1f - env);
+    }
 
     /** Whether the hazard can hurt at time t. */
     public boolean lethalAt(float t) {

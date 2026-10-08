@@ -36,6 +36,7 @@ public class ClimbGame extends Game {
         store = new SaveStore(dataDir);
         settings = store.loadSettings();
         save = store.loadGame();
+        if (System.getProperty("climb.character") != null) settings.character = Integer.getInteger("climb.character");
         tuning = Tuning.parse(Gdx.files.internal("data/tuning.json").readString("UTF-8"));
         ui = new Ui(settings);
         audio = new Audio(settings);

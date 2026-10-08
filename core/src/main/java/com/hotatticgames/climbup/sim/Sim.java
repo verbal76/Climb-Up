@@ -51,6 +51,7 @@ public final class Sim {
     public boolean[] featDone = new boolean[0];   // per feature (Course.hazards index): key taken / gate opened
     public int lastKeyColor, lastGateColor;
     public float clubTime, swingT, shoveCd;       // spiked club carried (seconds left), swing animation clock, grace between shoves
+    public boolean knockedBee;
     public float crabS, crabY;                    // where the last crab was knocked off (effects)
     public Element hitBy;
     public float hitS, hitY;                      // where the last hit happened (effects)
@@ -257,14 +258,27 @@ public final class Sim {
             if (Math.abs(dx) < 0.95f && e.y > y - 0.4f && e.y < y + T.height + 0.4f) { featDone[idx] = true; clubTime = CLUB_SECONDS; events |= EV_CLUB; }
             return;
         }
+        if (e.type == Element.Type.BEE) { stepBee(e, idx, hw); return; }
         float cs = e.sAt(time), dx = course.dsWrap(s, cs);
         if (swingT > 0.06f && swingT < 0.28f) {                       // the club is on its way through: anything in front of you and within reach goes flying
             float ahead = -dx * facing;
-            if (ahead > -0.3f && ahead < 2.2f && Math.abs(e.y - y) < 1.5f) { featDone[idx] = true; crabS = cs; crabY = e.y; events |= EV_CRAB_OFF; return; }
+            if (ahead > -0.3f && ahead < 2.2f && Math.abs(e.y - y) < 1.5f) { featDone[idx] = true; crabS = cs; crabY = e.y; knockedBee = false; events |= EV_CRAB_OFF; return; }
         }
         if (shoveCd <= 0f && invuln <= 0f && Math.abs(dx) < 0.55f + hw && y < e.y + 0.62f && y + T.height > e.y + 0.05f && (mode == Mode.GROUND || mode == Mode.AIR)) {
             float side = Math.signum(dx); if (side == 0f) side = -facing;
             vx = side * 9f; vy = Math.max(vy, 6f); mode = Mode.AIR; onElem = -1; lockout = 0.3f; jumpedUp = false; shoveCd = 0.9f; events |= EV_SHOVE;
+        }
+    }
+    private void stepBee(Element e, int idx, float hw) {
+        if (!e.beePresent(time)) return;
+        float bs = e.beeS(time), by = e.beeY(time), dx = course.dsWrap(s, bs);
+        if (swingT > 0.06f && swingT < 0.28f) {
+            float ahead = -dx * facing;
+            if (ahead > -0.3f && ahead < 2.2f && Math.abs(by - (y + 0.7f)) < 1.6f) { featDone[idx] = true; crabS = bs; crabY = by; knockedBee = true; events |= EV_CRAB_OFF; return; }
+        }
+        if (shoveCd <= 0f && invuln <= 0f && Math.abs(dx) < Element.BEE_R + hw && by + Element.BEE_R > y + 0.1f && by - Element.BEE_R < y + T.height - 0.05f && (mode == Mode.GROUND || mode == Mode.AIR)) {
+            float side = Math.signum(dx); if (side == 0f) side = -facing;
+            vx = side * 6.5f; vy = Math.max(vy, 3f); mode = Mode.AIR; onElem = -1; lockout = 0.25f; jumpedUp = false; shoveCd = 1.0f; events |= EV_SHOVE;
         }
     }
     public static final float CLUB_SECONDS = 18f;
@@ -275,7 +289,7 @@ public final class Sim {
         for (int k = 0, cnt = hz == null ? course.hazards.size() : hz.length; k < cnt; k++) {
             int hi_ = hz == null ? k : hz[k];
             Element e = course.hazards.get(hi_);
-            if (e.type == Element.Type.CLUB || e.type == Element.Type.CRAB) { stepClubCrab(e, hi_, hw); continue; }
+            if (e.type == Element.Type.CLUB || e.type == Element.Type.CRAB || e.type == Element.Type.BEE) { stepClubCrab(e, hi_, hw); continue; }
             if (e.type != Element.Type.KEY && e.type != Element.Type.GATE) continue;
             if (hi_ < featDone.length && featDone[hi_]) continue;
             float dx = course.dsWrap(s, e.s);

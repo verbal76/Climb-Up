@@ -93,7 +93,7 @@ public final class PlayScreen extends ScreenAdapter {
             if (hStart > 0) { int i = 0; while (i < course.size() - 1 && course.get(i + 1).y < hStart) i++; while (i > 0 && course.get(i).anchor >= 0) i--; sim = Sim.startOn(course, g.tuning, i); sim.checkpoint = i; sim.keysFree = false; sim.keys = 0; }
             updateWindow(true);
         }
-        world = new WorldRenderer(g.tuning, course, g.models, g.settings.quality);
+        world = new WorldRenderer(g.tuning, course, g.models, g.settings.quality, g.settings.character);
         applySettings();
         world.snapCamera(sim);
         if (demo) driver[0] = new Autopilot.Driver(sim);
@@ -122,6 +122,7 @@ public final class PlayScreen extends ScreenAdapter {
     private void applySettings() {
         world.reducedMotion = g.settings.reducedMotion;
         world.quality = g.settings.quality;
+        world.setCharacter(g.settings.character);
         world.particles.density = g.settings.quality == 0 ? 0.4f : g.settings.quality == 1 ? 0.7f : 1f;
         sim.assistForgive = g.settings.assistForgive ? g.tuning.assistJumpForgiveness : 0f;
     }
@@ -251,6 +252,9 @@ public final class PlayScreen extends ScreenAdapter {
                     }
                     break;
                 }
+                case BEE:
+                    if (h.beePresent(sim.time) && sawT <= 0f && d < 11f) { sawT = 0.3f; g.audio.play("buzz", 0.4f * vol, 0.9f + MathUtils.random(0.2f)); }
+                    break;
                 case SAW_H: case SAW_V:
                     if (sawT <= 0f && d < 9f) { sawT = 0.45f; g.audio.play("saw", 0.35f * vol, 0.95f + MathUtils.random(0.1f)); }
                     break;
@@ -320,12 +324,12 @@ public final class PlayScreen extends ScreenAdapter {
         }
         if ((ev & Sim.EV_CLUB) != 0) {
             g.audio.play("key", 0.9f, 0.8f); world.particles.burst(s, y + 1f, 14, gold, 3f, 3.2f, 0.12f, -1f, 0.9f); vibrate(25, 1);
-            toast = "SPIKED CLUB! TAP SWING TO KNOCK CRABS OFF"; toastT = 3f; say("[CLUB]");
+            toast = "SPIKED CLUB! TAP SWING TO KNOCK CRABS AND BEES OFF"; toastT = 3f; say("[CLUB]");
         }
         if ((ev & Sim.EV_SWING) != 0) { g.audio.play("swing", 0.8f, 0.95f + MathUtils.random(0.1f)); vibrate(10, 2); }
         if ((ev & Sim.EV_SHOVE) != 0) { g.audio.play("bonk", 0.9f, 0.9f + MathUtils.random(0.2f)); world.shake(0.4f); freeze(0.05f); vibrate(25, 1); pop("OOF!", Color.WHITE); say("[BONK]"); }
         if ((ev & Sim.EV_CRAB_OFF) != 0) {
-            g.audio.play("squeak", 0.9f, 0.9f + MathUtils.random(0.3f)); world.crabFlung(sim.crabS, sim.crabY, sim.facing); freeze(0.07f); world.shake(0.4f); vibrate(30, 1);
+            g.audio.play("squeak", 0.9f, 0.9f + MathUtils.random(0.3f)); world.crabFlung(sim.crabS, sim.crabY, sim.facing, sim.knockedBee); freeze(0.07f); world.shake(0.4f); vibrate(30, 1);
             pop("BONK!", gold); world.particles.burst(sim.crabS, sim.crabY + 0.4f, 12, red, 3.5f, 3.5f, 0.12f, 6f, 0.6f);
         }
         if ((ev & Sim.EV_KEY) != 0) {
@@ -363,7 +367,8 @@ public final class PlayScreen extends ScreenAdapter {
         {"cannon", "CANNONS FIRE SPIKED BALLS. WAIT FOR ONE TO PASS, THEN LEAP."},
         {"trap", "SPIKES POP UP ON A BEAT. WAIT IN THE SAFE PATCH, THEN RUN ACROSS WHEN THEY ARE DOWN."},
         {"block", "STONE SPIKE BLOCKS: HOP OVER THEM, AND DON'T DROP INTO ONE."},
-        {"crab", "CRABS SHOVE YOU AROUND. TIME YOUR RUN, HOP OVER, OR SWING A SPIKED CLUB AT THEM."},
+        {"crab", "CRABS BUMP YOU AROUND LIKE PING-PONG. TIME YOUR RUN, HOP OVER, OR KNOCK THEM OFF THE EDGE WITH THE SPIKED CLUB."},
+        {"bee", "BEES BUZZ IN, BUMP YOU AND FLY OFF AGAIN. THEY ONLY NUDGE YOU: THE DANGER IS WHAT IS BELOW."},
         {"club", "A SPIKED CLUB! PRESS SWING TO KNOCK CRABS OFF THE PLATFORM. IT WEARS OFF AFTER A WHILE."},
         {"drop", "SPIKED SLABS SLAM DOWN ON A BEAT. SLIP UNDER WHILE THEY ARE RAISED."},
         {"spring", "SPRINGS LAUNCH YOU ALONG THE ARROW. STEER IN THE AIR TO LAND IT."},
@@ -396,7 +401,7 @@ public final class PlayScreen extends ScreenAdapter {
             String key = null;
             switch (h.type) {
                 case SAW_H: case SAW_V: key = "saw"; break; case CANNON: key = "cannon"; break;
-                case SPIKE_TRAP: key = "trap"; break; case SPIKE_BLOCK: key = "block"; break; case SPIKE_DROP: key = "drop"; break; case GATE: key = "gate"; break; case CRAB: key = "crab"; break; case CLUB: key = "club"; break; default: break;
+                case SPIKE_TRAP: key = "trap"; break; case SPIKE_BLOCK: key = "block"; break; case SPIKE_DROP: key = "drop"; break; case GATE: key = "gate"; break; case CRAB: key = "crab"; break; case CLUB: key = "club"; break; case BEE: key = "bee"; break; default: break;
             }
             if (key == null || Math.abs(course.dsWrap(h.s, sim.s)) > 9f || Math.abs(h.y - sim.y) > 7f) continue;
             if (tipFor(key)) return;

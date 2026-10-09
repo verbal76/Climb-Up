@@ -4,6 +4,7 @@ import os
 from PIL import Image, ImageDraw
 ROOT = os.path.join(os.path.dirname(__file__), '..')
 RES = os.path.join(ROOT, 'android', 'src', 'main', 'res')
+plat = Image.open(os.path.join(ROOT, 'tools', 'icon', 'platform_render.png')).convert('RGBA'); plat = plat.crop(plat.getbbox())
 hero = Image.open(os.path.join(ROOT, 'tools', 'icon', 'hero_face.png')).convert('RGBA'); hero = hero.crop(hero.getbbox())
 
 def background(size):
@@ -25,12 +26,12 @@ def foreground(size):
     hw = int(size * 0.50); hh = int(hw * hero.height / hero.width)
     ledge_top = int(size * 0.68)
     im.alpha_composite(hero.resize((hw, hh), Image.LANCZOS), ((size - hw) // 2, ledge_top - hh + int(size * 0.07)))
-    d.rectangle([int(size * 0.14), ledge_top, int(size * 0.86), ledge_top + int(size * 0.07)], fill=(122, 255, 190, 255))      # grass lip
-    d.rectangle([int(size * 0.14), ledge_top + int(size * 0.07), int(size * 0.86), ledge_top + int(size * 0.19)], fill=(222, 112, 64, 255))   # earth
-    for k, (bx, by, bw) in enumerate(((1, 15, 5), (12, 14, 5))):          # smaller steps around it
-        x0, y0 = bx * u, by * u
-        d.rectangle([x0, y0 + u * 0.5, x0 + bw * u, y0 + u * 1.3], fill=(222, 112, 64, 255))
-        d.rectangle([x0, y0, x0 + bw * u, y0 + u * 0.6], fill=(122, 255, 190, 255))
+    # platform blocks rendered from the game's own Kenney grass block model, so the ledge looks like the platforms in the game
+    pw = int(size * 0.80); ph = int(pw * plat.height / plat.width)
+    im.alpha_composite(plat.resize((pw, ph), Image.LANCZOS), ((size - pw) // 2, ledge_top - int(ph * 0.22)))
+    sw = int(size * 0.34); sh = int(sw * plat.height / plat.width)           # two smaller platforms below and beside it
+    im.alpha_composite(plat.resize((sw, sh), Image.LANCZOS), (int(size * 0.02), int(size * 0.86)))
+    im.alpha_composite(plat.resize((sw, sh), Image.LANCZOS), (int(size * 0.62), int(size * 0.80)))
     return im
 
 def mono(fg):

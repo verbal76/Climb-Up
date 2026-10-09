@@ -25,19 +25,27 @@ public final class IconShot extends ApplicationAdapter {
     private final int size = 1024;
     @Override public void create() {
         String root = System.getProperty("climb.assets", "assets");
-        Model m = new G3dModelLoader(new JsonReader()).loadModel(Gdx.files.absolute(root + "/" + System.getProperty("climb.iconModel", "hero/hero.g3dj")));
+        String mp = System.getProperty("climb.iconModel", "hero/hero.g3dj");
+        Model m = mp.endsWith(".obj") ? new com.badlogic.gdx.graphics.g3d.loader.ObjLoader().loadModel(Gdx.files.absolute(root + "/" + mp), true)
+                : new G3dModelLoader(new JsonReader()).loadModel(Gdx.files.absolute(root + "/" + mp));
+        int row = Integer.getInteger("climb.iconRow", 1);          // a row of identical 2-unit blocks, like a platform in the game (scaled like WorldRenderer: 0.96 x 1 x 1.7)
         ModelInstance inst = new ModelInstance(m);
+        java.util.ArrayList<ModelInstance> all = new java.util.ArrayList<>();
+        if (row > 1) { for (int i = 0; i < row; i++) { ModelInstance b = new ModelInstance(m); b.transform.idt().translate((i - (row - 1) / 2f) * 2f, 0, 0).scale(Float.parseFloat(System.getProperty("climb.iconSx", "0.96")), 1f, 1.7f); all.add(b); } inst = all.get(0); }
         AnimationController ac = new AnimationController(inst);
         try { ac.setAnimation(System.getProperty("climb.iconAnim", "Idle")); ac.update(Float.parseFloat(System.getProperty("climb.iconT", "0.6"))); } catch (Exception ignored) { }
         inst.calculateTransforms();
-        BoundingBox bb = new BoundingBox(); inst.calculateBoundingBox(bb);
+        BoundingBox bb = new BoundingBox();
+        if (row > 1) { bb.inf(); BoundingBox t = new BoundingBox(); for (ModelInstance b : all) { b.calculateBoundingBox(t); t.mul(b.transform); bb.ext(t); } } else inst.calculateBoundingBox(bb);
         Vector3 c = bb.getCenter(new Vector3()), d = bb.getDimensions(new Vector3());
         float r = Math.max(d.y, d.x) * 0.5f;
+        float pitch = Float.parseFloat(System.getProperty("climb.iconPitch", "0"));
         PerspectiveCamera cam = new PerspectiveCamera(30f, size, size);
         float zoom = Float.parseFloat(System.getProperty("climb.iconZoom", "1")), lookY = Float.parseFloat(System.getProperty("climb.iconLookY", "0"));   // zoom < 1 moves in; lookY shifts the aim up (fraction of height)
         float fy = c.y + d.y * lookY;
         cam.position.set(c.x + r * 0.55f * zoom, fy + r * 0.1f * zoom, c.z + r * 3.4f / (float) Math.tan(Math.toRadians(15)) * 0.42f * zoom);
-        cam.lookAt(c.x, fy - r * 0.02f * zoom, c.z); cam.near = 0.1f; cam.far = 500f; cam.update();
+        if (pitch != 0f) { float dist = c.z + r * 3.4f / (float) Math.tan(Math.toRadians(15)) * 0.42f * zoom - c.z; cam.position.set(c.x, fy + (float) Math.sin(Math.toRadians(pitch)) * dist, c.z + (float) Math.cos(Math.toRadians(pitch)) * dist); cam.lookAt(c.x, fy, c.z); }
+        else cam.lookAt(c.x, fy - r * 0.02f * zoom, c.z); cam.near = 0.1f; cam.far = 500f; cam.update();
         Environment env = new Environment();
         env.set(new ColorAttribute(ColorAttribute.AmbientLight, 0.62f, 0.6f, 0.68f, 1f));
         env.add(new DirectionalLight().set(1.0f, 0.95f, 0.85f, -0.5f, -0.8f, -0.6f));
@@ -45,7 +53,7 @@ public final class IconShot extends ApplicationAdapter {
         FrameBuffer fb = new FrameBuffer(Pixmap.Format.RGBA8888, size, size, true);
         ModelBatch mb = new ModelBatch(new com.badlogic.gdx.graphics.g3d.utils.DefaultShaderProvider(boneCfg()));
         fb.begin(); Gdx.gl.glClearColor(0, 0, 0, 0); Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT | GL20.GL_DEPTH_BUFFER_BIT);
-        mb.begin(cam); mb.render(inst, env); mb.end();
+        mb.begin(cam); if (row > 1) { for (ModelInstance b : all) mb.render(b, env); } else mb.render(inst, env); mb.end();
         Pixmap raw = Pixmap.createFromFrameBuffer(0, 0, size, size);
         fb.end();
         Pixmap out = new Pixmap(size, size, Pixmap.Format.RGBA8888); out.setBlending(Pixmap.Blending.None);

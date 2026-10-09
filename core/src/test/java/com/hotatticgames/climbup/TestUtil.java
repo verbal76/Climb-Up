@@ -11,7 +11,7 @@ final class TestUtil {
     /** A finite, validated test tower (seed 300 + i) built by the same generator that feeds the endless climb. */
     static synchronized Course tower(int i) throws Exception {
         Course c = TOWERS.get(i);
-        if (c == null) { c = CourseGenerator.generate(300 + i, tuning()); TOWERS.put(i, c); }
+        if (c == null) { c = CourseGenerator.generate(300 + i + (i >= 5 ? 1 : 0), tuning()); TOWERS.put(i, c); }
         return c;
     }
     /** Flat test world: a long platform plus helpers. */

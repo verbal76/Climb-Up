@@ -14,12 +14,16 @@ import java.io.File;
 /** Application root: shared services, screen flow (studio splash -> title -> play). */
 public class ClimbGame extends Game {
     public static final String VERSION = "0.1.0";
+    /** Android versionCode of the running APK (set by the launcher before the game starts; 0 on desktop). Used only by the test-only OTA compatibility gate. */
+    public static int appBuild;
 
     public final File dataDir;
     public SaveStore store;
     public Settings settings;
     public SaveData save;
     public Tuning tuning;
+    public com.hotatticgames.climbup.ota.OtaStore ota;
+    public com.hotatticgames.climbup.ota.OtaClient otaClient;
     public Ui ui;
     public Audio audio;
     public Models models;
@@ -37,7 +41,16 @@ public class ClimbGame extends Game {
         settings = store.loadSettings();
         save = store.loadGame();
         if (System.getProperty("climb.character") != null) settings.character = Integer.getInteger("climb.character");
-        tuning = Tuning.parse(Gdx.files.internal("data/tuning.json").readString("UTF-8"));
+        String bundled = Gdx.files.internal("data/tuning.json").readString("UTF-8");
+        // FAMILY-TEST OTA (see docs/OTA.md): an applied, verified payload may replace the bundled tuning numbers; anything wrong falls back to the bundled file
+        ota = new com.hotatticgames.climbup.ota.OtaStore(new File(dataDir, "ota"));
+        String over = null;
+        try { over = ota.startup(); } catch (Throwable t) { over = null; }
+        Tuning tn = null;
+        if (over != null) { try { tn = Tuning.parse(over); } catch (Throwable t) { tn = null; } }
+        tuning = tn != null ? tn : Tuning.parse(bundled);
+        otaClient = new com.hotatticgames.climbup.ota.OtaClient(ota, new com.hotatticgames.climbup.ota.Fetcher.Http(), appBuild);
+        if (settings.otaEnabled && !demo && System.getProperty("climb.shots") == null) startOtaCheck(false);
         ui = new Ui(settings);
         audio = new Audio(settings);
         models = new Models();
@@ -51,6 +64,13 @@ public class ClimbGame extends Game {
         }
     }
 
+    /** Silent background check (never blocks play, never shows anything; the result only appears in Settings > About). */
+    public void startOtaCheck(boolean force) {
+        final com.hotatticgames.climbup.ota.OtaClient c = otaClient;
+        Thread t = new Thread(() -> { try { c.check(System.currentTimeMillis(), force); } catch (Throwable ignored) { } }, "ota-check");
+        t.setDaemon(true); t.start();
+    }
+
     private int shotCount;
     private float shotClock;
     @Override public void render() { super.render(); if (audio != null) audio.update(Math.min(Gdx.graphics.getDeltaTime(), 0.25f)); }
@@ -59,7 +79,7 @@ public class ClimbGame extends Game {
     public void autoShot(String prefix, float dt) {
         if (shotDir == null) return;
         shotClock += dt;
-        if (shotClock < 1.5f) return;
+        if (shotClock < Float.parseFloat(System.getProperty("climb.shotEvery", "1.5"))) return;
         shotClock = 0;
         try {
             com.badlogic.gdx.graphics.Pixmap raw = com.badlogic.gdx.graphics.Pixmap.createFromFrameBuffer(0, 0, Gdx.graphics.getBackBufferWidth(), Gdx.graphics.getBackBufferHeight());

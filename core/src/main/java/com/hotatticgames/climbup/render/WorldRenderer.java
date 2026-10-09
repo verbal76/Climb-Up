@@ -202,10 +202,14 @@ public final class WorldRenderer implements Disposable {
                 }
                 break;
             }
-            case MOVE_H: case MOVE_V: {
+            case MOVE_H: case MOVE_V: case MOVE_Z: {
                 int w = Math.max(1, Math.round(e.w));
                 Model m = models.obj(e.type == Element.Type.MOVE_H ? "block-moving-blue" : "block-moving");
-                for (int i = 0; i < w; i++) { Part p = part(m, i - (w - 1) / 2f, -0.3f, 0f, 0.95f, 1f, 1.7f); p.tinted = false; ps.add(p); }
+                for (int i = 0; i < w; i++) {
+                    Part p = part(m, i - (w - 1) / 2f, -0.3f, 0f, 0.95f, 1f, 1.7f); p.tinted = false;
+                    if (e.skin == 1) { p.color = new Color(1f, 0.74f, 0.52f, 1f); p.fall = true; }          // falls apart after you stand on it: the same warm tint as crumbling tiles
+                    ps.add(p);
+                }
                 // rails/arrows hint the travel direction
                 Color rail = new Color(0.25f, 0.28f, 0.36f, 1f);
                 if (e.type == Element.Type.MOVE_H) {
@@ -492,9 +496,10 @@ public final class WorldRenderer implements Disposable {
                 else if (p.tinted) p.tintAttr.color.set(tint);
                 else p.tintAttr.color.set(Color.WHITE);
             }
-            place(p.inst, es + du + shakeX, y + dy + fallY, p.dz, camS, p.sx, sy, p.sz, extraYaw, roll);
+            place(p.inst, es + du + shakeX, y + dy + fallY, p.dz + (e.type == Element.Type.MOVE_Z ? e.zAt(sim.time) : 0f), camS, p.sx, sy, p.sz, extraYaw, roll);
             batch.render(p.inst, env);
         }
+        if (e.type == Element.Type.MOVE_Z) drawDepthRail(e, es, ey, camS, sim.time);
         if (e.checkpoint && i > 0 && e.type == Element.Type.STATIC) drawGem(sim, i, es, ey, camS, time);
         if (e.type == Element.Type.SWING) drawSwingRopes(e, es, ey, camS);
         if (e.type == Element.Type.MOVE_V) drawRail(e, camS, true);
@@ -639,6 +644,14 @@ public final class WorldRenderer implements Disposable {
 
     private ModelInstance stone;
     private final Color tmpDoor = new Color();
+
+    /** Two guide posts and a faint track in depth show where a depth mover travels; the rail brightens while the platform is in your plane (landable). */
+    private void drawDepthRail(Element e, float es, float ey, float camS, float t) {
+        float z = e.zAt(t), live = Math.abs(z) <= Element.Z_REACH ? 1f : 0f;
+        drawBox(es, ey - 0.62f, -e.amp * 0.0f, camS, 0.12f, 0.1f, e.amp * 2f + 1.6f, 0.30f + 0.5f * live, 0.34f + 0.4f * live, 0.44f);
+        drawBox(es - e.halfW() - 0.2f, ey - 0.62f, e.amp + 0.8f, camS, 0.2f, 0.9f, 0.2f, 0.3f, 0.32f, 0.4f);
+        drawBox(es - e.halfW() - 0.2f, ey - 0.62f, -e.amp - 0.8f, camS, 0.2f, 0.9f, 0.2f, 0.3f, 0.32f, 0.4f);
+    }
 
     private void drawBox(float arc, float y, float dz, float camS, float w, float h, float d, float cr, float cg, float cb) {
         // one instance per colour: the batch draws at end(), so a shared instance would take the colour of the last box of the frame
@@ -811,7 +824,9 @@ public final class WorldRenderer implements Disposable {
             }
         }
         float wy = py; heroY = py;
-        hero.update(sim, dt, time, 0f, wy, 0f, phi, reducedMotion);
+        float heroZ = 0f;
+        if ((sim.mode == Sim.Mode.GROUND) && sim.onElem >= 0 && course.get(sim.onElem).type == Element.Type.MOVE_Z) heroZ = -course.get(sim.onElem).zAt(sim.time);      // carried toward / away from the camera with the platform
+        hero.update(sim, dt, time, 0f, wy, heroZ, phi, reducedMotion);
         hero.render(batch, heroEnv);
         if (sim.clubTime > 0f) {
             float k = sim.swingT > 0f ? 1f - sim.swingT / Sim.SWING_TIME : -1f;

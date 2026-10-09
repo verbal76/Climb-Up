@@ -2,8 +2,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-feature android:glEsVersion="0x00020000" android:required="true" />
-    <!-- Haptics (normal permission, no prompt). No INTERNET: the over-the-air update feature is not part of this candidate. -->
+    <!-- Haptics (normal permission, no prompt). -->
     <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- Family-test OTA only: one small HTTPS GET of a public GitHub release file (docs/OTA.md). No other network use, no identifiers sent. -->
+    <uses-permission android:name="android.permission.INTERNET" />
 
     <application
         android:allowBackup="true"

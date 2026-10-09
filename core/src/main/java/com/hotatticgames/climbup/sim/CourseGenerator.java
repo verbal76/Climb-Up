@@ -15,7 +15,7 @@ import java.util.Random;
  */
 public final class CourseGenerator {
     static final float RAMP_SLOPE = 0.576f;
-    enum Kind { HOP, STAIRS, CRUMBLE, MOVER_H, MOVER_V, PAD, ROPE, CABLE, SWING, GRAB, HAZ, TRAP, SPRING, SEESAW, BRIDGE, RAMP }
+    enum Kind { HOP, STAIRS, CRUMBLE, MOVER_H, MOVER_V, PAD, ROPE, CABLE, SWING, GRAB, HAZ, TRAP, SPRING, SEESAW, BRIDGE, RAMP, MOVER_Z, ELEV_FALL, SLIDE_FALL }
 
     private final Tuning T;
     private final Random rnd;
@@ -598,7 +598,8 @@ public final class CourseGenerator {
     private Kind pick(int zone, Element last) {
         float[] w = new float[Kind.values().length];
         switch (zone) {
-            case 0: w[Kind.HOP.ordinal()] = 4; w[Kind.STAIRS.ordinal()] = 2; w[Kind.CRUMBLE.ordinal()] = 1; w[Kind.PAD.ordinal()] = 1.5f; w[Kind.ROPE.ordinal()] = 1.5f; break;
+            case 0: w[Kind.HOP.ordinal()] = 3; w[Kind.STAIRS.ordinal()] = 2; w[Kind.CRUMBLE.ordinal()] = 1; w[Kind.PAD.ordinal()] = 1.5f; w[Kind.ROPE.ordinal()] = 1.5f;
+                    w[Kind.MOVER_H.ordinal()] = 1.5f; w[Kind.MOVER_V.ordinal()] = 1.5f; w[Kind.SWING.ordinal()] = 1.5f; w[Kind.MOVER_Z.ordinal()] = 1.5f; break;
             case 1: w[Kind.HOP.ordinal()] = 2; w[Kind.STAIRS.ordinal()] = 1; w[Kind.CRUMBLE.ordinal()] = 2; w[Kind.PAD.ordinal()] = 2; w[Kind.ROPE.ordinal()] = 2;
                     w[Kind.MOVER_H.ordinal()] = 2.5f; w[Kind.MOVER_V.ordinal()] = 1.5f; w[Kind.CABLE.ordinal()] = 1.5f; break;
             case 2: w[Kind.HOP.ordinal()] = 1.5f; w[Kind.CRUMBLE.ordinal()] = 2; w[Kind.PAD.ordinal()] = 2; w[Kind.ROPE.ordinal()] = 2; w[Kind.MOVER_H.ordinal()] = 2;
@@ -606,6 +607,7 @@ public final class CourseGenerator {
             default: w[Kind.HOP.ordinal()] = 1; w[Kind.CRUMBLE.ordinal()] = 2; w[Kind.PAD.ordinal()] = 2; w[Kind.ROPE.ordinal()] = 2; w[Kind.MOVER_H.ordinal()] = 2;
                     w[Kind.MOVER_V.ordinal()] = 2; w[Kind.CABLE.ordinal()] = 2; w[Kind.SWING.ordinal()] = 3; w[Kind.GRAB.ordinal()] = 3;
         }
+        if (zone >= 1) { w[Kind.MOVER_Z.ordinal()] = 2.5f; w[Kind.ELEV_FALL.ordinal()] = 2f; w[Kind.SLIDE_FALL.ordinal()] = 2f; if (zone == 1) w[Kind.SWING.ordinal()] = 2.5f; }
         float inten = intensity(last.y);
         w[Kind.RAMP.ordinal()] = zone == 0 ? 1.5f : 3f;
         if (zone >= 1) { w[Kind.SEESAW.ordinal()] = 4f; w[Kind.BRIDGE.ordinal()] = 4f; }
@@ -617,7 +619,7 @@ public final class CourseGenerator {
         float dev = last.y - guide;
         boolean lagging = dev < -2f, rushing = dev > 7f;
         for (Kind k : Kind.values()) {
-            boolean vert = k == Kind.PAD || k == Kind.ROPE || k == Kind.MOVER_V || k == Kind.STAIRS;
+            boolean vert = k == Kind.PAD || k == Kind.ROPE || k == Kind.MOVER_V || k == Kind.STAIRS || k == Kind.ELEV_FALL;
             if (lagging && !vert) w[k.ordinal()] *= 0.12f;
             if (rushing && vert) w[k.ordinal()] *= 0.2f;
         }
@@ -778,6 +780,30 @@ public final class CourseGenerator {
                 float rise = 3.5f + 2f * d;
                 Element m = plat(Element.Type.MOVE_V, eR + 1.0f + 1.5f, y0, 3f, z);
                 m.amp = rise; m.period = r(5f, 6.5f); m.phase = r(0f, 6.28f);
+                l.add(m);
+                l.add(plat(S, m.s + 1.5f + 1.0f + 1.5f, y0 + rise, 3f, z));
+                break;
+            }
+            case MOVER_Z: {          // slides toward and away from the camera: step on while it is in your plane
+                float amp = 3.0f + 0.8f * d, wm = 3f, gapIn = lerp(1.0f, 1.8f, d), gapOut = lerp(1.0f, 1.8f, d);
+                Element m = plat(Element.Type.MOVE_Z, eR + gapIn + wm / 2, y0 + 0.3f, wm, z);
+                m.amp = amp; m.period = r(4.6f, 6.0f); m.phase = r(0f, 6.28f);
+                l.add(m);
+                l.add(plat(S, m.s + wm / 2 + gapOut + 1.5f, m.y + r(0.3f, 1.0f), 3f, z));
+                break;
+            }
+            case SLIDE_FALL: {       // a slider that falls apart a moment after you step on it
+                float amp = 1.2f + 0.8f * d, wm = 2.5f, gapIn = lerp(1.0f, 1.6f, d), gapOut = lerp(1.0f, 1.6f, d);
+                Element m = plat(Element.Type.MOVE_H, eR + gapIn + amp + wm / 2, y0 + 0.3f, wm, z);
+                m.skin = 1; m.amp = amp; m.period = r(3.0f, 4.0f); m.phase = r(0f, 6.28f);
+                l.add(m);
+                l.add(plat(S, m.s + amp + wm / 2 + gapOut + 1.5f, m.y + r(0.3f, 0.8f), 3f, z));
+                break;
+            }
+            case ELEV_FALL: {        // an elevator that falls apart while you ride it: be quick
+                float rise = 2.2f + 0.8f * d;
+                Element m = plat(Element.Type.MOVE_V, eR + 1.0f + 1.5f, y0, 3f, z);
+                m.skin = 1; m.amp = rise; m.period = r(3.0f, 3.8f); m.phase = r(0f, 6.28f);
                 l.add(m);
                 l.add(plat(S, m.s + 1.5f + 1.0f + 1.5f, y0 + rise, 3f, z));
                 break;

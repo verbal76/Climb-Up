@@ -61,7 +61,10 @@ public final class SettingsScreen extends ScreenAdapter {
             toggle("CAPTIONS FOR SOUNDS", s.captions, () -> s.captions = !s.captions);
         } else if (page == 2) {
             rowY -= 24; ui.textC("CLIMB UP  V" + ClimbGame.VERSION, W / 2, rowY + 30, 4.5f, Ui.TEXT); rowY -= 72;
-            ui.textC("CONTENT: BUNDLED (NO UPDATES INSTALLED)", W / 2, rowY + 30, 3.4f, Ui.DIM); rowY -= 64;
+            ui.textC("CONTENT: " + g.ota.describe(), W / 2, rowY + 30, 3.0f, Ui.DIM); rowY -= 54;
+            ui.textC("TEST-ONLY UPDATER: CHECKSUM ONLY, NOT SECURE. " + (g.otaClient.status.isEmpty() ? "" : g.otaClient.status.toUpperCase()), W / 2, rowY + 30, 2.4f, Ui.DIM); rowY -= 54;
+            toggle("CHECK FOR GAME UPDATES", s.otaEnabled, () -> s.otaEnabled = !s.otaEnabled);
+            row("UPDATE NOW", "CHECK", null, null, () -> g.startOtaCheck(true));
             ui.textC(g.audio.diag(), W / 2, rowY + 30, 2.8f, Ui.DIM); rowY -= 64;
             row("RESTART AUDIO", "RESTART", null, null, () -> g.audio.restart());
         } else {

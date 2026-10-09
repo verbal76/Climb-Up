@@ -14,6 +14,7 @@ public final class Settings {
     public boolean assistForgive = false;     // jump forgiveness assist
     public boolean tips = true;
     public int character = 0;                 // 0 = Quaternius bunny, 1 = chibi hamster
+    public boolean otaEnabled = true;         // family-test OTA: check for gameplay-number updates (Settings > About)
     public boolean highContrast = false;      // HUD/control outlines for visibility
 
     public float textMul() { return textScale == 0 ? 1f : textScale == 1 ? 1.3f : 1.6f; }

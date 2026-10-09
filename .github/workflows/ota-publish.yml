@@ -1,0 +1,25 @@
+name: Publish family-test OTA content
+# Manual only (never runs on push). Needs NO secrets: it uses the automatic workflow token to update the public "ota-dev" release.
+# TEST-ONLY: the manifest carries a checksum, not a signature. Do not point strangers or any store build at this channel (docs/OTA.md).
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Content version (integer, must be higher than the last one published)'
+        required: true
+permissions:
+  contents: write
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build payload and manifest
+        run: python3 tools/ota/make_ota.py --version "${{ github.event.inputs.version }}"
+      - name: Upload to the public ota-dev release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -e
+          gh release view ota-dev >/dev/null 2>&1 || gh release create ota-dev --prerelease --latest=false --title "Family-test OTA channel (dev)" --notes "TEST-ONLY updater payloads. Checksum only, not authenticated. See docs/OTA.md."
+          gh release upload ota-dev build/ota/payload.zip build/ota/manifest.json --clobber

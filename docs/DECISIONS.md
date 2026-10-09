@@ -96,3 +96,11 @@
 - Rope top: holding up for 0.22 s at the top of a rope mounts the beam (new `Sim.Mode.BEAM`): a 0.62 s haul-up from behind the thin board, then standing/walking on it, jump from it, step back down (down) or walk off. The planner never lingers at the top, so solved links are unchanged (stress: 240 slices, 0 failures).
 - Rope climb animation: whole-body squash/stretch (inchworm) synced with the hand-over-hand phase.
 - Fixed: `drawBox` shared one instance, so every box in a frame took the last colour; now one instance per colour.
+
+## Family-test OTA, fixed debug key, new movers, full falls (candidate after build 36)
+- OTA replaced by the owner's simplified TEST-ONLY design (docs/OTA.md): public `ota-dev` release, checksum only, tuning.json only, apply on next start, runtime/min-version gate, anti-rollback counter, 2-launch confirmation rollback. Zero new secrets. Supersedes the signed-manifest text in CLAUDE.md for the family playtest; production needs a separate review.
+- Permissions: INTERNET added (one small HTTPS GET of a public release file). The unmetered-network check was dropped (it would need ACCESS_NETWORK_STATE; payloads are ~1 KB).
+- Signing: one committed debug keystore (`android/debug.keystore`, public Android debug credentials) so builds install over each other. Existing builds (random per-run keys) cannot be upgraded in place.
+- Falling: the fall floor is the lowest platform of the WHOLE map; the simulated window follows a falling player down so every platform below can still catch him. Only falling past all of it (or a hazard) sends him back to the last red-gem checkpoint.
+- New traversal: depth movers (MOVE_Z: slide toward/away from the camera, landable only while in your plane, carry you), crumbling sliders/elevators (skin=1, 1.6 s hold), swing super-jump (jump at the top of the arc: +5.5 vy, +3.5 outward vx; tuning `swingSuper*`). Movers and swings now also appear in the first world.
+- Rope grip: arms cross in front of the chest with hands on the rope.

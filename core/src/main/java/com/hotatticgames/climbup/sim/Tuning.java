@@ -13,6 +13,8 @@ public class Tuning {
     public float climbSpeed = 3.4f, ropeGrabRadius = 0.42f, cableShimmy = 3.6f, grabLockout = 0.28f;
     public float ledgeReachX = 0.4f, ledgeReachBelow = 0.9f, ledgeReachAbove = 0.15f, pullUpTime = 0.32f;
     public float crumbleDelay = 0.7f, crumbleRespawn = 3.4f;
+    public float moverCrumbleDelay = 1.6f;       // movers that fall apart (elevators, sliders, swings) hold a little longer than plain crumbling tiles
+    public float swingSuper = 5.5f, swingSuperVx = 3.5f;   // jumping from the top of a swing's arc catapults you: extra upward and outward speed
     public float fallRespawnDepth = 12f;
     public float seesawMaxTilt = 0.55f, seesawRate = 1.0f, seesawRelax = 1.0f, seesawSlide = 5f, seesawUphill = 0.45f;   // seesaw bridge: slope (height per metre), tip / relax speed, downhill slide, uphill slow-down
     public float courseHeight = 520f;        // finite test towers only; the shipped game is endless
@@ -25,6 +27,22 @@ public class Tuning {
     public int restEvery = 5, checkpointEveryRests = 1;
     public float minLinkMargin = 0.07f;
     public float assistJumpForgiveness = 0.08f, assistSlowFactor = 0.8f;
+
+    /** Sanity check for replacement tuning (OTA payloads): every number finite and non-negative, the core movement/world numbers positive and in a playable range. Returns null if fine. */
+    public String validate() {
+        try {
+            for (java.lang.reflect.Field f : Tuning.class.getFields()) {
+                if (f.getType() == float.class) { float v = f.getFloat(this); if (Float.isNaN(v) || Float.isInfinite(v) || v < 0f) return f.getName() + " out of range"; }
+                else if (f.getType() == int.class && f.getInt(this) < 0) return f.getName() + " out of range";
+            }
+        } catch (IllegalAccessException e) { return "unreadable"; }
+        if (radius < 2f || radius > 100f) return "radius";
+        if (runSpeed <= 0f || runSpeed > 40f || gravity <= 0f || gravity > 200f || jumpVel <= 0f || jumpVel > 60f || maxFall <= 0f) return "movement";
+        if (halfWidth <= 0f || height <= 0f || handHeight <= 0f || handHeight > height + 1f) return "body";
+        if (zoneHeight < 50f || zoneCount < 1 || chunkHeight < 20f || chunkHeight > 200f || restEvery < 1 || gemSpacing < 10f) return "world";
+        if (crumbleDelay < 0.1f || crumbleRespawn < 0.5f || moverCrumbleDelay < 0.1f) return "crumble";
+        return null;
+    }
 
     public float circumference() { return (float) (2 * Math.PI * radius); }
 

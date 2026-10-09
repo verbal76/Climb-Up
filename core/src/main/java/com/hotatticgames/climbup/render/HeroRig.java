@@ -203,7 +203,7 @@ public final class HeroRig implements Disposable {
         float speed = Math.abs(sim.vx);
         float targetYaw;
         switch (sim.mode) {
-            case ROPE: targetYaw = sim.facing * 22f; break;
+            case ROPE: targetYaw = sim.facing * 6f; break;
             case LEDGE: case PULLUP: targetYaw = sim.ledgeSide * HANG_YAW; break;
             case BEAM: targetYaw = sim.mounting() ? sim.facing * 22f : sim.facing * 68f; break;   // turns to face the ledge he is gripping
             case CABLE: targetYaw = sim.facing * 24f; break;
@@ -314,9 +314,10 @@ public final class HeroRig implements Disposable {
             float len = pB.dst(pC) + pC.dst(pF);
             float reach = moving ? 0.5f + 0.5f * MathUtils.sin(phase + side * MathUtils.PI) : (side == 0 ? 0.95f : 0.62f);
             float sgn = Math.signum(pB.x == 0f ? (side == 0 ? 1f : -1f) : pB.x);
-            float ty = pB.y + len * (0.42f + 0.50f * reach);
-            float tx = cable ? sgn * len * (0.10f + 0.30f * (1f - reach)) : -sgn * len * 0.04f;     // a rope hangs straight down the middle; a cable runs sideways
-            float tz = pB.z + ROPE_FRONT / SCALE;                                                  // the line hangs in front of him (he is drawn a little behind it)
+            // rope: arms cross in front of the chest, one hand stepping up the rope while the other pulls down; cable: hands reach up and out along the line
+            float ty = cable ? pB.y + len * (0.42f + 0.50f * reach) : pB.y + len * (-0.10f + 0.42f * reach);
+            float tx = cable ? sgn * len * (0.10f + 0.30f * (1f - reach)) : sgn * len * 0.45f;
+            float tz = cable ? pB.z + ROPE_FRONT / SCALE : pB.z + len * 0.95f;                          // the line hangs in front of him (he is drawn a little behind it); hands sit just in front of it
             tgt.set(tx - pB.x, ty - pB.y, tz - pB.z).nor();         // (aim() reuses 'dir' internally, so the target lives in its own vector)
             aim(up, lo, tgt, 1f); aim(lo, fi, tgt, 1f);
         }

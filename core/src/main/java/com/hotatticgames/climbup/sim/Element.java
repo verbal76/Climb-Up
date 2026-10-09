@@ -16,7 +16,9 @@ public final class Element {
         /** Wooden bridge balanced on a pivot in its middle: tips toward whoever stands on it, so keep running. (tilt state lives in the Sim) */
         SEESAW,
         /** Sloped walkway (amp = height gained per metre toward +s, w = horizontal length, y = height at its middle). skin: 0 plain, 1 crumbles, 2 shakes and bounces you, 3 sinks away when stepped on. */
-        RAMP }
+        RAMP,
+        /** Platform that slides toward and away from the camera (amp = depth travel). You can only land on it while it is in your plane (|depth| <= Z_REACH); once you stand on it, it carries you. */
+        MOVE_Z }
 
     public Type type;
     public int zone;
@@ -35,11 +37,11 @@ public final class Element {
         switch (type) { case SAW_H: case SAW_V: case PENDULUM: case CANNON: case SPIKE_TRAP: case SPIKE_BLOCK: case SPIKE_DROP: return true; default: return false; }
     }
     /** Platforms that fall apart soon after being stood on. */
-    public boolean crumbles() { return type == Type.CRUMBLE || (type == Type.RAMP && skin == 1); }
+    public boolean crumbles() { return type == Type.CRUMBLE || (type == Type.RAMP && skin == 1) || (skin == 1 && (type == Type.MOVE_H || type == Type.MOVE_V || type == Type.SWING)); }
     public boolean isPlatform() { return type != Type.ROPE && type != Type.CABLE && !isHazard(); }
     /** True for anything that changes with time (planner sweeps its phase). */
     public boolean isMoving() {
-        switch (type) { case MOVE_H: case MOVE_V: case SWING: case SAW_H: case SAW_V: case PENDULUM: case CANNON: case SPIKE_TRAP: case SPIKE_DROP: case CRAB: case BEE: return true; default: return false; }
+        switch (type) { case MOVE_H: case MOVE_V: case MOVE_Z: case SWING: case SAW_H: case SAW_V: case PENDULUM: case CANNON: case SPIKE_TRAP: case SPIKE_DROP: case CRAB: case BEE: return true; default: return false; }
     }
 
     public static final float CANNON_FLIGHT = 0.7f;      // fraction of the cycle a ball is in the air
@@ -100,6 +102,12 @@ public final class Element {
             default: return false;
         }
     }
+
+    public static final float Z_REACH = 1.0f;
+    /** Depth offset of a depth mover at time t (+ = away from the camera). */
+    public float zAt(float t) { return type == Type.MOVE_Z ? amp * (float) Math.sin(ang(t)) : 0f; }
+    /** Swing platforms: -1..1 position along the arc (+-1 = top of the arc, where the platform is momentarily still). */
+    public float swingFrac(float t) { return (float) Math.sin(ang(t)); }
 
     private float ang(float t) { return (float) (2 * Math.PI * t / period + phase); }
 

@@ -30,7 +30,7 @@
 * **No APK was built, installed or run.** `dl.google.com` (Android SDK + AGP) is blocked in this sandbox. The Android module, manifest, icons, resources and CI workflow are untested; first CI run may need small fixes.
 * No real touch input, haptics, audio output (no sound device), on-device frame rate, memory, thermals, notch/cutout behaviour, background/kill-and-relaunch on a phone.
 * Human feel of movement/difficulty is unplayed - the solver proves solvability and tolerance, not fun. Expect tuning (`assets/data/tuning.json`, then `:desktop:genCourses`).
-* Colorblind palettes, over-the-air updates, 16 KB page-size verification of natives, release signing: not done.
+* Colorblind palettes, 16 KB page-size verification of natives, release signing: not done. Family-test OTA: implemented and unit-tested (OtaTest), see docs/OTA.md; not yet exercised on a phone, no APK built for it.
 
 ## Known issues / risks
 * Player is the Quaternius Character: no dedicated rope-climb or hang animations (Run / Jump_Idle are reused); 29 bones need a GLES2 device with >= 128 vertex uniform vectors (virtually all phones).

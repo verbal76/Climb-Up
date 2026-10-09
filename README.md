@@ -33,3 +33,6 @@ Test hooks (system properties): `-Dclimb.demo=true` (autopilot plays), `-Dclimb.
 `core/` game (sim = pure-Java rules, render = libGDX 3D, ui/audio/screens) · `desktop/` LWJGL3 launcher + content tools · `android/` launcher, manifest, icons ·
 `assets/` models, the player model (hero), audio, data (`data/tuning.json` holds every movement/generator number), `pack/` (hazard, castle, key, crab and club models converted from the Quaternius pack) · `tools/` audio/icon generators · `docs/`.
 Credits and licenses: `ASSETS.md`, `assets/licenses/`, in-game Credits screen.
+
+## Updates (family test only)
+Test builds can pull gameplay-number updates (tuning.json) from the public `ota-dev` release; this is a checksum-only, TEST-ONLY updater, see [docs/OTA.md](docs/OTA.md). Builds are signed with the committed debug key so they install over each other (the first build with this key needs the old one uninstalled).

@@ -4,9 +4,9 @@ State: endless candidate 0.1.0 on branch `ccr-cb458cd1-w4dh5c`. Core loop, endle
 
 Next steps:
 1. Playtest on the phone: tune `assets/data/tuning.json` (hazardStartY/hazardRampY/minTimingWindow/chunkHeight/rampHeight and movement numbers) and re-run `:core:test`.
-2. Open: shared debug keystore (installs over each other), OTA updates, colorblind palette modes, grappling hook.
+2. Done in the OTA-baseline candidate (not yet built or pushed): shared debug keystore, family-test OTA (docs/OTA.md). Open: colorblind palette modes, grappling hook.
 Test hooks and commands: README.md.
 
 ## Latest batch (see docs/DECISIONS.md and docs/VERIFICATION.md)
 Seesaw + floating bridges, ramps (plain/crumbling/shaky/sinking/ski jump), fall-to-lower-level rule, audio watchdog, title hero picker, hamster rebuilt on the bunny skeleton, four astronaut characters, character juice, space scenery (`render/SpaceScene.java`), prompt audit (`docs/PROMPT_AUDIT.md`). Owner rule: release builds only when a batch is complete (no incremental pushes).
-Open: shared debug keystore, OTA updates, colourblind/subtitle options, phone verification.
+Open: colourblind/subtitle options, phone verification. OTA candidate: see docs/OTA.md (needs one replacement APK).

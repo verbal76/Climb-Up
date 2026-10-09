@@ -31,6 +31,7 @@ public final class Sim {
     public float lastGroundY;
     public float[] onT;             // ramps: seconds spent standing on them (shaking / sinking ramps)
     public float[] tilt;             // seesaw bridges: slope (height gained per metre toward +s) of each element
+    private float minPlatY = Float.POSITIVE_INFINITY; private int minPlatSize = -1;
     public float floorY = Float.NEGATIVE_INFINITY;   // endless: height of the lowest platform in the window; falling past it (nothing left to land on) respawns
     public int checkpoint;
     public int bestElem;             // highest route element reached (progress)
@@ -90,9 +91,12 @@ public final class Sim {
             for (int i = lo; i <= hi; i++) if (i < oldLo || i > oldHi) { Element e = course.get(i); es0[i] = es1[i] = e.sAt(time); ey0[i] = ey1[i] = e.yAt(time); }
         }
         act = a; winLo = lo; winHi = hi;
-        float fl = Float.POSITIVE_INFINITY;
-        for (int i = lo; i <= hi; i++) { Element e = course.get(i); if (e.isPlatform()) fl = Math.min(fl, e.y - Math.abs(e.amp) - 1f); }
-        floorY = fl == Float.POSITIVE_INFINITY ? Float.NEGATIVE_INFINITY : fl;
+        if (minPlatSize != course.size()) {          // the lowest platform of the WHOLE map: a fall only ends when you land on something or drop below all of it
+            float fl = Float.POSITIVE_INFINITY;
+            for (int i = 0; i < course.size(); i++) { Element e = course.get(i); if (e.isPlatform()) fl = Math.min(fl, e.y - Math.abs(e.amp) - 1f); }
+            minPlatY = fl; minPlatSize = course.size();
+        }
+        floorY = minPlatY == Float.POSITIVE_INFINITY ? Float.NEGATIVE_INFINITY : minPlatY;
         hz = course.hazardsFor(lo - 6, hi + 6);
     }
 
@@ -227,7 +231,10 @@ public final class Sim {
             int i = act == null ? k0 : act[k0];
             es0[i] = es1[i]; ey0[i] = ey1[i];
             Element e = course.get(i);
-            if (e.isMoving()) { es1[i] = e.sAt(time); ey1[i] = e.yAt(time); }
+            if (e.isMoving()) {
+                es1[i] = e.sAt(time); ey1[i] = e.yAt(time);
+                if (e.type == Element.Type.MOVE_Z) gone[i] = Math.abs(e.zAt(time)) > Element.Z_REACH && !(mode == Mode.GROUND && onElem == i);   // out of your plane: nothing to land on
+            }
             else if (e.type == Element.Type.SEESAW) {          // surface height is reported at the player's own position along the plank
                 float hw = e.halfW(), x = Math.max(-hw, Math.min(hw, course.dsWrap(s, es1[i])));
                 boolean on = mode == Mode.GROUND && onElem == i;
@@ -245,7 +252,7 @@ public final class Sim {
             if (padSquash[i] > 0) padSquash[i] = Math.max(0, padSquash[i] - dt);
             if (e.crumbles()) {
                 if (gone[i]) { goneT[i] -= dt; if (goneT[i] <= 0) { gone[i] = false; crumbleT[i] = -1f; } }
-                else if (crumbleT[i] >= 0) { crumbleT[i] += dt; if (crumbleT[i] >= T.crumbleDelay) { gone[i] = true; goneT[i] = T.crumbleRespawn; events |= EV_CRUMBLE; } }
+                else if (crumbleT[i] >= 0) { crumbleT[i] += dt; if (crumbleT[i] >= (e.type == Element.Type.CRUMBLE || e.type == Element.Type.RAMP ? T.crumbleDelay : T.moverCrumbleDelay)) { gone[i] = true; goneT[i] = T.crumbleRespawn; events |= EV_CRUMBLE; } }
             }
         }
 
@@ -389,7 +396,14 @@ public final class Sim {
         if (jumpBuf > 0) {
             float pv = platformVy(e);
             vx += platformVs(e) * 0.6f;
-            doJump(Math.max(0, pv) * 0.6f);
+            float boost = Math.max(0, pv) * 0.6f;
+            Element je = course.get(e);
+            if (je.type == Element.Type.SWING) {          // jump at the top of the arc and the swing catapults you
+                float f = je.swingFrac(time), k = f * f * f * f;
+                boost += T.swingSuper * k; vx += Math.signum(f) * T.swingSuperVx * k;
+                if (k > 0.5f) events |= EV_BOUNCE;
+            }
+            doJump(boost);
             return;
         }
         // leave the edge?

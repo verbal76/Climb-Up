@@ -120,6 +120,13 @@ public final class PlayScreen extends ScreenAdapter {
     /** Endless climb: only the part of the world around the player is simulated. */
     private void updateWindow(boolean force) {
         int idx = Math.max(Math.max(sim.bestElem, sim.onElem), sim.checkpoint);
+        if (winCenter != Integer.MIN_VALUE && sim.mode == Sim.Mode.AIR && sim.vy < -2f && sim.winLo > 0 && sim.y < course.get(sim.winLo).y + 30f) {
+            int f = Math.min(course.size() - 1, winCenter + 160);          // falling out of the bottom of the simulated slice: follow the player down so every platform below can still catch him
+            while (f > 0 && !(course.get(f).anchor < 0 && course.get(f).isPlatform() && course.get(f).y < sim.y - 1f)) f--;
+            winCenter = f - 40; winSize = course.size();
+            sim.setRange(f - 160, f + 120);
+            return;
+        }
         boolean grew = course.size() > winSize && winCenter + 160 > winSize;
         if (!force && !grew && Math.abs(idx - winCenter) < 30) return;
         winCenter = idx; winSize = course.size();
@@ -222,6 +229,7 @@ public final class PlayScreen extends ScreenAdapter {
                 sim.step(in);
                 in.jumpPressed = false; jumpLatch = false; kJump = false; in.swingPressed = false; swingLatch = false; kSwing = false;
                 runTime += Sim.DT;
+                if (runTime > 15f && g.ota != null) g.ota.confirm();          // live play with the current (possibly OTA) content: a freshly applied update is now trusted
                 if (!demo) { if (!clockLive && (in.moveX != 0f || in.jumpPressed || in.moveY != 0f)) clockLive = true; if (clockLive) g.save.runClock += Sim.DT; }
                 handleEvents(sim.consumeEvents());
                 acc -= Sim.DT; steps++;
@@ -386,6 +394,7 @@ public final class PlayScreen extends ScreenAdapter {
             toast = "CHECKPOINT"; toastT = 2f; if (tower != null) g.rememberCheckpoint(tower, sim.checkpoint); g.persist(); say("[CHECKPOINT]");
         }
         if ((ev & Sim.EV_RESPAWN) != 0) {
+            if (tower != null) updateWindow(true);
             world.particles.burst(sim.s, sim.y + 0.6f, 18, cyan, 3f, 3.2f, 0.1f, 2f, 0.7f);
             g.audio.play("respawn", 0.8f, 1f); fade = 1f; g.save.falls++; vibrate(40, 1); world.shake(0.5f);
             if ((ev & Sim.EV_HIT) == 0) { toast = "BACK TO CHECKPOINT"; toastT = 1.6f; }

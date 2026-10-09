@@ -53,7 +53,7 @@ configurations.configureEach { resolutionStrategy.force 'androidx.core:core:1.15
 // The host refuses to build without the public key it must pin (CI generates a throw-away pair per run), and the baseline module must be present.
 tasks.register('requireLabInputs') {
     doFirst {
-        ['lab_public_key.b64', 'baseline/module.dex', 'baseline/manifest.json', 'baseline/manifest.sig'].each { if (!file("src/main/assets/\$it").isFile()) throw new GradleException("climbhost/src/main/assets/\$it missing: the lab workflow creates it") }
+        ['lab_public_key.b64', 'baseline/module.dex', 'baseline/manifest.json', 'baseline/manifest.sig'].each { if (!file("src/main/assets/${it}").isFile()) throw new GradleException("climbhost/src/main/assets/${it} missing: the lab workflow creates it") }
     }
 }
 tasks.matching { it.name.startsWith('merge') && it.name.endsWith('Assets') }.configureEach { dependsOn 'requireLabInputs' }

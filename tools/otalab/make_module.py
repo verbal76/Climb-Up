@@ -32,7 +32,7 @@ with tempfile.TemporaryDirectory() as tmp:
             n = item.filename
             if n.startswith("com/badlogic/") or n.startswith("com/hotatticgames/climbup/spi/"): die("module jar carries host-owned classes: " + n)
             zout.writestr(item, zin.read(n))
-        if not a.no_props: zout.writestr("synthetic.properties", "version=%d\nmode=%s\nhue=%.2f\n" % (a.version, a.mode, (0.37 * a.version) % 1.0))
+        pass
     # 2. code file
     if a.jar_only:
         code_name = "module.jar"; code = open(patched, "rb").read()
@@ -44,6 +44,7 @@ with tempfile.TemporaryDirectory() as tmp:
         code_name = "module.dex"; code = open(os.path.join(outd, "classes.dex"), "rb").read()
     hello = (a.hello or ("hello from v%d" % a.version)).encode()
     files = [(code_name, code), ("hello.txt", hello)]
+    if not a.no_props: files.append(("synthetic.properties", ("version=%d\nmode=%s\nhue=%.2f\n" % (a.version, a.mode, (0.37 * a.version) % 1.0)).encode()))      # a dex carries no resources: the behaviour switches are a signed bundle file
     # 3. manifest
     pub = subprocess.run(["openssl", "pkey", "-in", a.key, "-pubout", "-outform", "DER"] + (["-passin", "env:" + a.passphrase_env] if a.passphrase_env else []), capture_output=True)
     if pub.returncode: die("cannot read the signing key")

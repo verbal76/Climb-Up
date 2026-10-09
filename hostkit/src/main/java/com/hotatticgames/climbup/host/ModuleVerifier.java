@@ -7,6 +7,12 @@ import java.nio.file.Files;
 public final class ModuleVerifier {
     private ModuleVerifier() {}
 
+    /**
+     * Android's runtime writes its compiled/verified form of a loaded dex into an {@code oat} directory next to the dex (observed on API 34). It is derived, never loaded by this
+     * project, and ART validates it against the dex's own checksum; it is the one entry tolerated besides the signed files. A file (not a directory) of that name is still rejected.
+     */
+    static final String RUNTIME_CACHE = "oat";
+
     public static final class Result {
         public final ModuleManifest manifest; public final String reason;
         Result(ModuleManifest m, String r) { manifest = m; reason = r; }
@@ -34,7 +40,10 @@ public final class ModuleVerifier {
             if (m.interfaceVersion != host.interfaceVersion) return no("interface " + m.interfaceVersion + " != host " + host.interfaceVersion);
             if (host.hostLevel < m.hostMin || host.hostLevel > m.hostMax) return no("host level " + host.hostLevel + " outside " + m.hostMin + ".." + m.hostMax);
             String[] present = dir.list(); int expected = m.files.size() + 2;
-            if (present == null || present.length != expected) return no("unexpected files in module directory");
+            if (present == null) return no("unreadable module directory");
+            int derived = 0;
+            for (String n : present) if (n.equals(RUNTIME_CACHE) && new File(dir, n).isDirectory()) derived++;
+            if (present.length - derived != expected) return no("unexpected files in module directory");
             for (ModuleManifest.FileEntry e : m.files) {
                 File f = new File(dir, e.name);
                 if (!f.isFile() || !f.getCanonicalFile().getParentFile().equals(dir.getCanonicalFile())) return no("file missing: " + e.name);

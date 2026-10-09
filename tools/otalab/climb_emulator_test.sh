@@ -61,14 +61,14 @@ adb shell input tap 1200 600; sleep 1; logs | grep -q "FATAL" && fail "K3 touch 
 echo "== K4 a climb in progress survives module updates (and a world-changing module waits)"
 start "$HOST_ACT" --es prop.climb.start play --es prop.climb.seed 777 >/dev/null
 expect "K4 climb started: host told" "climbInProgress=true" 40; sleep 4
-H0=$(adb shell run-as $HOST sh -c 'cd files; sha256sum history.bin' | tr -d '\r' | cut -d' ' -f1); [ -n "$H0" ] && pass "K4 climb history exists ($H0)" || fail "K4 no history.bin"
+H0=$(adb shell "run-as $HOST sh -c 'cd files; sha256sum history.bin'" | tr -d '\r' | cut -d' ' -f1); [ -n "$H0" ] && pass "K4 climb history exists ($H0)" || fail "K4 no history.bin"
 adb shell input keyevent KEYCODE_HOME; sleep 2                                    # backgrounding persists the save, as on a phone
 serve c2_same_world; start "$HOST_ACT" --es prop.climb.start play --es updateBase http://10.0.2.2:8099/ >/dev/null
 expect "K4 same-world v2 staged" "update check: staged v2" 40; adb shell input keyevent KEYCODE_HOME; sleep 2
 start "$HOST_ACT" --es prop.climb.start play >/dev/null
 expect "K4 same-world v2 applied at the next cold start, mid-climb" "running module v2" 40
-H1=$(adb shell run-as $HOST sh -c 'cd files; sha256sum history.bin' | tr -d '\r' | cut -d' ' -f1); [ "$H0" = "$H1" ] && pass "K4 history.bin byte-identical after the module switch" || fail "K4 history changed ($H0 -> $H1)"
-adb shell run-as $HOST sh -c 'cd files; grep -o "\"seed\":[0-9]*" save.json' | tr -d '\r' | grep -q 777 && pass "K4 save still holds the climb (seed 777)" || fail "K4 save lost the climb"
+H1=$(adb shell "run-as $HOST sh -c 'cd files; sha256sum history.bin'" | tr -d '\r' | cut -d' ' -f1); [ "$H0" = "$H1" ] && pass "K4 history.bin byte-identical after the module switch" || fail "K4 history changed ($H0 -> $H1)"
+adb shell "run-as $HOST sh -c 'cd files; grep -o seed.:[0-9]* save.json'" | tr -d '\r' | grep -q 777 && pass "K4 save still holds the climb (seed 777)" || fail "K4 save lost the climb"
 adb shell input keyevent KEYCODE_HOME; sleep 2
 serve c3_new_generator; start "$HOST_ACT" --es prop.climb.start play --es updateBase http://10.0.2.2:8099/ >/dev/null
 expect "K4 world-changing v3 staged" "update check: staged v3" 40; adb shell input keyevent KEYCODE_HOME; sleep 2

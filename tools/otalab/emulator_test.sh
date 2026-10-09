@@ -69,7 +69,7 @@ echo "== S8 offline start works"
 stop_server; launch http://10.0.2.2:8099/; expect "S8 offline check fails silently" "update check: offline or failed"; expect "S8 game still runs" "module 2 healthy"
 
 echo "== S9 corrupted module at rest -> recovery path -> baseline from the APK restores play"
-adb shell run-as $PKG sh -c 'chmod u+w files/host/mod/v2/module.dex && printf X | dd of=files/host/mod/v2/module.dex bs=1 seek=100 conv=notrunc 2>/dev/null' 
+adb shell "run-as $PKG sh -c 'chmod u+w files/host/mod/v2/module.dex; printf X | dd of=files/host/mod/v2/module.dex bs=1 seek=100 conv=notrunc'" 
 launch; expect "S9 corruption detected" "verification failed"; expect "S9 baseline reinstalled and running" "running module v1"; expect "S9 v1 plays" "module 1 healthy"
 
 echo "== summary"; logs | grep -o "bootMs=[0-9]*" | tr '\n' ' '; echo

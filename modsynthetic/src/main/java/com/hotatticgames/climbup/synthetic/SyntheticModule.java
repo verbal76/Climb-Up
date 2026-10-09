@@ -6,6 +6,8 @@ import com.badlogic.gdx.files.FileHandle;
 import com.badlogic.gdx.graphics.GL20;
 import com.hotatticgames.climbup.spi.GameModule;
 import com.hotatticgames.climbup.spi.HostEnv;
+import java.io.File;
+import java.io.FileInputStream;
 import java.io.InputStream;
 import java.util.Properties;
 
@@ -22,7 +24,8 @@ public final class SyntheticModule implements GameModule {
 
     @Override public ApplicationListener create(HostEnv env) {
         Properties p = new Properties();
-        try (InputStream in = SyntheticModule.class.getResourceAsStream("/synthetic.properties")) { if (in != null) p.load(in); } catch (Exception ignored) { }
+        File f = env.moduleDir() == null ? null : new File(env.moduleDir(), "synthetic.properties");       // a signed bundle file (a dex carries no resources)
+        try (InputStream in = f != null && f.isFile() ? new FileInputStream(f) : SyntheticModule.class.getResourceAsStream("/synthetic.properties")) { if (in != null) p.load(in); } catch (Exception ignored) { }
         String mode = p.getProperty("mode", "ok");
         if (mode.equals("throwCreate")) throw new IllegalStateException("synthetic module refuses to start");
         return new Game(env, p.getProperty("version", "?"), Float.parseFloat(p.getProperty("hue", "0.2")), mode);

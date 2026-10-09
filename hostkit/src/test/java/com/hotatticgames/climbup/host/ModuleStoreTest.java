@@ -216,6 +216,37 @@ public class ModuleStoreTest {
         assertNull(store.installBaseline(baseDir)); assertEquals(1, bootNew().manifest.moduleVersion);
     }
 
+    // ---------------------------------------------------------------- found by the first run on a real Android runtime
+
+    @Test public void theRuntimesOwnCompiledCacheNextToTheDexIsToleratedAndNothingElseIs() throws Exception {
+        baseline();
+        File oat = new File(root, "mod/v1/oat/x86_64"); assertTrue(oat.mkdirs());                          // what ART writes after loading module.dex
+        Files.write(new File(oat, "module.vdex").toPath(), new byte[]{1, 2, 3}); Files.write(new File(oat, "module.odex").toPath(), new byte[]{4});
+        for (int i = 0; i < 5; i++) assertEquals("a restart after the runtime cached its output keeps the module", 1, bootNew().manifest.moduleVersion);
+        File stray = new File(root, "mod/v1/classes2.dex"); Files.write(stray.toPath(), new byte[]{9});    // anything else is still refused
+        assertTrue(bootNew().recovery()); assertTrue(store.st.rollback.contains("unexpected files"));
+        stray.delete();
+    }
+
+    @Test public void aFileCalledOatOrASecondDirectoryIsNotTheRuntimeCache() throws Exception {
+        File d = tmp.newFolder("a"); Bundles.write(d, new Bundles.Spec(), key); Files.write(new File(d, "oat").toPath(), new byte[]{1});
+        assertEquals("unexpected files in module directory", ModuleVerifier.verify(d, keys, host).reason);
+        File e = tmp.newFolder("b"); Bundles.write(e, new Bundles.Spec(), key); assertTrue(new File(e, "extra").mkdirs());
+        assertEquals("unexpected files in module directory", ModuleVerifier.verify(e, keys, host).reason);
+        File f = tmp.newFolder("c"); Bundles.write(f, new Bundles.Spec(), key); assertTrue(new File(f, "oat").mkdirs());
+        assertTrue(ModuleVerifier.verify(f, keys, host).ok());
+    }
+
+    @Test public void onlyAMisbehavingReleaseIsBlacklistedNotOneThatWasMerelyDamagedOrRevoked() throws Exception {
+        File baseDir = tmp.newFolder("apkBaseline"); Bundles.write(baseDir, new Bundles.Spec(), key);
+        assertNull(store.installBaseline(baseDir)); bootNew();
+        File jar = new File(root, "mod/v1/module.jar"); jar.setWritable(true); Files.write(jar.toPath(), new byte[]{1, 2, 3});
+        assertTrue(bootNew().recovery()); assertFalse("damage is not the release's fault", store.st.bad.contains(1));
+        assertNull("so the signed baseline can restore play", store.installBaseline(baseDir)); assertEquals(1, bootNew().manifest.moduleVersion);
+        // a release that misbehaves IS blacklisted (anUnconfirmedModuleIsRolledBack..., aBlacklistedOrRevokedBaselineIsNotReinstalled)
+        assertNull(stage(new Bundles.Spec().v(2))); bootNew(); bootNew(); bootNew(); assertTrue(bootNew().manifest != null); assertTrue(store.st.bad.contains(2));
+    }
+
     // ---------------------------------------------------------------- climb / save compatibility, revocation
 
     @Test public void aGeneratorChangeWaitsWhileAClimbIsInProgress() throws Exception {

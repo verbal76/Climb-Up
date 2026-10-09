@@ -57,7 +57,7 @@ public final class ModuleStore {
         try { note = activateStaged(); } catch (Exception e) { note = "staged module ignored: " + e.getMessage(); Hashing.deleteTree(stagedDir); }
         if (st.pending != 0) {
             st.tries++;
-            if (st.tries > MAX_UNCONFIRMED_LAUNCHES) dropActive("not confirmed after " + (st.tries - 1) + " launches");
+            if (st.tries > MAX_UNCONFIRMED_LAUNCHES) dropActive("not confirmed after " + (st.tries - 1) + " launches", true);
         }
         for (int guard = 0; guard < 3 && st.active != 0; guard++) {
             ModuleVerifier.Result r = ModuleVerifier.verify(dirOf(st.active), keys, host);
@@ -65,7 +65,7 @@ public final class ModuleStore {
                 saveState();
                 return new Boot(dirOf(st.active), r.manifest, note);
             }
-            dropActive(r.ok() ? "revoked (below floor " + st.revokeFloor + ")" : "verification failed: " + r.reason);
+            dropActive(r.ok() ? "revoked (below floor " + st.revokeFloor + ")" : "verification failed: " + r.reason, false);
         }
         saveState();
         return new Boot(null, null, note.isEmpty() ? st.rollback : note);
@@ -107,9 +107,13 @@ public final class ModuleStore {
         return null;
     }
 
-    private void dropActive(String why) {
+    /**
+     * @param blame true when the release itself misbehaved (crash loop, could not load): it is blacklisted and never taken again. A verification failure or a revocation says
+     *              nothing against the release (disk damage, a floor raised later), so it is not blacklisted and the signed baseline can still be restored.
+     */
+    private void dropActive(String why, boolean blame) {
         int dropped = st.active;
-        if (dropped != 0 && !st.bad.contains(dropped)) st.bad.add(dropped);
+        if (blame && dropped != 0 && !st.bad.contains(dropped)) st.bad.add(dropped);
         int back = st.lastGood != dropped ? st.lastGood : 0;
         if (back != 0) {
             ModuleVerifier.Result r = ModuleVerifier.verify(dirOf(back), keys, host);
@@ -135,7 +139,7 @@ public final class ModuleStore {
 
     /** The loader could not instantiate the module (class missing, wrong interface, constructor threw): drop it now rather than after two crashes. */
     public synchronized Boot loadFailed(String why) {
-        dropActive("failed to load: " + why); saveState();
+        dropActive("failed to load: " + why, true); saveState();
         if (st.active == 0) return new Boot(null, null, st.rollback);
         ModuleVerifier.Result r = ModuleVerifier.verify(dirOf(st.active), keys, host);
         return r.ok() ? new Boot(dirOf(st.active), r.manifest, st.rollback) : new Boot(null, null, st.rollback);

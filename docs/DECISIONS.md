@@ -86,3 +86,6 @@
 
 ## Step-up onto close platforms (owner bug report on build 34)
 - Walking or dropping off a platform towards a close platform that is a little higher no longer slips through its edge. The ledge grab used to need the hands to be level with or below the top, which only happens after a jump; when the feet are already within a hand's height below the top the player now scrambles straight up onto it (a "step-up", the pull-up animation started from where the feet are). A hand-height or more below the top still gives the normal hanging grab. `StepUpTest` covers gaps of 0.2-1.0 m and heights of 0 to 0.9 m, and fails without the change. The solver stress run is unchanged (168 sections, 0 failures).
+
+## Falling sound (owner-supplied)
+- The owner's 3.2 s falling sound (`assets/audio/pack/fall.ogg`, mapped as `fall` in `sfx.json`) starts once when a real fall has lasted about 0.2 s (downward speed over 9 m/s, so hops and short drops stay silent), is cut off the moment the fall ends (landing, grab, respawn, pause, leaving the screen), shows a [FALLING] caption when captions are on, and follows the effects volume.

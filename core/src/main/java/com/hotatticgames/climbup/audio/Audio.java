@@ -60,6 +60,22 @@ public final class Audio implements Disposable {
         catch (Exception e) { errors++; lastError = e.getClass().getSimpleName(); }
     }
 
+    private long fallId = -1; private Sound fallSnd; private boolean falling;
+    /** The long falling sound (owner-supplied): starts once when a real fall begins and is cut off when it ends. */
+    public void fallStart(float vol) {
+        if (falling || settings.sfx <= 0) return;
+        Sound[] v = variants.get("fall"); if (v == null) return;
+        falling = true; fallSnd = v[0];
+        try { fallId = fallSnd.play(MathUtils.clamp(vol, 0, 1) * settings.sfx / 10f, 1f, 0f); played++; } catch (Exception e) { errors++; lastError = e.getClass().getSimpleName(); }
+    }
+    public void fallStop() {
+        if (!falling) return;
+        falling = false;
+        try { if (fallSnd != null && fallId != -1) fallSnd.stop(fallId); } catch (Exception e) { errors++; lastError = e.getClass().getSimpleName(); }
+        fallId = -1;
+    }
+    public boolean isFalling() { return falling; }
+
     private final Map<String, Long> lastPlay = new HashMap<>();
     private int played, throttled, refused, errors, musicRestarts;
     private String lastError = "-";

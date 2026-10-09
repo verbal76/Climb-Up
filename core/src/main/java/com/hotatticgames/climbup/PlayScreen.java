@@ -318,11 +318,16 @@ public final class PlayScreen extends ScreenAdapter {
         return h > 0 ? String.format("%d:%02d:%02d.%d", h, m, s, tenth) : String.format("%d:%02d.%d", m, s, tenth);
     }
 
-    private float windT, trailT, creakT;
+    private boolean fallCaptioned;
+    private float windT, trailT, creakT, fallT2;
 
     /** Cosmetic feedback that runs every frame: wind streaks in a fast fall, a spark trail after a bounce, wood creaks on a tipping bridge. */
     private void juice(float dt) {
-        if (g.settings.reducedMotion || sim == null) return;
+        if (sim == null) return;
+        // the falling sound: starts when a real fall has lasted a moment (not on every hop), stops the instant it ends
+        if (sim.mode == Sim.Mode.AIR && sim.vy < -9f) { fallT2 += dt; if (fallT2 > 0.22f) { g.audio.fallStart(0.85f); if (!fallCaptioned) { fallCaptioned = true; say("[FALLING]"); } } }
+        else { fallT2 = 0f; fallCaptioned = false; if (g.audio.isFalling()) g.audio.fallStop(); }
+        if (g.settings.reducedMotion) return;
         if (sim.mode == Sim.Mode.AIR && sim.vy < -11f) {
             windT -= dt;
             if (windT <= 0) { windT = 0.03f; world.particles.spawn(sim.s + MathUtils.random(-0.8f, 0.8f), sim.y + MathUtils.random(0f, 1.6f), 0f, 9f + MathUtils.random(4f), Color.WHITE, 0.045f, 0f, 0.3f); }
@@ -646,14 +651,14 @@ public final class PlayScreen extends ScreenAdapter {
 
     // ------------------------------------------------------------------ lifecycle
 
-    private void pauseGame() { if (state == State.PLAYING) { state = State.PAUSED; confirmRestart = false; stickPtr = jumpPtr = -1; jumpHeldTouch = false; g.audio.play("click"); g.persist(); } }
+    private void pauseGame() { if (state == State.PLAYING) { g.audio.fallStop(); state = State.PAUSED; confirmRestart = false; stickPtr = jumpPtr = -1; jumpHeldTouch = false; g.audio.play("click"); g.persist(); } }
     private void resumePlay() { state = State.PLAYING; acc = 0; g.audio.play("click"); }
     public void resumeFromSettings() { applySettings(); }
 
-    @Override public void hide() { g.persist(); }
-    @Override public void pause() { /* app backgrounded */ if (state == State.PLAYING) { state = State.PAUSED; confirmRestart = false; stickPtr = jumpPtr = -1; jumpHeldTouch = false; } g.persist(); g.audio.pauseMusic(); }
+    @Override public void hide() { g.audio.fallStop(); g.persist(); }
+    @Override public void pause() { /* app backgrounded */ g.audio.fallStop(); if (state == State.PLAYING) { state = State.PAUSED; confirmRestart = false; stickPtr = jumpPtr = -1; jumpHeldTouch = false; } g.persist(); g.audio.pauseMusic(); }
     @Override public void resume() { g.audio.resumeMusic(); }
 
-    @Override public void dispose() { if (world != null) { world.dispose(); world = null; } shapes.dispose(); }
+    @Override public void dispose() { g.audio.fallStop(); if (world != null) { world.dispose(); world = null; } shapes.dispose(); }
 
 }

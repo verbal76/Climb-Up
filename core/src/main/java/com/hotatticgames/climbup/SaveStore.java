@@ -92,9 +92,7 @@ public final class SaveStore {
             if (!v.has("completions")) v.addChild("completions", new JsonValue(0L));
         }
         // v2 -> v3: finite towers became the endless climb; there is no seed yet, so the next Play starts a fresh climb (best height and stats are kept)
-        // v3 -> v4: castles now stand at fixed 500 m heights and keys/gems follow new rules, so a climb saved by an older build (its stored slice has the old castle layout) cannot be resumed.
-        // The unfinished climb and its clock are dropped; best height, falls and all records are kept.
-        if (ver < 4) for (String k : new String[]{"seed", "slice", "sliceJson", "sliceCheckpoint", "runClock", "towerStartClock", "towerStartHeight", "towers", "splits", "towerTotals", "finished", "finishTime"}) if (v.has(k)) v.remove(k);
+        // v3/v4 -> v5: climbs get a version/build stamp. An unstamped climb in progress is kept; Legacy decides at launch whether the rules changed since it started.
         if (v.has("version")) v.remove("version");
         v.addChild("version", new JsonValue((long) SaveData.CURRENT_VERSION));
         return v;

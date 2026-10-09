@@ -419,6 +419,18 @@ public final class Autopilot {
         }
         for (int q = 0; q < 24 && real.mode == Sim.Mode.GROUND && real.onElem == r; q++) { in.clear(); real.step(in); }
     }
+    /** Knocked into the air by a bee or a crab (nothing to do with a planned move): steer back towards the platform we meant to stand on until something is under our feet. True if we landed on a route platform without a setback. */
+    static boolean recover(Sim real, int a, InputState in) {
+        Course c = real.course; int f0 = real.setbacks();
+        for (int q = 0; q < 360 && real.mode != Sim.Mode.GROUND; q++) {
+            in.clear();
+            if (real.mode == Sim.Mode.LEDGE || real.mode == Sim.Mode.PULLUP) in.moveY = 1f;
+            else if (real.mode == Sim.Mode.AIR) in.moveX = Math.max(-1f, Math.min(1f, 1.5f * c.dsWrap(real.es1[a], real.s)));
+            real.step(in);
+            if (real.setbacks() != f0) return false;
+        }
+        return real.mode == Sim.Mode.GROUND && real.onElem >= 0 && real.onElem < c.routeSize();
+    }
     private static int[] chain(int first, int n) { int[] a = new int[n]; for (int i = 0; i < n; i++) a[i] = first + i; return a; }
 
     /** True if the planner can get from route/decoy element a to element b and attach to it (the same check the generator proves, re-run on the finished data: used by the tests). */
@@ -459,9 +471,19 @@ public final class Autopilot {
             if (real.mode == Sim.Mode.GROUND && real.onElem == a && hasMidHazard(c, a)) {   // like a person would: stop in the safe pocket before sizing up the hazard
                 for (int q = 0; q < 40 && Math.abs(real.vx) > 0.05f && real.mode == Sim.Mode.GROUND; q++) { in.clear(); real.step(in); }
             }
+            if (real.mode == Sim.Mode.AIR && !(real.lastPad == a && (c.get(a).type == Element.Type.PAD || c.get(a).type == Element.Type.SPRING))) {      // shoved into the air by a bee or crab: settle first
+                if (!recover(real, a, in)) { rep.failedLink = a; rep.simTime = real.time; rep.failInfo = "recover " + String.format("mode=%s s=%.2f y=%.2f", real.mode, real.s, real.y); return rep; }
+                a = real.onElem; settle(real, a, in); continue;
+            }
             Result r = plan(real, a, false, true);
             if (!r.ok) r = plan(real, a, false, false);        // no move leaves a state that suits the next link: take any that works and sort the next link out from there
             rep.links++;
+            if (!r.ok && Boolean.getBoolean("dbg")) System.out.printf("first plan failed at %d: mode=%s on=%d s=%.2f y=%.2f vx=%.2f vy=%.2f t=%.2f%n", a, real.mode, real.onElem, real.s, real.y, real.vx, real.vy, real.time);
+            if (!r.ok && real.mode == Sim.Mode.GROUND && real.onElem == a && !hasMidHazard(c, a)) {      // like a person: arrived still moving, so brake, line up in the middle and size the jump up from a standstill
+                settle(real, a, in);
+                if (real.mode == Sim.Mode.GROUND && real.onElem == a) r = plan(real, a, false, true);
+                if (!r.ok && real.mode == Sim.Mode.GROUND && real.onElem == a) r = plan(real, a, false, false);
+            }
             for (int tryBack = 0; !r.ok && tryBack < 2 && real.mode == Sim.Mode.GROUND && real.onElem == a && !hasMidHazard(c, a); tryBack++) {
                 // like a person: walk back along the platform for a longer run-up, settle, and size up the jump again
                 Element el = c.get(a);
@@ -491,6 +513,9 @@ public final class Autopilot {
                     r = plan(real, a, false, false);
                     if (r.ok) break;
                 }
+            }
+            if (!r.ok && real.mode == Sim.Mode.AIR && !(real.lastPad == a && (c.get(a).type == Element.Type.PAD || c.get(a).type == Element.Type.SPRING))) {     // bumped while lining up: land, then size the move up again
+                if (recover(real, a, in)) { a = real.onElem; settle(real, a, in); continue; }
             }
             if (!r.ok) { rep.failedLink = a; rep.simTime = real.time; rep.failInfo = String.format("plan failed: mode=%s on=%d s=%.2f y=%.2f vx=%.2f vy=%.2f", real.mode, real.onElem, real.s, real.y, real.vx, real.vy); return rep; }
             Policy p = r.factory.create();

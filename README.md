@@ -4,10 +4,10 @@ A 2.5D skill-platformer by **Hot Attic Games**: climb a spiral tower that doesn'
 course rotates around you as you climb. Ropes, cables, swinging and moving platforms, crumbling tiles, bounce pads and fingertip ledge grabs, in
 an **endless**, procedurally generated (and solver-validated) tower that keeps getting harder. Timed sawblades, cannons that fire spiked balls, pop-up spikes, spiked stone blocks and slabs, angled springs, crabs that shove you, a floating spiked club, and coloured castles whose keys are hidden below the path. You play Quaternius' blue bunny-eared "Character", a skinned and animated 3D model. No upgrades: either you can make the jump or you can't.
 
-Status: **candidate build 0.1.0** produced from the Climb Up v6 design package (see `design-package/`, `CLAUDE.md`). Android target; desktop build included for testing.
+Status: **version 1.1.3 (the number and build are shown bottom-right of the title screen)** produced from the Climb Up v6 design package (see `design-package/`, `CLAUDE.md`). Android target; desktop build included for testing.
 
 ## Install (Android, sideload)
-Every CI build publishes a **GitHub Release** (`v0.1.0-buildN`) with the APK attached: open the repo's *Releases* page on your phone and tap the APK.
+Every CI build publishes a **GitHub Release** (`v<version>-build<N>`) with the APK attached: open the repo's *Releases* page on your phone and tap the APK.
 The Android APK is built by GitHub Actions (`.github/workflows/android.yml`, run it manually: *Actions -> Android build -> Run workflow*). Download the
 `climb-up-debug-apk-N` artifact, copy the `.apk` to a phone and open it (allow "install unknown apps"). Landscape only; Android 8.0+ (API 26), OpenGL ES 2.0.
 Local APK builds need the Android SDK (`ANDROID_HOME`) and access to Google's Maven; the sandbox this was written in blocks `dl.google.com`, so the APK has **not** been built or installed here.

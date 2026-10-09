@@ -29,7 +29,8 @@ jobs:
         run: |
           set -e
           SRC=$(ls android/build/outputs/apk/debug/*.apk | head -1)
-          OUT=android/build/outputs/apk/debug/climb-up-0.1.0-build${{ github.run_number }}-debug.apk
+          VER=$(grep -oP "appVersionName = '\K[^']+" build.gradle)
+          OUT=android/build/outputs/apk/debug/climb-up-${VER}-build${{ github.run_number }}-debug.apk
           cp "$SRC" "$OUT"; rm -f "$SRC"
           BT=$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -1)
           echo "SOURCE_SHA=${{ github.sha }}"
@@ -64,5 +65,6 @@ jobs:
           set -e
           APK=$(ls android/build/outputs/apk/debug/*.apk)
           SHA=$(sha256sum "$APK" | cut -d' ' -f1)
-          printf 'Physical-test build ${{ github.run_number }} (debug-signed, sideload).\n\nSource: ${{ github.sha }}\nPackage: com.hotatticgames.climbup, versionName 0.1.0, versionCode ${{ github.run_number }}\nSHA-256: %s\n' "$SHA" > notes.md
-          gh release create "v0.1.0-build${{ github.run_number }}" "$APK" --target ${{ github.sha }} --title "Climb up v0.1.0 (build ${{ github.run_number }})" --notes-file notes.md --latest
+          VER=$(grep -oP "appVersionName = '\K[^']+" build.gradle)
+          printf 'Physical-test build ${{ github.run_number }} (debug-signed, sideload).\n\nVersion: %s build ${{ github.run_number }}\nSource: ${{ github.sha }}\nPackage: com.hotatticgames.climbup, versionName %s, versionCode ${{ github.run_number }}\nSHA-256: %s\n' "$VER" "$VER" "$SHA" > notes.md
+          gh release create "v${VER}-build${{ github.run_number }}" "$APK" --target ${{ github.sha }} --title "Climb up v${VER} (build ${{ github.run_number }})" --notes-file notes.md --latest

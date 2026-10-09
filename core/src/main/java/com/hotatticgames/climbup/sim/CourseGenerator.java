@@ -832,22 +832,24 @@ public final class CourseGenerator {
         int base = c.size();
         for (int j = 0; j < n; j++) {
             float uR = cur.s + cur.w / 2f, dy = r(-0.3f, 0.6f);
+            boolean cannonOk = cur.w >= 3f && cur.type == Element.Type.STATIC;
+            int roll = rnd.nextInt(cannonOk ? 5 : 4);
+            if (roll == 1) dy = Math.min(dy, 0.1f);      // a saw never guards an uphill jump: the blade would sit higher than the take-off
             float g = Math.min(3.05f, Math.max(2.3f, reach(Math.max(0f, dy)) * lerp(0.68f, 0.90f, d) * r(0.95f, 1f) * (1f - 0.03f * attempt)));
+            if (roll == 1) g = Math.min(g, 2.6f);      // a saw hangs in the gap: keep the gap well short of a full-length jump so there is room to time the arc over the blade
             float w = j == n - 1 ? 3f + rnd.nextInt(2) : 2.5f;
             Element v = plat(Element.Type.STATIC, uR + g + w / 2f, cur.y + dy, w, z);
             es.add(v);
             int anchor = (j == 0) ? c.size() - 1 : base + j - 1;      // the platform the gap starts at
             float top = Math.max(cur.y, v.y), mid = uR + g / 2f;
             // pick a hazard that fits this gap
-            boolean cannonOk = cur.w >= 3f && cur.type == Element.Type.STATIC;
-            int roll = rnd.nextInt(cannonOk ? 5 : 4);
             Element h;
             if (roll == 0) {
                 h = hz(Element.Type.SAW_V, mid + r(-0.1f, 0.1f), top + 0.35f, 0f, z);
                 h.amp = r(1.5f, 2.3f); h.period = r(2.6f, 3.6f) - 0.5f * inten;
-            } else if (roll == 1 && g >= 2.6f) {
-                h = hz(Element.Type.SAW_H, mid, top + 0.95f + r(0f, 0.4f), 0f, z);
-                h.amp = Math.max(0.3f, Math.min(1.0f, g / 2f - 1.0f)); h.period = r(2.4f, 3.2f) - 0.4f * inten;
+            } else if (roll == 1) {
+                h = hz(Element.Type.SAW_H, mid, top + 0.62f + r(0f, 0.2f), 0f, z);      // blade top 1.17-1.37 m above the higher ledge: a normal jump arc clears it near its top
+                h.amp = Math.max(0.2f, Math.min(0.45f, g / 2f - 0.92f)); h.period = r(2.6f, 3.4f) - 0.4f * inten;
             } else if (roll == 3) {
                 h = hz(Element.Type.BEE, mid, top + 1.1f, 0f, z);                  // a bee flies in, buzzes around the gap, dives at you, and leaves
                 h.amp = Math.max(0.15f, Math.min(0.8f, g / 2f - 0.95f)); h.len = 0.8f; h.period = r(7.0f, 9.5f) - 1.5f * inten;
@@ -881,7 +883,7 @@ public final class CourseGenerator {
             h.period = r(3.2f, 4.2f); h.amp = lerp(0.30f, 0.40f, inten);
         } else if (roll == 1) {         // a sawblade sliding along the floor: hop it
             h = hz(Element.Type.SAW_H, p.s, p.y + 0.62f, 0f, z);
-            h.amp = 1.4f; h.period = r(3.0f, 4.0f) - 0.5f * inten;
+            h.amp = 1.1f; h.period = r(3.0f, 4.0f) - 0.5f * inten;
         } else if (roll == 2) {         // a spiked stone block in the way: hop it
             h = hz(Element.Type.SPIKE_BLOCK, p.s, p.y - 0.1f, 1.3f, z);
             h.len = 1.0f; h.period = 4f;

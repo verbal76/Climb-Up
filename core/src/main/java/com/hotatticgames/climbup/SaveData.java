@@ -5,7 +5,7 @@ import java.util.List;
 
 /** Run progress and stats. Versioned; see {@link SaveStore#migrate}. No power progression of any kind is stored. */
 public final class SaveData {
-    public static final int CURRENT_VERSION = 4;
+    public static final int CURRENT_VERSION = 5;
     public int version = CURRENT_VERSION;
     public int courseIndex = 0;          // legacy (v2 finite towers); unused by the endless climb
     public int checkpoint = 0;           // legacy (v2)
@@ -14,6 +14,12 @@ public final class SaveData {
     public int slice = 0;
     public String sliceJson = null;      // that slice exactly as generated (see CourseIO)
     public int sliceCheckpoint = 0;      // local element index of the checkpoint inside the slice
+    // which build / version started the climb in progress (empty = started before versions were stamped) - see Legacy
+    public String climbVersion = "";
+    public int climbBuild = 0;
+    public String climbDate = "";
+    public float climbHeight = 0f;       // highest point reached in the climb in progress
+    public List<LegacyRun> legacy = new ArrayList<>();   // runs set aside when an update changed the rules
     public float bestHeight = 0f;
     public int falls = 0;
     public float playSeconds = 0f;
@@ -32,4 +38,17 @@ public final class SaveData {
     public float bestFinish = 0f;                // fastest finish ever (0 = none)
     public float bestSplit = 0f;                 // fastest single tower ever (0 = none)
     public float[] bestTotals = new float[0];    // fastest run clock at the Nth unlock, ever
+
+    /** A run that was in progress when an update changed the rules, kept as a stamped record (it cannot be resumed: its castles and obstacles came from the old rules). */
+    public static final class LegacyRun {
+        public String version = "";      // game version that started it ("" = before versions were stamped)
+        public int build = 0;            // build number that started it (0 = unknown)
+        public String date = "";         // day the climb was started
+        public String savedDate = "";    // day it was set aside
+        public float height = 0f;
+        public int towers = 0;
+        public float runClock = 0f;
+        public boolean finished = false;
+        public float finishTime = 0f;
+    }
 }

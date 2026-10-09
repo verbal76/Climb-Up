@@ -325,7 +325,7 @@ public final class WorldRenderer implements Disposable {
             boolean tall = name.startsWith("tree");
             float side = (i == 0 ? -1 : 1) * (w / 2f - 0.7f);
             if (n == 1) side = ((h >> 9) % 2 == 0 ? -1 : 1) * (w / 2f - 0.5f);
-            Part p = part(models.obj(name), side, 0f, 0.9f + (tall ? 0.6f : 0f), 1.35f, 1.35f, 1.35f);
+            Part p = part(models.obj(name), side, 0f, 0.5f, 1.35f, 1.35f, 1.35f);      // inside the slab's depth (it spans +-0.85 front to back), so every tree and prop stands on the ground it grows from
             p.tinted = true; ps.add(p);
         }
     }

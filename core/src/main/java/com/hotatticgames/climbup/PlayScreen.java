@@ -224,7 +224,15 @@ public final class PlayScreen extends ScreenAdapter {
         if (play) {
             float speed = g.settings.assistSlow ? g.tuning.assistSlowFactor : 1f;
             if (hitstop > 0) hitstop -= dt; else acc += dt * speed;
-            if (tower != null) { if (tower.poll()) sim.ensureCapacity(); tower.ensureAbove(sim.maxHeight, 75f); updateWindow(false); }
+            if (tower != null) {
+                try { if (tower.poll()) sim.ensureCapacity(); tower.ensureAbove(sim.maxHeight, 75f); }
+                catch (RuntimeException ex) {          // the next stretch of tower could not be built (never expected): keep the run as a stamped record and go back to the title instead of crashing
+                    Gdx.app.error("climb", "tower generation failed", ex);
+                    if (g.save.seed != 0) Legacy.archive(g.save, Legacy.today());
+                    g.persist(); next = new TitleScreen(g); disposeOnLeave = true;
+                }
+                updateWindow(false);
+            }
             int steps = 0;
             while (acc >= Sim.DT && steps < 6) {
                 if (demo) { driver[0].drive(sim, in); } else readInput();
@@ -232,7 +240,7 @@ public final class PlayScreen extends ScreenAdapter {
                 in.jumpPressed = false; jumpLatch = false; kJump = false; in.swingPressed = false; swingLatch = false; kSwing = false;
                 runTime += Sim.DT;
                 if (runTime > 15f && g.ota != null) g.ota.confirm();          // live play with the current (possibly OTA) content: a freshly applied update is now trusted
-                if (!demo) { if (!clockLive && (in.moveX != 0f || in.jumpPressed || in.moveY != 0f)) clockLive = true; RunRecord.tick(g.save, Sim.DT, clockLive); }
+                if (!demo) { if (!clockLive && (in.moveX != 0f || in.jumpPressed || in.moveY != 0f)) clockLive = true; RunRecord.tick(g.save, Sim.DT, clockLive); if (sim.maxHeight > g.save.climbHeight) g.save.climbHeight = sim.maxHeight; }
                 handleEvents(sim.consumeEvents());
                 acc -= Sim.DT; steps++;
                 if (state != State.PLAYING) break;

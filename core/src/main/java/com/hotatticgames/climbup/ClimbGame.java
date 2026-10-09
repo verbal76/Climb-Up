@@ -13,7 +13,7 @@ import java.io.File;
 
 /** Application root: shared services, screen flow (studio splash -> title -> play). */
 public class ClimbGame extends Game {
-    public static final String VERSION = "0.1.0";
+    public static final String VERSION = "1.1.3";
     /** Android versionCode of the running APK (set by the launcher before the game starts; 0 on desktop). Used only by the test-only OTA compatibility gate. */
     public static int appBuild;
 
@@ -111,6 +111,7 @@ public class ClimbGame extends Game {
         String sd = System.getProperty("climb.seed");
         long seed = sd != null ? Long.parseLong(sd) : (System.nanoTime() ^ (System.currentTimeMillis() * 0x9E3779B97F4A7C15L)) & 0x7fffffffL | 1L;
         r.tower = new Tower(seed, tuning); r.startIdx = 0;
+        Legacy.stampNewClimb(save, VERSION, appBuild, Legacy.today());
         save.seed = seed; save.slice = 0; save.sliceCheckpoint = 0; save.sliceJson = CourseIO.toJson(r.tower.slices.get(0).data);
         return r;
     }

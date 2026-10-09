@@ -36,16 +36,18 @@ public class PersistenceTest {
         assertEquals(0f, old.runClock, 0f); assertEquals(0, old.towers); assertNotNull(old.splits); assertEquals(70f, old.bestHeight, 0f);
     }
 
-    @Test public void aClimbSavedByAnOlderBuildIsDroppedButRecordsAreKept() throws Exception {
+    @Test public void aClimbSavedByAnOlderBuildSurvivesTheLoadAndIsHandledByLegacy() throws Exception {
         File dir = tmp(); SaveStore st = new SaveStore(dir);
         st.writeAtomic("save.json", "{\"version\":3,\"seed\":12345,\"slice\":2,\"sliceJson\":\"{}\",\"sliceCheckpoint\":4,\"runClock\":56.2,\"towers\":1,\"splits\":[10],\"towerTotals\":[10],"
             + "\"bestHeight\":175,\"falls\":9,\"bestSplit\":42.5,\"bestFinish\":900,\"bestTotals\":[42.5]}");
         SaveData d = st.loadGame();
-        assertEquals("old climb cannot be resumed (its castles were not at 500 m)", 0L, d.seed); assertNull(d.sliceJson); assertEquals(0f, d.runClock, 0f); assertEquals(0, d.towers);
-        assertEquals(175f, d.bestHeight, 0f); assertEquals(9, d.falls); assertEquals(42.5f, d.bestSplit, 1e-3f); assertEquals(900f, d.bestFinish, 1e-3f); assertEquals(1, d.bestTotals.length);
-        assertEquals(SaveData.CURRENT_VERSION, d.version);
-        d.seed = 77; d.sliceJson = "{}"; st.saveGame(d);
-        assertEquals("a climb saved by this build is resumable", 77L, st.loadGame().seed);
+        assertEquals("the unfinished climb is kept until the player decides", 12345L, d.seed); assertEquals(56.2f, d.runClock, 1e-3f); assertEquals("", d.climbVersion);
+        assertEquals(175f, d.bestHeight, 0f); assertEquals(42.5f, d.bestSplit, 1e-3f); assertEquals(SaveData.CURRENT_VERSION, d.version);
+        assertTrue("unstamped climbs count as older rules", Legacy.needsPrompt(d, ClimbGame.VERSION));
+        st.saveGame(d);
+        SaveData again = st.loadGame();
+        assertEquals("the version is always written, so a save is never mistaken for an old one", SaveData.CURRENT_VERSION, again.version);
+        assertEquals(12345L, again.seed); assertEquals(56.2f, again.runClock, 1e-3f);
     }
 
     @Test public void corruptSaveIsBackedUpAndDefaultsReturned() throws Exception {

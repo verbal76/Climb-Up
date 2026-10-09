@@ -253,7 +253,7 @@ public class ModuleStoreTest {
     static HostEnv env(File moduleDir, java.util.List<String> log, ModuleStore store) {
         return new HostEnv() {
             public File dataDir() { return new File("data"); } public int appBuild() { return 1; } public int hostLevel() { return 1; }
-            public File moduleDir() { return moduleDir; } public void confirmHealthy() { store.confirm(); } public void diag(String l) { log.add(l); }
+            public File moduleDir() { return moduleDir; } public void confirmHealthy() { store.confirm(); } public void climbInProgress(boolean b) { store.setClimbInProgress(b); } public void diag(String l) { log.add(l); }
         };
     }
 

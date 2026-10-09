@@ -15,3 +15,7 @@ ci-secrets/
 *.pem
 OTA_SIGNING_*
 ANDROID_KEY*
+otalab/src/main/assets/baseline/
+otalab/src/main/assets/lab_public_key.b64
+otalab/libs/
+*.pem

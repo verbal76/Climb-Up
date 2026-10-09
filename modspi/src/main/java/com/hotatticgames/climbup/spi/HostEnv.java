@@ -14,6 +14,11 @@ public interface HostEnv {
     File moduleDir();
     /** The game reached live play with this module: the host stops treating it as unproven. Call once; later calls are ignored. */
     void confirmHealthy();
+    /**
+     * Tells the host whether a climb is in progress (its history is stored and resumable). The host never activates a module that would read that climb differently
+     * (other generator ruleset, unreadable save schema) while this is true; it waits until the climb ends.
+     */
+    void climbInProgress(boolean inProgress);
     /** Diagnostics line for the host log (Settings/About reads these); never required for play. */
     void diag(String line);
 }

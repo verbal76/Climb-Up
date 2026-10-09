@@ -1,0 +1,74 @@
+name: OTA lab (experimental, never publishes)
+# Proves the full-game OTA delivery mechanism with a SYNTHETIC module on a real Android runtime (emulator, API 34). Builds an isolated app (com.hotatticgames.climbup.otalab)
+# that cannot replace the installed game, uses a throw-away signing key generated inside the run, uploads artifacts only. No release, no tag, no OTA channel write.
+on:
+  workflow_dispatch: {}
+  push:
+    branches: [exp/ota-full]
+permissions:
+  contents: read
+
+jobs:
+  lab:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '17' }
+      - name: Accept Android SDK licenses (runner image ships the SDK)
+        run: |
+          mkdir -p "$ANDROID_HOME/licenses"
+          printf '\n24333f8a63b6825ea9c5514f83c2829b004d1fee\n8933bad161af4178b1185d1a37fbf41ea5269c55\nd56f5187479451eabf01fb78af6dfcb131a6481e\n' > "$ANDROID_HOME/licenses/android-sdk-license"
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Host unit tests (verifier, store, rollback, downloader, loader glue)
+        run: ./gradlew :hostkit:test :modsynthetic:jar --no-daemon
+      - name: Throw-away lab signing keys (inside this run only)
+        run: |
+          set -e
+          openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-256 -out "$RUNNER_TEMP/lab.pem"
+          openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-256 -out "$RUNNER_TEMP/other.pem"
+          openssl pkey -in "$RUNNER_TEMP/lab.pem" -pubout -outform DER | base64 -w0 > "$RUNNER_TEMP/lab_pub.b64"
+          mkdir -p otalab/src/main/assets && cp "$RUNNER_TEMP/lab_pub.b64" otalab/src/main/assets/lab_public_key.b64
+      - name: Build the baseline + scenario bundles (dex via D8) and verify them with the host's own verifier
+        run: |
+          set -e
+          BT=$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -1); LIB=$(ls -d $ANDROID_HOME/platforms/android-* | sort -V | tail -1)/android.jar
+          echo "build-tools: $BT  platform: $LIB"
+          JAR=$(ls modsynthetic/build/libs/modsynthetic-*.jar | head -1)
+          tools/otalab/build_fixtures.sh "$JAR" "$RUNNER_TEMP/serve" otalab/src/main/assets/baseline "$RUNNER_TEMP/lab.pem" "$RUNNER_TEMP/other.pem" "$BT/d8" "$LIB"
+          # duplicate-class gate: the module dex must contain neither libGDX nor the host SPI (the host owns both)
+          "$BT/dexdump" -f otalab/src/main/assets/baseline/module.dex | grep "Class descriptor" | tee "$RUNNER_TEMP/classes.txt"
+          if grep -E "Lcom/badlogic/|Lcom/hotatticgames/climbup/spi/" "$RUNNER_TEMP/classes.txt"; then echo "::error::module dex carries host-owned classes"; exit 1; fi
+          ./gradlew :hostkit:jar --no-daemon -q
+          CP="hostkit/build/libs/hostkit-$(grep -oP "appVersionName = '\K[^']+" build.gradle).jar:modspi/build/libs/modspi-$(grep -oP "appVersionName = '\K[^']+" build.gradle).jar:$(find ~/.gradle -name 'gdx-1.14.2.jar' | head -1)"
+          java -cp "$CP" com.hotatticgames.climbup.host.VerifyBundleCli otalab/src/main/assets/baseline "$RUNNER_TEMP/lab_pub.b64" com.hotatticgames.climbup.otalab internal
+          java -cp "$CP" com.hotatticgames.climbup.host.VerifyBundleCli "$RUNNER_TEMP/serve/v2" "$RUNNER_TEMP/lab_pub.b64" com.hotatticgames.climbup.otalab internal
+          for bad in t_dex t_manifest t_signature wrong_key wrong_app wrong_iface wrong_channel wrong_host; do
+            if java -cp "$CP" com.hotatticgames.climbup.host.VerifyBundleCli "$RUNNER_TEMP/serve/$bad" "$RUNNER_TEMP/lab_pub.b64" com.hotatticgames.climbup.otalab internal; then echo "::error::host verifier ACCEPTED $bad"; exit 1; fi
+          done
+      - name: Assemble the lab APK
+        run: ./gradlew :otalab:assembleDebug --no-daemon -PwithAndroid
+      - name: Contents of the lab APK (native libs, dex, one libGDX only)
+        run: |
+          APK=$(ls otalab/build/outputs/apk/debug/*.apk | head -1)
+          sha256sum "$APK"; unzip -l "$APK" | grep -E "\.so$|classes[0-9]*\.dex|assets/baseline|lab_public" 
+          BT=$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -1); "$BT/aapt2" dump badging "$APK" | grep -E "^package|targetSdk|uses-permission"
+      - uses: actions/upload-artifact@v4
+        with: { name: otalab-apk, path: otalab/build/outputs/apk/debug/*.apk }
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules; sudo udevadm trigger --name-match=kvm
+      - run: pip install pillow
+      - name: Emulator run (Android 14 / API 34, x86_64)
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          disable-animations: true
+          script: env APK="$(ls otalab/build/outputs/apk/debug/*.apk | head -1)" SERVE="${{ runner.temp }}/serve" OUT="${{ runner.temp }}/emu-out" tools/otalab/emulator_test.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: otalab-emulator-evidence, path: "${{ runner.temp }}/emu-out" }

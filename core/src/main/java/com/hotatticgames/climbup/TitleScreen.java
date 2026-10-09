@@ -107,24 +107,34 @@ public final class TitleScreen extends ScreenAdapter {
         if (next != null) { Screen n = next; next = null; g.setScreen(n); }
     }
 
-    private static final String NOTICE_1 = "THIS UPDATE CHANGED HOW A CLIMB IS STORED, SO YOUR UNFINISHED CLIMB COULD NOT CARRY OVER.";
-    private static final String NOTICE_2 = "IT IS KEPT AS A LEGACY RUN. YOUR RECORDS AND SETTINGS ARE SAFE. YOUR NEXT CLIMB STARTS FRESH.";
+    private static final String[] NOTICE_A = {"THIS UPDATE CHANGED HOW A CLIMB IS STORED, SO YOUR", "UNFINISHED CLIMB COULD NOT CARRY OVER."};
+    private static final String[] NOTICE_B = {"IT IS KEPT AS A LEGACY RUN. YOUR RECORDS AND SETTINGS ARE SAFE.", "YOUR NEXT CLIMB STARTS FRESH."};
 
-    /** One-time notice after the save format change: the old climb could not carry over. Text is word-wrapped to the panel and the panel grows (or the text shrinks) to hold it, at every text size. */
+    private static java.util.List<String> wrapAll(String[] src, java.util.function.ToDoubleFunction<String> width, float maxW) {
+        java.util.List<String> out = new java.util.ArrayList<>(); for (String s : src) out.addAll(TextWrap.wrap(s, width, maxW)); return out;
+    }
+
+    /**
+     * One-time notice after the save format change: the old climb could not carry over. The panel is as wide as the notice's own lines need (the wide layout), up to the screen;
+     * a line is only wrapped when it still does not fit (large text sizes, narrow screens), and the text shrinks a step at a time if the panel would not fit the screen height.
+     */
     private void legacyPrompt(Ui ui, float W, float H) {
         ui.rect(0, 0, W, H, new Color(0f, 0f, 0.05f, 0.72f));
-        float pw = Math.min(W - 60, 900), pad = 40, maxW = pw - 2 * pad, bw = 360, bh = 80;
-        float scale = ui.tm(), titlePx = 4.6f, body1 = 3.2f, body2 = 3f;
-        java.util.List<String> a, b; float ph;
-        while (true) {                                      // largest text size (up to the player's setting) whose panel fits the screen
+        float pad = 44, bw = 360, bh = 80, scale = ui.tm(), titlePx = 4.6f, body1 = 3.2f, body2 = 3f;
+        float pw, ph; java.util.List<String> a, b;
+        while (true) {
             float t = titlePx * Math.min(scale, 1.3f), p1 = body1 * scale, p2 = body2 * scale;
-            a = TextWrap.wrap(NOTICE_1, str -> ui.font.width(str, p1), maxW); b = TextWrap.wrap(NOTICE_2, str -> ui.font.width(str, p2), maxW);
+            float need = ui.font.width("NEW VERSION, NEW TOWER", t);
+            for (String l : NOTICE_A) need = Math.max(need, ui.font.width(l, p1));
+            for (String l : NOTICE_B) need = Math.max(need, ui.font.width(l, p2));
+            pw = Math.max(Math.min(W - 60, 900), Math.min(W - 60, need + 2 * pad)); float maxW = pw - 2 * pad;
+            a = wrapAll(NOTICE_A, str -> ui.font.width(str, p1), maxW); b = wrapAll(NOTICE_B, str -> ui.font.width(str, p2), maxW);
             ph = 40 + ui.font.height(t) + 34 + a.size() * (ui.font.height(p1) + 14) + 22 + b.size() * (ui.font.height(p2) + 14) + 30 + bh + 40;
             if (ph <= H - 40 || scale <= 0.7f) break;
             scale -= 0.1f;
         }
         float t = titlePx * Math.min(scale, 1.3f), p1 = body1 * scale, p2 = body2 * scale;
-        if (ui.font.width("NEW VERSION, NEW TOWER", t) > maxW) t = Math.max(2f, t * maxW / ui.font.width("NEW VERSION, NEW TOWER", t));
+        if (ui.font.width("NEW VERSION, NEW TOWER", t) > pw - 2 * pad) t = Math.max(2f, t * (pw - 2 * pad) / ui.font.width("NEW VERSION, NEW TOWER", t));
         float px = W / 2 - pw / 2, py = Math.max(20, H / 2 - ph / 2);
         ui.panel(px, py, pw, ph);
         float cx = W / 2, top = py + ph - 40, y = top - ui.font.height(t);

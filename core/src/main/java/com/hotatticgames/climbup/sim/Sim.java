@@ -519,7 +519,8 @@ public final class Sim {
         float py = y, ps = s;
         // previous feet height relative to previous platform tops handled per element
         s += vx * dt; y += vy * dt;
-        stopAtEdges();
+        boolean stopped = stopAtEdges();
+        if (stopped && lockout <= 0 && tryGrab(in)) return;          // a body held at a platform's side is caught (hang / step up / bounce) before it can settle back on the platform it just left
         // landing
         int best = -1; float bestTop = -1e9f;
         for (int k1 = 0, cnt1 = act == null ? course.size() : act.length; k1 < cnt1; k1++) {
@@ -548,7 +549,8 @@ public final class Sim {
      * the feet and the head, bounce on a pad), or it slides down the face. Without this, a fast rising body slipped into the block (the catch is off above 3.5 m/s) and sank through it.
      * Landing from above and jumping up through the underside are unchanged: neither crosses a side face.
      */
-    private void stopAtEdges() {
+    private boolean stopAtEdges() {
+        boolean stopped = false;
         for (int k = 0, cnt = act == null ? course.size() : act.length; k < cnt; k++) {
             int i = act == null ? k : act[k];
             Element el = course.get(i);
@@ -562,7 +564,9 @@ public final class Sim {
             float side = dPrev > 0 ? 1f : -1f;                                                   // + : the platform is ahead (+s)
             s = course.wrap(es1[i] - side * stop);
             if (vx * side > 0f) vx = 0f;
+            stopped = true;
         }
+        return stopped;
     }
 
     private void land(int i, InputState in) {

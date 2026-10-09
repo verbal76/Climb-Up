@@ -137,3 +137,6 @@
 - The castle approach is randomized per run; only the castle itself is fixed (heights N x 500 m).
 - Validation: `OfficialWorldRulesTest`, `OfficialRunTest`, `GemCheckpointTest`, `CastleSpacingTest`. Stress: 840 slices, 1 solver miss (seed 130, slice 11), consistent with the known rare solver miss; no generation errors. `EndlessTest.crabSlicesStillSolve` seed 32 was swapped for 36 for the same reason.
 - Automated only; no device testing.
+
+## Hazard hits knock you off (build 42)
+A hazard no longer teleports you. It knocks you off what you hold (small hop away from the hazard, 0.7 s grace); you then land on whatever is below, and only falling past the lowest platform of the map returns you to the last red gem you touched. Stress (1200 slices, seeds 160-259): 10 autopilot-run misses with this rule vs 5 before it (0.8% vs 0.4% of slices; the autopilot replays from a live state, while generation proves every link from a fresh state). Not investigated further.

@@ -196,6 +196,13 @@ public final class Sim {
         return m;
     }
 
+    /** A hazard never teleports you: it knocks you off whatever you hold, and you land on what is below or, if nothing is, fall back to the last red gem. */
+    private void knockOff() {
+        float side = hitBy == null ? 0f : course.dsWrap(s, hitBy.sAt(time));
+        mode = Mode.AIR; onElem = -1; coyote = 0; jumpBuf = 0;
+        vx = (side >= 0f ? 1f : -1f) * 4f; vy = 3f; invuln = 0.7f;
+    }
+
     public void respawn() {
         falls++; invuln = 0.7f;
         events |= EV_RESPAWN; teleported = true;
@@ -279,7 +286,7 @@ public final class Sim {
         else if (in.swingPressed && clubTime > 0f && (mode == Mode.GROUND || mode == Mode.AIR)) { swingT = SWING_TIME; events |= EV_SWING; }
         stepFeatures();
         if (invuln > 0) invuln = Math.max(0f, invuln - dt);
-        else if (hazardHit()) { hits++; events |= EV_HIT; hitS = s; hitY = y; respawn(); return; }
+        else if (hazardHit()) { hits++; events |= EV_HIT; hitS = s; hitY = y; knockOff(); }
 
         if (mode != Mode.AIR) lastGroundY = y;
         else if (y > lastGroundY && mode == Mode.AIR && vy <= 0) { /* keep */ }

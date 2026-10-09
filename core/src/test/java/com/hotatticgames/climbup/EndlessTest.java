@@ -84,7 +84,7 @@ public class EndlessTest {
         return n;
     }
 
-    @Test public void hazardsSendYouBackWithGraceAndOnlyWhenTouched() throws Exception {
+    @Test public void hazardsKnockYouOffWithGraceAndOnlyWhenTouched() throws Exception {
         Tuning t = TestUtil.tuning();
         Course c = TestUtil.flat(t);
         Element saw = new Element(Element.Type.SPIKE_BLOCK, 10f, 0f, 1.2f); saw.len = 1f; saw.anchor = 0; c.hazards.add(saw);
@@ -94,8 +94,11 @@ public class EndlessTest {
         for (int i = 0; i < 40 && s.hits == 0; i++) { in.clear(); in.moveX = 1f; s.step(in); }
         assertEquals("walking into a spike block hurts", 1, s.hits);
         assertTrue((s.consumeEvents() & Sim.EV_HIT) != 0);
-        assertEquals("respawned on the checkpoint", 0, s.onElem);
-        assertTrue("grace period after respawn", s.invuln > 0f);
+        assertEquals("no teleport: a hazard knocks you off instead", 0, s.falls);
+        assertTrue("knocked into the air", s.mode == Sim.Mode.AIR || s.onElem < 0);
+        assertTrue("grace period after the hit", s.invuln > 0f);
+        for (int i = 0; i < 300; i++) { in.clear(); s.step(in); }
+        assertEquals("you land on what is below and carry on", 0, s.falls);
         // a player on another spiral layer below a trap is not touched
         c = TestUtil.flat(t);
         Element trap = new Element(Element.Type.SPIKE_TRAP, 30f, 40f, 2.4f); trap.period = 3f; trap.amp = 0.4f; trap.anchor = 0;

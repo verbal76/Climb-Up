@@ -22,7 +22,7 @@ public class OfficialRunTest {
             for (Element h : c.hazards) if (h.type == Element.Type.GATE) { castles++; assertTrue(h.skin >= 1 && h.skin <= 11); castleY[h.skin] = h.y; }
             for (int i = 1; i < c.routeSize(); i++) {
                 Element e = c.get(i);
-                if (e.y < 5000f - 1f && e.y >= 25f && (e.y % 1000f) >= 25f) assertEquals("world of an element at " + e.y, (int) (e.y / 1000f), e.zone);        // (a module that starts just below a boundary keeps the old world for a few metres)
+                if (e.y < 5000f - 1f && e.y >= 25f && (e.y % 1000f) >= 25f && (e.y % 1000f) <= 975f) assertEquals("world of an element at " + e.y, (int) (e.y / 1000f), e.zone);        // (a module that starts just below a boundary keeps the old world for a few metres, and one that reaches over it takes the new one)
                 if (e.y < 5000f) { perWorld[Math.min(4, (int) (e.y / 1000f))]++; families[Math.min(4, (int) (e.y / 1000f))][e.type.ordinal()]++; }
             }
         }

@@ -132,9 +132,11 @@ public final class Autopilot {
     /** Waits, runs across the platform, hops over the hazard in the middle ({@code hopDist} before it), then leaves like {@link GroundPolicy}. */
     static final class MidHopPolicy implements Policy {
         final int a, b, dir; final float wait, hopDist, hx; final GroundPolicy rest; float t; int phase;
-        MidHopPolicy(int a, int b, int dir, float wait, float hopDist, float hx, float offset, int steerMode) {
+        MidHopPolicy(int a, int b, int dir, float wait, float hopDist, float hx, float offset, int steerMode) { this(a, b, dir, wait, hopDist, hx, offset, steerMode, 1f); }
+        /** {@code restSpeed} below 1 is the walk to the take-off edge after the hazard is behind: a person eases off before a spring or pad, which launches with whatever speed is carried in. */
+        MidHopPolicy(int a, int b, int dir, float wait, float hopDist, float hx, float offset, int steerMode, float restSpeed) {
             this.a = a; this.b = b; this.dir = dir; this.wait = wait; this.hopDist = hopDist; this.hx = hx;
-            rest = new GroundPolicy(a, b, dir, 0f, offset, 0.9f, steerMode);
+            rest = new GroundPolicy(a, b, dir, 0f, offset, 0.9f, steerMode); rest.speed = restSpeed;
         }
         public void act(Sim s, InputState in) {
             if (s.mode == Sim.Mode.LEDGE || s.mode == Sim.Mode.PULLUP) { in.moveY = 1f; return; }
@@ -300,8 +302,18 @@ public final class Autopilot {
                 break;
             }
         }
-        if (SLOW_APPROACH.get() && base.mode == Sim.Mode.GROUND && !pair && c.get(a).isPlatform() && !(movingNear(c, a))) {   // a gentle approach: a person can walk up slowly and make a short, controlled hop where a full-speed run-up would overshoot or catch the wrong ledge
-            slowCands = new ArrayList<>();
+        if (SLOW_APPROACH.get() && base.mode == Sim.Mode.GROUND && !pair && c.get(a).isPlatform() && !(movingNear(c, a))) {
+            if (slowCands == null) slowCands = new ArrayList<>();
+            for (Element h : c.hazards) {          // hop the hazard in the middle, then ease off for the take-off
+                if (h.anchor != anchorIdx(c, a) || !(h.type == Element.Type.SAW_H || h.type == Element.Type.SPIKE_BLOCK || h.type == Element.Type.SPIKE_TRAP || h.type == Element.Type.CRAB)) continue;
+                if (Math.abs(c.dsWrap(h.s, base.es1[a])) >= c.get(a).halfW()) continue;
+                final float hx = base.es1[a] + c.dsWrap(h.s, base.es1[a]);
+                for (float rs : new float[]{0.5f, 0.3f}) for (float hd : new float[]{1.0f, 1.5f, 2.0f, 2.5f}) for (int sm = 0; sm < 2; sm++) {
+                    final float fhd = hd, frs = rs; final int fsm = sm == 0 ? 0 : 3;
+                    slowCands.add(() -> new MidHopPolicy(a, b, dir, 0f, fhd, hx, 0f, fsm, frs));
+                }
+                break;
+            }   // a gentle approach: a person can walk up slowly and make a short, controlled hop where a full-speed run-up would overshoot or catch the wrong ledge
             for (float sp : new float[]{0.5f, 0.3f}) for (int oi = 0; oi < OFFSETS.length; oi++) for (int hi = 0; hi < HOLDS.length; hi++) for (int sm = 0; sm < 4; sm++) {
                 if (sm == 2) continue;
                 final float fo = OFFSETS[oi], fh = HOLDS[hi], fs = sp; final int fsm = sm;
@@ -330,7 +342,11 @@ public final class Autopilot {
         if (!r.ok && slowCands != null) {
             for (PolicyFactory f : slowCands) {
                 r.trials++;
-                if (trialEnd(base, a, tgt, f, 4.5f + (c.get(a).crumbles() ? 0 : 6f)) != null) { r.ok = true; r.factory = f; r.successes++; break; }
+                Sim end = trialEnd(base, a, tgt, f, 4.5f + (c.get(a).crumbles() ? 0 : 6f));
+                if (end == null) continue;
+                r.successes++;
+                if (!lookahead || leavesGoodState(end, a)) { r.ok = true; r.factory = f; break; }      // while playing, a slow move that also suits the next link beats a working one that does not
+                if (firstOk == null) firstOk = f;
             }
         }
         if (measureMargin && !group.isEmpty()) { int best = 0; for (int gw : groupWins) best = Math.max(best, gw); r.window = best / (float) nWaits; }
@@ -453,7 +469,7 @@ public final class Autopilot {
         Sim real = Sim.startOn(c, t, 0); lastReal = real;
         real.keysFree = false; real.keys = 0;       // the solver must fetch every key it needs
         for (Element g : c.hazards) if (g.type == Element.Type.GATE) {      // endless: a castle's key lies in an earlier section, carried here
-            boolean own = false; for (Element k : c.hazards) if (k.type == Element.Type.KEY && k.color == g.color) own = true;
+            boolean own = false; for (Element k : c.hazards) if (k.type == Element.Type.KEY && k.color == g.color && k.anchor < g.anchor) own = true;     // colours repeat: a key found above a gate opens a later castle, not this one
             if (!own) real.keys |= 1 << g.color;
         }
         int a = 0;
@@ -516,6 +532,14 @@ public final class Autopilot {
             }
             if (!r.ok && real.mode == Sim.Mode.AIR && !(real.lastPad == a && (c.get(a).type == Element.Type.PAD || c.get(a).type == Element.Type.SPRING))) {     // bumped while lining up: land, then size the move up again
                 if (recover(real, a, in)) { a = real.onElem; settle(real, a, in); continue; }
+            }
+            if (!r.ok && real.mode == Sim.Mode.AIR && real.lastPad == a && (c.get(a).type == Element.Type.PAD || c.get(a).type == Element.Type.SPRING)) {
+                // like a person: just launched sideways off a pad, so let it carry you a moment (no input) before steering for the next one
+                int before = real.setbacks();
+                for (int q = 0; q < 150 && !r.ok && real.mode == Sim.Mode.AIR && real.setbacks() == before; q++) {
+                    in.clear(); real.step(in);
+                    if (q % 6 == 5 && real.mode == Sim.Mode.AIR) r = plan(real, a, false, false);
+                }
             }
             if (!r.ok) { rep.failedLink = a; rep.simTime = real.time; rep.failInfo = String.format("plan failed: mode=%s on=%d s=%.2f y=%.2f vx=%.2f vy=%.2f", real.mode, real.onElem, real.s, real.y, real.vx, real.vy); return rep; }
             Policy p = r.factory.create();

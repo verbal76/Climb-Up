@@ -33,7 +33,7 @@ jobs:
       - name: Build the baseline + scenario bundles (dex via D8) and verify them with the host's own verifier
         run: |
           set -e
-          BT=$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -1); LIB=$(ls -d $ANDROID_HOME/platforms/android-* | sort -V | tail -1)/android.jar
+          BT=$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -1); LIB=$(ls -d $ANDROID_HOME/platforms/android-* | grep -E 'android-[0-9]+$' | sort -V | tail -1)/android.jar
           echo "build-tools: $BT  platform: $LIB"
           JAR=$(ls modsynthetic/build/libs/modsynthetic-*.jar | head -1)
           tools/otalab/build_fixtures.sh "$JAR" "$RUNNER_TEMP/serve" otalab/src/main/assets/baseline "$RUNNER_TEMP/lab.pem" "$RUNNER_TEMP/other.pem" "$BT/d8" "$LIB"

@@ -37,7 +37,7 @@ with tempfile.TemporaryDirectory() as tmp:
         code_name = "module.jar"; code = open(patched, "rb").read()
     else:
         if not a.d8 or not a.lib: die("--d8 and --lib are required unless --jar-only")
-        outd = os.path.join(tmp, "dex")
+        outd = os.path.join(tmp, "dex"); os.makedirs(outd)
         r = subprocess.run([a.d8, "--release", "--min-api", "26", "--lib", a.lib, "--output", outd, patched], capture_output=True, text=True)
         if r.returncode: die("d8 failed: " + r.stderr[-400:])
         code_name = "module.dex"; code = open(os.path.join(outd, "classes.dex"), "rb").read()

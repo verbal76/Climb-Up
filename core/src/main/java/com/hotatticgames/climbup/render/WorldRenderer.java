@@ -723,6 +723,7 @@ public final class WorldRenderer implements Disposable {
                 boolean inside = Math.abs(dxg) < 1.6f;
                 ModelInstance g = gateInst(h);
                 for (com.badlogic.gdx.graphics.g3d.Material mt : g.materials) { if (inside) mt.set(gateBlend); else mt.remove(BlendingAttribute.Type); }       // the walls turn glassy while you walk through, so you stay visible inside
+                for (com.badlogic.gdx.graphics.g3d.model.Node nd : g.nodes) for (com.badlogic.gdx.graphics.g3d.model.NodePart np : nd.parts) if (np.material.id.contains("Black")) np.enabled = !inside;       // the two dark doorway boxes would show through the glassy walls: hide them then
                 float phi = dxg / T.radius;
                 // the tower is turned a quarter turn so its door faces down the path (right); the second door sits exactly opposite (left)
                 g.transform.idt().translate(T.radius * MathUtils.sin(phi), h.y, -T.radius + T.radius * MathUtils.cos(phi))

@@ -8,5 +8,5 @@ rootProject.name = 'climb-up'
 include ':core', ':desktop', ':modspi', ':hostkit', ':modsynthetic', ':climbmodule'
 // The Android module needs the Android SDK + Google's Maven; CI (and any machine with ANDROID_HOME) enables it.
 if (System.getenv('ANDROID_HOME') != null || System.getenv('ANDROID_SDK_ROOT') != null || hasProperty('withAndroid')) {
-    include ':android', ':otalab'
+    include ':android', ':otalab', ':climbhost', ':climbref'
 }

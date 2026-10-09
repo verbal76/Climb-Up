@@ -1,20 +1,28 @@
 plugins { id 'com.android.application' version '8.7.3' }
 
-// Isolated experimental host for the full-game OTA architecture (docs/ota-full). NOT the shipped game: its own application id, so it can never replace the installed Climb up.
+// Experimental Climb Up host (docs/ota-full). Own application id: it can never replace the installed game.
 def buildCode = (System.getenv('GITHUB_RUN_NUMBER') ?: (project.findProperty('buildCode') ?: '1')).toInteger()
 
 android {
-    namespace 'com.hotatticgames.climbup.otalab'
+    namespace 'com.hotatticgames.climbup.otaref'
     compileSdk 35
     defaultConfig {
-        applicationId 'com.hotatticgames.climbup.otalab'
+        applicationId 'com.hotatticgames.climbup.otaref'
         minSdk 26
-        targetSdk 35          // Android 14+ read-only dex rule applies (targetSdk >= 34)
+        targetSdk 35
         versionCode buildCode
-        versionName rootProject.ext.appVersionName + '-otalab'
+        versionName rootProject.ext.appVersionName + '-otaref'
     }
     compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
-    sourceSets { main { jniLibs.srcDirs = ['libs']; java.srcDirs += ['../labcommon/java'] } }
+    sourceSets {
+        main {
+            // the game's own assets and Android resources (theme, cutout handling, icons), used in place: nothing is copied or converted
+            assets.srcDirs = ['../assets', 'src/main/assets']
+            res.srcDirs = ['../android/src/main/res']
+            jniLibs.srcDirs = ['libs']
+            java.srcDirs += ['../labcommon/java']
+        }
+    }
     packaging { jniLibs { useLegacyPackaging = false } }
     lint { abortOnError false }
 }
@@ -22,12 +30,13 @@ android {
 configurations { natives }
 
 dependencies {
-    implementation project(':hostkit')
     implementation project(':modspi')
     implementation "com.badlogicgames.gdx:gdx-backend-android:${rootProject.ext.gdxVersion}"
     natives "com.badlogicgames.gdx:gdx-platform:${rootProject.ext.gdxVersion}:natives-armeabi-v7a"
     natives "com.badlogicgames.gdx:gdx-platform:${rootProject.ext.gdxVersion}:natives-arm64-v8a"
     natives "com.badlogicgames.gdx:gdx-platform:${rootProject.ext.gdxVersion}:natives-x86_64"
+    implementation project(':core')
+    implementation project(':climbmodule')
 }
 
 tasks.register('copyAndroidNatives') {
@@ -40,12 +49,5 @@ tasks.register('copyAndroidNatives') {
     }
 }
 tasks.matching { it.name.contains('merge') && it.name.contains('JniLibFolders') }.configureEach { dependsOn 'copyAndroidNatives' }
-
-// Same pin as the game's android module (androidx.core 1.17 needs AGP 8.9.1+).
 configurations.configureEach { resolutionStrategy.force 'androidx.core:core:1.15.0' }
 
-// The lab host refuses to build without the public key it must pin: the build supplies it (CI generates a throw-away pair per run), so there is no default key to forget about.
-tasks.register('requireLabKey') {
-    doFirst { if (!file('src/main/assets/lab_public_key.b64').isFile()) throw new GradleException('otalab/src/main/assets/lab_public_key.b64 missing: tools/otalab/emulator_test.sh creates it') }
-}
-tasks.matching { it.name.startsWith('merge') && it.name.endsWith('Assets') }.configureEach { dependsOn 'requireLabKey' }

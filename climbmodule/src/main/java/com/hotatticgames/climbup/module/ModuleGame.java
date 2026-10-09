@@ -10,9 +10,9 @@ import com.hotatticgames.climbup.spi.HostEnv;
  *  - the host is told when a climb exists (it holds back module switches that would change a climb in progress).
  */
 final class ModuleGame extends ClimbGame {
-    private static final int HEALTHY_FRAMES = 15 * 60;
+    private static final float HEALTHY_SECONDS = 15f;
     private final HostEnv env;
-    private int playFrames; private boolean healthy;
+    private float playSeconds; private boolean healthy;
 
     ModuleGame(HostEnv env) { super(env.dataDir()); this.env = env; }
 
@@ -23,7 +23,7 @@ final class ModuleGame extends ClimbGame {
 
     @Override public void render() {
         super.render();
-        if (!healthy && getScreen() instanceof PlayScreen && ++playFrames >= HEALTHY_FRAMES) { healthy = true; env.confirmHealthy(); }
+        if (!healthy && getScreen() instanceof PlayScreen) { playSeconds += Math.min(com.badlogic.gdx.Gdx.graphics.getDeltaTime(), 0.25f); if (playSeconds >= HEALTHY_SECONDS) { healthy = true; env.confirmHealthy(); } }
     }
 
     @Override public Run openRun(boolean fresh) { Run r = super.openRun(fresh); env.climbInProgress(true); return r; }

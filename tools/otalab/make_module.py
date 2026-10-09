@@ -15,6 +15,7 @@ ap.add_argument("--interface", type=int, default=1); ap.add_argument("--host-min
 ap.add_argument("--save-schema", type=int, default=6); ap.add_argument("--save-min", type=int, default=6); ap.add_argument("--ruleset", type=int, default=1)
 ap.add_argument("--revoke-floor", type=int, default=0); ap.add_argument("--content", type=int, default=1)
 ap.add_argument("--source-sha", default="0123456789abcdef0123456789abcdef01234567")
+ap.add_argument("--no-props", action="store_true", help="real game module: do not inject the synthetic module's behaviour file")
 ap.add_argument("--tamper", choices=["none", "dex", "manifest", "signature"], default="none", help="test fixtures only: produce a deliberately broken bundle")
 a = ap.parse_args()
 
@@ -27,11 +28,11 @@ with tempfile.TemporaryDirectory() as tmp:
     patched = os.path.join(tmp, "module-in.jar")
     with zipfile.ZipFile(a.jar) as zin, zipfile.ZipFile(patched, "w", zipfile.ZIP_DEFLATED) as zout:
         for item in zin.infolist():
-            if item.filename == "synthetic.properties": continue
+            if item.filename == "synthetic.properties" and not a.no_props: continue
             n = item.filename
             if n.startswith("com/badlogic/") or n.startswith("com/hotatticgames/climbup/spi/"): die("module jar carries host-owned classes: " + n)
             zout.writestr(item, zin.read(n))
-        zout.writestr("synthetic.properties", "version=%d\nmode=%s\nhue=%.2f\n" % (a.version, a.mode, (0.37 * a.version) % 1.0))
+        if not a.no_props: zout.writestr("synthetic.properties", "version=%d\nmode=%s\nhue=%.2f\n" % (a.version, a.mode, (0.37 * a.version) % 1.0))
     # 2. code file
     if a.jar_only:
         code_name = "module.jar"; code = open(patched, "rb").read()

@@ -19,3 +19,7 @@ otalab/src/main/assets/baseline/
 otalab/src/main/assets/lab_public_key.b64
 otalab/libs/
 *.pem
+climbhost/src/main/assets/baseline/
+climbhost/src/main/assets/lab_public_key.b64
+climbhost/libs/
+climbref/libs/

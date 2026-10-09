@@ -4,7 +4,6 @@ import android.os.Bundle;
 import android.util.Log;
 import com.badlogic.gdx.ApplicationListener;
 import com.badlogic.gdx.backends.android.AndroidApplication;
-import com.badlogic.gdx.backends.android.AndroidApplicationConfiguration;
 import com.hotatticgames.climbup.host.HostBoot;
 import com.hotatticgames.climbup.host.HostInfo;
 import com.hotatticgames.climbup.host.ModuleDownloader;
@@ -21,11 +20,12 @@ import java.io.InputStream;
  * It owns libGDX, the native libraries and the render loop; the module supplies only an ApplicationListener, which the stock backend drives directly.
  */
 public class LabLauncher extends AndroidApplication {
-    static final String TAG = "OTALAB";
+    static final String TAG = LabCommon.TAG;
     private ModuleStore store;
 
     @Override protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        LabCommon.applyTestProps(this);
         long t0 = System.nanoTime();
         File root = new File(getFilesDir(), "host");
         HostInfo host = new HostInfo(getPackageName(), HostInfo.HOST_LEVEL, "internal");
@@ -47,9 +47,8 @@ public class LabLauncher extends AndroidApplication {
         }
         Log.i(TAG, (s.recovery() ? "RECOVERY screen" : "running module v" + s.manifest.moduleVersion) + " active=" + store.st.active + " lastGood=" + store.st.lastGood + " pending=" + store.st.pending
                 + " tries=" + store.st.tries + " staged=" + store.st.staged + " note=[" + s.note + "] rollback=[" + store.st.rollback + "] bootMs=" + (System.nanoTime() - t0) / 1_000_000);
-        AndroidApplicationConfiguration config = new AndroidApplicationConfiguration();
-        config.useImmersiveMode = true; config.useAccelerometer = false; config.useCompass = false; config.useGyroscope = false; config.numSamples = 0;
-        initialize(listener, config);
+        initialize(listener, LabCommon.gameConfig());
+        LabCommon.startSelfTest(this, s.module);
 
         String base = getIntent() == null ? null : getIntent().getStringExtra("updateBase");      // lab only: where CI serves test bundles
         if (base != null) {
@@ -66,7 +65,7 @@ public class LabLauncher extends AndroidApplication {
             @Override public int hostLevel() { return HostInfo.HOST_LEVEL; }
             @Override public File moduleDir() { return moduleDir; }
             @Override public void confirmHealthy() { store.confirm(); Log.i(TAG, "confirmed healthy: " + store.st.lastResult); }
-            @Override public void climbInProgress(boolean v) { store.setClimbInProgress(v); }
+            @Override public void climbInProgress(boolean v) { Log.i(TAG, "climbInProgress=" + v); store.setClimbInProgress(v); }
             @Override public void diag(String line) { Log.i(TAG, line); }
         };
     }

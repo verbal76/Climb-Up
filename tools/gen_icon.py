@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Original app icon for Climb up: sunset voxel sky, green blocks, and the (CC0) Cute Robot head. Writes Android launcher resources."""
+"""Original app icon for Climb up: sunset sky, green blocks, and the game's own 3D bunny hero (render made by desktop IconShot from the Quaternius hero, CC0). Writes Android launcher resources."""
 import os
 from PIL import Image, ImageDraw
 ROOT = os.path.join(os.path.dirname(__file__), '..')
 RES = os.path.join(ROOT, 'android', 'src', 'main', 'res')
-head = Image.open(os.path.join(ROOT, 'tools', 'legacy_robot', 'Head.png')).convert('RGBA')
+hero = Image.open(os.path.join(ROOT, 'tools', 'icon', 'hero_render.png')).convert('RGBA'); hero = hero.crop(hero.getbbox())
 
 def background(size):
     im = Image.new('RGBA', (size, size)); d = ImageDraw.Draw(im)
@@ -26,8 +26,9 @@ def foreground(size):
         x0, y0 = bx * u, by * u
         d.rectangle([x0, y0 + u * 0.5, x0 + bw * u, y0 + u * 1.7], fill=(222, 112, 64, 255))
         d.rectangle([x0, y0, x0 + bw * u, y0 + u * 0.7], fill=(122, 255, 190, 255))
-    h = head.copy(); hw = int(size * 0.46); h = h.resize((hw, int(hw * h.height / h.width)), Image.NEAREST)
-    im.alpha_composite(h, (int(size * 0.20), int(size * 0.20)))
+    hh = int(size * 0.42); hw = int(hh * hero.width / hero.height)
+    h = hero.resize((hw, hh), Image.LANCZOS)
+    im.alpha_composite(h, (int(8.4 * u + (4.6 * u - hw) / 2), int(11 * u - hh + u * 0.15)))     # stands on the middle block
     return im
 
 def mono(fg):

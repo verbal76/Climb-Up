@@ -4,7 +4,7 @@ A 2.5D skill-platformer by **Hot Attic Games**: climb a spiral tower that doesn'
 course rotates around you as you climb. Ropes, cables, swinging and moving platforms, crumbling tiles, bounce pads and fingertip ledge grabs, in
 an **endless**, procedurally generated (and solver-validated) tower that keeps getting harder. Timed sawblades, cannons that fire spiked balls, pop-up spikes, spiked stone blocks and slabs, angled springs, crabs that shove you, a floating spiked club, and coloured castles whose keys are hidden below the path. You play Quaternius' blue bunny-eared "Character", a skinned and animated 3D model. No upgrades: either you can make the jump or you can't.
 
-Status: **version 1.1.4 (the number and build are shown bottom-right of the title screen)** produced from the Climb Up v6 design package (see `design-package/`, `CLAUDE.md`). Android target; desktop build included for testing.
+Status: **version 1.1.5 (the number and build are shown bottom-right of the title screen)** produced from the Climb Up v6 design package (see `design-package/`, `CLAUDE.md`). Android target; desktop build included for testing.
 
 ## Install (Android, sideload)
 Every CI build publishes a **GitHub Release** (`v<version>-build<N>`) with the APK attached: open the repo's *Releases* page on your phone and tap the APK.

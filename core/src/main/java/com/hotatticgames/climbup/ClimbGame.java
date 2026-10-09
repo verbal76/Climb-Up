@@ -12,7 +12,7 @@ import java.io.File;
 
 /** Application root: shared services, screen flow (studio splash -> title -> play). */
 public class ClimbGame extends Game {
-    public static final String VERSION = "1.1.4";
+    public static final String VERSION = "1.1.5";
     /** Android versionCode of the running APK (set by the launcher before the game starts; 0 on desktop). Used only by the OTA compatibility gate. */
     public static int appBuild;
 

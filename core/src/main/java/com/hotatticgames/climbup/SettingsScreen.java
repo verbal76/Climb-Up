@@ -62,7 +62,7 @@ public final class SettingsScreen extends ScreenAdapter {
         } else if (page == 2) {
             rowY -= 24; ui.textC("CLIMB UP  " + Legacy.versionLine(ClimbGame.VERSION, ClimbGame.appBuild), W / 2, rowY + 30, 4.5f, Ui.TEXT); rowY -= 72;
             ui.textC("CONTENT: " + g.ota.describe(), W / 2, rowY + 30, 3.0f, Ui.DIM); rowY -= 54;
-            ui.textC("TEST-ONLY UPDATER: CHECKSUM ONLY, NOT SECURE. " + (g.otaClient.status.isEmpty() ? "" : g.otaClient.status.toUpperCase()), W / 2, rowY + 30, 2.4f, Ui.DIM); rowY -= 54;
+            ui.textC("UPDATES ARE SIGNED AND VERIFIED. " + (g.otaClient.status.isEmpty() ? "" : g.otaClient.status.toUpperCase()), W / 2, rowY + 30, 2.4f, Ui.DIM); rowY -= 54;
             toggle("CHECK FOR GAME UPDATES", s.otaEnabled, () -> s.otaEnabled = !s.otaEnabled);
             row("UPDATE NOW", "CHECK", null, null, () -> g.startOtaCheck(true));
             ui.textC(g.audio.diag(), W / 2, rowY + 30, 2.8f, Ui.DIM); rowY -= 64;

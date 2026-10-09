@@ -1,31 +1,30 @@
-# Family-test OTA (TEST ONLY)
+# Over-the-air updates (signed)
 
-**Climb Up is a proof-of-concept game tested through sideloaded APKs on a few trusted family phones. This updater is not for Google Play, internal-testing tracks, strangers, or any production use.**
+Scope (owner decision): content and game logic expressed as **data the game interprets**. Today that is `assets/data/tuning.json`: every movement, hazard-timing, difficulty-ramp and assist number. No native code, no scripts, no assets, no models, no audio. A payload is a zip holding exactly `tuning.json`.
 
-> **Security statement.** The only integrity check is a SHA-256 taken from `manifest.json`. A checksum proves the download was not corrupted; it does **not** authenticate who published it. Anyone who can write to the `ota-dev` release (or intercept it, since the manifest is trusted as-is) could ship content to every installed copy. This configuration is therefore **not approved for untrusted or production distribution**. Promoting it to production needs a separate security review and authenticated (signed) update delivery. Nothing in the app or CI does that automatically.
-
-## What it updates
-Only `assets/data/tuning.json` (every gameplay / generator / movement number: run speed, gravity, jump, gap sizes, crumble delays, swing super-jump power, zone sizes ...). No code, no assets, no models/audio, no rendering or controls. A payload may contain exactly that one file; any other entry name (including `../x` or subfolders) rejects the whole payload.
-
-## How it works (small on purpose)
-* **Hosting:** two files on a public GitHub release with the fixed tag `ota-dev`: `manifest.json` and `payload.zip` (repo is public; no server, no accounts, no credentials in the APK, no identifiers in the request).
-  `https://github.com/verbal76/Climb-Up/releases/download/ota-dev/manifest.json`
-* **Manifest:** `schema`, `channel` (`dev`), `contentVersion` (integer, must only ever go up), `runtime`, `minVersionCode`, `payloadUrl` (must live under the same release URL), `sha256`, `size`.
-* **Check:** silent background thread at app start, at most once per 24 h, short timeouts, failure is silent. Settings > About shows `CONTENT:` state and the last result, has an on/off switch (default on) and an `UPDATE NOW` button.
-* **Download -> verify -> stage:** size caps (manifest 16 KB, payload 256 KB), SHA-256 of the zip must match, allow-listed unzip, the tuning JSON must parse and pass `Tuning.validate()` (finite, sane ranges), then written to `ota/staging.tmp` and renamed to `ota/staging` (atomic). A half-finished download is deleted at the next start.
-* **Apply:** only on the **next cold start**, never mid-session. `ota/active` -> `ota/previous`, staging -> `ota/active`.
-* **Compatibility gate:** `runtime` must equal the app's `OtaConfig.RUNTIME` (bump it, and the same constant in `tools/ota/make_ota.py`, only with a native/code change that old payloads cannot survive) and `minVersionCode` must not exceed the installed `versionCode`.
-* **Anti-rollback:** a version is accepted only if it is higher than everything ever applied or already staged and has not been rolled back before.
-* **Rollback / loop protection:** a freshly applied payload is "pending" until the game reaches 15 s of live play. If the app is started more than twice without that confirmation (crash, hang, ANR, kill), or the active files fail their checksum/validation, the payload is dropped, its version is blacklisted, and the previous payload (or the bundled content) is used. A bad file or a bad state file can never prevent the game from starting on bundled content.
+## How it works
+* **Hosting:** three files on the public GitHub release tagged `ota` (no server, no accounts, no identifiers sent, one HTTPS GET each):
+  `https://github.com/verbal76/Climb-Up/releases/download/ota/` `manifest.json`, `manifest.sig`, `payload.zip`.
+* **Trust:** `manifest.sig` is a base64 DER ECDSA (P-256, SHA-256) signature over the exact bytes of `manifest.json`, verified against the public key pinned in the app (`OtaConfig.PUBLIC_KEY_B64`, = `assets/ota/ota_public_key.b64`, key id `a95c0a99d590e934`). **Nothing in a manifest is read until its signature verifies.** The manifest carries the SHA-256 and size of the payload, so the payload is authenticated too. The private key exists only as the `OTA_SIGNING_PRIVATE_KEY` / `OTA_SIGNING_KEY_PASSPHRASE` GitHub secrets.
+* **Manifest fields:** `schema` (2), `channel` (`release`), `keyId`, `contentVersion` (integer), `runtime`, `minVersionCode`, `payloadUrl` (must be under the release URL), `sha256`, `size`.
+* **Runtime compatibility:** `runtime` must equal `OtaConfig.RUNTIME` exactly (this build: **2**) and `minVersionCode` must not exceed the installed `versionCode`. Bump `RUNTIME` (here and in `tools/ota/make_ota.py`; `OtaConfigTest` fails if they differ) when a change to the tuning schema or its meaning makes older payloads unsafe or newer payloads unreadable. A payload may not change the tower's layout constants (`OtaConfig.FROZEN_TUNING`: radius, zone/castle/gem spacing, chunk/course/ramp height, spiral pitch, rest/checkpoint cadence): those need a new APK.
+* **Versions:** this APK bundles content version `OtaConfig.BUNDLED_CONTENT_VERSION` (**1**). Only versions strictly above it and above everything ever applied or staged are taken (anti-rollback: an old signed release replayed by an attacker is ignored).
+* **Check:** silent background thread at app start, at most once per 24 h, 6 s timeouts, size caps (manifest 16 KB, signature 1 KB, payload 256 KB), failure is silent. Settings > About shows `CONTENT: V1 (BUNDLED), RUNTIME 2`, the last result, an on/off switch (default on) and `UPDATE NOW`. A transfer that is cut short (fewer bytes than promised) is discarded.
+* **Download -> verify -> stage:** signature, key id, channel, runtime, build gate, SHA-256, allow-listed unzip, `Tuning.validate()` (finite, sane ranges), layout check, then `ota/staging.tmp` -> atomic rename to `ota/staging`. Nothing half-written is ever used; a leftover temp dir is deleted at the next start.
+* **Activation:** only on the **next cold start**, never mid-session: `ota/active` -> `ota/previous`, staging -> `ota/active`. No prompts, no forced restart.
+* **Rollback / loop protection:** a freshly applied payload is "pending" until the game reaches 15 s of live play. If the app starts more than twice without that confirmation (crash, hang, kill), or the active files fail their checksum/validation, the payload is dropped, its version is blacklisted and the previous payload (or the bundled content) is used. Offline, or any failure, leaves the installed content untouched.
+* **Climbs in progress:** the tower's stored slices are bytes and its layout constants are frozen, so an update never invalidates a saved climb. Movement-feel numbers apply to the whole tower; each *new* slice is proven by the solver under the new numbers, slices already generated were proven under the numbers current when they were made. Keep movement changes modest.
+* **Not implemented:** the "unmetered connection only" condition of the original design (it needs `ACCESS_NETWORK_STATE`; the spec also says INTERNET only). The whole download is under 260 KB.
 
 ## Publishing an update (owner)
-1. Edit `assets/data/tuning.json`, commit and push it.
-2. GitHub > Actions > **Publish family-test OTA content** > Run workflow > enter the next version number (higher than the last). It builds `tools/ota/make_ota.py` output and uploads `manifest.json` + `payload.zip` to the `ota-dev` release (created on first use). Uses only the automatic workflow token: **no secrets**. (Local alternative: `python3 tools/ota/make_ota.py --version N`, then `gh release upload ota-dev build/ota/* --clobber`.)
-3. Open the game once (the check runs at start), close it, open it again: the new numbers are live.
+1. Edit `assets/data/tuning.json`.
+2. Raise the number in `tools/ota/content_version.txt` (must be higher than the last published; the APK ships 1).
+3. Push to the release branch. `Publish signed OTA content` runs: verifies the secrets, runs the generator/solver/OTA/persistence tests against the new numbers, signs, pushes the files through the app's own client against the pinned key (`:core:verifyOta`) and only then uploads to the `ota` release. (The same push also builds a new APK, as every push to that branch does.)
+4. Phones pick it up within a day at app start; it applies on the following start. To force it: Settings > About > UPDATE NOW, then restart.
+`tools/ota/make_ota.py --version N --sign` is the tool the workflow runs; it refuses to sign with a key that is not the pair of the pinned public key.
 
-## Signing (why one replacement APK is needed)
-The APKs published so far were debug-signed with a **different throw-away key on every CI run**, so no build can install over another, and they have no INTERNET permission and no updater code. Therefore **the currently installed APK cannot receive OTA updates**. One replacement APK is required: it contains the updater, the INTERNET permission, and a **fixed debug keystore committed at `android/debug.keystore`** (the standard Android debug identity: store/key password `android`, alias `androiddebugkey`; it is public by design, not a secret, and must never be used for a store release). Uninstall the old build first (saves on the phone are lost once), then install the new one; every later build then installs over it with no uninstall, and gameplay-number changes need no APK at all.
+## Rotating the key / revoking
+The pinned key is part of the APK. A new key means a new APK carrying the new public key (and new secrets); installs of the old APK keep trusting only the old key.
 
-## Not done / limits
-* Only tuning numbers are updatable (no scripts, no assets). The spec's signed-manifest design (CLAUDE.md section 9) is intentionally replaced by this test-only design per the owner's correction; it must be built properly (signed manifest, pinned public key) before any production use.
-* The OTA code path was verified with unit tests and a Python-built payload on desktop; it was not run on a phone and no APK was built for this candidate.
+## Verification performed (see docs/VERIFICATION.md)
+`OtaTest` (14), `OtaConfigTest` (3), `OtaEndToEndTest` (4: full pipeline over local HTTP incl. a signed gameplay change measured in the Sim after the next start, forged/altered releases, interrupted transfer, and the release produced by `make_ota.py` accepted by the Java verifier), and the release gate `:core:verifyOta` on every CI build with the real key.

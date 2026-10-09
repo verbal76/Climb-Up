@@ -1,5 +1,5 @@
 name: Android build
-# Not run on every push (deliberate: hosted CI minutes are only spent when the owner asks for a test APK).
+# Not run on every push of every branch (deliberate: hosted CI minutes are only spent when the owner asks for a test APK): only the release branch, or by hand.
 on:
   workflow_dispatch: {}
   push:
@@ -8,6 +8,10 @@ permissions:
   contents: write   # publish GitHub Releases
   actions: read
 
+env:
+  # The signing certificate of the installed Build 42 (builds 37-42). The build fails if the APK it produces is signed by anything else, so an update can never be un-installable.
+  EXPECTED_CERT_SHA256: "CE:DD:D6:86:8B:F9:4C:30:B2:70:F3:59:01:88:66:95:EE:6A:E9:AB:95:51:19:6C:2C:A9:E2:99:50:04:1C:39"
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -15,15 +19,31 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: '17' }
+      - name: Prove the signing secrets are the right ones (prints PASS/FAIL only, never a value)
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          OTA_SIGNING_PRIVATE_KEY: ${{ secrets.OTA_SIGNING_PRIVATE_KEY }}
+          OTA_SIGNING_KEY_PASSPHRASE: ${{ secrets.OTA_SIGNING_KEY_PASSPHRASE }}
+        run: |
+          set -e
+          tools/ci/verify_secrets.sh --keystore-out "$RUNNER_TEMP/android-signing.keystore"
+          echo "ANDROID_KEYSTORE_FILE=$RUNNER_TEMP/android-signing.keystore" >> "$GITHUB_ENV"
       - name: Accept Android SDK licenses (runner image ships the SDK)
         run: |
           mkdir -p "$ANDROID_HOME/licenses"
           printf '\n24333f8a63b6825ea9c5514f83c2829b004d1fee\n8933bad161af4178b1185d1a37fbf41ea5269c55\nd56f5187479451eabf01fb78af6dfcb131a6481e\n' > "$ANDROID_HOME/licenses/android-sdk-license"
           printf '\n84831b9409646a918e30573bab4c9c91346d8abd\n' > "$ANDROID_HOME/licenses/android-sdk-preview-license"
       - uses: gradle/actions/setup-gradle@v4
-      - name: Unit tests (headless simulation, generator, persistence)
+      - name: Unit tests (headless simulation, generator, persistence, OTA incl. end-to-end over local HTTP)
         run: ./gradlew :core:test --no-daemon
-      - name: Assemble debug APK
+      - name: Assemble debug APK (signed with the Build 42 identity)
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: ./gradlew :android:assembleDebug --no-daemon -PwithAndroid
       - name: Name, verify and fingerprint the APK
         run: |
@@ -37,28 +57,26 @@ jobs:
           echo "APK=$(basename $OUT)"
           sha256sum "$OUT"
           "$BT/aapt2" dump badging "$OUT" | grep -E "^package|sdkVersion|targetSdkVersion|uses-permission|launchable-activity|native-code"
-          "$BT/apksigner" verify --verbose "$OUT" | head -5
-          unzip -l "$OUT" | grep -E "\.so$|classes.*dex|assets/pack" | head -20
+          "$BT/apksigner" verify --verbose --print-certs "$OUT" > cert.txt; head -8 cert.txt
+          GOT=$(grep -m1 "certificate SHA-256 digest" cert.txt | sed 's/.*: //' | tr 'a-f' 'A-F' | sed 's/../&:/g; s/:$//')
+          echo "SIGNING_CERT_SHA256=$GOT"
+          if [ "$GOT" != "$EXPECTED_CERT_SHA256" ]; then echo "::error::APK is not signed with the installed Build 42 identity (expected $EXPECTED_CERT_SHA256)"; exit 1; fi
+          echo "signing certificate matches installed Build 42"
+          unzip -l "$OUT" | grep -E "\.so$|classes.*dex|assets/pack|assets/ota" | head -20
       - uses: actions/upload-artifact@v4
         with:
           name: climb-up-debug-apk-${{ github.run_number }}
           path: android/build/outputs/apk/debug/*.apk
-      - name: One-time - publish the exact build 4 APK as the release (tag cannot target the older commit with the workflow token)
-        if: github.run_number == 7
+      - name: Build, sign and verify the OTA baseline (the content bundled in this APK)
         env:
-          GH_TOKEN: ${{ github.token }}
+          OTA_SIGNING_PRIVATE_KEY: ${{ secrets.OTA_SIGNING_PRIVATE_KEY }}
+          OTA_SIGNING_KEY_PASSPHRASE: ${{ secrets.OTA_SIGNING_KEY_PASSPHRASE }}
         run: |
           set -e
-          gh api -X DELETE repos/${{ github.repository }}/releases/407114120 || true   # leftover diagnostic draft
-          gh release delete v0.1.0-build6 --yes --cleanup-tag || true                   # duplicate; build 4 is the test APK
-          gh run download 37736651485 -n climb-up-debug-apk-4 -D prev
-          APK=$(ls prev/*.apk)
-          SHA=$(sha256sum "$APK" | cut -d' ' -f1)
-          test "$SHA" = "b022f18a0fbf3c9b474c0cef733c7bd9f98aecc77825fe2ee16b4cc6aeb20638"
-          printf 'Physical-test build 4 (debug-signed, sideload).\n\nBuilt from source commit de5521f3aebe89c1ee74ec0ae3062284df54aa1b (game code identical to b31a009; later commits only change CI/README, which is why this tag points at a newer commit).\nPackage: com.hotatticgames.climbup, versionName 0.1.0, versionCode 4, minSdk 26, targetSdk 35\nSHA-256: %s\n' "$SHA" > notes4.md
-          gh release create v0.1.0-build4 "$APK" --target ${{ github.sha }} --title "Climb up v0.1.0 (build 4)" --notes-file notes4.md --latest
-      - name: Publish GitHub Release
-        if: github.run_number != 7
+          BASE=$(grep -oP "BUNDLED_CONTENT_VERSION = \K[0-9]+" core/src/main/java/com/hotatticgames/climbup/ota/OtaConfig.java)
+          python3 tools/ota/make_ota.py --version "$BASE" --sign
+          ./gradlew :core:verifyOta -PotaDir=build/ota -PexpectBundled --no-daemon -q
+      - name: Publish GitHub Release (APK)
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -66,5 +84,19 @@ jobs:
           APK=$(ls android/build/outputs/apk/debug/*.apk)
           SHA=$(sha256sum "$APK" | cut -d' ' -f1)
           VER=$(grep -oP "appVersionName = '\K[^']+" build.gradle)
-          printf 'Physical-test build ${{ github.run_number }} (debug-signed, sideload).\n\nVersion: %s build ${{ github.run_number }}\nSource: ${{ github.sha }}\nPackage: com.hotatticgames.climbup, versionName %s, versionCode ${{ github.run_number }}\nSHA-256: %s\n' "$VER" "$VER" "$SHA" > notes.md
+          RT=$(grep -oP "RUNTIME = \K[0-9]+" core/src/main/java/com/hotatticgames/climbup/ota/OtaConfig.java)
+          BV=$(grep -oP "BUNDLED_CONTENT_VERSION = \K[0-9]+" core/src/main/java/com/hotatticgames/climbup/ota/OtaConfig.java)
+          printf 'Physical-test build ${{ github.run_number }} (sideload; signed with the same certificate as every build since 37, so it installs over the previous one).\n\nVersion: %s build ${{ github.run_number }}\nSource: ${{ github.sha }}\nPackage: com.hotatticgames.climbup, versionName %s, versionCode ${{ github.run_number }}\nSHA-256: %s\nSigning certificate SHA-256: %s\nOTA: signed manifests, runtime %s, bundled content version %s\n' "$VER" "$VER" "$SHA" "$EXPECTED_CERT_SHA256" "$RT" "$BV" > notes.md
           gh release create "v${VER}-build${{ github.run_number }}" "$APK" --target ${{ github.sha }} --title "Climb up v${VER} (build ${{ github.run_number }})" --notes-file notes.md --latest
+      - name: Publish the OTA baseline (only if the channel does not already carry this version or a newer one)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -e
+          BV=$(grep -oP "BUNDLED_CONTENT_VERSION = \K[0-9]+" core/src/main/java/com/hotatticgames/climbup/ota/OtaConfig.java)
+          CUR=0
+          if gh release view ota >/dev/null 2>&1; then CUR=$(gh release download ota -p manifest.json -O - 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin).get('contentVersion',0))" 2>/dev/null || echo 0); else
+            gh release create ota --latest=false --title "OTA content channel (signed)" --notes "Signed over-the-air content for Climb up. Files: manifest.json, manifest.sig, payload.zip. Verified by the key pinned in the app; do not edit."; fi
+          if [ "$CUR" -ge "$BV" ]; then echo "channel already at v$CUR (>= baseline v$BV): left untouched"; exit 0; fi
+          gh release upload ota build/ota/payload.zip build/ota/manifest.json build/ota/manifest.sig --clobber
+          echo "published OTA baseline v$BV"

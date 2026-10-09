@@ -19,8 +19,8 @@
 - Algorithm: ECDSA over P-256 with SHA-256 (`SHA256withECDSA`, DER signature). Chosen because every Android version this app supports (minSdk 26) verifies it natively; Ed25519 is not available before Android 13.
 - Public key pinned in the app: `assets/ota/ota_public_key.b64` (X.509 SubjectPublicKeyInfo, base64). SHA-256 of the DER: `a95c0a99d590e9345103c6ffdbcf601f927bdf5eea384f13c8f96f942a87d88a`.
 - CI signs with `openssl dgst -sha256 -sign <(openssl pkey -in key -passin env:OTA_SIGNING_KEY_PASSPHRASE)`; verified end to end (openssl signature accepted by the JVM verifier, tampered data rejected).
-- **Not wired in yet:** the current updater (`OtaClient`) checks a SHA-256 only, and no workflow reads these secrets, so setting them changes nothing until the signed-manifest work is done and pushed.
+- **Wired in:** `android.yml` (APK signing + OTA baseline) and `ota-publish.yml` (later content) read these secrets; `tools/ci/verify_secrets.sh` proves them first (PASS/FAIL only) and the build fails if the APK's certificate is not the Build 42 one.
 - Rotating the OTA key later needs a new APK carrying the new public key (old installs only trust the pinned one).
 
 ## Loading the secrets
-Never paste values into chat, issues, logs or commits. Either type/paste each one into Settings > Secrets and variables > Actions > (name) > Update secret, or on a computer with `gh auth login`: `tools/ci/set_github_secrets.sh <folder>` (reads the files, sends them over stdin, prints only the names). Delete the folder afterwards.
+Never paste values into chat, issues, logs or commits. The values were verified once by a throw-away workflow (since removed; its logic is `tools/ci/verify_secrets.sh`, which every release build runs). To re-enter a value: Settings > Secrets and variables > Actions > (name) > Update secret, or on a computer with `gh auth login`: `tools/ci/set_github_secrets.sh <folder>` (reads the files, sends them over stdin, prints only the names). Delete the folder afterwards.

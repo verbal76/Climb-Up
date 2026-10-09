@@ -29,11 +29,14 @@ public final class OtaStore {
     }
 
     private final File root, activeDir, previousDir, stagingDir, tmpDir, stateFile;
+    private final int bundledVersion;
     public State st = new State();
     public String note = "";
 
-    public OtaStore(File root) {
-        this.root = root; activeDir = new File(root, "active"); previousDir = new File(root, "previous");
+    public OtaStore(File root) { this(root, OtaConfig.BUNDLED_CONTENT_VERSION); }
+    /** @param bundledVersion the content version compiled into this build; manifests at or below it are already current. */
+    public OtaStore(File root, int bundledVersion) {
+        this.root = root; this.bundledVersion = bundledVersion; activeDir = new File(root, "active"); previousDir = new File(root, "previous");
         stagingDir = new File(root, "staging"); tmpDir = new File(root, "staging.tmp"); stateFile = new File(root, "state.json");
     }
 
@@ -101,7 +104,21 @@ public final class OtaStore {
     public synchronized void recordCheck(long now, String result) { st.lastCheck = now; st.lastResult = result; saveStateQuiet(); }
 
     /** Anti-rollback: a version is taken only if it is newer than everything ever applied or already staged, and was not rolled back before. */
-    public synchronized boolean acceptable(int version) { return version > st.highestApplied && version > stagedVersion() && !st.bad.contains(version); }
+    public synchronized boolean acceptable(int version) { return version > Math.max(st.highestApplied, bundledVersion) && version > stagedVersion() && !st.bad.contains(version); }
+
+    /** The newest content version this install has, applied or downloaded. */
+    public synchronized int currentVersion() { return Math.max(Math.max(st.highestApplied, bundledVersion), stagedVersion()); }
+
+    /** Names the first layout constant (OtaConfig.FROZEN_TUNING) in which a payload differs from the bundled tuning, or null. */
+    public static String frozenMismatch(Tuning bundled, Tuning candidate) {
+        for (String f : OtaConfig.FROZEN_TUNING) {
+            try {
+                java.lang.reflect.Field fd = Tuning.class.getField(f);
+                if (!String.valueOf(fd.get(bundled)).equals(String.valueOf(fd.get(candidate)))) return f;
+            } catch (Exception e) { return f; }
+        }
+        return null;
+    }
 
     /** Writes the verified payload into staging atomically (temp dir, then rename). Replaces any older staged payload. */
     public synchronized void stage(int version, String tuningJson) throws IOException {
@@ -119,7 +136,7 @@ public final class OtaStore {
     }
 
     public synchronized String describe() {
-        String s = st.active == 0 ? "BUNDLED" : "V" + st.active + (st.pending != 0 ? " (NEW, UNCONFIRMED)" : "");
+        String s = (st.active == 0 ? "V" + bundledVersion + " (BUNDLED)" : "V" + st.active + (st.pending != 0 ? " (NEW, UNCONFIRMED)" : "")) + ", RUNTIME " + OtaConfig.RUNTIME;
         int sv = stagedVersion();
         if (sv != 0) s += ", V" + sv + " DOWNLOADED - APPLIES ON NEXT START";
         return s;

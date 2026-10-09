@@ -4,7 +4,7 @@
     <uses-feature android:glEsVersion="0x00020000" android:required="true" />
     <!-- Haptics (normal permission, no prompt). -->
     <uses-permission android:name="android.permission.VIBRATE" />
-    <!-- Family-test OTA only: one small HTTPS GET of a public GitHub release file (docs/OTA.md). No other network use, no identifiers sent. -->
+    <!-- OTA only: small HTTPS GETs of three public GitHub release files (signed manifest, signature, payload; docs/OTA.md). No other network use, no identifiers sent. -->
     <uses-permission android:name="android.permission.INTERNET" />
 
     <application

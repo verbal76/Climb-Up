@@ -6,3 +6,11 @@ dependencies {
     testImplementation 'junit:junit:4.13.2'
 }
 test { testLogging { events 'passed', 'failed', 'skipped'; exceptionFormat 'full'; showStandardStreams = true }; maxHeapSize = '1g' }
+
+// Release gate: run the freshly built OTA files through the app's own client against the pinned key (see OtaVerifyCli).
+tasks.register('verifyOta', JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'com.hotatticgames.climbup.ota.OtaVerifyCli'
+    workingDir = rootProject.projectDir
+    args = [project.findProperty('otaDir') ?: 'build/ota'] + (project.hasProperty('expectBundled') ? ['--expect-bundled'] : [])
+}

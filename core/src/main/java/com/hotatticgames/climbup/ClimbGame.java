@@ -12,8 +12,8 @@ import java.io.File;
 
 /** Application root: shared services, screen flow (studio splash -> title -> play). */
 public class ClimbGame extends Game {
-    public static final String VERSION = "1.1.3";
-    /** Android versionCode of the running APK (set by the launcher before the game starts; 0 on desktop). Used only by the test-only OTA compatibility gate. */
+    public static final String VERSION = "1.1.4";
+    /** Android versionCode of the running APK (set by the launcher before the game starts; 0 on desktop). Used only by the OTA compatibility gate. */
     public static int appBuild;
 
     public final File dataDir;
@@ -41,14 +41,14 @@ public class ClimbGame extends Game {
         save = store.loadGame();
         if (System.getProperty("climb.character") != null) settings.character = Integer.getInteger("climb.character");
         String bundled = Gdx.files.internal("data/tuning.json").readString("UTF-8");
-        // FAMILY-TEST OTA (see docs/OTA.md): an applied, verified payload may replace the bundled tuning numbers; anything wrong falls back to the bundled file
+        // OTA (see docs/OTA.md): an applied payload (signed manifest, verified checksum, validated numbers) may replace the bundled tuning numbers; anything wrong falls back to the bundled file
         ota = new com.hotatticgames.climbup.ota.OtaStore(new File(dataDir, "ota"));
         String over = null;
         try { over = ota.startup(); } catch (Throwable t) { over = null; }
         Tuning tn = null;
         if (over != null) { try { tn = Tuning.parse(over); } catch (Throwable t) { tn = null; } }
         tuning = tn != null ? tn : Tuning.parse(bundled);
-        otaClient = new com.hotatticgames.climbup.ota.OtaClient(ota, new com.hotatticgames.climbup.ota.Fetcher.Http(), appBuild);
+        otaClient = new com.hotatticgames.climbup.ota.OtaClient(ota, new com.hotatticgames.climbup.ota.Fetcher.Http(), appBuild, Tuning.parse(bundled));
         if (settings.otaEnabled && !demo && System.getProperty("climb.shots") == null) startOtaCheck(false);
         ui = new Ui(settings);
         audio = new Audio(settings);

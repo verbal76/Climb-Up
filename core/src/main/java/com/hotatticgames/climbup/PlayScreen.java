@@ -104,6 +104,11 @@ public final class PlayScreen extends ScreenAdapter {
         Gdx.input.setCatchKey(Input.Keys.BACK, true);
         g.audio.playlist(Audio.GAME_TRACKS);
         runTime = 0; milestone = (int) (sim.maxHeight / 50f);
+        if (Boolean.getBoolean("climb.ropeScript")) {   // test hook: start low on the first rope; readInput() then climbs it, mounts the beam and jumps (screenshots of the rope top)
+            for (int e = 0; e < course.size(); e++) if (course.get(e).type == Element.Type.ROPE && course.get(e).y > 5f) {
+                Element el = course.get(e); sim.mode = Sim.Mode.ROPE; sim.onElem = e; sim.s = sim.es1[e]; sim.y = el.y - el.len + 0.6f; sim.vx = sim.vy = 0; world.snapCamera(sim); break;
+            }
+        }
         if (Boolean.getBoolean("climb.hang")) {   // test hook: hang from the left edge of the first platform ahead
             int e = 1; Element el = course.get(e);
             sim.mode = Sim.Mode.LEDGE; sim.onElem = e; sim.ledgeSide = 1; sim.facing = 1;
@@ -192,7 +197,13 @@ public final class PlayScreen extends ScreenAdapter {
         in.jumpHeld = jumpHeldTouch || kJumpHeld;
         in.jumpPressed = jumpLatch || kJump;
         in.swingPressed = swingLatch || kSwing;
+        if (Boolean.getBoolean("climb.ropeScript")) {
+            scriptT += Sim.DT;
+            in.moveY = sim.mode == Sim.Mode.ROPE || sim.mounting() ? 1f : 0f; in.moveX = 0f;
+            if (sim.mode == Sim.Mode.BEAM && !sim.mounting()) { in.moveX = scriptT % 3f < 1.2f ? 1f : 0f; in.jumpPressed = scriptT > Float.parseFloat(System.getProperty("climb.ropeJumpAt", "99")); }
+        }
     }
+    private float scriptT;
 
     // ------------------------------------------------------------------ frame
 

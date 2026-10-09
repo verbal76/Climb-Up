@@ -5,7 +5,7 @@ package com.hotatticgames.climbup.sim;
  * No rendering or engine dependencies; cloneable so tests and the course validator can look ahead.
  */
 public final class Sim {
-    public enum Mode { GROUND, AIR, ROPE, CABLE, LEDGE, PULLUP }
+    public enum Mode { GROUND, AIR, ROPE, CABLE, LEDGE, PULLUP, BEAM }
 
     public static final float DT = 1f / 60f, SWING_TIME = 0.34f;
     // event bits
@@ -24,6 +24,8 @@ public final class Sim {
     public int lastPad = -1;
     public float coyote, jumpBuf, lockout, pullT, pullFromS, pullFromY, pullToS, pullToY;
     public int ledgeSide = 1;
+    public float ropeTopT;           // seconds the climber has pushed up against the top of a rope (a short hold mounts the beam)
+    public static final float BEAM_MOUNT_TIME = 0.62f, BEAM_TOP = 0.24f, BEAM_HALF = 1.1f, ROPE_TOP_HOLD = 0.22f;
     public boolean jumpedUp;         // current ascent came from a jump (variable height cut applies)
     public boolean prevJumpHeld;
     public float lastGroundY;
@@ -121,7 +123,7 @@ public final class Sim {
         course = o.course; T = o.T;
         time = o.time; s = o.s; y = o.y; vx = o.vx; vy = o.vy; facing = o.facing; mode = o.mode; onElem = o.onElem;
         lastPad = o.lastPad; coyote = o.coyote; jumpBuf = o.jumpBuf; lockout = o.lockout; pullT = o.pullT;
-        pullFromS = o.pullFromS; pullFromY = o.pullFromY; pullToS = o.pullToS; pullToY = o.pullToY;
+        ropeTopT = o.ropeTopT; pullFromS = o.pullFromS; pullFromY = o.pullFromY; pullToS = o.pullToS; pullToY = o.pullToY;
         ledgeSide = o.ledgeSide; jumpedUp = o.jumpedUp; prevJumpHeld = o.prevJumpHeld; lastGroundY = o.lastGroundY; floorY = o.floorY;
         checkpoint = o.checkpoint; bestElem = o.bestElem; maxHeight = o.maxHeight; won = o.won; falls = o.falls;
         landSpeed = o.landSpeed; events = o.events; assistForgive = o.assistForgive; ps0 = o.ps0; py0 = o.py0; teleported = o.teleported;
@@ -209,7 +211,7 @@ public final class Sim {
 
     public boolean attachedTo(int idx) {
         if (idx < 0) return false;
-        return ((mode == Mode.GROUND || mode == Mode.LEDGE || mode == Mode.ROPE || mode == Mode.CABLE) && onElem == idx);
+        return ((mode == Mode.GROUND || mode == Mode.LEDGE || mode == Mode.ROPE || mode == Mode.CABLE || mode == Mode.BEAM) && onElem == idx);
     }
 
     // ---------------------------------------------------------------- step
@@ -257,6 +259,7 @@ public final class Sim {
             case CABLE: stepCable(in, dt); break;
             case LEDGE: stepLedge(in, dt); break;
             case PULLUP: stepPull(dt); break;
+            case BEAM: stepBeam(in, dt); break;
         }
         prevJumpHeld = in.jumpHeld;
         s = course.wrap(s);
@@ -540,6 +543,35 @@ public final class Sim {
             return;
         }
         if (in.moveY < -0.7f && y <= yMin + 0.01f) { mode = Mode.AIR; onElem = -1; lockout = T.grabLockout; vy = 0; }
+        // pushing on at the very top: haul up from behind the beam and stand on it (a cliff-style mantle)
+        if (y >= yMax - 0.01f && in.moveY > 0.6f) ropeTopT += dt; else ropeTopT = 0f;
+        if (ropeTopT >= ROPE_TOP_HOLD) { ropeTopT = 0f; mode = Mode.BEAM; pullT = 0; pullFromY = y; vx = vy = 0; events |= EV_PULL; }
+    }
+
+    /** True while the climber is still hauling himself over the rope's top beam (as opposed to standing on it). */
+    public boolean mounting() { return mode == Mode.BEAM && pullT < BEAM_MOUNT_TIME; }
+
+    /** The beam above a rope is a small standing place: climb up onto it, walk along it, jump from it, or step back down onto the rope. */
+    private void stepBeam(InputState in, float dt) {
+        int i = onElem; Element el = course.get(i);
+        float top = el.y + BEAM_TOP;
+        s = course.wrap(es1[i] + course.dsWrap(s, es1[i]));
+        if (pullT < BEAM_MOUNT_TIME) {
+            pullT = Math.min(BEAM_MOUNT_TIME, pullT + dt);
+            float k = pullT / BEAM_MOUNT_TIME, up = Math.min(1f, k * 1.25f);
+            y = pullFromY + (top - pullFromY) * up; vx = 0;
+            if (pullT >= BEAM_MOUNT_TIME) { y = top; coyote = T.coyote; jumpBuf = 0; }
+            return;
+        }
+        y = top; vy = 0; coyote = T.coyote;
+        float target = in.moveX * T.runSpeed * 0.55f;
+        vx = target;
+        s += vx * dt;
+        if (Math.abs(in.moveX) > 0.15f) facing = in.moveX > 0 ? 1 : -1;
+        if (jumpBuf > 0) { vx = Math.abs(in.moveX) > 0.2f ? in.moveX * T.runSpeed : 0f; doJump(0f); lockout = T.grabLockout; return; }
+        float d = course.dsWrap(s, es1[i]);
+        if (in.moveY < -0.7f) { mode = Mode.ROPE; s = es1[i]; y = el.y - T.handHeight; vx = 0; ropeTopT = 0f; lockout = 0f; return; }
+        if (Math.abs(d) > BEAM_HALF) { mode = Mode.AIR; onElem = -1; vy = 0; lockout = T.grabLockout; jumpedUp = false; }
     }
 
     private void stepCable(InputState in, float dt) {

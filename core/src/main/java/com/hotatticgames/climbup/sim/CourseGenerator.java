@@ -222,6 +222,7 @@ public final class CourseGenerator {
         for (int attempt = 0; attempt < 6; attempt++) {
             float dy = r(0f, 0.5f), gap = reach(dy) * lerp(0.5f, 0.8f, d) * (1f - 0.04f * attempt);
             Element g = plat(Element.Type.STATIC, u.s + u.w / 2f + gap + 4.5f, u.y + dy, 9f, th);
+            g.skin = 2;                                                  // castle deck: drawn deep and broad enough to carry the whole tower base
             Element gate = hz(Element.Type.GATE, g.s, g.y, 3.4f, th);
             gate.len = 7.5f; gate.color = rnd.nextInt(Element.KEY_COUNT); gate.anchor = c.size();
             if (!commit(listOf(g), listOf(gate), T.minLinkMargin)) continue;

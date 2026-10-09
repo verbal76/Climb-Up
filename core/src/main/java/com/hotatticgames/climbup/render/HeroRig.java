@@ -194,6 +194,7 @@ public final class HeroRig implements Disposable {
             case ROPE: return Math.abs(sim.y - sim.py0) > 0.002f ? Anim.CLIMB : Anim.HANG;
             case CABLE: return Math.abs(sim.course.dsWrap(sim.s, sim.ps0)) > 0.002f ? Anim.SHIMMY : Anim.HANG;
             case LEDGE: return Anim.HANG;
+            case BEAM: return sim.mounting() ? Anim.PULLUP : (speed < 0.4f ? Anim.IDLE : Anim.RUN);
             default: return Anim.PULLUP;
         }
     }
@@ -203,7 +204,8 @@ public final class HeroRig implements Disposable {
         float targetYaw;
         switch (sim.mode) {
             case ROPE: targetYaw = sim.facing * 22f; break;
-            case LEDGE: case PULLUP: targetYaw = sim.ledgeSide * HANG_YAW; break;   // turns to face the ledge he is gripping
+            case LEDGE: case PULLUP: targetYaw = sim.ledgeSide * HANG_YAW; break;
+            case BEAM: targetYaw = sim.mounting() ? sim.facing * 22f : sim.facing * 68f; break;   // turns to face the ledge he is gripping
             case CABLE: targetYaw = sim.facing * 24f; break;
             default: targetYaw = sim.facing * 68f;   // clearly faces the direction of travel
         }
@@ -244,7 +246,12 @@ public final class HeroRig implements Disposable {
         }
         if (sim.won) play("Wave", -1, 1f, 0.2f);
 
-        float sxz = SCALE * (1f - 0.5f * sq), sy = SCALE * (1f + sq);
+        if (sim.mode == Sim.Mode.BEAM && sim.mounting()) {      // hauling over the beam: starts behind it (like on the rope), ends standing on top of it
+            float k = MathUtils.clamp((sim.pullT / Sim.BEAM_MOUNT_TIME - 0.45f) / 0.55f, 0f, 1f);
+            wz -= ROPE_FRONT * (1f - k * k * (3f - 2f * k));
+        }
+        float inch = anim == Anim.CLIMB ? INCH * MathUtils.sin(climbPhase * 2f) : 0f;          // inchworm: the whole body compresses, then stretches, with every pull up the rope
+        float sxz = SCALE * (1f - 0.5f * sq - 0.5f * inch), sy = SCALE * (1f + sq + inch);
         float flip = anim == Anim.BIG_JUMP ? -sim.facing * 360f * (1f - bigT / BIG_TIME) : 0f;                   // somersault on a big bounce
         float knock = anim == Anim.HIT ? hitDir * 26f * Math.max(0f, hitT / HIT_TIME) : 0f;                       // thrown back
         float leanT = 0f;           // lean into the run, tuck up while rising, reach forward while falling
@@ -262,7 +269,7 @@ public final class HeroRig implements Disposable {
         hangSway += dt * 2.4f;
         float grip = 0f;
         if (anim == Anim.HANG || anim == Anim.CLIMB || anim == Anim.SHIMMY) grip = 1f;
-        else if (anim == Anim.PULLUP) grip = CYCLE ? 0.8f : Math.max(0f, 1f - sim.pullT / sim.T.pullUpTime * 1.25f);
+        else if (anim == Anim.PULLUP) grip = CYCLE ? 0.8f : Math.max(0f, 1f - sim.pullT / (sim.mode == Sim.Mode.BEAM ? Sim.BEAM_MOUNT_TIME : sim.T.pullUpTime) * 1.25f);
         if (grip > 0.01f) {
             if (ham) stretchArms(grip);
             boolean line = anim == Anim.CLIMB || anim == Anim.SHIMMY || (anim == Anim.HANG && (sim.mode == Sim.Mode.ROPE || sim.mode == Sim.Mode.CABLE));
@@ -295,6 +302,7 @@ public final class HeroRig implements Disposable {
     private final Vector3 pF = new Vector3();
     /** While hanging on a rope or cable the hero is drawn this far behind the line (world units) so his arms visibly reach forward and grip it. */
     private static final float ROPE_FRONT = 0.30f;
+    private static final float INCH = 0.15f;
 
     /** Both hands go to the rope (or along the cable): each arm is aimed from its shoulder at a point on the line, one hand reaching high while the other pulls down, swapping with the climb. */
     private void gripLine(float phase, boolean moving, boolean cable) {

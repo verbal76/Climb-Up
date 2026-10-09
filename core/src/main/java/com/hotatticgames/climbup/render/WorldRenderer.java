@@ -162,15 +162,22 @@ public final class WorldRenderer implements Disposable {
                 Model m = models.obj(name), ml = models.obj(name + "-long");
                 float h = thick ? 1f : 0.5f;
                 float left = -w / 2f; int pos = 0;
+                boolean deck = e.skin == 2 && e.type == Element.Type.STATIC;        // castle deck: stretched front-to-back so the tower stands fully on it
+                float zs = deck ? 4.0f : 1.7f;
                 boolean orbit = e.zone == Palette.SPACE && e.type != Element.Type.GOAL;
                 if (orbit) { spacePlatform(ps, e, idx); pos = w; }          // deep space: a metal deck on a drifting asteroid
                 while (pos < w) {
                     boolean two = w - pos >= 2;
                     float cx = left + pos + (two ? 1f : 0.5f);
-                    Part p = part(two ? ml : m, cx, -h, 0f, two ? 0.96f : 0.96f, 1f, 1.7f);
+                    Part p = part(two ? ml : m, cx, -h, 0f, two ? 0.96f : 0.96f, 1f, zs);
                     if (e.type == Element.Type.CRUMBLE) { p.color = new Color(1f, 0.74f, 0.52f, 1f); p.fall = true; }
                     ps.add(p);
                     pos += two ? 2 : 1;
+                }
+                if (deck) {          // a stone plinth that widens toward the bottom, like the castle's footing
+                    Color st = new Color(0.50f, 0.50f, 0.56f, 1f), st2 = new Color(0.40f, 0.40f, 0.46f, 1f);
+                    ps.add(boxPart(0f, -h - 0.35f, 0f, w * 0.78f, 0.7f, zs * 1.04f, st));
+                    ps.add(boxPart(0f, -h - 0.95f, 0f, w * 0.88f, 0.5f, zs * 1.12f, st2));
                 }
                 if (e.type == Element.Type.CRUMBLE) {
                     // cracks: small dark pebbles on the surface hint that it will fall
@@ -184,7 +191,7 @@ public final class WorldRenderer implements Disposable {
                     Part rk = part(models.space(rock), ((hh >> 5) % 5 - 2) * 0.08f * w, -h - 0.25f - top * sc, ((hh >> 9) % 3 - 1) * 0.15f, sc, sc, sc);
                     rk.roll = 180f; rk.yaw = (hh >> 3) % 360; ps.add(rk);
                 }
-                if (orbit) { /* decorated by spacePlatform */ }
+                if (orbit || deck) { /* decorated by spacePlatform / bare so the tower fits */ }
                 else if (thick && e.type != Element.Type.GOAL && quality > 0) decorate(ps, e, idx, w, snow);
                 else if (!thick && e.type == Element.Type.STATIC && quality > 0 && hash(idx, 7) % 3 == 0) decorate(ps, e, idx, w, snow);
                 // checkpoints are marked by a hovering red gem (drawn every frame in drawGem), not baked into the platform
@@ -234,9 +241,9 @@ public final class WorldRenderer implements Disposable {
                 ps.add(boxPart(0, -e.len * 0.5f, 0, 0.11f, e.len, 0.11f, rope));
                 int knots = (int) e.len;
                 for (int k = 1; k <= knots; k++) ps.add(boxPart(0, -k + 0.5f, 0, 0.2f, 0.12f, 0.2f, new Color(0.7f, 0.52f, 0.28f, 1f)));
-                ps.add(boxPart(0, 0.12f, 0, 2.4f, 0.24f, 0.7f, beam));
-                ps.add(boxPart(-1.1f, -0.9f, 0, 0.2f, 1.7f, 0.2f, beam));
-                ps.add(boxPart(1.1f, -0.9f, 0, 0.2f, 1.7f, 0.2f, beam));
+                ps.add(boxPart(0, 0.12f, -0.05f, 2.4f, 0.24f, 0.26f, beam));           // a thin standing board: the climber hauls himself up from behind it
+                ps.add(boxPart(-1.1f, -0.9f, -0.05f, 0.2f, 1.7f, 0.2f, beam));
+                ps.add(boxPart(1.1f, -0.9f, -0.05f, 0.2f, 1.7f, 0.2f, beam));
                 break;
             }
             case CABLE: {
@@ -572,6 +579,23 @@ public final class WorldRenderer implements Disposable {
     private final java.util.HashMap<String, ModelInstance> colorInst = new java.util.HashMap<>();
 
     /** A pack model with its flag / key material recoloured for one of the four key colours. */
+    private BlendingAttribute gateBlend = new BlendingAttribute(true, 0.38f);
+    private final java.util.HashMap<Element, ModelInstance> gateInsts = new java.util.HashMap<>();
+    /** One tower instance per castle so its fade-while-inside never leaks onto another castle of the same colour. */
+    private ModelInstance gateInst(Element h) {
+        ModelInstance m = gateInsts.get(h);
+        if (m == null) {
+            if (gateInsts.size() > 16) gateInsts.clear();
+            m = new ModelInstance(models.pack("tower"));
+            float[] c = KEY_RGB[h.color % KEY_RGB.length];
+            for (com.badlogic.gdx.graphics.g3d.Material mat : m.materials) {
+                if (mat.id.contains("Flag") || mat.id.contains("Gold") || mat.id.contains("Wood")) { mat.set(ColorAttribute.createDiffuse(c[0], c[1], c[2], 1f)); mat.set(ColorAttribute.createEmissive(c[0] * 0.25f, c[1] * 0.25f, c[2] * 0.25f, 1f)); }
+            }
+            gateInsts.put(h, m);
+        }
+        return m;
+    }
+
     private ModelInstance colored(String name, int color) {
         String k = name + color;
         ModelInstance m = colorInst.get(k);
@@ -614,12 +638,24 @@ public final class WorldRenderer implements Disposable {
     }
 
     private ModelInstance stone;
+    private final Color tmpDoor = new Color();
+
     private void drawBox(float arc, float y, float dz, float camS, float w, float h, float d, float cr, float cg, float cb) {
-        if (stone == null) stone = new ModelInstance(models.box);
-        stone.materials.get(0).set(ColorAttribute.createDiffuse(cr, cg, cb, 1f));
-        place(stone, arc, y + h * 0.5f, dz, camS, w, h, d, 0f);
-        batch.render(stone, env);
+        // one instance per colour: the batch draws at end(), so a shared instance would take the colour of the last box of the frame
+        int key = ((int) (cr * 255) << 16) | ((int) (cg * 255) << 8) | (int) (cb * 255);
+        ModelInstance st = boxByColour.get(key);
+        if (st == null) { st = new ModelInstance(models.box); st.materials.get(0).set(ColorAttribute.createDiffuse(cr, cg, cb, 1f)); boxByColour.put(key, st); }
+        place(st, arc, y + h * 0.5f, dz, camS, w, h, d, 0f);
+        batch.render(st, env);
     }
+    private void drawBoxYaw(float arc, float y, float dz, float camS, float w, float h, float d, float yaw, float cr, float cg, float cb) {
+        int key = ((int) (cr * 255) << 16) | ((int) (cg * 255) << 8) | (int) (cb * 255);
+        ModelInstance st = boxByColour.get(key);
+        if (st == null) { st = new ModelInstance(models.box); st.materials.get(0).set(ColorAttribute.createDiffuse(cr, cg, cb, 1f)); boxByColour.put(key, st); }
+        place(st, arc, y + h * 0.5f, dz, camS, w, h, d, yaw);
+        batch.render(st, env);
+    }
+    private final java.util.HashMap<Integer, ModelInstance> boxByColour = new java.util.HashMap<>();
 
     private void drawHazard(Element h, float t, float camS, float time, boolean done) {
         float cs = h.type == Element.Type.CANNON ? h.s + h.dir * h.len * 0.5f : h.s;
@@ -669,11 +705,22 @@ public final class WorldRenderer implements Disposable {
                 break;
             }
             case GATE: {
-                ModelInstance g = colored("tower", h.color);
-                float phi = wrapDiff(h.s, camS) / T.radius;
+                float dxg = wrapDiff(h.s, camS);
+                float[] rgb = KEY_RGB[h.color % KEY_RGB.length];
+                boolean inside = Math.abs(dxg) < 1.6f;
+                ModelInstance g = gateInst(h);
+                for (com.badlogic.gdx.graphics.g3d.Material mt : g.materials) { if (inside) mt.set(gateBlend); else mt.remove(BlendingAttribute.Type); }       // the walls turn glassy while you walk through, so you stay visible inside
+                float phi = dxg / T.radius;
+                // the tower is turned a quarter turn so its door faces down the path (right); the second door sits exactly opposite (left)
                 g.transform.idt().translate(T.radius * MathUtils.sin(phi), h.y, -T.radius + T.radius * MathUtils.cos(phi))
-                        .rotate(0, 1, 0, phi * MathUtils.radiansToDegrees).scale(0.4f, 0.4f, 0.4f);
+                        .rotate(0, 1, 0, phi * MathUtils.radiansToDegrees + 90f).scale(0.4f, 0.4f, 0.4f);
                 batch.render(g, env);
+                // second door on the opposite side, set into the curved wall at the same angle the model's own door appears at
+                float th = 78f * MathUtils.degreesToRadians, ys = 180f + (90f - 78f);
+                float sn = MathUtils.sin(th), cq = MathUtils.cos(th);
+                drawBoxYaw(h.s - 1.70f * sn, h.y, -1.70f * cq, camS, 0.12f, 1.78f, 1.22f, ys, 0.17f, 0.17f, 0.21f);                                // stone surround
+                drawBoxYaw(h.s - 1.84f * sn, h.y, -1.84f * cq, camS, 0.30f, 1.55f, 0.95f, ys, rgb[0] * 0.8f, rgb[1] * 0.8f, rgb[2] * 0.8f);        // the door leaf, in the key's colour
+                drawBoxYaw(h.s - 1.90f * sn - 0.3f * cq, h.y + 0.75f, -1.90f * cq + 0.3f * sn, camS, 0.08f, 0.14f, 0.14f, ys, 1f, 0.85f, 0.25f);     // knob
                 break;
             }
             case CRAB: {

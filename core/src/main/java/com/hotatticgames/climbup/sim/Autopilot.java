@@ -178,7 +178,7 @@ public final class Autopilot {
 
     static boolean succeeded(Sim s, int a) {
         switch (s.mode) {
-            case GROUND: case LEDGE: case PULLUP: case ROPE: case CABLE:
+            case GROUND: case LEDGE: case PULLUP: case ROPE: case CABLE: case BEAM:
                 return s.onElem > a && s.onElem < s.course.routeSize() && (s.mode != Sim.Mode.GROUND || !s.gone[s.onElem]);
             default: return s.lastPad > a && s.lastPad < s.course.routeSize();
         }
@@ -187,7 +187,7 @@ public final class Autopilot {
     /** Pair mode (key-room detours): success means attaching to exactly element {@code tgt}. */
     static boolean succeededTo(Sim s, int tgt) {
         switch (s.mode) {
-            case GROUND: case LEDGE: case PULLUP: case ROPE: case CABLE: return s.onElem == tgt && (s.mode != Sim.Mode.GROUND || !s.gone[tgt]);
+            case GROUND: case LEDGE: case PULLUP: case ROPE: case CABLE: case BEAM: return s.onElem == tgt && (s.mode != Sim.Mode.GROUND || !s.gone[tgt]);
             default: return s.mode == Sim.Mode.AIR && s.lastPad == tgt;
         }
     }

@@ -89,3 +89,10 @@
 
 ## Falling sound (owner-supplied)
 - The owner's 3.2 s falling sound (`assets/audio/pack/fall.ogg`, mapped as `fall` in `sfx.json`) starts once when a real fall has lasted about 0.2 s (downward speed over 9 m/s, so hops and short drops stay silent), is cut off the moment the fall ends (landing, grab, respawn, pause, leaving the screen), shows a [FALLING] caption when captions are on, and follows the effects volume.
+
+## Castle decks, two doors; rope-top beam and inchworm climb
+- Castle deck platform is flagged `skin=2` (STATIC; sim ignores it) and drawn 4 m deep with a widening stone plinth so the whole tower base stands on it; no trees on it.
+- Tower is turned a quarter turn so its own door faces down the path; a second door (box-built surround, leaf in the key colour) sits on the opposite side. Walls turn glassy while the hero is inside. Doors are cosmetic: the gate wall logic is unchanged.
+- Rope top: holding up for 0.22 s at the top of a rope mounts the beam (new `Sim.Mode.BEAM`): a 0.62 s haul-up from behind the thin board, then standing/walking on it, jump from it, step back down (down) or walk off. The planner never lingers at the top, so solved links are unchanged (stress: 240 slices, 0 failures).
+- Rope climb animation: whole-body squash/stretch (inchworm) synced with the hand-over-hand phase.
+- Fixed: `drawBox` shared one instance, so every box in a frame took the last colour; now one instance per colour.

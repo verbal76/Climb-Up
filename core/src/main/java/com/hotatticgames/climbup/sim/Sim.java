@@ -518,7 +518,7 @@ public final class Sim {
         for (int k3 = 0, cnt3 = act == null ? course.size() : act.length; k3 < cnt3; k3++) {
             int i = act == null ? k3 : act[k3];
             Element el = course.get(i);
-            if (!el.isPlatform() || el.type == Element.Type.PAD || el.type == Element.Type.SPRING || gone[i]) continue;
+            if (!el.isPlatform() || gone[i]) continue;
             float top = ey1[i];
             if (hand < top - T.ledgeReachBelow) continue;
             boolean mantle = hand > top + T.ledgeReachAbove;      // the hands are already above the top: the feet are only a little below it (walked or dropped off a nearby platform)
@@ -529,6 +529,7 @@ public final class Sim {
             int side = d > 0 ? 1 : -1;
             boolean toward = (side > 0 ? (vx > 0.3f || in.moveX > 0.3f) : (vx < -0.3f || in.moveX < -0.3f));
             if (!toward) continue;
+            if (el.type == Element.Type.PAD || el.type == Element.Type.SPRING) { y = top; land(i, in); return true; }       // walked or dropped into the side of a bounce pad: it bounces you, just as if you had landed on it
             if (mantle) {          // a step-up: scramble straight onto the platform from where the feet are, no hang
                 ledgeSide = side; onElem = i; mode = Mode.PULLUP; pullT = 0; pullFromS = s; pullFromY = y; vx = vy = 0; facing = side; events |= EV_GRAB | EV_PULL;
                 return true;

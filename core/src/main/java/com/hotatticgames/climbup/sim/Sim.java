@@ -79,6 +79,25 @@ public final class Sim {
         hz = course.hazardsFor(lo - 3, hi + 3);
     }
 
+    /** Like {@link #setWindow} but also simulates earlier route platforms that hang near the given elements (the climb winds round, so a platform passed a few steps ago can sit right over a side branch). */
+    public void setWindowNear(int rLo, int rHi, int a, int b) {
+        setWindow(rLo, rHi);
+        int lo = Math.max(0, rLo);
+        java.util.ArrayList<Integer> extra = new java.util.ArrayList<>();
+        for (int i = Math.max(0, lo - 12); i < lo; i++) {
+            Element e = course.get(i);
+            for (int ref : new int[]{a, b}) {
+                Element r = course.get(ref);
+                if (Math.abs(course.dsWrap(e.s, r.s)) < 12f && Math.abs(e.y - r.y) < 9f) { extra.add(i); break; }
+            }
+        }
+        if (extra.isEmpty()) return;
+        int[] n = new int[act.length + extra.size()];
+        System.arraycopy(act, 0, n, 0, act.length);
+        for (int k = 0; k < extra.size(); k++) n[act.length + k] = extra.get(k);
+        act = n;
+    }
+
     private void progress(int i) { if (i > bestElem && course.get(i).anchor < 0 && i < course.routeSize()) bestElem = i; }
 
     /** Endless worlds: simulate only elements lo..hi (inclusive); refreshes positions of elements that newly enter the window. */
@@ -200,8 +219,11 @@ public final class Sim {
     private void knockOff() {
         float side = hitBy == null ? 0f : course.dsWrap(s, hitBy.sAt(time));
         mode = Mode.AIR; onElem = -1; coyote = 0; jumpBuf = 0;
-        vx = (side >= 0f ? 1f : -1f) * 4f; vy = 3f; invuln = 0.7f;
+        vx = (side >= 0f ? 1f : -1f) * 6f; vy = 6f; invuln = 0.7f;
     }
+
+    /** Falls to the checkpoint plus hazard knock-offs: any of them means a move was not clean (the solver and the generator proofs reject such moves). */
+    public int setbacks() { return falls + hits; }
 
     public void respawn() {
         falls++; invuln = 0.7f;

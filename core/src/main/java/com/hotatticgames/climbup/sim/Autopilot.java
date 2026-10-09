@@ -40,7 +40,7 @@ public final class Autopilot {
     }
 
     static final class GroundPolicy implements Policy {
-        final int a, b, dir, steerMode; final float wait, offset, hold;
+        final int a, b, dir, steerMode; final float wait, offset, hold; float speed = 1f;
         float t, holdT; int phase;
         GroundPolicy(int a, int b, int dir, float wait, float offset, float hold, int steerMode) {
             this.a = a; this.b = b; this.dir = dir; this.wait = wait; this.offset = offset; this.hold = hold; this.steerMode = steerMode;
@@ -55,15 +55,15 @@ public final class Autopilot {
                     float edge = s.es1[a] + dir * (el.halfW() - Math.min(offset, Math.max(0f, el.w - 0.5f)));
                     float ds = s.course.dsWrap(edge, s.s);
                     float ahead = ds * dir;
-                    if (ahead > 0.06f) { in.moveX = dir; return; }
+                    if (ahead > 0.06f) { in.moveX = dir * speed; return; }
                     if (ahead < -0.3f) { in.moveX = -dir * 0.6f; return; }
-                    in.moveX = dir; in.jumpPressed = true; in.jumpHeld = true; phase = 2; holdT = 0; return;
+                    in.moveX = dir * speed; in.jumpPressed = true; in.jumpHeld = true; phase = 2; holdT = 0; return;
                 }
             }
             if (phase == 2) {
                 holdT += Sim.DT;
                 in.jumpHeld = holdT < hold;
-                in.moveX = steerMode == 3 ? dir : steer(s, b, steerMode);
+                in.moveX = (steerMode == 3 ? dir : steer(s, b, steerMode)) * speed;
             }
         }
     }
@@ -210,17 +210,18 @@ public final class Autopilot {
 
     static Sim trialEnd(Sim base, int a, int tgt, PolicyFactory f, float limit) {
         Sim s = base.copy();
-        if (tgt >= 0) s.setWindow(anchorIdx(s.course, a) - 2, anchorIdx(s.course, a) + 6); else s.setWindow(a - 1, a + 6);
+        if (tgt >= 0) s.setWindowNear(anchorIdx(s.course, a) - 2, anchorIdx(s.course, a) + 6, a, tgt);     // plus earlier route platforms the climb passed that hang over a side branch
+        else s.setWindow(a - 1, a + 6);
         Policy p = f.create();
         InputState in = new InputState();
-        int fallsBefore = s.falls;
+        int fallsBefore = s.setbacks();
         float floorY = (tgt >= 0 ? Math.min(s.course.get(a).y, s.course.get(tgt).y) : Math.min(s.course.get(a).y, s.course.get(Math.min(s.course.routeSize() - 1, a + 1)).y)) - 4.5f;
         int n = (int) (limit / Sim.DT);
         for (int i = 0; i < n; i++) {
             in.clear();
             p.act(s, in);
             s.step(in);
-            if (s.falls != fallsBefore) return null;
+            if (s.setbacks() != fallsBefore) return null;
             if (tgt >= 0 ? succeededTo(s, tgt) : succeeded(s, a)) return tgt >= 0 && !staysOn(s, tgt) ? null : s;
             if (tgt < 0 && s.mode == Sim.Mode.GROUND && s.onElem >= 0 && (s.onElem < a || s.onElem >= s.course.routeSize())) return null;   // fell back, or onto a dead end
             if (s.mode == Sim.Mode.AIR && s.vy < 0 && s.y < floorY) return null;
@@ -252,7 +253,7 @@ public final class Autopilot {
         Result r = new Result();
         final int tgt = pair ? b : -1;
         if (!pair && b >= c.routeSize()) { r.ok = true; return r; }
-        List<PolicyFactory> cands = new ArrayList<>();
+        List<PolicyFactory> cands = new ArrayList<>(), slowCands = null;
         List<Integer> group = new ArrayList<>();      // move-style id per candidate (offset x hold x steering), for the timing-window metric
         int[] groupWins = new int[32]; int nWaits = 1;
         int dir = c.dsWrap(base.es1[b], base.es1[a]) >= 0 ? 1 : -1;
@@ -299,6 +300,14 @@ public final class Autopilot {
                 break;
             }
         }
+        if (SLOW_APPROACH.get() && base.mode == Sim.Mode.GROUND && !pair && c.get(a).isPlatform() && !(movingNear(c, a))) {   // a gentle approach: a person can walk up slowly and make a short, controlled hop where a full-speed run-up would overshoot or catch the wrong ledge
+            slowCands = new ArrayList<>();
+            for (float sp : new float[]{0.5f, 0.3f}) for (int oi = 0; oi < OFFSETS.length; oi++) for (int hi = 0; hi < HOLDS.length; hi++) for (int sm = 0; sm < 4; sm++) {
+                if (sm == 2) continue;
+                final float fo = OFFSETS[oi], fh = HOLDS[hi], fs = sp; final int fsm = sm;
+                slowCands.add(() -> { GroundPolicy g = new GroundPolicy(a, b, dir, 0f, fo, fh, fsm); g.speed = fs; return g; });
+            }
+        }
         PolicyFactory firstOk = null;
         for (int ci = 0; ci < cands.size(); ci++) {
             PolicyFactory f = cands.get(ci);
@@ -316,6 +325,12 @@ public final class Autopilot {
                 if (ci < group.size()) groupWins[group.get(ci)]++;
                 if (!r.ok) { r.ok = true; r.factory = f; }
                 if (!measureMargin) break;
+            }
+        }
+        if (!r.ok && slowCands != null) {
+            for (PolicyFactory f : slowCands) {
+                r.trials++;
+                if (trialEnd(base, a, tgt, f, 4.5f + (c.get(a).crumbles() ? 0 : 6f)) != null) { r.ok = true; r.factory = f; r.successes++; break; }
             }
         }
         if (measureMargin && !group.isEmpty()) { int best = 0; for (int gw : groupWins) best = Math.max(best, gw); r.window = best / (float) nWaits; }
@@ -357,9 +372,9 @@ public final class Autopilot {
         }
         if (!r.ok) { if (Boolean.getBoolean("dbg")) System.out.printf("execLink %d->%d plan failed at t=%.2f s=%.2f y=%.2f keys=%d%n", a, b, real.time, real.s, real.y, real.keys); return false; }
         Policy p = r.factory.create(); Policy pull = new PullPolicy();
-        int f0 = real.falls; int guard = (int) (14f / Sim.DT);
-        while (guard-- > 0 && !succeededTo(real, b)) { in.clear(); p.act(real, in); real.step(in); if (real.falls != f0) return false; }
-        if (!succeededTo(real, b)) { if (Boolean.getBoolean("dbg")) System.out.printf("execLink %d->%d exec failed mode=%s s=%.2f y=%.2f falls=%d%n", a, b, real.mode, real.s, real.y, real.falls - f0); return false; }
+        int f0 = real.setbacks(); int guard = (int) (14f / Sim.DT);
+        while (guard-- > 0 && !succeededTo(real, b)) { in.clear(); p.act(real, in); real.step(in); if (real.setbacks() != f0) return false; }
+        if (!succeededTo(real, b)) { if (Boolean.getBoolean("dbg")) System.out.printf("execLink %d->%d exec failed mode=%s s=%.2f y=%.2f falls=%d%n", a, b, real.mode, real.s, real.y, real.setbacks() - f0); return false; }
         for (int g = 0; g < 120 && (real.mode == Sim.Mode.LEDGE || real.mode == Sim.Mode.PULLUP); g++) { in.clear(); pull.act(real, in); real.step(in); }
         return true;
     }
@@ -369,21 +384,15 @@ public final class Autopilot {
     static boolean detour(Sim real, int[] kr, InputState in) {
         Course c = real.course; int r = kr[0], first = kr[1], cnt = Math.max(1, kr[2]), mode = kr[3];
         Element key = c.hazards.get(kr[4]);
-        for (int q = 0; q < 24; q++) { in.clear(); real.step(in); }              // arrive, stop, then plan the detour from a standstill
-        for (int q = 0; q < 180 && real.mode == Sim.Mode.GROUND && real.onElem == r; q++) {      // settle in the middle of the platform first, like a person lining up the move
-            float dx = c.dsWrap(real.es1[r], real.s); in.clear();
-            if (Math.abs(dx) < 0.25f && Math.abs(real.vx) < 0.3f) break;
-            in.moveX = Math.abs(dx) < 0.25f ? 0f : Math.signum(dx) * 0.7f; real.step(in);
-        }
-        for (int q = 0; q < 24; q++) { in.clear(); real.step(in); }
+        settle(real, r, in);                                                      // arrive, brake and line up in the middle, then plan the detour from a standstill
         int[] out = mode == 2 ? new int[0] : mode == 3 ? new int[]{first, first + 1} : mode == 1 ? new int[]{first} : chain(first, cnt);
         int prev = r;
         for (int idx : out) { why = "out"; if (!execLink(real, prev, idx, in)) return false; prev = idx; }
         for (int q = 0; q < 40 && Math.abs(real.vx) > 0.05f && real.mode == Sim.Mode.GROUND; q++) { in.clear(); real.step(in); }      // brake after landing
-        int f0 = real.falls; int guard = (int) (6f / Sim.DT);
+        int f0 = real.setbacks(); int guard = (int) (6f / Sim.DT);
         while (guard-- > 0 && (real.keys & (1 << key.color)) == 0) {            // walk across the key platform to the key
             in.clear(); float dx = c.dsWrap(key.s, real.s); in.moveX = Math.abs(dx) < 0.1f ? 0f : Math.signum(dx); real.step(in);
-            if (real.falls != f0) { why = "fell on key platform"; return false; }
+            if (real.setbacks() != f0) { why = "fell on key platform"; return false; }
         }
         if ((real.keys & (1 << key.color)) == 0) { why = "key not taken"; return false; }
         for (int q = 0; q < 24; q++) { in.clear(); real.step(in); }          // come to a stop before heading back
@@ -400,6 +409,16 @@ public final class Autopilot {
         for (int q = 0; q < 24; q++) { in.clear(); real.step(in); }
         return real.mode == Sim.Mode.GROUND && real.onElem == r;
     }
+    /** Like a person arriving on a platform with momentum: counter-steer to brake and drift to the middle, then stand still. */
+    static void settle(Sim real, int r, InputState in) {
+        Course c = real.course;
+        for (int q = 0; q < 240 && real.mode == Sim.Mode.GROUND && real.onElem == r; q++) {
+            float dx = c.dsWrap(real.es1[r], real.s);
+            if (Math.abs(dx) < 0.2f && Math.abs(real.vx) < 0.3f) break;
+            in.clear(); in.moveX = Math.max(-1f, Math.min(1f, 1.5f * dx - 0.35f * real.vx)); real.step(in);
+        }
+        for (int q = 0; q < 24 && real.mode == Sim.Mode.GROUND && real.onElem == r; q++) { in.clear(); real.step(in); }
+    }
     private static int[] chain(int first, int n) { int[] a = new int[n]; for (int i = 0; i < n; i++) a[i] = first + i; return a; }
 
     /** True if the planner can get from route/decoy element a to element b and attach to it (the same check the generator proves, re-run on the finished data: used by the tests). */
@@ -410,9 +429,16 @@ public final class Autopilot {
 
     // ------------------------------------------------------------------ whole-course run
 
+    /** Only the whole-course solver (a stand-in for a person) may use slow approaches; the generator's own proofs stay on the standard move set so difficulty is unchanged. */
+    static final ThreadLocal<Boolean> SLOW_APPROACH = ThreadLocal.withInitial(() -> false);
+    static Sim lastReal;       // diagnostics: the live sim of the most recent run
     public static Report run(Course c, Tuning t, float maxSimSeconds) {
+        SLOW_APPROACH.set(true);
+        try { return runInner(c, t, maxSimSeconds); } finally { SLOW_APPROACH.set(false); }
+    }
+    private static Report runInner(Course c, Tuning t, float maxSimSeconds) {
         Report rep = new Report();
-        Sim real = Sim.startOn(c, t, 0);
+        Sim real = Sim.startOn(c, t, 0); lastReal = real;
         real.keysFree = false; real.keys = 0;       // the solver must fetch every key it needs
         for (Element g : c.hazards) if (g.type == Element.Type.GATE) {      // endless: a castle's key lies in an earlier section, carried here
             boolean own = false; for (Element k : c.hazards) if (k.type == Element.Type.KEY && k.color == g.color) own = true;
@@ -449,14 +475,31 @@ public final class Autopilot {
                 if (real.mode != Sim.Mode.GROUND || real.onElem != a) break;
                 r = plan(real, a, false, true);
             }
+            if (!r.ok && real.mode == Sim.Mode.GROUND && real.onElem == a && !hasMidHazard(c, a)) {
+                // like a person: a shorter or slower approach from a different spot can be the only clean line (a full-speed run-up from the far end can overshoot or catch the wrong ledge)
+                float room = c.get(a).halfW() - 0.4f;
+                for (float off : new float[]{0f, 0.5f, 1.0f, -0.5f, 1.3f, -1.0f}) {
+                    if (Math.abs(off) > room) continue;
+                    float toS = c.wrap(real.es1[a] + off);
+                    for (int q = 0; q < 240 && real.mode == Sim.Mode.GROUND; q++) {
+                        float d = c.dsWrap(toS, real.s);
+                        if (Math.abs(d) < 0.08f && Math.abs(real.vx) < 0.4f) break;
+                        in.clear(); in.moveX = Math.abs(d) < 0.08f ? 0f : Math.signum(d) * (Math.abs(d) < 0.8f ? 0.4f : 1f); real.step(in);
+                    }
+                    for (int q = 0; q < 40 && real.mode == Sim.Mode.GROUND && Math.abs(real.vx) > 0.05f; q++) { in.clear(); real.step(in); }
+                    if (real.mode != Sim.Mode.GROUND || real.onElem != a) break;
+                    r = plan(real, a, false, false);
+                    if (r.ok) break;
+                }
+            }
             if (!r.ok) { rep.failedLink = a; rep.simTime = real.time; rep.failInfo = String.format("plan failed: mode=%s on=%d s=%.2f y=%.2f vx=%.2f vy=%.2f", real.mode, real.onElem, real.s, real.y, real.vx, real.vy); return rep; }
             Policy p = r.factory.create();
-            int fallsBefore = real.falls;
+            int fallsBefore = real.setbacks();
             real.act = null;
             int guard = (int) (20f / Sim.DT);
             while (guard-- > 0 && !succeeded(real, a)) {
                 in.clear(); p.act(real, in); real.step(in);
-                if (real.falls != fallsBefore) { rep.failedLink = a; rep.simTime = real.time; return rep; }
+                if (real.setbacks() != fallsBefore) { rep.failedLink = a; rep.simTime = real.time; return rep; }
             }
             if (!succeeded(real, a)) { rep.failedLink = a; rep.simTime = real.time; return rep; }
             // settle: finish pull-ups and keep going from the attached element
@@ -484,13 +527,13 @@ public final class Autopilot {
         int a; Policy p; boolean settling; int fallsSeen;
         public boolean failed;
         private final Policy pull = new PullPolicy();
-        public Driver(Sim s) { a = Math.max(0, s.onElem); fallsSeen = s.falls; }
+        public Driver(Sim s) { a = Math.max(0, s.onElem); fallsSeen = s.setbacks(); }
         public int link() { return a; }
 
         public void drive(Sim s, InputState in) {
             in.clear();
             if (s.won) return;
-            if (s.falls != fallsSeen) { fallsSeen = s.falls; a = Math.max(0, s.onElem); p = null; settling = false; }
+            if (s.setbacks() != fallsSeen) { fallsSeen = s.setbacks(); a = Math.max(0, s.onElem); p = null; settling = false; }
             if (settling) {
                 if (s.mode == Sim.Mode.GROUND) { settling = false; a = s.onElem; p = null; } else { pull.act(s, in); return; }
             }

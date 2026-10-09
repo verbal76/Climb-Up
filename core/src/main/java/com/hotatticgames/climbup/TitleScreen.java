@@ -87,7 +87,7 @@ public final class TitleScreen extends ScreenAdapter {
             g.settings.character = com.hotatticgames.climbup.render.Characters.next(g.settings.character);
             world.setCharacter(g.settings.character); g.persist(); g.audio.play("click");
         }
-        String stat = "BEST " + (int) g.save.bestHeight + " M   V" + ClimbGame.VERSION;
+        String stat = "BEST " + (int) g.save.bestHeight + " M   V" + ClimbGame.VERSION + (g.save.bestFinish > 0f ? "   BEST FINISH " + PlayScreen.fmtTime(g.save.bestFinish) : "");
         ui.rect(0, 0, W, 54, new Color(0.05f, 0.07f, 0.14f, 0.7f)); ui.textC(stat, W / 2, 18, 3f, Ui.TEXT);
         ui.end();
         g.autoShot("title", dt);

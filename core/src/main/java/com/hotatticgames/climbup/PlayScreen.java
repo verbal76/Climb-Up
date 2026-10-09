@@ -232,7 +232,7 @@ public final class PlayScreen extends ScreenAdapter {
                 in.jumpPressed = false; jumpLatch = false; kJump = false; in.swingPressed = false; swingLatch = false; kSwing = false;
                 runTime += Sim.DT;
                 if (runTime > 15f && g.ota != null) g.ota.confirm();          // live play with the current (possibly OTA) content: a freshly applied update is now trusted
-                if (!demo) { if (!clockLive && (in.moveX != 0f || in.jumpPressed || in.moveY != 0f)) clockLive = true; if (clockLive && !g.save.finished) g.save.runClock += Sim.DT; }
+                if (!demo) { if (!clockLive && (in.moveX != 0f || in.jumpPressed || in.moveY != 0f)) clockLive = true; RunRecord.tick(g.save, Sim.DT, clockLive); }
                 handleEvents(sim.consumeEvents());
                 acc -= Sim.DT; steps++;
                 if (state != State.PLAYING) break;
@@ -317,6 +317,7 @@ public final class PlayScreen extends ScreenAdapter {
     /** A castle was opened: record the split (time since the previous unlock) and the total, keep the personal bests, start timing the next tower. */
     private void towerUnlocked() {
         SaveData sd = g.save;
+        if (sd.finished) { toast = KEY_NAMES[sim.lastGateColor] + " CASTLE " + sim.lastGateNo + " OPENED!"; toastT = 3f; g.persist(); return; }      // after the official finish nothing more is timed or recorded
         float split = sd.runClock - sd.towerStartClock, total = sd.runClock;
         int n = sd.towers;
         sd.splits = java.util.Arrays.copyOf(sd.splits, n + 1); sd.splits[n] = split;
@@ -334,7 +335,7 @@ public final class PlayScreen extends ScreenAdapter {
     }
 
     /** m:ss.t (h:mm:ss.t from an hour). */
-    static String fmtTime(float sec) {
+    public static String fmtTime(float sec) {
         int t = Math.max(0, (int) (sec * 10f)), tenth = t % 10, s = (t / 10) % 60, m = (t / 600) % 60, h = t / 36000;
         return h > 0 ? String.format("%d:%02d:%02d.%d", h, m, s, tenth) : String.format("%d:%02d.%d", m, s, tenth);
     }
@@ -423,11 +424,13 @@ public final class PlayScreen extends ScreenAdapter {
             towerUnlocked();
             say("[DOOR OPENS]");
         }
-        if ((ev & Sim.EV_FINISH) != 0 && !g.save.finished) {
-            SaveData sd = g.save; sd.finished = true; sd.finishTime = sd.runClock;
-            finishNewBest = sd.bestFinish <= 0f || sd.finishTime < sd.bestFinish; if (finishNewBest) sd.bestFinish = sd.finishTime;
-            g.audio.fallStop(); g.audio.play("win", 1f, 1f); world.particles.burst(s, y + 1.2f, 40, new Color(1f, 0.85f, 0.3f, 1f), 4f, 4f, 0.14f, 1f, 1.6f); vibrate(60, 1); say("[RUN COMPLETE]");
-            state = State.FINISHED; stickPtr = jumpPtr = -1; jumpHeldTouch = false; g.persist();
+        if ((ev & Sim.EV_FINISH) != 0) {
+            int r = RunRecord.complete(g.save);
+            if (r >= 0) {
+                finishNewBest = r == 1;
+                g.audio.fallStop(); g.audio.play("win", 1f, 1f); world.particles.burst(s, y + 1.2f, 40, new Color(1f, 0.85f, 0.3f, 1f), 4f, 4f, 0.14f, 1f, 1.6f); vibrate(60, 1); say("[RUN COMPLETE]");
+                state = State.FINISHED; stickPtr = jumpPtr = -1; jumpHeldTouch = false; g.persist();
+            }
         }
         if ((ev & Sim.EV_BLOCKED) != 0 && lockedT <= 0f) {
             lockedT = 1.6f; g.audio.play("locked", 0.8f, 1f); vibrate(15, 2);
@@ -523,7 +526,8 @@ public final class PlayScreen extends ScreenAdapter {
         ui.text("BEST " + (int) Math.max(g.save.bestHeight, sim.maxHeight), m, H - m - 56 * zk, 2.6f * zk, Ui.DIM);
         // speed-run clock: distance and time on the tower being worked towards, and the total time of the climb (always shown)
         float segM = Math.max(0f, sim.maxHeight - g.save.towerStartHeight);
-        ui.text("TOWER " + (int) segM + " M  " + fmtTime(g.save.runClock - g.save.towerStartClock), m, H - m - 80 * zk, 3f * zk, new Color(1f, 0.82f, 0.3f, 1f));
+        if (g.save.finished) ui.text("INFINITY +" + (int) Math.max(0f, sim.maxHeight - g.tuning.finishCastle * g.tuning.castleSpacing) + " M", m, H - m - 80 * zk, 3f * zk, new Color(1f, 0.82f, 0.3f, 1f));
+        else ui.text("TOWER " + (int) segM + " M  " + fmtTime(g.save.runClock - g.save.towerStartClock), m, H - m - 80 * zk, 3f * zk, new Color(1f, 0.82f, 0.3f, 1f));
         if (g.save.finished) ui.text("FINISH " + fmtTime(g.save.finishTime), m, H - m - 104 * zk, 3f * zk, new Color(0.45f, 1f, 0.55f, 1f));
         else ui.text("TOTAL " + fmtTime(g.save.runClock), m, H - m - 104 * zk, 3f * zk, Ui.TEXT);
         float barW = 360 * zk, barY = H - m - 126 * zk;

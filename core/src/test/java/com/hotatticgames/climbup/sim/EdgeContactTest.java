@@ -17,7 +17,7 @@ public class EdgeContactTest {
     /** One example of every distinct platform (type, skin, width, motion) that the generator produces over many seeds. */
     private static List<Element> specimens(Tuning t) {
         Map<String, Element> m = new TreeMap<>();
-        for (int seed = 1; seed <= 16; seed++) {
+        for (int seed = 1; seed <= 6; seed++) {
             Course prev = null;
             for (int k = 0; k < 8; k++) {
                 Course c = CourseGenerator.chunk(seed, k, prev, t); prev = c;
@@ -30,9 +30,30 @@ public class EdgeContactTest {
         return new ArrayList<>(m.values());
     }
 
+
+    private static Element mk(Element.Type type, int skin, float w, float amp, float period) { Element e = new Element(type, 12f, 0f, w); e.skin = skin; e.amp = amp; e.period = period; return e; }
+
+    /** Every platform kind at its narrowest, widest and fastest, whatever the generator happened to produce in this run (parameters read off 8 seeds x 1,500 m of generated tower). */
+    private static List<Element> constructed() {
+        List<Element> l = new ArrayList<>(); Element.Type S = Element.Type.STATIC;
+        for (float w : new float[]{1f, 2f, 3f, 5f, 7f}) l.add(mk(S, 0, w, 0f, 4f));
+        l.add(mk(S, 1, 7f, 0f, 4f)); l.add(mk(S, 2, 9f, 0f, 4f)); l.add(mk(S, 3, 4f, 0f, 4f)); l.add(mk(S, 3, 6f, 0f, 4f));
+        l.add(mk(Element.Type.CRUMBLE, 0, 1f, 0f, 4f)); l.add(mk(Element.Type.CRUMBLE, 0, 2f, 0f, 4f));
+        for (float a : new float[]{1.5f, 2.4f}) for (float p : new float[]{3.4f, 4.2f}) { l.add(mk(Element.Type.MOVE_H, 0, 2f, a, p)); l.add(mk(Element.Type.MOVE_H, 1, 2.5f, a, p)); }
+        for (float a : new float[]{3.5f, 4.3f}) for (float p : new float[]{5.1f, 6.2f}) l.add(mk(Element.Type.MOVE_V, 0, 3f, a, p));
+        for (float a : new float[]{2.4f, 2.7f}) for (float p : new float[]{3.0f, 3.7f}) l.add(mk(Element.Type.MOVE_V, 1, 3f, a, p));
+        for (float a : new float[]{3.0f, 3.8f}) for (float p : new float[]{5.2f, 5.9f}) l.add(mk(Element.Type.MOVE_Z, 0, 3f, a, p));
+        l.add(mk(Element.Type.PAD, 0, 2f, 0f, 4f));
+        for (float a : new float[]{0.37f, 0.53f}) l.add(mk(Element.Type.SPRING, 0, 2f, a, 4f));
+        for (int skin = 0; skin < 4; skin++) for (float w : new float[]{3.0f, 3.8f}) l.add(mk(Element.Type.RAMP, skin, w, 0.58f, 4f));
+        for (float w : new float[]{7f, 8f}) l.add(mk(Element.Type.SEESAW, 1, w, 0f, 4f));
+        for (float p : new float[]{3.7f, 4.4f}) l.add(mk(Element.Type.SWING, 0, 2f, 0.5f, p));
+        return l;
+    }
+
     @Test public void everyPlatformTypeHasEdgesAtEveryHeightSpeedAndDirection() throws Exception {
         Tuning t = tuning();
-        List<Element> sp = specimens(t);
+        List<Element> sp = constructed(); sp.addAll(specimens(t));
         Set<String> types = new TreeSet<>(); for (Element e : sp) types.add(e.type + "/" + e.skin);
         float[] depths = {0.1f, -0.2f, -0.5f, -0.8f, -1.1f, -1.4f, -1.8f}, vxs = {1.5f, 3f, 5f, 6.5f}, vys = {-10f, -5f, -1f, 2f, 5f, 8f, 11f}, gaps = {0.1f, 0.8f}, phases = {0.45f, 2.2f};
         long trials = 0, contacts = 0; List<String> bad = new ArrayList<>();
@@ -61,7 +82,7 @@ public class EdgeContactTest {
                 }
         }
         System.out.println("edge sweep: " + types.size() + " platform kinds, " + sp.size() + " specimens, " + (trials % 1_000_000_000L) + " trials, " + contacts + " side contacts, " + (trials / 1_000_000_000L) + " fall-throughs " + types);
-        assertTrue("these platform kinds are covered: " + types, types.containsAll(Arrays.asList("STATIC/0", "CRUMBLE/0", "MOVE_H/0", "MOVE_V/0", "MOVE_Z/0", "SWING/0", "PAD/0", "SPRING/0", "RAMP/0", "SEESAW/1")));
+        assertTrue("these platform kinds are covered: " + types, types.containsAll(Arrays.asList("STATIC/0", "CRUMBLE/0", "MOVE_H/0", "MOVE_V/0", "MOVE_Z/0", "SWING/0", "PAD/0", "SPRING/0", "RAMP/0", "RAMP/1", "RAMP/2", "RAMP/3", "SEESAW/1", "STATIC/1", "STATIC/2", "STATIC/3", "MOVE_H/1", "MOVE_V/1")));
         assertTrue("the sweep really makes side contact (" + contacts + ")", contacts > 20000);
         assertEquals("a body slipped into a platform's side and sank through it: " + bad, 0, trials / 1_000_000_000L);
     }

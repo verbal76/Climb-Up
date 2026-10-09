@@ -1,0 +1,105 @@
+{
+  "_comment": "Maps a game sound to one or more files from the owner-supplied retro/platformer sound pack (assets/audio/pack/<name>.ogg). One is picked at random each time. Delete an entry to fall back to the built-in synthesized sound. Edit freely, no code change needed. Grunts and the bee buzz stay synthesized (they are pitched per character).",
+  "hit": [
+    "crunch_1",
+    "crunch_2"
+  ],
+  "cannon": [
+    "shell_explosion_1"
+  ],
+  "spikes": [
+    "snap_1",
+    "snap_2"
+  ],
+  "swing": [
+    "woosh_1",
+    "woosh_2",
+    "woosh_3"
+  ],
+  "bonk": [
+    "thud1",
+    "thud2"
+  ],
+  "squeak": [
+    "parry1",
+    "parry2",
+    "parry3"
+  ],
+  "door": [
+    "thudd3"
+  ],
+  "locked": [
+    "clang8",
+    "clang9"
+  ],
+  "key": [
+    "sucess1"
+  ],
+  "crumble": [
+    "crunch_3"
+  ],
+  "click": [
+    "click_1"
+  ],
+  "poof": [
+    "woosh_4"
+  ],
+  "saw": [
+    "scratch2"
+  ],
+  "jump": [
+    "woosh_2",
+    "woosh_1"
+  ],
+  "land": [
+    "thud1",
+    "thudd3"
+  ],
+  "bounce": [
+    "clang11",
+    "clang10"
+  ],
+  "grab": [
+    "clickandrelease_1"
+  ],
+  "pull": [
+    "snap_3",
+    "snap_4"
+  ],
+  "effort": [
+    "snap_1",
+    "snap_2"
+  ],
+  "checkpoint": [
+    "sucesss2"
+  ],
+  "respawn": [
+    "woosh_3"
+  ],
+  "win": [
+    "brass1",
+    "brass3"
+  ],
+  "rope": [
+    "scratch2"
+  ],
+  "step": [
+    "unclick_1",
+    "unclick_2"
+  ],
+  "whoosh": [
+    "transition"
+  ],
+  "steam": [
+    "steam_1",
+    "steam_2",
+    "steam_3"
+  ],
+  "talk": [
+    "textscroll_2",
+    "textscroll_3"
+  ],
+  "fall": [
+    "fall"
+  ]
+}

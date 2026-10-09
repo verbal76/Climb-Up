@@ -1,0 +1,3 @@
+libGDX - https://libgdx.com - Apache License 2.0 (https://www.apache.org/licenses/LICENSE-2.0)
+Copyright Mario Zechner, Nathan Sweet and the libGDX contributors.
+Used unmodified as a library (gdx, gdx-backend-android, gdx-backend-lwjgl3, gdx-platform natives).

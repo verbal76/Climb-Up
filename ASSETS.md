@@ -1,0 +1,56 @@
+# Assets and provenance
+
+Every external asset used by the game must have a row here with its exact source URL, creator, license and download date.
+Planned resolutions from Game Designer are listed first; the build appends one row per actual file.
+
+## Asset strategy
+
+Asset sources in priority order: 1) appropriately licensed free assets (CC0/public domain; verify every license); 2) for whatever remains uncovered, original/procedural work created by the builder.
+
+| Need | Resolution | License | Source / instructions |
+|---|---|---|---|
+| characters | external cc0 | CC0 1.0 / public domain | Kenney (https://kenney.nl/assets); Quaternius (https://quaternius.com); Poly Haven (https://polyhaven.com); OpenGameArt.org (CC0-filtered) (https://opengameart.org); itch.io (CC0-tagged assets) (https://itch.io/game-assets/assets-cc0) Choose ONE visually coherent set (consistency over variety). If no coherent clean-license set covers this need, build the original procedural fallback: Generate meshes from primitives and parametric/lathe/extrude builders with vertex colors or simple materials; deterministic seeds. |
+| environment | external cc0 | CC0 1.0 / public domain | Kenney (https://kenney.nl/assets); Quaternius (https://quaternius.com); Poly Haven (https://polyhaven.com); OpenGameArt.org (CC0-filtered) (https://opengameart.org); itch.io (CC0-tagged assets) (https://itch.io/game-assets/assets-cc0) Choose ONE visually coherent set (consistency over variety). If no coherent clean-license set covers this need, build the original procedural fallback: Generate meshes from primitives and parametric/lathe/extrude builders with vertex colors or simple materials; deterministic seeds. |
+| materials | external cc0 | CC0 1.0 / public domain | Poly Haven (https://polyhaven.com); ambientCG (https://ambientcg.com) Choose ONE visually coherent set (consistency over variety). If no coherent clean-license set covers this need, build the original procedural fallback: Generate tileable textures with noise/pattern shaders baked at build time. |
+| ui_kit | external cc0 | CC0 1.0 / public domain | Kenney (https://kenney.nl/assets); OpenGameArt.org (CC0-filtered) (https://opengameart.org); itch.io (CC0-tagged assets) (https://itch.io/game-assets/assets-cc0) Choose ONE visually coherent set (consistency over variety). If no coherent clean-license set covers this need, build the original procedural fallback: Build the UI from engine-native drawing primitives (rounded rects, gradients, icons drawn as vectors) with a shared theme. |
+| vfx | external cc0 | CC0 1.0 / public domain | Kenney (https://kenney.nl/assets) Choose ONE visually coherent set (consistency over variety). If no coherent clean-license set covers this need, build the original procedural fallback: Use engine particle systems and shaders with a shared small palette. |
+| font | external cc0 | CC0 1.0 / public domain | Kenney (https://kenney.nl/assets) Choose ONE visually coherent set (consistency over variety). If no coherent clean-license set covers this need, build the original procedural fallback: Use a CC0 font from a blanket-CC0 source, or generate a bitmap font from code. |
+| sfx | external cc0 | CC0 1.0 / public domain | Kenney (https://kenney.nl/assets); OpenGameArt.org (CC0-filtered) (https://opengameart.org); itch.io (CC0-tagged assets) (https://itch.io/game-assets/assets-cc0); Freesound (CC0-filtered) (https://freesound.org) Choose ONE visually coherent set (consistency over variety). If no coherent clean-license set covers this need, build the original procedural fallback: Synthesize effects with a small sfxr-style synthesizer (waveform, envelope, filter) rendered at build time with seeded parameters per effect. |
+| music | external cc0 | CC0 1.0 / public domain | Kenney (https://kenney.nl/assets); OpenGameArt.org (CC0-filtered) (https://opengameart.org); itch.io (CC0-tagged assets) (https://itch.io/game-assets/assets-cc0); Freesound (CC0-filtered) (https://freesound.org) Choose ONE visually coherent set (consistency over variety). If no coherent clean-license set covers this need, build the original procedural fallback: Synthesize loopable music from a small procedural sequencer (scales, chord progressions, simple instruments) rendered at build time. |
+
+
+## Owner-supplied branding (use as-is; never replace or regenerate)
+
+| Slot | File in this package | Original name | Size | SHA-256 | License |
+|---|---|---|---|---|---|
+| studio_splash | `branding/master/studio_splash_e3d9bb56.png` | Hot_Attic_Games_Master_Logo_ALPHA_FINAL.png | 1536x1024 | e3d9bb5653eafb783eede827606e7ac73a4e45564a1c25b1ed13ad1429f48c4e | owner-supplied |
+
+## Actual files
+
+| File | Source URL | Creator | License | Downloaded |
+|---|---|---|---|---|
+| `assets/models/*.obj, *.mtl, Textures/colormap.png` (blocks, props, flag/chest/jewel; 40 models) | owner-supplied pack `kenney_platformer-kit.zip` (https://kenney.nl/assets/platformer-kit) | Kenney (www.kenney.nl) | CC0 1.0 (`assets/licenses/Kenney_PlatformerKit_License.txt`) | 2026-10-08 |
+| `assets/pack/*.g3dj` (hazards: saw, cannon, spiked ball, spikes, spike trap; later keys, castle, crabs, club) | converted from the same owner-supplied Quaternius pack by `tools/gltf_static_to_g3dj.py` | Quaternius | CC0 1.0 (`assets/licenses/Quaternius_UltimatePlatformer_License.txt`) | 2026-10-08 |
+| `assets/audio/pack/*.ogg`, `assets/data/sfx.json` | OWNER-SUPPLIED `FREE Retro Action Platformer Sound Effects.7z` = "FREE Retro Action Platformer Sound Effects (56 SFX)" by **jeageroni** (https://jeageroni.itch.io, name-your-own-price; page checked by the owner 2026-10-09); converted to mono OGG, loudness-normalised; mapped to game sounds by `assets/data/sfx.json` | jeageroni | **Author's licence (not CC0):** free for commercial and non-commercial projects, no attribution required, modification allowed; **do not redistribute or resell the files as standalone assets.** Page states no generative AI was used. Shipping them inside the game is within the licence; keeping the raw .ogg files in a PUBLIC repo is a grey area (see docs/DECISIONS.md) | 2026-10-09 |
+| `assets/hero/hamster.g3dj`, `hamster.png` (rigged on the bunny skeleton by `tools/hamster/build_rigged_hamster.py`) | "Chibi Hamster 3D Character - Game Asset", https://fran-zerogame.itch.io (page checked by the owner 2026-10-09; published 2025-09-14, updated 2025-12-17; name-your-own-price, files .blend/.fbx/.obj/.gltf; page says no generative AI was used). Our copy: static mesh from the supplied .blend, 2048 px texture reduced to 1024 px, rigged and animated in code | Zero (itch.io author "Zero") | **No licence text on the page.** The author says he gives it away free and that it is meant as a base for animation, shorts and games (page text, Spanish), and that future rigged/animated versions would cost up to 3 USD. Treated as free to use and adapt in a game; a written commercial-use confirmation from the author is still recommended before any commercial release | 2026-10-08 |
+| `assets/pack/bee_anim.g3dj`, `crab_anim.g3dj` | animated Bee / Crab from the Quaternius pack (skeleton + clips, `tools/gltf_to_g3dj.py`) | Quaternius | CC0 1.0 | 2026-10-08 |
+| `assets/hero/hero.g3dj` (converted from `Character.gltf` by `tools/gltf_to_g3dj.py`) | owner-supplied pack `Ultimate Platformer Pack by Quaternius.zip` (https://quaternius.com / quaternius.itch.io) | Quaternius | CC0 1.0 (`assets/licenses/Quaternius_UltimatePlatformer_License.txt`) | 2026-10-08 |
+| `assets/branding/studio_splash.png` | owner-supplied (`branding/master/studio_splash_e3d9bb56.png`) | Hot Attic Games | owner-supplied, unmodified | 2026-10-08 |
+| `assets/audio/music_leaplike.ogg`, `music_mountain_jig.ogg`, `music_track4.ogg` | OWNER-SUPPLIED by Kevin (music generated with **Suno**, per the owner) ("Leaplike Melody", "Mountain Jig", one untitled); transcoded from supplied WAVs (OGG Vorbis q4, 44.1 kHz); license/provenance as supplied by the owner | owner | owner-supplied | gameplay playlist |
+| `assets/audio/music_game.ogg` | OWNER-SUPPLIED by Kevin (generated with **Suno**, per the owner) ("Here is some music"); transcoded from the supplied WAV (OGG Vorbis q4, 44.1 kHz); license/provenance as supplied by the owner | owner | owner-supplied | gameplay music |
+| `assets/audio/*.wav` (12 effects, 1 menu music loop) | original - synthesised by `tools/gen_audio.py` | Hot Attic Games / this build | original, no third-party material | generated |
+| app icon (`android/src/main/res/mipmap-*`, `drawable-nodpi`, `docs/play_store_icon_512.png`) | original - `tools/gen_icon.py` composes a sunset sky, blocks and a close-up render of the game's own bunny hero peeking over a ledge (`tools/icon/hero_face.png`, `tools/icon/platform_render.png` = the game's own grass block, made with desktop `IconShot` from the Quaternius hero) | Hot Attic Games / Quaternius | original + CC0 | 2026-10-09 |
+| pixel font, title lettering, HUD, ropes/cables/pads/beams, clouds/stars | original - drawn in code (`ui/PixelFont.java`, `render/*`) | Hot Attic Games / this build | original | n/a |
+| libGDX 1.14.2 (library) | https://libgdx.com | libGDX contributors | Apache-2.0 (`assets/licenses/libGDX_NOTICE.txt`) | via Maven Central |
+
+Gaps filled with original/procedural work (no external download was needed): audio, font, UI kit, VFX, title art, icon, materials (the Kenney palette texture covers surfaces).
+
+## Owner-supplied: Quaternius "Ultimate Space Kit" (astronaut animals, spaceships, planets, rocks, ramp) — NOT yet in the build
+- Files: Astronaut_/Spaceship_ {FinnTheFrog, RaeTheRedPanda, FernandoTheFlamingo, BarbaraTheBee}, Planet_1..11, Rock_1..4, Rock_Large_1..3, Ramp (.gltf + .blend each).
+- Source: Quaternius (quaternius.com), downloaded by the owner via the site's "Ultimate Space Collection" link; no licence file for this pack was in the download the owner uploaded (the uploaded License.txt is the Ultimate Platformer Pack's).
+- Licence: owner states Quaternius packs are CC0. A web search agrees (CC0, commercial use allowed) but one third-party listing (Sketchfab) shows "Creative Commons Attribution", and quaternius.com could not be reached from this environment. Status: **confirmed** — the owner's screenshot of the pack's own quaternius.com page ("Ultimate Space Kit, March 2023", 92 models, License: CC0) shows CC0; the pack's licence text file itself was not supplied. Credit Quaternius in the credits screen regardless.
+- Date logged: 2026-10-08.
+| `assets/space/*.g3dj` (ramp, rocks, planets, spaceships, astronauts) | converted from the owner-supplied Quaternius Ultimate Space Kit glTFs by `tools/space_kit_to_g3dj.py` (palette atlas baked to vertex colours) | Quaternius | CC0 1.0 (pack page shows CC0; see section above) | 2026-10-08 |
+| `assets/audio/pack/fall.ogg` (the falling sound) | owner-supplied `____.wav` (3.2 s), converted to mono OGG | the owner (designed by Kevin, generated with Suno) | owner's own creation; Suno plan terms apply (see docs/DECISIONS.md) | 2026-10-08 |
+
+| `assets/pack/tower2.g3dj` | derived from the Quaternius castle tower (`tower.g3dj`) by `tools/make_tower_door.py`: the door area (arch, recess, base ring, door leaf) copied turned 180 degrees onto the opposite wall so the castle has a door on both sides | Quaternius | CC0 1.0 | 2026-10-09 |

@@ -1,0 +1,60 @@
+name: Publish signed OTA content
+# Runs when tools/ota/content_version.txt changes on the release branch (edit assets/data/tuning.json, raise that number, push) or by hand.
+# The payload is the tuning numbers of this commit; they must pass the same tests as a full build, are signed with the OTA key from the secrets, are run through the app's own
+# client against the pinned public key, and only then published to the public "ota" release. Older or equal versions are refused.
+on:
+  workflow_dispatch: {}
+  push:
+    branches: [ccr-cb458cd1-w4dh5c]
+    paths: ['tools/ota/content_version.txt']
+concurrency: ota-publish
+permissions:
+  contents: write
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '17' }
+      - name: Decide
+        id: v
+        run: |
+          set -e
+          V=$(tr -d ' \n\r' < tools/ota/content_version.txt)
+          BV=$(grep -oP "BUNDLED_CONTENT_VERSION = \K[0-9]+" core/src/main/java/com/hotatticgames/climbup/ota/OtaConfig.java)
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          if [ "$V" -le "$BV" ]; then echo "content version $V is the one bundled in the APK (baseline is published by the APK build): nothing to do"; echo "go=false" >> "$GITHUB_OUTPUT"; else echo "go=true" >> "$GITHUB_OUTPUT"; fi
+      - name: Prove the OTA signing secrets (PASS/FAIL only)
+        if: steps.v.outputs.go == 'true'
+        env:
+          OTA_SIGNING_PRIVATE_KEY: ${{ secrets.OTA_SIGNING_PRIVATE_KEY }}
+          OTA_SIGNING_KEY_PASSPHRASE: ${{ secrets.OTA_SIGNING_KEY_PASSPHRASE }}
+        run: tools/ci/verify_secrets.sh --ota-only
+      - uses: gradle/actions/setup-gradle@v4
+        if: steps.v.outputs.go == 'true'
+      - name: Gate - the numbers to ship must pass the generator, solver, OTA and persistence tests
+        if: steps.v.outputs.go == 'true'
+        run: ./gradlew :core:test --no-daemon --tests '*EndlessTest*' --tests '*FramedGenerationTest*' --tests '*OtaTest*' --tests '*OtaEndToEndTest*' --tests '*OtaConfigTest*' --tests '*SimTest*' --tests '*FallRulesTest*' --tests '*TowerStreamingTest*' --tests '*ResumeTest*'
+      - name: Build, sign and verify
+        if: steps.v.outputs.go == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OTA_SIGNING_PRIVATE_KEY: ${{ secrets.OTA_SIGNING_PRIVATE_KEY }}
+          OTA_SIGNING_KEY_PASSPHRASE: ${{ secrets.OTA_SIGNING_KEY_PASSPHRASE }}
+        run: |
+          set -e
+          V=${{ steps.v.outputs.version }}
+          CUR=0; if gh release view ota >/dev/null 2>&1; then CUR=$(gh release download ota -p manifest.json -O - 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin).get('contentVersion',0))" 2>/dev/null || echo 0); fi
+          if [ "$V" -le "$CUR" ]; then echo "::error::version $V is not higher than the published v$CUR"; exit 1; fi
+          python3 tools/ota/make_ota.py --version "$V" --sign
+          ./gradlew :core:verifyOta -PotaDir=build/ota --no-daemon -q
+      - name: Publish
+        if: steps.v.outputs.go == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -e
+          gh release view ota >/dev/null 2>&1 || gh release create ota --latest=false --title "OTA content channel (signed)" --notes "Signed over-the-air content for Climb up. Files: manifest.json, manifest.sig, payload.zip. Verified by the key pinned in the app; do not edit."
+          gh release upload ota build/ota/payload.zip build/ota/manifest.json build/ota/manifest.sig --clobber
+          echo "published OTA content v${{ steps.v.outputs.version }}"

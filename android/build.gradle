@@ -1,0 +1,63 @@
+plugins { id 'com.android.application' version '8.7.3' }
+
+def buildCode = (System.getenv('GITHUB_RUN_NUMBER') ?: (project.findProperty('buildCode') ?: '1')).toInteger()
+
+android {
+    namespace 'com.hotatticgames.climbup.android'
+    compileSdk 35
+    defaultConfig {
+        applicationId 'com.hotatticgames.climbup'
+        minSdk 26
+        targetSdk 35
+        versionCode buildCode
+        versionName rootProject.ext.appVersionName
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    // ONE signing identity for every build, so each installs over the previous one: the certificate of the installed Build 42 (CE:DD:D6:86...). CI supplies that same keystore from the
+    // ANDROID_KEYSTORE_* secrets (tools/ci/verify_secrets.sh proves they are the right ones and the workflow checks the built APK's certificate); local builds use the committed copy.
+    def ciKeystore = System.getenv('ANDROID_KEYSTORE_FILE')
+    signingConfigs {
+        debug {
+            if (ciKeystore) { storeFile file(ciKeystore); storePassword System.getenv('ANDROID_KEYSTORE_PASSWORD'); keyAlias System.getenv('ANDROID_KEY_ALIAS'); keyPassword System.getenv('ANDROID_KEY_PASSWORD') }
+            else { storeFile file('debug.keystore'); storePassword 'android'; keyAlias 'androiddebugkey'; keyPassword 'android' }
+        }
+    }
+    sourceSets {
+        main {
+            assets.srcDirs = ['../assets']
+            jniLibs.srcDirs = ['libs']
+        }
+    }
+    packaging { jniLibs { useLegacyPackaging = false } }
+    buildTypes { release { minifyEnabled false } }
+    lint { abortOnError false }
+}
+
+configurations { natives }
+
+dependencies {
+    implementation project(':core')
+    implementation "com.badlogicgames.gdx:gdx-backend-android:${rootProject.ext.gdxVersion}"
+    natives "com.badlogicgames.gdx:gdx-platform:${rootProject.ext.gdxVersion}:natives-armeabi-v7a"
+    natives "com.badlogicgames.gdx:gdx-platform:${rootProject.ext.gdxVersion}:natives-arm64-v8a"
+    natives "com.badlogicgames.gdx:gdx-platform:${rootProject.ext.gdxVersion}:natives-x86_64"
+}
+
+tasks.register('copyAndroidNatives') {
+    doFirst {
+        ['armeabi-v7a', 'arm64-v8a', 'x86_64'].each { file("libs/$it").mkdirs() }
+        configurations.natives.copy().files.each { jar ->
+            def abi = ['armeabi-v7a', 'arm64-v8a', 'x86_64'].find { jar.name.endsWith("natives-${it}.jar") }
+            if (abi) copy { from zipTree(jar); into file("libs/$abi"); include '*.so' }
+        }
+    }
+}
+tasks.matching { it.name.contains('merge') && it.name.contains('JniLibFolders') }.configureEach { dependsOn 'copyAndroidNatives' }
+
+// gdx-backend-android pulls androidx.core 1.17.0, which needs AGP 8.9.1+/compileSdk 36; pin to the last release matching AGP 8.7.3 / SDK 35.
+configurations.configureEach {
+    resolutionStrategy.force 'androidx.core:core:1.15.0'
+}

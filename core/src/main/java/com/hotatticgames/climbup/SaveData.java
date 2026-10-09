@@ -5,7 +5,7 @@ import java.util.List;
 
 /** Run progress and stats. Versioned; see {@link SaveStore#migrate}. No power progression of any kind is stored. */
 public final class SaveData {
-    public static final int CURRENT_VERSION = 3;
+    public static final int CURRENT_VERSION = 4;
     public int version = CURRENT_VERSION;
     public int courseIndex = 0;          // legacy (v2 finite towers); unused by the endless climb
     public int checkpoint = 0;           // legacy (v2)

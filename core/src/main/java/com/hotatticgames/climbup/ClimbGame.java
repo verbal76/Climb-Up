@@ -125,7 +125,7 @@ public class ClimbGame extends Game {
 
     public void forgetRun() {
         save.seed = 0; save.sliceJson = null; save.slice = 0; save.sliceCheckpoint = 0;
-        save.runClock = 0; save.towerStartClock = 0; save.towerStartHeight = 0; save.towers = 0; save.splits = new float[0]; save.towerTotals = new float[0];      // records (bestSplit, bestTotals) are kept
+        save.finished = false; save.finishTime = 0; save.runClock = 0; save.towerStartClock = 0; save.towerStartHeight = 0; save.towers = 0; save.splits = new float[0]; save.towerTotals = new float[0];      // records (bestSplit, bestTotals) are kept
     }
 
     public void persist() { store.saveGame(save); store.saveSettings(settings); }

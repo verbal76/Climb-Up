@@ -13,6 +13,8 @@ public class Tuning {
     public float climbSpeed = 3.4f, ropeGrabRadius = 0.42f, cableShimmy = 3.6f, grabLockout = 0.28f;
     public float ledgeReachX = 0.4f, ledgeReachBelow = 0.9f, ledgeReachAbove = 0.15f, pullUpTime = 0.32f;
     public float crumbleDelay = 0.7f, crumbleRespawn = 3.4f;
+    public float castleSpacing = 500f;             // the castles of the endless climb stand at exactly this height apart (500, 1000, 1500 ...): equal for every runner
+    public int finishCastle = 10;                  // walking through this castle's door ends the timed run
     public float moverCrumbleDelay = 1.6f;       // movers that fall apart (elevators, sliders, swings) hold a little longer than plain crumbling tiles
     public float swingSuper = 5.5f, swingSuperVx = 3.5f;   // jumping from the top of a swing's arc catapults you: extra upward and outward speed
     public float fallRespawnDepth = 12f;

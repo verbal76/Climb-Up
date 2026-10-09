@@ -66,6 +66,9 @@ public final class SaveStore {
         if (!(d.bestHeight >= 0)) d.bestHeight = 0;
         if (!(d.playSeconds >= 0)) d.playSeconds = 0;
         if (!(d.runClock >= 0)) d.runClock = 0;
+        if (!(d.finishTime >= 0)) d.finishTime = 0;
+        if (!(d.bestFinish >= 0)) d.bestFinish = 0;
+        if (d.finishTime == 0) d.finished = false;
         if (!(d.towerStartClock >= 0)) d.towerStartClock = 0;
         if (!(d.towerStartHeight >= 0)) d.towerStartHeight = 0;
         if (d.splits == null) d.splits = new float[0];

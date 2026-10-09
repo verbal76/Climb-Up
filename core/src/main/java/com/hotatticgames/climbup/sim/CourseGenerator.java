@@ -126,6 +126,11 @@ public final class CourseGenerator {
             rests = prev.get(rs - 1).zone * 3 + rs;   // keeps the checkpoint cadence varied between slices
         }
         float startY = c.get(ctx - 1).y;
+        castleTarget = 0f; castleDone = false;
+        if (T.castleSpacing > 0f) {          // the castles stand at exact, equal heights (spacing, 2 x spacing ...): the slice that starts within 80 m below one builds it
+            int mc = (int) Math.floor((startY + 80f) / T.castleSpacing);
+            if (mc >= 1 && mc * T.castleSpacing > startY) castleTarget = mc * T.castleSpacing;
+        }
         extend(startY + T.chunkHeight);
         addRest(theme(c.get(c.size() - 1).y));
         c.get(c.size() - 1).checkpoint = true;
@@ -171,20 +176,23 @@ public final class CourseGenerator {
 
     /** Appends modules until the last platform reaches height {@code targetY}. */
     private void extend(float targetY) {
+        if (castleTarget > 0f && !castleDone) targetY = Math.max(targetY, castleTarget + 8f);
         int sinceRest = 0;
         float lastRestY = c.get(c.size() - 1).y, nextGap = T.gemSpacing * r(0.85f, 1.15f);      // red-gem checkpoints at even stretches of height, each with a little random give
         while (c.get(c.size() - 1).y < targetY) {
             Element last = c.get(c.size() - 1);
             float d = diff(last.y);
             int zone = tier(last.y), th = theme(last.y);
-            if (last.y - lastRestY >= nextGap && targetY - last.y > 0.4f * T.gemSpacing) {      // (not right before the slice's own closing rest)
+            boolean castlePending = castleTarget > 0f && !castleDone;
+            if (castlePending && last.y >= castleTarget - 6f) { buildExactCastle(th); castleDone = true; lastRestY = c.get(c.size() - 1).y; continue; }
+            if (last.y - lastRestY >= nextGap && targetY - last.y > 0.4f * T.gemSpacing && !(castlePending && last.y > castleTarget - 14f)) {      // (not right before the slice's own closing rest)
                 addRest(th); sinceRest = 0; lastRestY = c.get(c.size() - 1).y; nextGap = T.gemSpacing * r(0.85f, 1.15f); maybeCastle(th); continue;
             }
             Kind k = pick(zone, last);
-            if (!tryModule(k, d, th)) {
+            if (!tryModuleBelow(k, d, th)) {
                 rejected++;
                 boolean ok = false;
-                for (Kind fb : new Kind[]{Kind.PAD, Kind.ROPE, Kind.MOVER_V, Kind.STAIRS, Kind.HOP}) { if (fb != k && tryModule(fb, 0.15f, th)) { k = fb; ok = true; break; } }
+                for (Kind fb : new Kind[]{Kind.PAD, Kind.ROPE, Kind.MOVER_V, Kind.STAIRS, Kind.HOP}) { if (fb != k && tryModuleBelow(fb, 0.15f, th)) { k = fb; ok = true; break; } }
                 if (!ok) throw new IllegalStateException("cannot extend course (layer=" + failLayer + " haz=" + failHaz + " plan=" + failPlan + " window=" + failWindow + ") at " + c.size() + " last=" + last.type + " s=" + last.s + " y=" + last.y + " below=" + below(last));
             }
             prev2 = prev; prev = k; sinceRest++;
@@ -196,11 +204,12 @@ public final class CourseGenerator {
 
     private final List<int[]> pendingCastles = new ArrayList<>();   // {rest platform index, gate index in c.hazards}
     private int castlesThisCourse;
-    public int castleDue, castleBuilt, roomFailed, roomOk; public int[] roomWhy = new int[5], roomWhyD = new int[5];
+    public int castleDue, castleBuilt, roomFailed, roomOk, roomFallback; public int[] roomWhy = new int[5], roomWhyD = new int[5];
 
     private int sliceNo() { return (int) ((salt - 1) % 1000003L); }
 
     private void maybeCastle(int th) {
+        if (endless) return;                    // the endless climb builds its castles at exact heights (buildExactCastle)
         Element last = c.get(c.size() - 1);
         boolean due = endless ? (castlesThisCourse == 0 && c.size() - ctx > 6)
                               : (last.y > 70f && castlesThisCourse < (int) (last.y / 150f) && castlesThisCourse < 3);
@@ -208,6 +217,47 @@ public final class CourseGenerator {
         if (!due || !last.checkpoint || last.type != Element.Type.STATIC || last.w < 4f) return;
         if (endless && last.y > c.get(ctx - 1).y + T.chunkHeight - 8f) return;           // keep the whole castle inside this slice
         tryCastle(th);
+    }
+
+    private float castleTarget; private boolean castleDone;
+
+    /** A module that must not carry the climb past the castle's approach window (keeps the last platform at least 1.6 m below the castle deck). */
+    private boolean tryModuleBelow(Kind k, float d, int zone) {
+        if (castleTarget <= 0f || castleDone) return tryModule(k, d, zone);
+        int n0 = c.size(), h0 = c.hazards.size();
+        if (!tryModule(k, d, zone)) return false;
+        if (c.get(c.size() - 1).y > castleTarget - 1.6f) { rollbackTo(n0, h0); return false; }
+        return true;
+    }
+
+    /** The castle of the endless climb: a rest platform, a staircase of small steps that lands the deck at EXACTLY castleTarget, the deck with its gate (gate.skin = castle number). */
+    private void buildExactCastle(int th) {
+        addRest(th);
+        int rIdx = c.size() - 1; Element u = c.get(rIdx);
+        float R = castleTarget - u.y;
+        if (R < 0.05f || R > 7.5f || !u.checkpoint || u.w < 4f) throw new IllegalStateException("castle approach out of range R=" + R);
+        int number = Math.round(castleTarget / T.castleSpacing);
+        float d = diff(u.y);
+        for (int attempt = 0; attempt < 10; attempt++) {
+            int k = Math.max(1, (int) Math.ceil(R / 0.7f)); float step = R / k;
+            List<Element> l = new ArrayList<>(); Element pv = u;
+            for (int i = 1; i < k; i++) {
+                float w = 3.0f, gap = reach(step) * lerp(0.45f, 0.7f, d) * (1f - 0.04f * attempt);
+                Element e = plat(Element.Type.STATIC, pv.s + pv.w / 2f + gap + w / 2f, u.y + step * i, w, th); l.add(e); pv = e;
+            }
+            float gapD = reach(step) * lerp(0.5f, 0.75f, d) * (1f - 0.04f * attempt);
+            Element g = plat(Element.Type.STATIC, pv.s + pv.w / 2f + gapD + 4.5f, castleTarget, 9f, th);
+            g.skin = 2; l.add(g);
+            Element gate = hz(Element.Type.GATE, g.s, castleTarget, 3.4f, th);
+            gate.len = 7.5f; gate.color = rnd.nextInt(Element.KEY_COUNT); gate.skin = number; gate.anchor = c.size() + l.size() - 1;
+            if (!commit(l, listOf(gate), T.minLinkMargin)) continue;
+            int gateIdx = c.hazards.size() - 1;
+            addRest(th);
+            pendingCastles.add(new int[]{rIdx, gateIdx});
+            castlesThisCourse++; castleBuilt++;
+            return;
+        }
+        throw new IllegalStateException("castle " + number + " could not be placed");
     }
 
     private boolean tryCastle(int th) {
@@ -255,6 +305,12 @@ public final class CourseGenerator {
                 Element pl = c.get(anchor);
                 if (pl.type != Element.Type.STATIC || (anchor != pc[0] && pl.w < 3f)) continue;
                 for (int attempt = 0; attempt < 14 && !ok; attempt++) ok = tryKeyRoom(anchor, gate, attempt);
+            }
+            if (!ok && endless && gate.skin > 0) {        // an exact-height castle can never be dropped: when no side room can be proven, the key simply lies on the rest platform in front of the castle
+                Element R = c.get(pc[0]);
+                Element key = new Element(Element.Type.KEY, R.s, R.y + 0.95f, 0f);
+                key.zone = R.zone; key.color = gate.color; key.anchor = pc[0];
+                c.hazards.add(key); roomFallback++; continue;
             }
             if (!ok) { removeGates.add(gate); roomFailed++; } else roomOk++;
         }

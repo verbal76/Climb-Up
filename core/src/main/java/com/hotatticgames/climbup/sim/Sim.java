@@ -10,7 +10,7 @@ public final class Sim {
     public static final float DT = 1f / 60f, SWING_TIME = 0.34f;
     // event bits
     public static final int EV_JUMP = 1, EV_LAND = 2, EV_BOUNCE = 4, EV_GRAB = 8, EV_PULL = 16, EV_CRUMBLE = 32,
-            EV_CHECKPOINT = 64, EV_RESPAWN = 128, EV_WIN = 256, EV_ROPE = 512, EV_CABLE = 1024, EV_FALL_NEAR = 2048, EV_HIT = 4096, EV_KEY = 8192, EV_DOOR = 16384, EV_BLOCKED = 32768, EV_CLUB = 65536, EV_SWING = 131072, EV_SHOVE = 262144, EV_CRAB_OFF = 524288;
+            EV_CHECKPOINT = 64, EV_RESPAWN = 128, EV_WIN = 256, EV_ROPE = 512, EV_CABLE = 1024, EV_FALL_NEAR = 2048, EV_HIT = 4096, EV_KEY = 8192, EV_DOOR = 16384, EV_BLOCKED = 32768, EV_CLUB = 65536, EV_SWING = 131072, EV_SHOVE = 262144, EV_CRAB_OFF = 524288, EV_FINISH = 1048576;
 
     public final Course course;
     public final Tuning T;
@@ -55,7 +55,8 @@ public final class Sim {
     public int keys;                              // bit per colour of the keys carried
     public boolean keysFree;                      // planners/demos: every gate simply opens on touch
     public boolean[] featDone = new boolean[0];   // per feature (Course.hazards index): key taken / gate opened
-    public int lastKeyColor, lastGateColor;
+    public int lastKeyColor, lastGateColor, lastGateNo;
+    public boolean finishedRun;         // the finishCastle's door has been walked through (the timed run is over)
     public float clubTime, swingT, shoveCd;       // spiked club carried (seconds left), swing animation clock, grace between shoves
     public boolean knockedBee;
     public float crabS, crabY;                    // where the last crab was knocked off (effects)
@@ -133,7 +134,7 @@ public final class Sim {
         landSpeed = o.landSpeed; events = o.events; assistForgive = o.assistForgive; ps0 = o.ps0; py0 = o.py0; teleported = o.teleported;
         es0 = o.es0.clone(); ey0 = o.ey0.clone(); es1 = o.es1.clone(); ey1 = o.ey1.clone();
         crumbleT = o.crumbleT.clone(); gone = o.gone.clone(); goneT = o.goneT.clone(); padSquash = o.padSquash.clone(); tilt = o.tilt.clone(); onT = o.onT.clone();
-        clubTime = o.clubTime; swingT = o.swingT; shoveCd = o.shoveCd; crabS = o.crabS; crabY = o.crabY; keys = o.keys; keysFree = o.keysFree; featDone = o.featDone.clone(); lastKeyColor = o.lastKeyColor; lastGateColor = o.lastGateColor;
+        clubTime = o.clubTime; swingT = o.swingT; shoveCd = o.shoveCd; crabS = o.crabS; crabY = o.crabY; keys = o.keys; keysFree = o.keysFree; featDone = o.featDone.clone(); finishedRun = o.finishedRun; lastGateNo = o.lastGateNo; lastKeyColor = o.lastKeyColor; lastGateColor = o.lastGateColor;
         act = o.act; hz = o.hz; winLo = o.winLo; winHi = o.winHi; invuln = o.invuln; hits = o.hits; hitS = o.hitS; hitY = o.hitY;
     }
 
@@ -326,6 +327,8 @@ public final class Sim {
             Element e = course.hazards.get(hi_);
             if (e.type == Element.Type.CLUB || e.type == Element.Type.CRAB || e.type == Element.Type.BEE) { stepClubCrab(e, hi_, hw); continue; }
             if (e.type != Element.Type.KEY && e.type != Element.Type.GATE) continue;
+            if (e.type == Element.Type.GATE && !finishedRun && e.skin > 0 && e.skin == T.finishCastle && hi_ < featDone.length && featDone[hi_]
+                    && Math.abs(course.dsWrap(s, e.s)) < 0.35f && hi < e.y + e.len && lo > e.y - 1f) { finishedRun = true; events |= EV_FINISH; }          // walked through the finish castle's open door
             if (hi_ < featDone.length && featDone[hi_]) continue;
             float dx = course.dsWrap(s, e.s);
             if (e.type == Element.Type.KEY) {
@@ -336,7 +339,7 @@ public final class Sim {
                 if (Math.abs(dx) >= half || hi <= e.y - 1f || lo >= e.y + e.len) continue;
                 if (keysFree || (keys & (1 << e.color)) != 0) {
                     featDone[hi_] = true; if (!keysFree) keys &= ~(1 << e.color);
-                    lastGateColor = e.color; events |= EV_DOOR;
+                    lastGateColor = e.color; lastGateNo = e.skin; events |= EV_DOOR;
                 } else {
                     float side = Math.signum(course.dsWrap(ps0, e.s)); if (side == 0f) side = Math.signum(dx) == 0f ? 1f : Math.signum(dx);
                     s = course.wrap(e.s + side * (half + 0.01f));

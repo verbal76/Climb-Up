@@ -22,7 +22,8 @@ import java.io.File;
 
 /** The climb itself: fixed-step simulation, touch controls, HUD, pause/summit overlays, contextual tips. */
 public final class PlayScreen extends ScreenAdapter {
-    private enum State { PLAYING, PAUSED }
+    private enum State { PLAYING, PAUSED, FINISHED }
+    private boolean finishNewBest;
 
     private final ClimbGame g;
     private final boolean demo;
@@ -104,6 +105,7 @@ public final class PlayScreen extends ScreenAdapter {
         Gdx.input.setCatchKey(Input.Keys.BACK, true);
         g.audio.playlist(Audio.GAME_TRACKS);
         runTime = 0; milestone = (int) (sim.maxHeight / 50f);
+        if (Boolean.getBoolean("climb.finishDemo")) { g.save.runClock = 3723.4f; g.save.finished = true; g.save.finishTime = 3723.4f; finishNewBest = true; state = State.FINISHED; }       // test hook: shows the finish screen
         if (Boolean.getBoolean("climb.ropeScript")) {   // test hook: start low on the first rope; readInput() then climbs it, mounts the beam and jumps (screenshots of the rope top)
             for (int e = 0; e < course.size(); e++) if (course.get(e).type == Element.Type.ROPE && course.get(e).y > 5f) {
                 Element el = course.get(e); sim.mode = Sim.Mode.ROPE; sim.onElem = e; sim.s = sim.es1[e]; sim.y = el.y - el.len + 0.6f; sim.vx = sim.vy = 0; world.snapCamera(sim); break;
@@ -230,7 +232,7 @@ public final class PlayScreen extends ScreenAdapter {
                 in.jumpPressed = false; jumpLatch = false; kJump = false; in.swingPressed = false; swingLatch = false; kSwing = false;
                 runTime += Sim.DT;
                 if (runTime > 15f && g.ota != null) g.ota.confirm();          // live play with the current (possibly OTA) content: a freshly applied update is now trusted
-                if (!demo) { if (!clockLive && (in.moveX != 0f || in.jumpPressed || in.moveY != 0f)) clockLive = true; if (clockLive) g.save.runClock += Sim.DT; }
+                if (!demo) { if (!clockLive && (in.moveX != 0f || in.jumpPressed || in.moveY != 0f)) clockLive = true; if (clockLive && !g.save.finished) g.save.runClock += Sim.DT; }
                 handleEvents(sim.consumeEvents());
                 acc -= Sim.DT; steps++;
                 if (state != State.PLAYING) break;
@@ -421,6 +423,12 @@ public final class PlayScreen extends ScreenAdapter {
             towerUnlocked();
             say("[DOOR OPENS]");
         }
+        if ((ev & Sim.EV_FINISH) != 0 && !g.save.finished) {
+            SaveData sd = g.save; sd.finished = true; sd.finishTime = sd.runClock;
+            finishNewBest = sd.bestFinish <= 0f || sd.finishTime < sd.bestFinish; if (finishNewBest) sd.bestFinish = sd.finishTime;
+            g.audio.fallStop(); g.audio.play("win", 1f, 1f); world.particles.burst(s, y + 1.2f, 40, new Color(1f, 0.85f, 0.3f, 1f), 4f, 4f, 0.14f, 1f, 1.6f); vibrate(60, 1); say("[RUN COMPLETE]");
+            state = State.FINISHED; stickPtr = jumpPtr = -1; jumpHeldTouch = false; g.persist();
+        }
         if ((ev & Sim.EV_BLOCKED) != 0 && lockedT <= 0f) {
             lockedT = 1.6f; g.audio.play("locked", 0.8f, 1f); vibrate(15, 2);
             toast = "LOCKED. FIND THE " + KEY_NAMES[sim.lastGateColor] + " KEY"; toastT = 2.6f; say("[LOCKED]");
@@ -516,7 +524,8 @@ public final class PlayScreen extends ScreenAdapter {
         // speed-run clock: distance and time on the tower being worked towards, and the total time of the climb (always shown)
         float segM = Math.max(0f, sim.maxHeight - g.save.towerStartHeight);
         ui.text("TOWER " + (int) segM + " M  " + fmtTime(g.save.runClock - g.save.towerStartClock), m, H - m - 80 * zk, 3f * zk, new Color(1f, 0.82f, 0.3f, 1f));
-        ui.text("TOTAL " + fmtTime(g.save.runClock), m, H - m - 104 * zk, 3f * zk, Ui.TEXT);
+        if (g.save.finished) ui.text("FINISH " + fmtTime(g.save.finishTime), m, H - m - 104 * zk, 3f * zk, new Color(0.45f, 1f, 0.55f, 1f));
+        else ui.text("TOTAL " + fmtTime(g.save.runClock), m, H - m - 104 * zk, 3f * zk, Ui.TEXT);
         float barW = 360 * zk, barY = H - m - 126 * zk;
         float within = ((sim.y / g.tuning.zoneHeight) % Z + Z) % Z / Z;
         ui.rect(m, barY, barW, 8, new Color(0.2f, 0.22f, 0.32f, 1f));
@@ -567,6 +576,7 @@ public final class PlayScreen extends ScreenAdapter {
         if (state == State.PLAYING) drawControls();
         if (fade > 0) ui.rect(0, 0, W, H, new Color(0, 0, 0, fade));
         if (state == State.PAUSED) pauseMenu();
+        if (state == State.FINISHED) finishMenu();
         ui.end();
     }
     private static final float PixelFont_H = 7f;
@@ -638,6 +648,21 @@ public final class PlayScreen extends ScreenAdapter {
         ui.batch.begin();
         ui.textC("JUMP", jx, jy - 78, 3.2f, new Color(1, 1, 1, hc ? 1f : 0.8f));
         if (sim.clubTime > 0f) ui.textC("SWING", sbx, sby - 74, 3f, new Color(1, 1, 1, hc ? 1f : 0.85f));
+    }
+
+    /** Castle 10's door has been walked through: the time is recorded; END RUN returns to the title (fresh climb next time), CONTINUE keeps climbing for ever without further timing. */
+    private void finishMenu() {
+        Ui ui = g.ui; float W = ui.w(), H = ui.h(); SaveData sd = g.save;
+        ui.rect(0, 0, W, H, new Color(0, 0, 0, 0.62f));
+        float pw = 640, ph = 560, x = W / 2 - pw / 2, y = H / 2 - ph / 2;
+        ui.panel(x, y, pw, ph);
+        ui.textC("CASTLE " + g.tuning.finishCastle + " REACHED!", W / 2, y + ph - 76, 4.8f, Ui.ACCENT);
+        ui.textC("FINISH TIME", W / 2, y + ph - 150, 3.4f, Ui.DIM);
+        ui.textC(fmtTime(sd.finishTime), W / 2, y + ph - 216, 8f, new Color(0.45f, 1f, 0.55f, 1f));
+        ui.textC(finishNewBest ? "NEW RECORD!" : "BEST " + fmtTime(sd.bestFinish), W / 2, y + ph - 270, 3.6f, finishNewBest ? new Color(1f, 0.85f, 0.3f, 1f) : Ui.DIM);
+        float bw = 520, bh = 90, bx = W / 2 - bw / 2;
+        if (ui.button("END RUN AND SAVE TIME", bx, y + 150, bw, bh, true)) { g.audio.play("click"); g.forgetRun(); g.persist(); next = new TitleScreen(g); disposeOnLeave = true; }
+        if (ui.button("KEEP CLIMBING FOR EVER", bx, y + 40, bw, bh)) { resumePlay(); }
     }
 
     private void pauseMenu() {

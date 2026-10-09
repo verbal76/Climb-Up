@@ -4,7 +4,7 @@ import os
 from PIL import Image, ImageDraw
 ROOT = os.path.join(os.path.dirname(__file__), '..')
 RES = os.path.join(ROOT, 'android', 'src', 'main', 'res')
-hero = Image.open(os.path.join(ROOT, 'tools', 'icon', 'hero_render.png')).convert('RGBA'); hero = hero.crop(hero.getbbox())
+hero = Image.open(os.path.join(ROOT, 'tools', 'icon', 'hero_face.png')).convert('RGBA'); hero = hero.crop(hero.getbbox())
 
 def background(size):
     im = Image.new('RGBA', (size, size)); d = ImageDraw.Draw(im)
@@ -21,14 +21,16 @@ def background(size):
 def foreground(size):
     im = Image.new('RGBA', (size, size), (0, 0, 0, 0)); d = ImageDraw.Draw(im)
     u = size / 18.0
-    # stair-stepped green blocks spiralling upward (the tower that does not exist)
-    for k, (bx, by, bw) in enumerate(((3, 14, 6), (8, 11, 5), (11, 8, 4))):
+    # the bunny peeks over a ledge as it climbs up (face close-up; the render is cut off at the chest, the ledge hides the cut)
+    hw = int(size * 0.50); hh = int(hw * hero.height / hero.width)
+    ledge_top = int(size * 0.68)
+    im.alpha_composite(hero.resize((hw, hh), Image.LANCZOS), ((size - hw) // 2, ledge_top - hh + int(size * 0.07)))
+    d.rectangle([int(size * 0.14), ledge_top, int(size * 0.86), ledge_top + int(size * 0.07)], fill=(122, 255, 190, 255))      # grass lip
+    d.rectangle([int(size * 0.14), ledge_top + int(size * 0.07), int(size * 0.86), ledge_top + int(size * 0.19)], fill=(222, 112, 64, 255))   # earth
+    for k, (bx, by, bw) in enumerate(((1, 15, 5), (12, 14, 5))):          # smaller steps around it
         x0, y0 = bx * u, by * u
-        d.rectangle([x0, y0 + u * 0.5, x0 + bw * u, y0 + u * 1.7], fill=(222, 112, 64, 255))
-        d.rectangle([x0, y0, x0 + bw * u, y0 + u * 0.7], fill=(122, 255, 190, 255))
-    hh = int(size * 0.42); hw = int(hh * hero.width / hero.height)
-    h = hero.resize((hw, hh), Image.LANCZOS)
-    im.alpha_composite(h, (int(8.4 * u + (4.6 * u - hw) / 2), int(11 * u - hh + u * 0.15)))     # stands on the middle block
+        d.rectangle([x0, y0 + u * 0.5, x0 + bw * u, y0 + u * 1.3], fill=(222, 112, 64, 255))
+        d.rectangle([x0, y0, x0 + bw * u, y0 + u * 0.6], fill=(122, 255, 190, 255))
     return im
 
 def mono(fg):

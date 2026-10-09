@@ -34,8 +34,10 @@ public final class IconShot extends ApplicationAdapter {
         Vector3 c = bb.getCenter(new Vector3()), d = bb.getDimensions(new Vector3());
         float r = Math.max(d.y, d.x) * 0.5f;
         PerspectiveCamera cam = new PerspectiveCamera(30f, size, size);
-        cam.position.set(c.x + r * 0.55f, c.y + r * 0.1f, c.z + r * 3.4f / (float) Math.tan(Math.toRadians(15)) * 0.42f);
-        cam.lookAt(c.x, c.y - r * 0.02f, c.z); cam.near = 0.1f; cam.far = 500f; cam.update();
+        float zoom = Float.parseFloat(System.getProperty("climb.iconZoom", "1")), lookY = Float.parseFloat(System.getProperty("climb.iconLookY", "0"));   // zoom < 1 moves in; lookY shifts the aim up (fraction of height)
+        float fy = c.y + d.y * lookY;
+        cam.position.set(c.x + r * 0.55f * zoom, fy + r * 0.1f * zoom, c.z + r * 3.4f / (float) Math.tan(Math.toRadians(15)) * 0.42f * zoom);
+        cam.lookAt(c.x, fy - r * 0.02f * zoom, c.z); cam.near = 0.1f; cam.far = 500f; cam.update();
         Environment env = new Environment();
         env.set(new ColorAttribute(ColorAttribute.AmbientLight, 0.62f, 0.6f, 0.68f, 1f));
         env.add(new DirectionalLight().set(1.0f, 0.95f, 0.85f, -0.5f, -0.8f, -0.6f));

@@ -549,8 +549,10 @@ public final class Sim {
      * the feet and the head, bounce on a pad), or it slides down the face. Without this, a fast rising body slipped into the block (the catch is off above 3.5 m/s) and sank through it.
      * Landing from above and jumping up through the underside are unchanged: neither crosses a side face.
      */
+    static final int EDGE_MODE = Integer.getInteger("climb.edge", 1);          // TEMP experiment: 0 off, 1 every side entry, 2 only while rising faster than the catch allows
     private boolean stopAtEdges() {
         boolean stopped = false;
+        if (EDGE_MODE == 0 || (EDGE_MODE == 2 && vy <= 3.5f)) return false;
         for (int k = 0, cnt = act == null ? course.size() : act.length; k < cnt; k++) {
             int i = act == null ? k : act[k];
             Element el = course.get(i);

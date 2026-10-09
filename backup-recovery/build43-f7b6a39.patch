@@ -1,0 +1,667 @@
+diff --git a/.github/workflows/android.yml b/.github/workflows/android.yml
+index 7ce0efa..b2ac390 100644
+--- a/.github/workflows/android.yml
++++ b/.github/workflows/android.yml
+@@ -29,7 +29,8 @@ jobs:
+         run: |
+           set -e
+           SRC=$(ls android/build/outputs/apk/debug/*.apk | head -1)
+-          OUT=android/build/outputs/apk/debug/climb-up-0.1.0-build${{ github.run_number }}-debug.apk
++          VER=$(grep -oP "appVersionName = '\K[^']+" build.gradle)
++          OUT=android/build/outputs/apk/debug/climb-up-${VER}-build${{ github.run_number }}-debug.apk
+           cp "$SRC" "$OUT"; rm -f "$SRC"
+           BT=$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -1)
+           echo "SOURCE_SHA=${{ github.sha }}"
+@@ -64,5 +65,6 @@ jobs:
+           set -e
+           APK=$(ls android/build/outputs/apk/debug/*.apk)
+           SHA=$(sha256sum "$APK" | cut -d' ' -f1)
+-          printf 'Physical-test build ${{ github.run_number }} (debug-signed, sideload).\n\nSource: ${{ github.sha }}\nPackage: com.hotatticgames.climbup, versionName 0.1.0, versionCode ${{ github.run_number }}\nSHA-256: %s\n' "$SHA" > notes.md
+-          gh release create "v0.1.0-build${{ github.run_number }}" "$APK" --target ${{ github.sha }} --title "Climb up v0.1.0 (build ${{ github.run_number }})" --notes-file notes.md --latest
++          VER=$(grep -oP "appVersionName = '\K[^']+" build.gradle)
++          printf 'Physical-test build ${{ github.run_number }} (debug-signed, sideload).\n\nVersion: %s build ${{ github.run_number }}\nSource: ${{ github.sha }}\nPackage: com.hotatticgames.climbup, versionName %s, versionCode ${{ github.run_number }}\nSHA-256: %s\n' "$VER" "$VER" "$SHA" > notes.md
++          gh release create "v${VER}-build${{ github.run_number }}" "$APK" --target ${{ github.sha }} --title "Climb up v${VER} (build ${{ github.run_number }})" --notes-file notes.md --latest
+diff --git a/README.md b/README.md
+index b4ec8df..59bf344 100644
+--- a/README.md
++++ b/README.md
+@@ -4,10 +4,10 @@ A 2.5D skill-platformer by **Hot Attic Games**: climb a spiral tower that doesn'
+ course rotates around you as you climb. Ropes, cables, swinging and moving platforms, crumbling tiles, bounce pads and fingertip ledge grabs, in
+ an **endless**, procedurally generated (and solver-validated) tower that keeps getting harder. Timed sawblades, cannons that fire spiked balls, pop-up spikes, spiked stone blocks and slabs, angled springs, crabs that shove you, a floating spiked club, and coloured castles whose keys are hidden below the path. You play Quaternius' blue bunny-eared "Character", a skinned and animated 3D model. No upgrades: either you can make the jump or you can't.
+ 
+-Status: **candidate build 0.1.0** produced from the Climb Up v6 design package (see `design-package/`, `CLAUDE.md`). Android target; desktop build included for testing.
++Status: **version 1.1.3 (the number and build are shown bottom-right of the title screen)** produced from the Climb Up v6 design package (see `design-package/`, `CLAUDE.md`). Android target; desktop build included for testing.
+ 
+ ## Install (Android, sideload)
+-Every CI build publishes a **GitHub Release** (`v0.1.0-buildN`) with the APK attached: open the repo's *Releases* page on your phone and tap the APK.
++Every CI build publishes a **GitHub Release** (`v<version>-build<N>`) with the APK attached: open the repo's *Releases* page on your phone and tap the APK.
+ The Android APK is built by GitHub Actions (`.github/workflows/android.yml`, run it manually: *Actions -> Android build -> Run workflow*). Download the
+ `climb-up-debug-apk-N` artifact, copy the `.apk` to a phone and open it (allow "install unknown apps"). Landscape only; Android 8.0+ (API 26), OpenGL ES 2.0.
+ Local APK builds need the Android SDK (`ANDROID_HOME`) and access to Google's Maven; the sandbox this was written in blocks `dl.google.com`, so the APK has **not** been built or installed here.
+diff --git a/build.gradle b/build.gradle
+index cd4687d..dc68698 100644
+--- a/build.gradle
++++ b/build.gradle
+@@ -1,6 +1,6 @@
+ ext {
+     gdxVersion = '1.14.2'
+-    appVersionName = '0.1.0'
++    appVersionName = '1.1.3'
+ }
+ allprojects {
+     group = 'com.hotatticgames.climbup'
+diff --git a/core/src/main/java/com/hotatticgames/climbup/ClimbGame.java b/core/src/main/java/com/hotatticgames/climbup/ClimbGame.java
+index 29aefe9..c259c35 100644
+--- a/core/src/main/java/com/hotatticgames/climbup/ClimbGame.java
++++ b/core/src/main/java/com/hotatticgames/climbup/ClimbGame.java
+@@ -13,7 +13,7 @@ import java.io.File;
+ 
+ /** Application root: shared services, screen flow (studio splash -> title -> play). */
+ public class ClimbGame extends Game {
+-    public static final String VERSION = "0.1.0";
++    public static final String VERSION = "1.1.3";
+     /** Android versionCode of the running APK (set by the launcher before the game starts; 0 on desktop). Used only by the test-only OTA compatibility gate. */
+     public static int appBuild;
+ 
+@@ -111,6 +111,7 @@ public class ClimbGame extends Game {
+         String sd = System.getProperty("climb.seed");
+         long seed = sd != null ? Long.parseLong(sd) : (System.nanoTime() ^ (System.currentTimeMillis() * 0x9E3779B97F4A7C15L)) & 0x7fffffffL | 1L;
+         r.tower = new Tower(seed, tuning); r.startIdx = 0;
++        Legacy.stampNewClimb(save, VERSION, appBuild, Legacy.today());
+         save.seed = seed; save.slice = 0; save.sliceCheckpoint = 0; save.sliceJson = CourseIO.toJson(r.tower.slices.get(0).data);
+         return r;
+     }
+diff --git a/core/src/main/java/com/hotatticgames/climbup/Legacy.java b/core/src/main/java/com/hotatticgames/climbup/Legacy.java
+new file mode 100644
+index 0000000..eda2a00
+--- /dev/null
++++ b/core/src/main/java/com/hotatticgames/climbup/Legacy.java
+@@ -0,0 +1,49 @@
++package com.hotatticgames.climbup;
++
++/**
++ * Versioning and legacy runs. The game version is MAJOR.MINOR.PATCH:
++ * MAJOR changes the rules of a run (castle layout, obstacle generation, finish rules), so runs started on an older MAJOR are not comparable and cannot be resumed;
++ * MINOR adds features or content and PATCH fixes bugs: neither ever touches a run in progress.
++ * A run in progress under an older MAJOR is offered to the player as a stamped legacy record (build, version, date, height, castles, time).
++ */
++public final class Legacy {
++    private Legacy() {}
++
++    /** MAJOR number of a version string ("" or malformed = 0, i.e. before versions were stamped). */
++    public static int major(String version) {
++        if (version == null) return 0;
++        int dot = version.indexOf('.');
++        try { return Integer.parseInt(dot < 0 ? version.trim() : version.substring(0, dot).trim()); } catch (NumberFormatException e) { return 0; }
++    }
++
++    /** True if a climb is in progress that was started under a different MAJOR version than {@code current}. */
++    public static boolean needsPrompt(SaveData sd, String current) {
++        return sd.seed != 0 && sd.sliceJson != null && major(sd.climbVersion) != major(current);
++    }
++
++    /** "V1.1.3  BUILD 43" (build 0 = desktop / unknown). */
++    public static String versionLine(String version, int build) { return "V" + version + (build > 0 ? "  BUILD " + build : "  DEV"); }
++
++    /** Label for where a record came from: "V1.1.3 BUILD 43" or "BEFORE V1.1.3" when the climb pre-dates the stamps. */
++    public static String stampLabel(String version, int build, String current) {
++        if (version == null || version.isEmpty()) return "BEFORE V" + current;
++        return "V" + version + (build > 0 ? " BUILD " + build : "");
++    }
++
++    /** Stamps a brand-new climb with the version/build/day it started on. */
++    public static void stampNewClimb(SaveData sd, String version, int build, String today) {
++        sd.climbVersion = version; sd.climbBuild = build; sd.climbDate = today; sd.climbHeight = 0f;
++    }
++
++    /** Sets the climb in progress aside as a legacy record and clears it. Records (best height, splits, finishes) are untouched. Returns the record. */
++    public static SaveData.LegacyRun archive(SaveData sd, String today) {
++        SaveData.LegacyRun r = new SaveData.LegacyRun();
++        r.version = sd.climbVersion == null ? "" : sd.climbVersion; r.build = sd.climbBuild; r.date = sd.climbDate == null ? "" : sd.climbDate; r.savedDate = today;
++        r.height = sd.climbHeight; r.towers = sd.towers; r.runClock = sd.runClock; r.finished = sd.finished; r.finishTime = sd.finishTime;
++        sd.legacy.add(r);
++        RunRecord.forgetClimb(sd);
++        return r;
++    }
++
++    public static String today() { return new java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(new java.util.Date()); }
++}
+diff --git a/core/src/main/java/com/hotatticgames/climbup/LegacyScreen.java b/core/src/main/java/com/hotatticgames/climbup/LegacyScreen.java
+new file mode 100644
+index 0000000..9eca6eb
+--- /dev/null
++++ b/core/src/main/java/com/hotatticgames/climbup/LegacyScreen.java
+@@ -0,0 +1,37 @@
++package com.hotatticgames.climbup;
++
++import com.badlogic.gdx.Gdx;
++import com.badlogic.gdx.InputMultiplexer;
++import com.badlogic.gdx.Screen;
++import com.badlogic.gdx.ScreenAdapter;
++import com.badlogic.gdx.graphics.GL20;
++import com.hotatticgames.climbup.ui.Ui;
++import java.util.List;
++
++/** Runs that were in progress when an update changed the rules, kept with the build they started on (newest first). Read-only: they cannot be resumed. */
++public final class LegacyScreen extends ScreenAdapter {
++    private final ClimbGame g; private final Screen back;
++    public LegacyScreen(ClimbGame g, Screen back) { this.g = g; this.back = back; }
++    @Override public void show() { Gdx.input.setInputProcessor(new InputMultiplexer(g.ui)); }
++    @Override public void resize(int w, int h) { g.ui.resize(w, h); }
++    @Override public void render(float dt) {
++        Gdx.gl.glClearColor(0.06f, 0.08f, 0.16f, 1f); Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
++        Ui ui = g.ui; ui.begin();
++        float W = ui.w(), H = ui.h();
++        ui.textC("LEGACY RUNS", W / 2, H - 80, 7f, Ui.TEXT);
++        ui.textC("SET ASIDE WHEN AN UPDATE CHANGED THE RULES. THEY CANNOT BE CONTINUED.", W / 2, H - 126, 2.8f * Math.min(ui.tm(), 1.3f), Ui.DIM);
++        List<SaveData.LegacyRun> l = g.save.legacy;
++        int shown = Math.min(l.size(), 6);
++        float y = H - 200, step = Math.min(92f, (H - 200 - 130) / Math.max(1, shown));
++        for (int i = 0; i < shown; i++) {
++            SaveData.LegacyRun r = l.get(l.size() - 1 - i);
++            ui.textC(Legacy.stampLabel(r.version, r.build, ClimbGame.VERSION) + (r.date.isEmpty() ? "" : "   STARTED " + r.date), W / 2, y, 3.4f, Ui.ACCENT);
++            ui.textC((int) r.height + " M   " + r.towers + " CASTLE" + (r.towers == 1 ? "" : "S") + "   " + PlayScreen.fmtTime(r.runClock) + (r.finished ? "   FINISHED " + PlayScreen.fmtTime(r.finishTime) : "") + (r.savedDate.isEmpty() ? "" : "   SAVED " + r.savedDate), W / 2, y - 36, 3f, Ui.TEXT);
++            y -= step;
++        }
++        if (l.size() > shown) ui.textC("+ " + (l.size() - shown) + " OLDER", W / 2, 118, 3f, Ui.DIM);
++        if (ui.button("BACK", W / 2 - 150, 22, 300, 78, true)) { g.audio.play("click"); g.setScreen(back); }
++        ui.end();
++        g.autoShot("legacy", dt);
++    }
++}
+diff --git a/core/src/main/java/com/hotatticgames/climbup/PlayScreen.java b/core/src/main/java/com/hotatticgames/climbup/PlayScreen.java
+index 5cfc193..98d9dc2 100644
+--- a/core/src/main/java/com/hotatticgames/climbup/PlayScreen.java
++++ b/core/src/main/java/com/hotatticgames/climbup/PlayScreen.java
+@@ -224,7 +224,15 @@ public final class PlayScreen extends ScreenAdapter {
+         if (play) {
+             float speed = g.settings.assistSlow ? g.tuning.assistSlowFactor : 1f;
+             if (hitstop > 0) hitstop -= dt; else acc += dt * speed;
+-            if (tower != null) { if (tower.poll()) sim.ensureCapacity(); tower.ensureAbove(sim.maxHeight, 75f); updateWindow(false); }
++            if (tower != null) {
++                try { if (tower.poll()) sim.ensureCapacity(); tower.ensureAbove(sim.maxHeight, 75f); }
++                catch (RuntimeException ex) {          // the next stretch of tower could not be built (never expected): keep the run as a stamped record and go back to the title instead of crashing
++                    Gdx.app.error("climb", "tower generation failed", ex);
++                    if (g.save.seed != 0) Legacy.archive(g.save, Legacy.today());
++                    g.persist(); next = new TitleScreen(g); disposeOnLeave = true;
++                }
++                updateWindow(false);
++            }
+             int steps = 0;
+             while (acc >= Sim.DT && steps < 6) {
+                 if (demo) { driver[0].drive(sim, in); } else readInput();
+@@ -232,7 +240,7 @@ public final class PlayScreen extends ScreenAdapter {
+                 in.jumpPressed = false; jumpLatch = false; kJump = false; in.swingPressed = false; swingLatch = false; kSwing = false;
+                 runTime += Sim.DT;
+                 if (runTime > 15f && g.ota != null) g.ota.confirm();          // live play with the current (possibly OTA) content: a freshly applied update is now trusted
+-                if (!demo) { if (!clockLive && (in.moveX != 0f || in.jumpPressed || in.moveY != 0f)) clockLive = true; RunRecord.tick(g.save, Sim.DT, clockLive); }
++                if (!demo) { if (!clockLive && (in.moveX != 0f || in.jumpPressed || in.moveY != 0f)) clockLive = true; RunRecord.tick(g.save, Sim.DT, clockLive); if (sim.maxHeight > g.save.climbHeight) g.save.climbHeight = sim.maxHeight; }
+                 handleEvents(sim.consumeEvents());
+                 acc -= Sim.DT; steps++;
+                 if (state != State.PLAYING) break;
+diff --git a/core/src/main/java/com/hotatticgames/climbup/RunRecord.java b/core/src/main/java/com/hotatticgames/climbup/RunRecord.java
+index a442e5f..aa85569 100644
+--- a/core/src/main/java/com/hotatticgames/climbup/RunRecord.java
++++ b/core/src/main/java/com/hotatticgames/climbup/RunRecord.java
+@@ -18,7 +18,7 @@ public final class RunRecord {
+ 
+     /** END RUN (and every fresh climb): forget the climb itself; the completed times (lastFinish, bestFinish) and the other personal bests stay. */
+     public static void forgetClimb(SaveData sd) {
+-        sd.seed = 0; sd.sliceJson = null; sd.slice = 0; sd.sliceCheckpoint = 0;
++        sd.seed = 0; sd.sliceJson = null; sd.slice = 0; sd.sliceCheckpoint = 0; sd.climbVersion = ""; sd.climbBuild = 0; sd.climbDate = ""; sd.climbHeight = 0f;
+         sd.finished = false; sd.finishTime = 0; sd.runClock = 0; sd.towerStartClock = 0; sd.towerStartHeight = 0; sd.towers = 0; sd.splits = new float[0]; sd.towerTotals = new float[0];
+     }
+ }
+diff --git a/core/src/main/java/com/hotatticgames/climbup/SaveData.java b/core/src/main/java/com/hotatticgames/climbup/SaveData.java
+index 721d3db..dd7bfdb 100644
+--- a/core/src/main/java/com/hotatticgames/climbup/SaveData.java
++++ b/core/src/main/java/com/hotatticgames/climbup/SaveData.java
+@@ -5,7 +5,7 @@ import java.util.List;
+ 
+ /** Run progress and stats. Versioned; see {@link SaveStore#migrate}. No power progression of any kind is stored. */
+ public final class SaveData {
+-    public static final int CURRENT_VERSION = 3;
++    public static final int CURRENT_VERSION = 5;
+     public int version = CURRENT_VERSION;
+     public int courseIndex = 0;          // legacy (v2 finite towers); unused by the endless climb
+     public int checkpoint = 0;           // legacy (v2)
+@@ -14,6 +14,12 @@ public final class SaveData {
+     public int slice = 0;
+     public String sliceJson = null;      // that slice exactly as generated (see CourseIO)
+     public int sliceCheckpoint = 0;      // local element index of the checkpoint inside the slice
++    // which build / version started the climb in progress (empty = started before versions were stamped) - see Legacy
++    public String climbVersion = "";
++    public int climbBuild = 0;
++    public String climbDate = "";
++    public float climbHeight = 0f;       // highest point reached in the climb in progress
++    public List<LegacyRun> legacy = new ArrayList<>();   // runs set aside when an update changed the rules
+     public float bestHeight = 0f;
+     public int falls = 0;
+     public float playSeconds = 0f;
+@@ -32,4 +38,17 @@ public final class SaveData {
+     public float bestFinish = 0f;                // fastest finish ever (0 = none)
+     public float bestSplit = 0f;                 // fastest single tower ever (0 = none)
+     public float[] bestTotals = new float[0];    // fastest run clock at the Nth unlock, ever
++
++    /** A run that was in progress when an update changed the rules, kept as a stamped record (it cannot be resumed: its castles and obstacles came from the old rules). */
++    public static final class LegacyRun {
++        public String version = "";      // game version that started it ("" = before versions were stamped)
++        public int build = 0;            // build number that started it (0 = unknown)
++        public String date = "";         // day the climb was started
++        public String savedDate = "";    // day it was set aside
++        public float height = 0f;
++        public int towers = 0;
++        public float runClock = 0f;
++        public boolean finished = false;
++        public float finishTime = 0f;
++    }
+ }
+diff --git a/core/src/main/java/com/hotatticgames/climbup/SaveStore.java b/core/src/main/java/com/hotatticgames/climbup/SaveStore.java
+index 06c1c82..9c162f2 100644
+--- a/core/src/main/java/com/hotatticgames/climbup/SaveStore.java
++++ b/core/src/main/java/com/hotatticgames/climbup/SaveStore.java
+@@ -38,7 +38,8 @@ public final class SaveStore {
+         recoveredFromCorruption = true;
+     }
+ 
+-    public void saveGame(SaveData d) { try { writeAtomic("save.json", json().toJson(d)); } catch (IOException ignored) { } }
++    public void saveGame(SaveData d) { try { Json j = json(); j.setUsePrototypes(false); writeAtomic("save.json", j.toJson(d)); }   // every field, so the version number is always written (a default-valued version would be left out and read back as 0)
++         catch (IOException ignored) { } }
+     public void saveSettings(Settings s) { try { writeAtomic("settings.json", json().toJson(s)); } catch (IOException ignored) { } }
+ 
+     public SaveData loadGame() {
+@@ -91,6 +92,7 @@ public final class SaveStore {
+             if (!v.has("completions")) v.addChild("completions", new JsonValue(0L));
+         }
+         // v2 -> v3: finite towers became the endless climb; there is no seed yet, so the next Play starts a fresh climb (best height and stats are kept)
++        // v3/v4 -> v5: climbs get a version/build stamp. An unstamped climb in progress is kept; Legacy decides at launch whether the rules changed since it started.
+         if (v.has("version")) v.remove("version");
+         v.addChild("version", new JsonValue((long) SaveData.CURRENT_VERSION));
+         return v;
+diff --git a/core/src/main/java/com/hotatticgames/climbup/SettingsScreen.java b/core/src/main/java/com/hotatticgames/climbup/SettingsScreen.java
+index b8e218e..1902e0d 100644
+--- a/core/src/main/java/com/hotatticgames/climbup/SettingsScreen.java
++++ b/core/src/main/java/com/hotatticgames/climbup/SettingsScreen.java
+@@ -60,7 +60,7 @@ public final class SettingsScreen extends ScreenAdapter {
+             toggle("REDUCED MOTION", s.reducedMotion, () -> s.reducedMotion = !s.reducedMotion);
+             toggle("CAPTIONS FOR SOUNDS", s.captions, () -> s.captions = !s.captions);
+         } else if (page == 2) {
+-            rowY -= 24; ui.textC("CLIMB UP  V" + ClimbGame.VERSION, W / 2, rowY + 30, 4.5f, Ui.TEXT); rowY -= 72;
++            rowY -= 24; ui.textC("CLIMB UP  " + Legacy.versionLine(ClimbGame.VERSION, ClimbGame.appBuild), W / 2, rowY + 30, 4.5f, Ui.TEXT); rowY -= 72;
+             ui.textC("CONTENT: " + g.ota.describe(), W / 2, rowY + 30, 3.0f, Ui.DIM); rowY -= 54;
+             ui.textC("TEST-ONLY UPDATER: CHECKSUM ONLY, NOT SECURE. " + (g.otaClient.status.isEmpty() ? "" : g.otaClient.status.toUpperCase()), W / 2, rowY + 30, 2.4f, Ui.DIM); rowY -= 54;
+             toggle("CHECK FOR GAME UPDATES", s.otaEnabled, () -> s.otaEnabled = !s.otaEnabled);
+diff --git a/core/src/main/java/com/hotatticgames/climbup/TitleScreen.java b/core/src/main/java/com/hotatticgames/climbup/TitleScreen.java
+index 16b2f44..9468a2b 100644
+--- a/core/src/main/java/com/hotatticgames/climbup/TitleScreen.java
++++ b/core/src/main/java/com/hotatticgames/climbup/TitleScreen.java
+@@ -20,7 +20,7 @@ public final class TitleScreen extends ScreenAdapter {
+     private Sim sim;
+     private WorldRenderer world;
+     private float time;
+-    private boolean confirmNew;
++    private boolean confirmNew, confirmDiscard;
+     private String lastBub;
+     private com.badlogic.gdx.Screen next;   // screen change is applied after ui.end() so the sprite batch is never left open
+ 
+@@ -68,32 +68,61 @@ public final class TitleScreen extends ScreenAdapter {
+         if (bub != null) { float[] hp = new float[2]; world.heroHeadScreen(W, H, hp); ui.bubble(bub, hp[0], hp[1] + 6, world.heroBubbleAlpha()); }
+         float bw = 400, bh = 76, bx = Math.max(40f, W / 2 - 640f + 40f);
+         boolean has = g.save.seed != 0 && g.save.sliceJson != null;
++        boolean prompt = Legacy.needsPrompt(g.save, ClimbGame.VERSION);        // a run from an older version is waiting for a decision before anything else
+         float y0 = H * 0.46f;
+-        if (ui.button(has ? "CONTINUE" : "PLAY", bx, y0, bw, bh, true)) { g.audio.play("click"); next = new PlayScreen(g, false); }
+-        float yy = y0 - 88;
+-        if (has) {
+-            if (ui.button(confirmNew ? "TAP AGAIN: NEW CLIMB" : "NEW CLIMB", bx, yy, bw, bh)) {
+-                if (confirmNew) { g.forgetRun(); g.save.falls = 0; g.runFresh = true; g.persist(); g.audio.play("click"); next = new PlayScreen(g, false); }
+-                confirmNew = true;
++        if (!prompt) {
++            if (ui.button(has ? "CONTINUE" : "PLAY", bx, y0, bw, bh, true)) { g.audio.play("click"); next = new PlayScreen(g, false); }
++            float yy = y0 - 88;
++            if (has) {
++                if (ui.button(confirmNew ? "TAP AGAIN: NEW CLIMB" : "NEW CLIMB", bx, yy, bw, bh)) {
++                    if (confirmNew) { g.forgetRun(); g.save.falls = 0; g.runFresh = true; g.persist(); g.audio.play("click"); next = new PlayScreen(g, false); }
++                    confirmNew = true;
++                }
++                yy -= 88;
+             }
++            if (!g.save.legacy.isEmpty()) {
++                if (ui.button("LEGACY RUNS (" + g.save.legacy.size() + ")", bx, yy, bw, bh)) { g.audio.play("click"); next = new LegacyScreen(g, this); }
++                yy -= 88;
++            }
++            if (ui.button("SETTINGS", bx, yy, bw, bh)) { g.audio.play("click"); next = new SettingsScreen(g, this); }
+             yy -= 88;
++            if (ui.button("CREDITS", bx, yy, bw, bh)) { g.audio.play("click"); next = new CreditsScreen(g, this); }
+         }
+-        if (ui.button("SETTINGS", bx, yy, bw, bh)) { g.audio.play("click"); next = new SettingsScreen(g, this); }
+-        yy -= 88;
+-        if (ui.button("CREDITS", bx, yy, bw, bh)) { g.audio.play("click"); next = new CreditsScreen(g, this); }
+         float cx = Math.min(W - bw - 40f, W / 2 + 240f);
+-        ui.textC("HERO: TAP TO CHANGE", cx + bw / 2, y0 + bh + 14, 3.2f, Ui.TEXT);
+-        if (ui.button(com.hotatticgames.climbup.render.Characters.name(g.settings.character), cx, y0, bw, bh)) {
++        if (!prompt) ui.textC("HERO: TAP TO CHANGE", cx + bw / 2, y0 + bh + 14, 3.2f, Ui.TEXT);
++        if (!prompt && ui.button(com.hotatticgames.climbup.render.Characters.name(g.settings.character), cx, y0, bw, bh)) {
+             g.settings.character = com.hotatticgames.climbup.render.Characters.next(g.settings.character);
+             world.setCharacter(g.settings.character); g.persist(); g.audio.play("click");
+         }
+-        String stat = "BEST " + (int) g.save.bestHeight + " M   V" + ClimbGame.VERSION + (g.save.bestFinish > 0f ? "   BEST FINISH " + PlayScreen.fmtTime(g.save.bestFinish) : "");
+-        ui.rect(0, 0, W, 54, new Color(0.05f, 0.07f, 0.14f, 0.7f)); ui.textC(stat, W / 2, 18, 3f, Ui.TEXT);
++        String stat = "BEST " + (int) g.save.bestHeight + " M" + (g.save.bestFinish > 0f ? "   BEST FINISH " + PlayScreen.fmtTime(g.save.bestFinish) : "");
++        ui.rect(0, 0, W, 54, new Color(0.05f, 0.07f, 0.14f, 0.7f)); ui.text(stat, 24, 18, 3f, Ui.TEXT);
++        String ver = Legacy.versionLine(ClimbGame.VERSION, ClimbGame.appBuild);          // always visible: which build is this?
++        ui.text(ver, W - 24 - ui.font.width(ver, 3.6f), 17, 3.6f, Ui.ACCENT);
++        if (prompt) legacyPrompt(ui, W, H);
+         ui.end();
+         g.autoShot("title", dt);
+         if (next != null) { Screen n = next; next = null; g.setScreen(n); }
+     }
+ 
++    /** A run from an older version is in progress: it cannot continue under the new rules, so offer to keep it as a stamped record. */
++    private void legacyPrompt(Ui ui, float W, float H) {
++        SaveData sd = g.save;
++        ui.rect(0, 0, W, H, new Color(0f, 0f, 0.05f, 0.72f));
++        float pw = Math.min(W - 60, 900), ph = 470, px = W / 2 - pw / 2, py = H / 2 - ph / 2;
++        ui.panel(px, py, pw, ph);
++        float cx = W / 2;
++        ui.textC("A RUN FROM AN OLDER VERSION", cx, py + ph - 56, 4.6f, Ui.ACCENT);
++        ui.textC("STARTED ON  " + Legacy.stampLabel(sd.climbVersion, sd.climbBuild, ClimbGame.VERSION) + (sd.climbDate.isEmpty() ? "" : "   " + sd.climbDate), cx, py + ph - 112, 3.4f, Ui.TEXT);
++        ui.textC((int) sd.climbHeight + " M   " + sd.towers + " CASTLE" + (sd.towers == 1 ? "" : "S") + "   " + PlayScreen.fmtTime(sd.runClock) + (sd.finished ? "   FINISHED" : ""), cx, py + ph - 156, 3.4f, Ui.TEXT);
++        ui.textC("THE RULES CHANGED IN THIS VERSION, SO IT CANNOT BE CONTINUED.", cx, py + ph - 214, 3f, Ui.DIM);
++        ui.textC("SAVE IT AS A LEGACY RUN, STAMPED WITH THE BUILD IT STARTED ON?", cx, py + ph - 246, 3f, Ui.DIM);
++        float bw = Math.min(400, pw / 2 - 40), bh = 80;
++        if (ui.button("SAVE AS LEGACY RUN", cx - bw - 14, py + 40, bw, bh, true)) { g.audio.play("click"); Legacy.archive(sd, Legacy.today()); g.persist(); confirmDiscard = false; }
++        if (ui.button(confirmDiscard ? "TAP AGAIN: DISCARD" : "DISCARD IT", cx + 14, py + 40, bw, bh)) {
++            if (confirmDiscard) { g.forgetRun(); g.persist(); g.audio.play("click"); confirmDiscard = false; } else confirmDiscard = true;
++        }
++    }
++
+     @Override public void hide() { dispose(); }
+     @Override public void dispose() { if (world != null) { world.dispose(); world = null; } }
+ }
+diff --git a/core/src/main/java/com/hotatticgames/climbup/render/WorldRenderer.java b/core/src/main/java/com/hotatticgames/climbup/render/WorldRenderer.java
+index 708166b..7b8371c 100644
+--- a/core/src/main/java/com/hotatticgames/climbup/render/WorldRenderer.java
++++ b/core/src/main/java/com/hotatticgames/climbup/render/WorldRenderer.java
+@@ -325,7 +325,7 @@ public final class WorldRenderer implements Disposable {
+             boolean tall = name.startsWith("tree");
+             float side = (i == 0 ? -1 : 1) * (w / 2f - 0.7f);
+             if (n == 1) side = ((h >> 9) % 2 == 0 ? -1 : 1) * (w / 2f - 0.5f);
+-            Part p = part(models.obj(name), side, 0f, 0.9f + (tall ? 0.6f : 0f), 1.35f, 1.35f, 1.35f);
++            Part p = part(models.obj(name), side, 0f, 0.5f, 1.35f, 1.35f, 1.35f);      // inside the slab's depth (it spans +-0.85 front to back), so every tree and prop stands on the ground it grows from
+             p.tinted = true; ps.add(p);
+         }
+     }
+diff --git a/core/src/main/java/com/hotatticgames/climbup/sim/Autopilot.java b/core/src/main/java/com/hotatticgames/climbup/sim/Autopilot.java
+index c7ec5ba..25b2541 100644
+--- a/core/src/main/java/com/hotatticgames/climbup/sim/Autopilot.java
++++ b/core/src/main/java/com/hotatticgames/climbup/sim/Autopilot.java
+@@ -419,6 +419,18 @@ public final class Autopilot {
+         }
+         for (int q = 0; q < 24 && real.mode == Sim.Mode.GROUND && real.onElem == r; q++) { in.clear(); real.step(in); }
+     }
++    /** Knocked into the air by a bee or a crab (nothing to do with a planned move): steer back towards the platform we meant to stand on until something is under our feet. True if we landed on a route platform without a setback. */
++    static boolean recover(Sim real, int a, InputState in) {
++        Course c = real.course; int f0 = real.setbacks();
++        for (int q = 0; q < 360 && real.mode != Sim.Mode.GROUND; q++) {
++            in.clear();
++            if (real.mode == Sim.Mode.LEDGE || real.mode == Sim.Mode.PULLUP) in.moveY = 1f;
++            else if (real.mode == Sim.Mode.AIR) in.moveX = Math.max(-1f, Math.min(1f, 1.5f * c.dsWrap(real.es1[a], real.s)));
++            real.step(in);
++            if (real.setbacks() != f0) return false;
++        }
++        return real.mode == Sim.Mode.GROUND && real.onElem >= 0 && real.onElem < c.routeSize();
++    }
+     private static int[] chain(int first, int n) { int[] a = new int[n]; for (int i = 0; i < n; i++) a[i] = first + i; return a; }
+ 
+     /** True if the planner can get from route/decoy element a to element b and attach to it (the same check the generator proves, re-run on the finished data: used by the tests). */
+@@ -459,9 +471,19 @@ public final class Autopilot {
+             if (real.mode == Sim.Mode.GROUND && real.onElem == a && hasMidHazard(c, a)) {   // like a person would: stop in the safe pocket before sizing up the hazard
+                 for (int q = 0; q < 40 && Math.abs(real.vx) > 0.05f && real.mode == Sim.Mode.GROUND; q++) { in.clear(); real.step(in); }
+             }
++            if (real.mode == Sim.Mode.AIR && !(real.lastPad == a && (c.get(a).type == Element.Type.PAD || c.get(a).type == Element.Type.SPRING))) {      // shoved into the air by a bee or crab: settle first
++                if (!recover(real, a, in)) { rep.failedLink = a; rep.simTime = real.time; rep.failInfo = "recover " + String.format("mode=%s s=%.2f y=%.2f", real.mode, real.s, real.y); return rep; }
++                a = real.onElem; settle(real, a, in); continue;
++            }
+             Result r = plan(real, a, false, true);
+             if (!r.ok) r = plan(real, a, false, false);        // no move leaves a state that suits the next link: take any that works and sort the next link out from there
+             rep.links++;
++            if (!r.ok && Boolean.getBoolean("dbg")) System.out.printf("first plan failed at %d: mode=%s on=%d s=%.2f y=%.2f vx=%.2f vy=%.2f t=%.2f%n", a, real.mode, real.onElem, real.s, real.y, real.vx, real.vy, real.time);
++            if (!r.ok && real.mode == Sim.Mode.GROUND && real.onElem == a && !hasMidHazard(c, a)) {      // like a person: arrived still moving, so brake, line up in the middle and size the jump up from a standstill
++                settle(real, a, in);
++                if (real.mode == Sim.Mode.GROUND && real.onElem == a) r = plan(real, a, false, true);
++                if (!r.ok && real.mode == Sim.Mode.GROUND && real.onElem == a) r = plan(real, a, false, false);
++            }
+             for (int tryBack = 0; !r.ok && tryBack < 2 && real.mode == Sim.Mode.GROUND && real.onElem == a && !hasMidHazard(c, a); tryBack++) {
+                 // like a person: walk back along the platform for a longer run-up, settle, and size up the jump again
+                 Element el = c.get(a);
+@@ -492,6 +514,9 @@ public final class Autopilot {
+                     if (r.ok) break;
+                 }
+             }
++            if (!r.ok && real.mode == Sim.Mode.AIR && !(real.lastPad == a && (c.get(a).type == Element.Type.PAD || c.get(a).type == Element.Type.SPRING))) {     // bumped while lining up: land, then size the move up again
++                if (recover(real, a, in)) { a = real.onElem; settle(real, a, in); continue; }
++            }
+             if (!r.ok) { rep.failedLink = a; rep.simTime = real.time; rep.failInfo = String.format("plan failed: mode=%s on=%d s=%.2f y=%.2f vx=%.2f vy=%.2f", real.mode, real.onElem, real.s, real.y, real.vx, real.vy); return rep; }
+             Policy p = r.factory.create();
+             int fallsBefore = real.setbacks();
+diff --git a/core/src/main/java/com/hotatticgames/climbup/sim/CourseGenerator.java b/core/src/main/java/com/hotatticgames/climbup/sim/CourseGenerator.java
+index df6c875..37db14b 100644
+--- a/core/src/main/java/com/hotatticgames/climbup/sim/CourseGenerator.java
++++ b/core/src/main/java/com/hotatticgames/climbup/sim/CourseGenerator.java
+@@ -832,22 +832,24 @@ public final class CourseGenerator {
+         int base = c.size();
+         for (int j = 0; j < n; j++) {
+             float uR = cur.s + cur.w / 2f, dy = r(-0.3f, 0.6f);
++            boolean cannonOk = cur.w >= 3f && cur.type == Element.Type.STATIC;
++            int roll = rnd.nextInt(cannonOk ? 5 : 4);
++            if (roll == 1) dy = Math.min(dy, 0.1f);      // a saw never guards an uphill jump: the blade would sit higher than the take-off
+             float g = Math.min(3.05f, Math.max(2.3f, reach(Math.max(0f, dy)) * lerp(0.68f, 0.90f, d) * r(0.95f, 1f) * (1f - 0.03f * attempt)));
++            if (roll == 1) g = Math.min(g, 2.6f);      // a saw hangs in the gap: keep the gap well short of a full-length jump so there is room to time the arc over the blade
+             float w = j == n - 1 ? 3f + rnd.nextInt(2) : 2.5f;
+             Element v = plat(Element.Type.STATIC, uR + g + w / 2f, cur.y + dy, w, z);
+             es.add(v);
+             int anchor = (j == 0) ? c.size() - 1 : base + j - 1;      // the platform the gap starts at
+             float top = Math.max(cur.y, v.y), mid = uR + g / 2f;
+             // pick a hazard that fits this gap
+-            boolean cannonOk = cur.w >= 3f && cur.type == Element.Type.STATIC;
+-            int roll = rnd.nextInt(cannonOk ? 5 : 4);
+             Element h;
+             if (roll == 0) {
+                 h = hz(Element.Type.SAW_V, mid + r(-0.1f, 0.1f), top + 0.35f, 0f, z);
+                 h.amp = r(1.5f, 2.3f); h.period = r(2.6f, 3.6f) - 0.5f * inten;
+-            } else if (roll == 1 && g >= 2.6f) {
+-                h = hz(Element.Type.SAW_H, mid, top + 0.95f + r(0f, 0.4f), 0f, z);
+-                h.amp = Math.max(0.3f, Math.min(1.0f, g / 2f - 1.0f)); h.period = r(2.4f, 3.2f) - 0.4f * inten;
++            } else if (roll == 1) {
++                h = hz(Element.Type.SAW_H, mid, top + 0.62f + r(0f, 0.2f), 0f, z);      // blade top 1.17-1.37 m above the higher ledge: a normal jump arc clears it near its top
++                h.amp = Math.max(0.2f, Math.min(0.45f, g / 2f - 0.92f)); h.period = r(2.6f, 3.4f) - 0.4f * inten;
+             } else if (roll == 3) {
+                 h = hz(Element.Type.BEE, mid, top + 1.1f, 0f, z);                  // a bee flies in, buzzes around the gap, dives at you, and leaves
+                 h.amp = Math.max(0.15f, Math.min(0.8f, g / 2f - 0.95f)); h.len = 0.8f; h.period = r(7.0f, 9.5f) - 1.5f * inten;
+@@ -881,7 +883,7 @@ public final class CourseGenerator {
+             h.period = r(3.2f, 4.2f); h.amp = lerp(0.30f, 0.40f, inten);
+         } else if (roll == 1) {         // a sawblade sliding along the floor: hop it
+             h = hz(Element.Type.SAW_H, p.s, p.y + 0.62f, 0f, z);
+-            h.amp = 1.4f; h.period = r(3.0f, 4.0f) - 0.5f * inten;
++            h.amp = 1.1f; h.period = r(3.0f, 4.0f) - 0.5f * inten;
+         } else if (roll == 2) {         // a spiked stone block in the way: hop it
+             h = hz(Element.Type.SPIKE_BLOCK, p.s, p.y - 0.1f, 1.3f, z);
+             h.len = 1.0f; h.period = 4f;
+diff --git a/core/src/test/java/com/hotatticgames/climbup/LegacyTest.java b/core/src/test/java/com/hotatticgames/climbup/LegacyTest.java
+new file mode 100644
+index 0000000..abaa4a9
+--- /dev/null
++++ b/core/src/test/java/com/hotatticgames/climbup/LegacyTest.java
+@@ -0,0 +1,62 @@
++package com.hotatticgames.climbup;
++
++import static org.junit.Assert.*;
++import static org.junit.Assume.assumeTrue;
++
++import java.io.File;
++import java.nio.file.Files;
++import java.util.regex.Matcher;
++import java.util.regex.Pattern;
++import org.junit.Test;
++
++/** Version numbers, and what happens to a run in progress when an update changes the rules. */
++public class LegacyTest {
++    private static SaveData climb(String version, int build) {
++        SaveData d = new SaveData(); d.seed = 99; d.sliceJson = "{}"; d.climbVersion = version; d.climbBuild = build; d.climbDate = "2026-10-01";
++        d.climbHeight = 1234f; d.towers = 2; d.runClock = 3600.5f; d.bestHeight = 2028f; d.bestSplit = 80f; d.bestFinish = 5000f; d.falls = 7;
++        return d;
++    }
++
++    @Test public void majorNumberDecidesWhetherRulesChanged() {
++        assertEquals(1, Legacy.major("1.1.3")); assertEquals(0, Legacy.major("")); assertEquals(0, Legacy.major(null)); assertEquals(0, Legacy.major("0.1.0")); assertEquals(2, Legacy.major("2.0.0")); assertEquals(0, Legacy.major("x.y"));
++    }
++
++    @Test public void onlyAMajorBumpSetsAClimbAside() {
++        assertFalse("patch update keeps the run", Legacy.needsPrompt(climb("1.1.3", 43), "1.1.4"));
++        assertFalse("minor update keeps the run", Legacy.needsPrompt(climb("1.1.3", 43), "1.2.0"));
++        assertTrue("major update sets it aside", Legacy.needsPrompt(climb("1.9.9", 60), "2.0.0"));
++        assertTrue("a climb from before versions were stamped counts as older rules", Legacy.needsPrompt(climb("", 0), "1.1.3"));
++        SaveData none = new SaveData(); assertFalse("nothing in progress, nothing to ask", Legacy.needsPrompt(none, "2.0.0"));
++    }
++
++    @Test public void archivingStampsTheRecordKeepsTheRecordsAndClearsTheClimb() {
++        SaveData d = climb("1.0.0", 41);
++        SaveData.LegacyRun r = Legacy.archive(d, "2026-10-09");
++        assertEquals(1, d.legacy.size()); assertSame(r, d.legacy.get(0));
++        assertEquals("1.0.0", r.version); assertEquals(41, r.build); assertEquals("2026-10-01", r.date); assertEquals("2026-10-09", r.savedDate);
++        assertEquals(1234f, r.height, 0f); assertEquals(2, r.towers); assertEquals(3600.5f, r.runClock, 1e-3f);
++        assertEquals("climb cleared", 0L, d.seed); assertNull(d.sliceJson); assertEquals(0f, d.runClock, 0f); assertEquals("", d.climbVersion);
++        assertEquals("records untouched", 2028f, d.bestHeight, 0f); assertEquals(80f, d.bestSplit, 0f); assertEquals(5000f, d.bestFinish, 0f); assertEquals(7, d.falls);
++        assertFalse(Legacy.needsPrompt(d, "2.0.0"));
++    }
++
++    @Test public void legacyRunsSurviveASaveRoundTrip() throws Exception {
++        File dir = Files.createTempDirectory("climb-legacy").toFile(); SaveStore st = new SaveStore(dir);
++        SaveData d = climb("", 0); Legacy.archive(d, "2026-10-09"); Legacy.stampNewClimb(d, "1.1.3", 43, "2026-10-09"); d.seed = 5; d.sliceJson = "{}";
++        st.saveGame(d);
++        SaveData r = st.loadGame();
++        assertEquals(1, r.legacy.size()); assertEquals(1234f, r.legacy.get(0).height, 0f); assertEquals(2, r.legacy.get(0).towers); assertEquals("2026-10-01", r.legacy.get(0).date);
++        assertEquals("1.1.3", r.climbVersion); assertEquals(43, r.climbBuild); assertFalse("a climb started by this version is resumable", Legacy.needsPrompt(r, "1.1.3"));
++    }
++
++    @Test public void theTitleLineShowsVersionAndBuild() {
++        assertEquals("V1.1.3  BUILD 43", Legacy.versionLine("1.1.3", 43)); assertEquals("V1.1.3  DEV", Legacy.versionLine("1.1.3", 0));
++        assertEquals("V1.0.0 BUILD 41", Legacy.stampLabel("1.0.0", 41, "1.1.3")); assertEquals("BEFORE V1.1.3", Legacy.stampLabel("", 0, "1.1.3"));
++    }
++
++    @Test public void theGameVersionMatchesTheGradleVersion() throws Exception {
++        File f = new File("../build.gradle"); assumeTrue(f.exists());
++        Matcher m = Pattern.compile("appVersionName = '([^']+)'").matcher(new String(Files.readAllBytes(f.toPath())));
++        assertTrue(m.find()); assertEquals(m.group(1), ClimbGame.VERSION);
++    }
++}
+diff --git a/core/src/test/java/com/hotatticgames/climbup/OfficialWorldRulesTest.java b/core/src/test/java/com/hotatticgames/climbup/OfficialWorldRulesTest.java
+index 68b5f57..c3fba9f 100644
+--- a/core/src/test/java/com/hotatticgames/climbup/OfficialWorldRulesTest.java
++++ b/core/src/test/java/com/hotatticgames/climbup/OfficialWorldRulesTest.java
+@@ -94,7 +94,7 @@ public class OfficialWorldRulesTest {
+                 if (e.type == Element.Type.STATIC && e.skin == 3) { assertTrue("a gem stands on a route platform you can stand on", e.anchor < 0 && e.w >= 3.5f && e.checkpoint); gems.add(e.y); }
+             }
+             assertTrue("a gem for each of the first ten sections: " + gems, gems.size() >= 10);
+-            for (int j = 0; j < 10; j++) { float dev = Math.abs(gems.get(j) - (250f + SP * j)); worst = Math.max(worst, dev); count++; assertTrue("gem " + (j + 1) + " within 3 m of the midpoint (dev " + dev + ")", dev <= 3f); }
++            for (int j = 0; j < 10; j++) { float dev = Math.abs(gems.get(j) - (250f + SP * j)); worst = Math.max(worst, dev); count++; assertTrue("gem " + (j + 1) + " within 4.5 m of the midpoint (dev " + dev + "; the nearest suitable platform, or a rest added where the climb crosses it, which can sit up to one module above)", dev <= 4.5f); }
+             for (int j = 1; j < gems.size(); j++) assertTrue("only one per section", gems.get(j) - gems.get(j - 1) > 400f);
+         }
+         System.out.println("gems: " + count + " checked, worst deviation from the midpoint " + worst + " m");
+diff --git a/core/src/test/java/com/hotatticgames/climbup/PersistenceTest.java b/core/src/test/java/com/hotatticgames/climbup/PersistenceTest.java
+index d11a84f..c15c114 100644
+--- a/core/src/test/java/com/hotatticgames/climbup/PersistenceTest.java
++++ b/core/src/test/java/com/hotatticgames/climbup/PersistenceTest.java
+@@ -36,6 +36,20 @@ public class PersistenceTest {
+         assertEquals(0f, old.runClock, 0f); assertEquals(0, old.towers); assertNotNull(old.splits); assertEquals(70f, old.bestHeight, 0f);
+     }
+ 
++    @Test public void aClimbSavedByAnOlderBuildSurvivesTheLoadAndIsHandledByLegacy() throws Exception {
++        File dir = tmp(); SaveStore st = new SaveStore(dir);
++        st.writeAtomic("save.json", "{\"version\":3,\"seed\":12345,\"slice\":2,\"sliceJson\":\"{}\",\"sliceCheckpoint\":4,\"runClock\":56.2,\"towers\":1,\"splits\":[10],\"towerTotals\":[10],"
++            + "\"bestHeight\":175,\"falls\":9,\"bestSplit\":42.5,\"bestFinish\":900,\"bestTotals\":[42.5]}");
++        SaveData d = st.loadGame();
++        assertEquals("the unfinished climb is kept until the player decides", 12345L, d.seed); assertEquals(56.2f, d.runClock, 1e-3f); assertEquals("", d.climbVersion);
++        assertEquals(175f, d.bestHeight, 0f); assertEquals(42.5f, d.bestSplit, 1e-3f); assertEquals(SaveData.CURRENT_VERSION, d.version);
++        assertTrue("unstamped climbs count as older rules", Legacy.needsPrompt(d, ClimbGame.VERSION));
++        st.saveGame(d);
++        SaveData again = st.loadGame();
++        assertEquals("the version is always written, so a save is never mistaken for an old one", SaveData.CURRENT_VERSION, again.version);
++        assertEquals(12345L, again.seed); assertEquals(56.2f, again.runClock, 1e-3f);
++    }
++
+     @Test public void corruptSaveIsBackedUpAndDefaultsReturned() throws Exception {
+         File dir = tmp(); SaveStore st = new SaveStore(dir);
+         st.writeAtomic("save.json", "{ this is not json");
+diff --git a/core/src/test/java/com/hotatticgames/climbup/SawFairnessTest.java b/core/src/test/java/com/hotatticgames/climbup/SawFairnessTest.java
+new file mode 100644
+index 0000000..873988d
+--- /dev/null
++++ b/core/src/test/java/com/hotatticgames/climbup/SawFairnessTest.java
+@@ -0,0 +1,40 @@
++package com.hotatticgames.climbup;
++
++import static org.junit.Assert.*;
++
++import com.hotatticgames.climbup.sim.*;
++import org.junit.Test;
++
++/** Horizontal saws must leave comfortable room to time the jump, at every height, not merely be possible. */
++public class SawFairnessTest {
++    @Test public void everySawLeavesAWideTimingWindow() throws Exception {
++        Tuning t = TestUtil.tuning();
++        int gap = 0, mid = 0; float worstGap = 9f, worstMid = 9f;
++        for (long seed : new long[]{1, 2, 3, 4, 5}) {
++            Course prev = null;
++            for (int k = 0; k < 26; k++) {
++                Course c = CourseGenerator.chunk(seed, k, prev, t); prev = c;
++                for (Element h : c.hazards) {
++                    if (h.type != Element.Type.SAW_H || h.anchor < 0 || h.anchor >= c.routeSize() - 1) continue;
++                    Element p = c.get(h.anchor), n = c.get(h.anchor + 1);
++                    boolean onPlatform = p.w >= 7f && Math.abs(h.y - p.y - 0.62f) < 0.01f;
++                    float window = Autopilot.plan(Sim.startOn(c, t, h.anchor), h.anchor, true).window;
++                    if (onPlatform) {
++                        mid++; worstMid = Math.min(worstMid, window);
++                        assertTrue("a floor saw sweeps at most 1.1 m each way, leaving room at both ends (amp " + h.amp + ")", h.amp <= 1.1f + 1e-4f);
++                    } else {
++                        gap++; worstGap = Math.min(worstGap, window);
++                        float g = c.dsWrap(n.s, p.s) - p.w / 2f - n.w / 2f;
++                        assertTrue("a saw over a gap never guards an uphill jump (dy " + (n.y - p.y) + ")", n.y - p.y <= 0.1f + 1e-3f);
++                        assertTrue("and never a near-full-length gap (" + g + ")", g <= 2.6f + 1e-3f);
++                        assertTrue("blade top stays within a normal jump arc: " + (h.y - Math.max(p.y, n.y)), h.y - Math.max(p.y, n.y) <= 0.85f);
++                    }
++                }
++            }
++        }
++        System.out.println("saws: gap " + gap + " (worst window " + worstGap + "), floor " + mid + " (worst window " + worstMid + ")");
++        assertTrue("saws actually appear", gap + mid >= 10);
++        assertTrue("every saw can be passed during at least half of its cycle (gap saws " + worstGap + ")", worstGap >= 0.5f);
++        assertTrue("floor saws: " + worstMid, worstMid >= 0.5f);
++    }
++}
+diff --git a/docs/DECISIONS.md b/docs/DECISIONS.md
+index c4af95d..082d548 100644
+--- a/docs/DECISIONS.md
++++ b/docs/DECISIONS.md
+@@ -150,3 +150,20 @@ All four were reproduced on the real generated geometry and traced with a live-s
+ - Knockback is now 6 m/s sideways and 6 m/s up (it was 4 and 3), so a hit can actually push you off a narrow platform.
+ 
+ Evidence: seeds 100-259 (2,040 slices) and 1-99 (6 slices each) swept with the autopilot: 0 failed runs, 0 generation errors (before the fixes: 5 failures in 1,200 slices, 10 with knockback and no hit check). `SolverEvidenceTest` re-runs the four original slices and re-proves every key-branch link; `FallRulesTest` verifies knockback, landing on what is below, and the red-gem return after leaving the map.
++
++## Old saved climbs are dropped (save v4)
++Owner report on build 42: a castle appeared a couple of metres ahead of the start. Fresh climbs place castle 1 at exactly 500 m (tests over many seeds), but the game resumes the climb stored in the save, and that stores the *generated slice itself* (`sliceJson`), written by an older build with the old castle layout. Builds 36-41 saved version 3, so their in-progress climb (and the slices generated after it from that stored slice) kept the old castles. Save version 4 drops the unfinished climb and its clock on load (`SaveStore.migrate`); best height, falls and all records are kept. `saveGame` now writes every field: with libGDX prototypes a default-valued `version` was left out and read back as 0, which would have re-dropped the climb on every launch.
++
++## Versioning and legacy runs (owner decision, build 43)
++- Version is MAJOR.MINOR.PATCH, starting at **1.1.3** (owner's choice), shown bottom-right of the title screen and in Settings as `V1.1.3  BUILD 43`; CI stamps the build number (versionCode = run number) into the APK name, release tag (`v1.1.3-build43`) and notes. Version lives in `build.gradle` (`appVersionName`) and `ClimbGame.VERSION`; a test keeps them equal.
++- MAJOR = the rules of a run changed (castle layout, generation, finish rules). A climb in progress started under a different MAJOR cannot be resumed (its stored slice has the old geometry). The first launch after such an update asks: SAVE AS LEGACY RUN (stamped with version, build, date, height, castles, time) or DISCARD (tap twice). MINOR and PATCH updates never touch a run in progress. Records (best height, splits, finishes) are never changed.
++- Climbs saved before versions were stamped (builds up to 42) count as MAJOR 0, so the first launch of build 43 asks about them.
++- Legacy runs are read-only records (title screen -> LEGACY RUNS); they cannot be continued.
++
++## Crash at 2,513 m (owner report, build 42)
++Reproduced the class of failure: a climb resumed from a save written by an older build stores its slice as generated by the old rules. Extending such a slice with the new generator throws `castle approach out of range` for slices that end at a castle (3 of 1,034 old slices from seeds 1-24 failed this way, all ending at 500 m / 1,500 m). The exception was thrown on the game thread when the next slice arrived, which closes the app, repeatedly at the same spot after every relaunch. Fix: (1) the legacy prompt means a climb from another MAJOR is never extended; (2) if building the next stretch of tower ever fails, the game now archives the run as a legacy record and returns to the title instead of crashing. A fresh climb never hit this (2,600+ slices swept).
++
++## Scenery and saws (owner reports, build 43)
++- Trees and props are now placed inside the slab's depth (z 0.5, the slab spans +-0.85 front to back), instead of 0.9-1.5 behind it, so they stand on the ground they belong to.
++- A tester found a horizontal saw "doable but must time it perfectly" near 1,700-1,900 m. Measured with the planner's timing-window metric (share of the saw's cycle during which some move works): floor saws were fine (worst 0.67-0.8), but gap saws had worst cases of 0.17-0.33, always an uphill, near-full-length gap with a high blade. A gap saw now: never guards an uphill jump (dy <= 0.1), gap <= 2.6 m, blade top 1.17-1.37 m above the higher ledge (a normal arc clears it), sweeps at most 0.2-0.45 m, period 2.6-3.4 s. Floor saws sweep 1.1 m (was 1.4) so each end has a 2 m pocket. Worst windows are now 0.78 (gap) and 0.7 (floor). `SawFairnessTest` enforces >= 0.5 for every saw.
++- Autopilot (solver only): it now recovers when a bee or crab shoves it into the air, and settles after arriving with momentum, before planning. Found by the finite-tower test after the saw change shifted the layout.

@@ -354,6 +354,20 @@ public final class Autopilot {
         return r;
     }
 
+    /** Waits {@code waitTicks} (hazard timing), walks to {@code toS} on platform a and brakes, then plans the next link from there; null if that leaves the platform or costs a setback. */
+    static Result repositionPlan(Sim sim, int a, float toS, int waitTicks) {
+        Course c = sim.course; InputState in = new InputState(); int sb = sim.setbacks();
+        for (int q = 0; q < waitTicks && sim.mode == Sim.Mode.GROUND; q++) { in.clear(); sim.step(in); }
+        for (int q = 0; q < 240 && sim.mode == Sim.Mode.GROUND; q++) {
+            float d = c.dsWrap(toS, sim.s);
+            if (Math.abs(d) < 0.08f && Math.abs(sim.vx) < 0.4f) break;
+            in.clear(); in.moveX = Math.abs(d) < 0.08f ? 0f : Math.signum(d) * (Math.abs(d) < 0.8f ? 0.4f : 1f); sim.step(in);
+        }
+        for (int q = 0; q < 40 && sim.mode == Sim.Mode.GROUND && Math.abs(sim.vx) > 0.05f; q++) { in.clear(); sim.step(in); }
+        if (sim.mode != Sim.Mode.GROUND || sim.onElem != a || sim.setbacks() != sb) return null;
+        return plan(sim, a, false, false);
+    }
+
     static boolean hasMidHazard(Course c, int a) {
         Element p = c.get(a);
         if (!p.isPlatform()) return false;
@@ -476,7 +490,10 @@ public final class Autopilot {
         java.util.HashSet<Integer> visited = new java.util.HashSet<>();
         InputState in = new InputState();
         boolean endless = c.get(c.goalIndex()).type != Element.Type.GOAL;     // endless slices end on a rest platform, not a goal flag
+        int lastA = -1, sameA = 0;
         while (!real.won && real.time < maxSimSeconds) {
+            if (a == lastA) sameA++; else { lastA = a; sameA = 0; }
+            if (sameA > 30) { rep.failedLink = a; rep.simTime = real.time; rep.failInfo = "stuck at one link: knocked back again and again"; return rep; }
             if (endless && a >= c.goalIndex()) { rep.completed = true; rep.simTime = real.time; return rep; }
             for (int[] kr : c.keyRooms) {
                 if (kr[0] != a || !visited.add(kr[0])) continue;
@@ -528,6 +545,22 @@ public final class Autopilot {
                     if (real.mode != Sim.Mode.GROUND || real.onElem != a) break;
                     r = plan(real, a, false, false);
                     if (r.ok) break;
+                }
+            }
+            if (!r.ok && real.mode == Sim.Mode.GROUND && real.onElem == a && hasMidHazard(c, a) && c.get(a).isPlatform()) {
+                // like a person: a hazard in the middle of this platform, and the spot we arrived at gives no clean hop. Wait for a better moment, step to another spot on the near side and size it up again (tried on a copy first: the stand-in never walks into the hazard)
+                float dirA = c.dsWrap(real.es1[a + 1], real.es1[a]) >= 0 ? 1f : -1f;
+                search:
+                for (float off : new float[]{1.0f, 0.6f, 1.4f, 0.8f, 1.8f, 2.4f}) {
+                    if (off > c.get(a).halfW() - 0.3f) continue;
+                    float toS = c.wrap(real.es1[a] - dirA * off);
+                    for (int wt = 0; wt <= 180; wt += 18) {
+                        Sim cp = real.copy();
+                        Result rr = repositionPlan(cp, a, toS, wt);
+                        if (rr == null || !rr.ok) continue;
+                        r = repositionPlan(real, a, toS, wt);
+                        break search;
+                    }
                 }
             }
             if (!r.ok && real.mode == Sim.Mode.AIR && !(real.lastPad == a && (c.get(a).type == Element.Type.PAD || c.get(a).type == Element.Type.SPRING))) {     // bumped while lining up: land, then size the move up again

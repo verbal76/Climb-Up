@@ -201,10 +201,10 @@ public class EndlessTest {
         assertEquals("a bee never hurts: the only consequence of a bump is where you end up", 0, s.hits);
     }
 
-    /** Three slices once stopped the whole-course autopilot. None was a generation defect: a gate reused a key colour from a later castle (202/31), a pad launch needed a moment's coast before steering (224/12), and a spring was entered at full run speed after a hazard hop (209/17). Each is a move a person makes. */
+    /** Four slices once stopped the whole-course autopilot. The fourth (259/24) is a saw in the middle of a platform that the solver approached from a spot with no clean hop; a person steps up to a better spot and waits for the saw. None was a generation defect: a gate reused a key colour from a later castle (202/31), a pad launch needed a moment's coast before steering (224/12), and a spring was entered at full run speed after a hazard hop (209/17). Each is a move a person makes. */
     @Test public void slicesThatOnceStoppedTheAutopilotAreCompletedNow() throws Exception {
         Tuning t = TestUtil.tuning();
-        for (long[] sk : new long[][]{{202, 31}, {224, 12}, {209, 17}}) {
+        for (long[] sk : new long[][]{{202, 31}, {224, 12}, {209, 17}, {259, 24}}) {
             Course prev = null, c = null;
             for (int k = 0; k <= sk[1]; k++) { c = CourseGenerator.chunk(sk[0], k, prev, t); prev = c; }
             Autopilot.Report r = Autopilot.run(c, t, 4000f);

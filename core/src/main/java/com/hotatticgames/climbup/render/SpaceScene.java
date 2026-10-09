@@ -31,6 +31,7 @@ public final class SpaceScene {
     private final ModelInstance[] planets = new ModelInstance[PLANETS];
     private final ModelInstance[] rocks = new ModelInstance[ROCKS];
     private final ModelInstance[] ships = new ModelInstance[SHIPS.length];
+    private final float[] planetExt = new float[PLANETS], rockExt = new float[ROCKS];      // horizontal radius of each model (model units): how far it reaches from its own centre
     private final java.util.Random rnd = new java.util.Random(31);   // cosmetic only
 
     // far layer: planets pinned to the sky
@@ -52,6 +53,8 @@ public final class SpaceScene {
         this.models = models; this.far = farCam; this.radius = radius; this.circumference = (float) (2 * Math.PI * radius);
         for (int i = 0; i < PLANETS; i++) planets[i] = fade(new ModelInstance(models.space("planet_" + (i + 1))));
         for (int i = 0; i < ROCKS; i++) rocks[i] = new ModelInstance(models.space(ROCK_NAMES[i]));
+        for (int i = 0; i < PLANETS; i++) planetExt[i] = reach(planets[i]);
+        for (int i = 0; i < ROCKS; i++) rockExt[i] = reach(rocks[i]);
         for (int i = 0; i < SHIPS.length; i++) ships[i] = fade(new ModelInstance(models.space(SHIPS[i])));
         env.set(new ColorAttribute(ColorAttribute.AmbientLight, 0.62f, 0.62f, 0.70f, 1f));
         env.add(new DirectionalLight().set(1f, 0.96f, 0.88f, -0.5f, -0.6f, -0.6f));
@@ -119,6 +122,7 @@ public final class SpaceScene {
             ModelInstance pl = planets[(int) ((h >>> 3) % PLANETS)];
             float arc = ((h >>> 10) % 1000) / 1000f * circumference, y = band * 70f + ((h >>> 20) % 1000) / 1000f * 60f, r = 3.2f + ((h >>> 30) % 1000) / 1000f * 4.5f;
             float sc = 0.45f + ((h >>> 40) % 1000) / 1000f * 0.8f;
+            r = inside(r, sc, planetExt[(int) ((h >>> 3) % PLANETS)]);
             alpha(pl, 1f);
             placer.place(pl, arc, y, radius - r, sc, sc, sc, reduced ? 0f : clock * (6f + (h % 7)));
             batch.render(pl, mainEnv);
@@ -126,6 +130,7 @@ public final class SpaceScene {
             if (spaceW > 0.3f) {            // deep space: a second planet per band
                 ModelInstance p2 = planets[(int) ((h >>> 5) % PLANETS)];
                 float a2 = ((h >>> 12) % 1000) / 1000f * circumference, y2 = band * 70f + ((h >>> 22) % 1000) / 1000f * 60f, r2 = 3.5f + ((h >>> 32) % 1000) / 1000f * 4f, s2 = 0.5f + ((h >>> 42) % 1000) / 1000f * 0.9f;
+                r2 = inside(r2, s2, planetExt[(int) ((h >>> 5) % PLANETS)]);
                 alpha(p2, 1f);
                 placer.place(p2, a2, y2, radius - r2, s2, s2, s2, reduced ? 0f : clock * 5f);
                 batch.render(p2, mainEnv);
@@ -137,6 +142,8 @@ public final class SpaceScene {
                 ModelInstance rk = rocks[(int) ((g >>> 4) % ROCKS)];
                 float ra = ((g >>> 12) % 1000) / 1000f * circumference, ry = band * 70f + ((g >>> 22) % 1000) / 1000f * 70f, rr = 2.5f + ((g >>> 32) % 1000) / 1000f * 5.5f;
                 float rs = 0.3f + ((g >>> 42) % 1000) / 1000f * 0.6f;
+                rr = inside(rr, rs, rockExt[(int) ((g >>> 4) % ROCKS)]);
+                if (rr < 0.3f) continue;
                 placer.place(rk, ra, ry + (reduced ? 0f : 0.4f * MathUtils.sin(clock * 0.6f + k)), radius - rr, rs, rs, rs, reduced ? 0f : clock * (8f + (g % 9)));
                 batch.render(rk, mainEnv);
             }
@@ -150,6 +157,15 @@ public final class SpaceScene {
             batch.render(sh, mainEnv);
         }
     }
+
+    private static float reach(ModelInstance m) {
+        com.badlogic.gdx.math.collision.BoundingBox bb = new com.badlogic.gdx.math.collision.BoundingBox(); m.calculateBoundingBox(bb);
+        com.badlogic.gdx.math.Vector3 d = bb.getDimensions(new com.badlogic.gdx.math.Vector3());
+        return 0.5f * (float) Math.sqrt(d.x * d.x + d.z * d.z);
+    }
+
+    /** Scenery floating inside the cylinder must never reach the plane the player and the platforms use (distance `radius` from the axis): keep its far edge a margin short of it. */
+    private float inside(float r, float scale, float ext) { return Math.min(r, radius - ext * scale - 2.2f); }
 
     private static float mod(float a, float m) { return ((a % m) + m) % m; }
     private static long mixSeed(long x) {

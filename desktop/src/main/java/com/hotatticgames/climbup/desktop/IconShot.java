@@ -34,6 +34,7 @@ public final class IconShot extends ApplicationAdapter {
         if (row > 1) { for (int i = 0; i < row; i++) { ModelInstance b = new ModelInstance(m); b.transform.idt().translate((i - (row - 1) / 2f) * 2f, 0, 0).scale(Float.parseFloat(System.getProperty("climb.iconSx", "0.96")), 1f, 1.7f); all.add(b); } inst = all.get(0); }
         AnimationController ac = new AnimationController(inst);
         try { ac.setAnimation(System.getProperty("climb.iconAnim", "Idle")); ac.update(Float.parseFloat(System.getProperty("climb.iconT", "0.6"))); } catch (Exception ignored) { }
+        inst.transform.rotate(0, 1, 0, Float.parseFloat(System.getProperty("climb.iconYaw", "0")));
         inst.calculateTransforms();
         BoundingBox bb = new BoundingBox();
         if (row > 1) { bb.inf(); BoundingBox t = new BoundingBox(); for (ModelInstance b : all) { b.calculateBoundingBox(t); t.mul(b.transform); bb.ext(t); } } else inst.calculateBoundingBox(bb);

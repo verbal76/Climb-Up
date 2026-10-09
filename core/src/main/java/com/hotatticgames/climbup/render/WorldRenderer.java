@@ -587,26 +587,11 @@ public final class WorldRenderer implements Disposable {
     private BlendingAttribute gateBlend = new BlendingAttribute(true, 0.38f);
     private final java.util.HashMap<Element, ModelInstance> gateInsts = new java.util.HashMap<>();
     /** One tower instance per castle so its fade-while-inside never leaks onto another castle of the same colour. */
-    /** How far (model units) the cut-out door model is pushed out of the wall so its leaf stands proud of the plain stone on the far side. */
-    private static final float DOOR_OUT = Float.parseFloat(System.getProperty("climb.doorOut", "1.0"));
-    private final java.util.HashMap<Element, ModelInstance> gateDoors = new java.util.HashMap<>();
-    private ModelInstance gateDoor(Element h) {
-        ModelInstance m = gateDoors.get(h);
-        if (m == null) {
-            if (gateDoors.size() > 16) gateDoors.clear();
-            m = new ModelInstance(models.pack("tower_door"));
-            float[] c = KEY_RGB[h.color % KEY_RGB.length];
-            for (com.badlogic.gdx.graphics.g3d.Material mat : m.materials) if (mat.id.contains("Wood")) { mat.set(ColorAttribute.createDiffuse(c[0], c[1], c[2], 1f)); mat.set(ColorAttribute.createEmissive(c[0] * 0.25f, c[1] * 0.25f, c[2] * 0.25f, 1f)); }
-            gateDoors.put(h, m);
-        }
-        return m;
-    }
-
     private ModelInstance gateInst(Element h) {
         ModelInstance m = gateInsts.get(h);
         if (m == null) {
             if (gateInsts.size() > 16) gateInsts.clear();
-            m = new ModelInstance(models.pack("tower"));
+            m = new ModelInstance(models.pack("tower2"));          // the castle with a door on both sides (tools/make_tower_door.py)
             float[] c = KEY_RGB[h.color % KEY_RGB.length];
             for (com.badlogic.gdx.graphics.g3d.Material mat : m.materials) {
                 if (mat.id.contains("Flag") || mat.id.contains("Gold") || mat.id.contains("Wood")) { mat.set(ColorAttribute.createDiffuse(c[0], c[1], c[2], 1f)); mat.set(ColorAttribute.createEmissive(c[0] * 0.25f, c[1] * 0.25f, c[2] * 0.25f, 1f)); }
@@ -743,12 +728,6 @@ public final class WorldRenderer implements Disposable {
                 g.transform.idt().translate(T.radius * MathUtils.sin(phi), h.y, -T.radius + T.radius * MathUtils.cos(phi))
                         .rotate(0, 1, 0, phi * MathUtils.radiansToDegrees + 90f).scale(0.4f, 0.4f, 0.4f);
                 batch.render(g, env);
-                // the second door: the tower's own arch + door leaf, cut out as its own model, mounted exactly opposite and shifted out so it sits on the plain wall
-                ModelInstance dr = gateDoor(h);
-                for (com.badlogic.gdx.graphics.g3d.Material mt : dr.materials) { if (inside) mt.set(gateBlend); else mt.remove(BlendingAttribute.Type); }
-                dr.transform.idt().translate(T.radius * MathUtils.sin(phi), h.y, -T.radius + T.radius * MathUtils.cos(phi))
-                        .rotate(0, 1, 0, phi * MathUtils.radiansToDegrees - 90f).scale(0.4f, 0.4f, 0.4f).translate(0f, 0f, DOOR_OUT);
-                batch.render(dr, env);
                 break;
             }
             case CRAB: {

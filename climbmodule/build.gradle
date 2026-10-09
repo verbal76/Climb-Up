@@ -1,0 +1,31 @@
+plugins { id 'java-library' }
+evaluationDependsOn(':core')
+tasks.withType(JavaCompile).configureEach { options.release = 17; options.encoding = 'UTF-8' }
+
+// The Climb Up game module = the unchanged :core classes + a thin entry class. libGDX and the host SPI belong to the HOST and are deliberately not packaged.
+dependencies {
+    compileOnly project(':modspi')
+    compileOnly project(':core')
+    compileOnly "com.badlogicgames.gdx:gdx:$gdxVersion"
+    testImplementation 'junit:junit:4.13.2'
+    testImplementation project(':modspi')
+    testImplementation project(':core')
+    testImplementation "com.badlogicgames.gdx:gdx:$gdxVersion"
+}
+
+tasks.register('moduleJar', Jar) {
+    archiveBaseName = 'climb-module'
+    dependsOn ':core:classes', 'classes'
+    from sourceSets.main.output
+    from project(':core').sourceSets.main.output
+    // reproducible: no timestamps, stable order
+    preserveFileTimestamps = false; reproducibleFileOrder = true
+}
+
+test {
+    dependsOn 'moduleJar'
+    systemProperty 'climb.moduleJar', tasks.named('moduleJar').get().archiveFile.get().asFile.absolutePath
+    systemProperty 'climb.coreClasses', project(':core').sourceSets.main.output.classesDirs.asPath
+    testLogging { events 'passed', 'failed', 'skipped'; exceptionFormat 'full'; showStandardStreams = true }
+    maxHeapSize = '1g'
+}

@@ -17,4 +17,10 @@ public interface GameModule {
 
     /** Creates the game's ApplicationListener. Called once, on the host's UI thread, before the backend starts the render loop. */
     ApplicationListener create(HostEnv env);
+
+    /**
+     * Diagnostics hook for validation only (never called during normal play): lets the host ask the module to run a named headless check and return a one-line result,
+     * e.g. a deterministic simulation digest used to prove a module-loaded game behaves exactly like the packaged one. Return null if the check is unknown.
+     */
+    default String selfTest(String request) { return null; }
 }

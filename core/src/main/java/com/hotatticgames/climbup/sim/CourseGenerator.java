@@ -26,6 +26,8 @@ public final class CourseGenerator {
     private int ctx = 1;                    // leading elements that are context from the previous slice
     private boolean endless;
     private float rampH;
+    private boolean relaxed;            // last-resort mode (see chunkIn)
+    private double base;                    // framed generation: absolute height = base + local y (a multiple of the castle spacing); 0 for the classic absolute-frame slices
     private List<Element> ghostElems = new ArrayList<>();   // earlier-slice elements, only consulted for spiral-layer clearance
     private List<Element> ghostHaz = new ArrayList<>();
     public StringBuilder trace = new StringBuilder();
@@ -51,11 +53,14 @@ public final class CourseGenerator {
      * Slice {@code k} of the endless tower. Element 0 of the result is the shared start platform (the previous slice's last
      * rest platform, a checkpoint); elements are route-first then decoys, hazards are in {@link Course#hazards}, anchors are local.
      */
-    public static Course chunk(long seed, int k, Course prev, Tuning t) {
+    public static Course chunk(long seed, int k, Course prev, Tuning t) { return chunkIn(seed, k, prev, t, 0.0); }
+
+    private static Course chunkIn(long seed, int k, Course prev, Tuning t, double base) {
         IllegalStateException last = null;
-        for (int attempt = 0; attempt < 12; attempt++) {      // a dead end is retried with different (but still deterministic) choices
+        for (int attempt = 0; attempt < 24; attempt++) {      // a dead end is retried with different (but still deterministic) choices
             CourseGenerator g = new CourseGenerator(seed, t, k + 1 + attempt * 1000003L);
-            g.endless = true; g.rampH = t.rampHeight;
+            g.endless = true; g.rampH = t.rampHeight; g.base = base;
+            g.relaxed = attempt >= 12;       // the previous slice can occasionally leave no room that keeps clear of every older spiral layer: after twelve normal tries, build above it without that clearance rather than ever failing
             lastForDebug = g;
             try { g.buildChunk(prev); return g.extract(); }
             catch (IllegalStateException e) { last = e; }
@@ -63,15 +68,42 @@ public final class CourseGenerator {
         throw last;
     }
 
+    /** A slice together with its frame: absolute height = yBase + local y, absolute arc = sBase + local s (yBase is a multiple of the castle spacing, sBase a whole number of laps), so every number the simulation touches stays small at any altitude. */
+    public static final class Framed {
+        public final Course c; public final double yBase, sBase;
+        public Framed(Course c, double yBase, double sBase) { this.c = c; this.yBase = yBase; this.sBase = sBase; }
+    }
+
+    /** Slice {@code k} generated in its own small frame from the previous slice (null for slice 0). Deterministic: the same (seed, k, previous slice) always gives the same slice, bit for bit. */
+    public static Framed chunkFramed(long seed, int k, Framed prev, Tuning t) {
+        if (prev == null) return new Framed(chunkIn(seed, k, null, t, 0.0), 0.0, 0.0);
+        Course pc = prev.c; Element last = pc.get(pc.routeSize() - 1);
+        double step = t.castleSpacing > 0f ? t.castleSpacing : 500.0;
+        double dy = Math.max(0.0, step * Math.floor(last.y / step)), ds = pc.circumference * Math.floor(last.s / pc.circumference);
+        double yBase = prev.yBase + dy, sBase = prev.sBase + ds;
+        Course shifted = shift(pc, (float) dy, (float) ds);
+        return new Framed(chunkIn(seed, k, shifted, t, yBase), yBase, sBase);
+    }
+
+    /** A copy of a course translated by (-dy, -ds): used to put the previous slice into the next slice's frame. */
+    public static Course shift(Course src, float dy, float ds) {
+        Course out = new Course(src.seed, src.circumference);
+        for (int i = 0; i < src.size(); i++) { Element e = copyOf(src.get(i), src.get(i).anchor); e.y -= dy; e.s -= ds; out.add(e); }
+        for (Element h : src.hazards) { Element e = copyOf(h, h.anchor); e.y -= dy; e.s -= ds; out.hazards.add(e); }
+        for (int[] k : src.keyRooms) out.keyRooms.add(k.clone());
+        out.routeCount = src.routeCount; out.gemCheckpoints = src.gemCheckpoints; out.indexDecoys();
+        return out;
+    }
+
     // ---- difficulty as a function of height (all numbers live in tuning.json)
-    private float diff(float y) { return Math.min(1f, Math.max(0f, y / rampH)); }
+    private float diff(float y) { return Math.min(1f, Math.max(0f, (float) ((y + base) / rampH))); }
     private int tier(float y) { return Math.min(3, (int) (diff(y) * 4f)); }
     /** Visual theme of the platforms at height y: the four worlds repeat for ever in the endless climb. */
-    private int theme(float y) { return endless ? ((int) (y / T.zoneHeight)) % T.zoneCount : tier(y); }
+    private int theme(float y) { return endless ? ((int) ((y + base) / T.zoneHeight)) % T.zoneCount : tier(y); }
     /** 0 before the first hazards, ramping to 1 (finite towers ramp over their own height so tests exercise them too). */
     float intensity(float y) {
         float start = endless ? T.hazardStartY : T.courseHeight * 0.18f, ramp = endless ? T.hazardRampY : T.courseHeight * 0.7f;
-        return Math.min(1f, Math.max(0f, (y - start) / ramp));
+        return Math.min(1f, Math.max(0f, (float) ((y + base - start) / ramp)));
     }
 
     // ------------------------------------------------------------------ physics helpers
@@ -119,22 +151,24 @@ public final class CourseGenerator {
             int rs = prev.routeSize(), m = Math.min(8, rs), from = rs - m;
             for (int i = from; i < rs; i++) c.add(copyOf(prev.get(i), -1));
             for (Element h : prev.hazards) if (h.anchor >= from - 2 && h.anchor < rs) c.hazards.add(copyOf(h, h.anchor - from));
-            for (int i = 0; i < rs; i++) if (i < from) ghostElems.add(prev.get(i));
-            for (int i = rs; i < prev.size(); i++) ghostElems.add(prev.get(i));
-            for (Element h : prev.hazards) if (h.anchor < from - 2) ghostHaz.add(h);
+            if (!relaxed) {
+                for (int i = 0; i < rs; i++) if (i < from) ghostElems.add(prev.get(i));
+                for (int i = rs; i < prev.size(); i++) ghostElems.add(prev.get(i));
+                for (Element h : prev.hazards) if (h.anchor < from - 2) ghostHaz.add(h);
+            }
             ctx = m;
             rests = prev.get(rs - 1).zone * 3 + rs;   // keeps the checkpoint cadence varied between slices
         }
         float startY = c.get(ctx - 1).y;
         castleTarget = 0f; castleDone = false; exactCastle = false; keyN = 0; keyY = 0f; gemBest = -1;
         if (T.castleSpacing > 0f) {          // exact heights: the castles at spacing x N, and ONE red-gem checkpoint halfway between every two castles (and between the start and castle 1)
-            int mc = (int) Math.floor((startY + 80f) / T.castleSpacing);
-            float half = T.castleSpacing * 0.5f;
-            int mg = (int) Math.floor((startY + 80f - half) / T.castleSpacing);
-            if (mc >= 1 && mc * T.castleSpacing > startY) { castleTarget = mc * T.castleSpacing; exactCastle = true; }
-            else if (mg >= 0 && half + mg * T.castleSpacing > startY) { castleTarget = half + mg * T.castleSpacing; exactCastle = false; }
-            for (int n = (int) Math.floor(startY / T.castleSpacing) + 1; n <= (int) Math.floor((startY + 80f) / T.castleSpacing) + 1; n++) {      // the key of castle n lies somewhere random in the section before it: the slice that covers its height places it
-                float hk = keyHeight(c.seed, n, T.castleSpacing);
+            double sp = T.castleSpacing, half = sp * 0.5, startAbs = startY + base;          // absolute heights in double: the same maths at any altitude
+            int mc = (int) Math.floor((startAbs + 80.0) / sp);
+            int mg = (int) Math.floor((startAbs + 80.0 - half) / sp);
+            if (mc >= 1 && mc * sp > startAbs) { castleTarget = (float) (mc * sp - base); exactCastle = true; }
+            else if (mg >= 0 && half + mg * sp > startAbs) { castleTarget = (float) (half + mg * sp - base); exactCastle = false; }
+            for (int n = (int) Math.floor(startAbs / sp) + 1; n <= (int) Math.floor((startAbs + 80.0) / sp) + 1; n++) {      // the key of castle n lies somewhere random in the section before it: the slice that contains its height places it
+                float hk = (float) (keyHeight(c.seed, n, T.castleSpacing) - base);
                 if (hk > startY && hk <= startY + 80f) { keyN = n; keyY = hk; break; }
             }
         }
@@ -244,7 +278,7 @@ public final class CourseGenerator {
         int rIdx = c.size() - 1; Element u = c.get(rIdx);
         float R = castleTarget - u.y;
         if (R < 0.05f || R > 7.5f || !u.checkpoint || u.w < 4f) throw new IllegalStateException("castle approach out of range R=" + R);
-        int number = Math.round(castleTarget / T.castleSpacing);
+        int number = (int) Math.round((castleTarget + base) / T.castleSpacing);
         float d = diff(u.y);
         for (int attempt = 0; attempt < 10; attempt++) {
             int k = Math.max(1, (int) Math.ceil(R / 1.25f)) + (rnd.nextFloat() < 0.4f ? 1 : 0);

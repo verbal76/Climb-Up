@@ -93,6 +93,7 @@ public final class PlayScreen extends ScreenAdapter {
             }
             sim = Sim.startOn(course, g.tuning, run.startIdx);
             sim.checkpoint = run.startIdx; sim.keysFree = false; sim.keys = 0;
+            if (run.resumed) ResumeState.restore(g.save, sim, course, g.tuning);
             if (hStart > 0) { int i = 0; while (i < course.size() - 1 && course.get(i + 1).y < hStart) i++; while (i > 0 && course.get(i).anchor >= 0) i--; sim = Sim.startOn(course, g.tuning, i); sim.checkpoint = i; sim.keysFree = false; sim.keys = 0; }
             updateWindow(true);
         }
@@ -227,7 +228,7 @@ public final class PlayScreen extends ScreenAdapter {
                 in.jumpPressed = false; jumpLatch = false; kJump = false; in.swingPressed = false; swingLatch = false; kSwing = false;
                 runTime += Sim.DT;
                 if (runTime > 15f && g.ota != null) g.ota.confirm();          // live play with the current (possibly OTA) content: a freshly applied update is now trusted
-                if (!demo) { if (!clockLive && (in.moveX != 0f || in.jumpPressed || in.moveY != 0f)) clockLive = true; RunRecord.tick(g.save, Sim.DT, clockLive); if (sim.maxHeight > g.save.climbHeight) g.save.climbHeight = sim.maxHeight; }
+                if (!demo) { if (!clockLive && (in.moveX != 0f || in.jumpPressed || in.moveY != 0f)) clockLive = true; RunRecord.tick(g.save, Sim.DT, clockLive); if (sim.maxHeight > g.save.climbHeight) g.save.climbHeight = sim.maxHeight; ResumeState.capture(g.save, sim); }
                 handleEvents(sim.consumeEvents());
                 acc -= Sim.DT; steps++;
                 if (state != State.PLAYING) break;
@@ -416,7 +417,7 @@ public final class PlayScreen extends ScreenAdapter {
         if ((ev & Sim.EV_DOOR) != 0) {
             float[] kc = KEY_RGB[sim.lastGateColor];
             g.audio.play("door", 1f, 1f); world.particles.burst(s + sim.facing * 1.4f, y + 1.2f, 22, new Color(kc[0], kc[1], kc[2], 1f), 3.5f, 3.5f, 0.14f, 0f, 1.0f); world.shake(0.5f); vibrate(40, 1);
-            towerUnlocked();
+            if (ResumeState.gateOpened(g.save, sim.lastGateNo)) towerUnlocked();          // a castle counts (and is timed) once, even if the climb is resumed and its door walked through again
             say("[DOOR OPENS]");
         }
         if ((ev & Sim.EV_FINISH) != 0) {

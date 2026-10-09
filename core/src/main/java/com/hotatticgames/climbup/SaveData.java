@@ -19,6 +19,8 @@ public final class SaveData {
     public int climbBuild = 0;
     public String climbDate = "";
     public float climbHeight = 0f;       // highest point reached in the climb in progress
+    public int keysHeld = 0;             // keys carried (bit per colour) - a resumed climb only has the stored slice, so this must be saved
+    public int openedUpTo = 0;           // highest castle number opened in this climb (castles open in order)
     public boolean continuedFromOlder = false;   // an unstamped climb from an older build that was checked and can safely carry on (see Legacy.tryContinue)
     public List<LegacyRun> legacy = new ArrayList<>();   // runs set aside when an update changed the rules
     public float bestHeight = 0f;
@@ -28,6 +30,7 @@ public final class SaveData {
     public float bestTime = 0f;          // fastest summit, seconds (0 = none yet)
     public List<String> shownTips = new ArrayList<>();
     // speed-run clock: counted only while playing, from the first input of a climb; reset by NEW CLIMB
+    public long runTicks = 0;            // the run clock in whole 1/60 s simulation steps (exact); runClock is derived from it
     public float runClock = 0f;          // total seconds of this climb so far
     public float towerStartClock = 0f, towerStartHeight = 0f;   // when / where the current tower segment began (the last unlock, or the start)
     public int towers = 0;               // castles unlocked this climb

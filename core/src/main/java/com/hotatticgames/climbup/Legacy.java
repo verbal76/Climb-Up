@@ -18,7 +18,26 @@ public final class Legacy {
 
     /** True if a climb is in progress that was started under a different MAJOR version than {@code current}. */
     public static boolean needsPrompt(SaveData sd, String current) {
-        return sd.seed != 0 && sd.sliceJson != null && major(sd.climbVersion) != major(current);
+        return sd.seed != 0 && sd.sliceJson != null && major(sd.climbVersion) != major(current) && !sd.continuedFromOlder;
+    }
+
+    /**
+     * A climb saved by an older build carries no version stamp, but that does not by itself make it unusable: most of them carry on perfectly. Retiring a run that can continue would cost the player
+     * hours, so before asking, check that it really can: the stored slice must put every castle on the 500 m grid, and the current generator must be able to build the slice after it.
+     * Returns true (and remembers it) if the climb may continue; false means the player gets the explicit choice. Never throws.
+     */
+    public static boolean tryContinue(SaveData sd, com.hotatticgames.climbup.sim.Tuning t) {
+        if (!needsPrompt(sd, ClimbGame.VERSION) || !(sd.climbVersion == null || sd.climbVersion.isEmpty())) return false;
+        try {
+            com.hotatticgames.climbup.sim.Course c = com.hotatticgames.climbup.sim.CourseIO.fromJson(sd.sliceJson);
+            for (com.hotatticgames.climbup.sim.Element h : c.hazards) {
+                if (h.type != com.hotatticgames.climbup.sim.Element.Type.GATE) continue;
+                float m = h.y % t.castleSpacing; if (m > 0.05f && t.castleSpacing - m > 0.05f) return false;      // a castle off the official grid: an old layout
+            }
+            com.hotatticgames.climbup.sim.CourseGenerator.chunk(sd.seed, sd.slice + 1, c, t);                  // the next stretch must be buildable from what is stored
+            sd.continuedFromOlder = true;
+            return true;
+        } catch (Throwable e) { return false; }
     }
 
     /** "V1.1.3  BUILD 43" (build 0 = desktop / unknown). */

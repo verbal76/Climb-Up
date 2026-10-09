@@ -19,6 +19,7 @@ public final class SaveData {
     public int climbBuild = 0;
     public String climbDate = "";
     public float climbHeight = 0f;       // highest point reached in the climb in progress
+    public boolean continuedFromOlder = false;   // an unstamped climb from an older build that was checked and can safely carry on (see Legacy.tryContinue)
     public List<LegacyRun> legacy = new ArrayList<>();   // runs set aside when an update changed the rules
     public float bestHeight = 0f;
     public int falls = 0;

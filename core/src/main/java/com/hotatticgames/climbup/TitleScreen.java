@@ -27,6 +27,7 @@ public final class TitleScreen extends ScreenAdapter {
     public TitleScreen(ClimbGame g) { this.g = g; }
 
     @Override public void show() {
+        if (Legacy.needsPrompt(g.save, ClimbGame.VERSION) && Legacy.tryContinue(g.save, g.tuning)) g.persist();      // an older climb that can safely carry on does: nobody loses a run that still works
         Tower tw = null; int idx = 0;
         if (g.save.seed != 0 && g.save.sliceJson != null) {        // backdrop: where the climb in progress stands
             try {

@@ -29,7 +29,7 @@ public final class PlayScreen extends ScreenAdapter {
     private final boolean demo;
     private Course course;
     private Tower tower;                 // null only in the scripted demo, which plays one fixed slice
-    private int winCenter = Integer.MIN_VALUE, winSize;
+    private final com.hotatticgames.climbup.sim.WindowFollower follower = new com.hotatticgames.climbup.sim.WindowFollower();
     private Sim sim;
     private WorldRenderer world;
     private final InputState in = new InputState();
@@ -120,20 +120,7 @@ public final class PlayScreen extends ScreenAdapter {
     }
 
     /** Endless climb: only the part of the world around the player is simulated. */
-    private void updateWindow(boolean force) {
-        int idx = Math.max(Math.max(sim.bestElem, sim.onElem), sim.checkpoint);
-        if (winCenter != Integer.MIN_VALUE && sim.mode == Sim.Mode.AIR && sim.vy < -2f && sim.winLo > 0 && sim.y < course.get(sim.winLo).y + 30f) {
-            int f = Math.min(course.size() - 1, winCenter + 160);          // falling out of the bottom of the simulated slice: follow the player down so every platform below can still catch him
-            while (f > 0 && !(course.get(f).anchor < 0 && course.get(f).isPlatform() && course.get(f).y < sim.y - 1f)) f--;
-            winCenter = f - 40; winSize = course.size();
-            sim.setRange(f - 160, f + 120);
-            return;
-        }
-        boolean grew = course.size() > winSize && winCenter + 160 > winSize;
-        if (!force && !grew && Math.abs(idx - winCenter) < 30) return;
-        winCenter = idx; winSize = course.size();
-        sim.setRange(idx - 120, idx + 160);
-    }
+    private void updateWindow(boolean force) { follower.update(sim, course, force); }
 
     private void applySettings() {
         world.reducedMotion = g.settings.reducedMotion;

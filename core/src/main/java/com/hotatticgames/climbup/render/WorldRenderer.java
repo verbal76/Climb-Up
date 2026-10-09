@@ -53,6 +53,7 @@ public final class WorldRenderer implements Disposable {
     /** True once after a spaceship has flown past the player (the play screen plays the sound). */
     public boolean takeWhoosh() { boolean w = whooshPending; whooshPending = false; return w; }
     private final java.util.ArrayList<Vis> vis = new java.util.ArrayList<>();
+    private int[] builtIdx = new int[256]; private int builtN, builtScan;       // every element whose model parts exist right now, so they can be freed wherever the player has moved away from them (up or down)
     private int pruneCursor;
     private final Background bg = new Background();
     private Clouds clouds;
@@ -140,6 +141,8 @@ public final class WorldRenderer implements Disposable {
 
     private void build(int idx) {
         Vis v = vis.get(idx); Element e = v.e; v.built = true;
+        if (builtN == builtIdx.length) builtIdx = java.util.Arrays.copyOf(builtIdx, builtN * 2);
+        builtIdx[builtN++] = idx;
         Array<Part> ps = new Array<>();
         boolean snow = e.zone == 1 || e.zone == 3;
         String base = snow ? "block-snow" : "block-grass";
@@ -380,7 +383,12 @@ public final class WorldRenderer implements Disposable {
         float sh = 0;
         if (shakeT > 0 && !reducedMotion) { shakeT -= dt; sh = camShake * MathUtils.sin(time * 70f) * (shakeT / 0.25f); } else camShake = 0;
         fovV += (-90f * fovK - 11f * fovV) * dt; fovK += fovV * dt; cam.fieldOfView = 40f + (reducedMotion ? 0f : fovK);
-        for (int di = 0; di < dip.length; di++) if (dip[di] != 0 || dipV[di] != 0) { dipV[di] += (-160f * dip[di] - 12f * dipV[di]) * dt; dip[di] += dipV[di] * dt; if (Math.abs(dip[di]) < 0.002f && Math.abs(dipV[di]) < 0.02f) { dip[di] = 0; dipV[di] = 0; } }
+        for (int k = 0; k < dipN; ) {
+            int di = dipAct[k];
+            dipV[di] += (-160f * dip[di] - 12f * dipV[di]) * dt; dip[di] += dipV[di] * dt;
+            if (Math.abs(dip[di]) < 0.002f && Math.abs(dipV[di]) < 0.02f) { dip[di] = 0; dipV[di] = 0; dipOn[di] = false; dipAct[k] = dipAct[--dipN]; }
+            else k++;
+        }
         if (quality > 0 && !reducedMotion) ambientMotes(dt, zoneF, ps);
         float pullT = (!reducedMotion && sim.mode == Sim.Mode.AIR && sim.vy < -10f) ? MathUtils.clamp((-sim.vy - 10f) / 14f, 0f, 1f) * 2.4f : 0f;       // pull back in a long fall to see where you will land
         camPull += (pullT - camPull) * Math.min(1f, 3f * dt);
@@ -425,7 +433,13 @@ public final class WorldRenderer implements Disposable {
         }
         for (int k = 0, cnt = sim.hz == null ? course.hazards.size() : sim.hz.length; k < cnt; k++) { int hi2 = sim.hz == null ? k : sim.hz[k]; drawHazard(course.hazards.get(hi2), sim.time + alpha * Sim.DT, ps, time, hi2 < sim.featDone.length && sim.featDone[hi2]); }
         if (space != null && quality > 0) space.renderNear(batch, env, (inst, arc, yy, dz, sx, sy, sz, yaw) -> place(inst, arc, yy, dz, ps, sx, sy, sz, yaw), ps, camY, py, 0f, reducedMotion);
-        for (int q = 0; q < 24 && pruneCursor < lo; q++, pruneCursor++) { Vis pv = vis.get(pruneCursor); pv.parts = null; pv.built = false; }
+        // free the model parts of anything the player has left behind, above or below the simulated window (a fall or a long descent can build far more than a climb ever does); freed parts are rebuilt on demand
+        for (int q = 0, n = Math.min(builtN, 48); q < n && builtN > 0; q++) {
+            if (builtScan >= builtN) builtScan = 0;
+            int bi = builtIdx[builtScan];
+            if (bi < lo - 12 || bi > hi + 12) { Vis pv = vis.get(bi); pv.parts = null; pv.built = false; builtIdx[builtScan] = builtIdx[--builtN]; }
+            else builtScan++;
+        }
         drawFlung(dt, ps);
         if (showPlayer) drawPlayer(sim, dt, time, ps, py, alpha);
         particles.render(batch, env, ps, T, course);
@@ -848,6 +862,7 @@ public final class WorldRenderer implements Disposable {
 
     private float heroY;
     private float[] dip, dipV; private float fovK, fovV, ambientAcc;
+    private int[] dipAct = new int[64]; private int dipN; private boolean[] dipOn = new boolean[16];      // platforms whose landing spring is still moving: the per-frame update touches only these, never the whole (ever-growing) tower
     private final Color ambCol = new Color();
 
     private static final class Flung { float s, y, vx, vy, rot, age; boolean bee; }
@@ -864,7 +879,13 @@ public final class WorldRenderer implements Disposable {
     }
 
     public void heroEvents(int ev, float landSpeed) { hero.events(ev, landSpeed); }
-    public void platformLanded(int idx, float speed) { syncVis(); if (dip != null && idx >= 0 && idx < dip.length) dipV[idx] += Math.min(14f, speed) * 0.9f; }
+    public void platformLanded(int idx, float speed) {
+        syncVis();
+        if (dip == null || idx < 0 || idx >= dip.length) return;
+        dipV[idx] += Math.min(14f, speed) * 0.9f;
+        if (dipOn.length < dip.length) dipOn = java.util.Arrays.copyOf(dipOn, dip.length);
+        if (!dipOn[idx]) { dipOn[idx] = true; if (dipN == dipAct.length) dipAct = java.util.Arrays.copyOf(dipAct, dipN * 2); dipAct[dipN++] = idx; }
+    }
     public void kick(float deg) { if (!reducedMotion) fovV += deg * 14f; }
     private final com.badlogic.gdx.math.Vector3 headTmp = new com.badlogic.gdx.math.Vector3();
     public String heroBubble() { return hero.bubble(); }

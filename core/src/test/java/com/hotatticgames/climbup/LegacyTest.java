@@ -59,4 +59,41 @@ public class LegacyTest {
         Matcher m = Pattern.compile("appVersionName = '([^']+)'").matcher(new String(Files.readAllBytes(f.toPath())));
         assertTrue(m.find()); assertEquals(m.group(1), ClimbGame.VERSION);
     }
+
+    private static SaveData unstampedFrom(com.hotatticgames.climbup.sim.Course c, long seed, int slice) {
+        SaveData d = new SaveData(); d.seed = seed; d.slice = slice; d.sliceJson = com.hotatticgames.climbup.sim.CourseIO.toJson(c); d.climbVersion = ""; d.towers = 1; d.runClock = 600f;
+        return d;
+    }
+
+    @Test public void aWorkingOlderClimbCarriesOnInsteadOfBeingRetired() throws Exception {
+        com.hotatticgames.climbup.sim.Tuning t = TestUtil.tuning();
+        com.hotatticgames.climbup.sim.Course c = null; for (int k = 0; k < 4; k++) c = com.hotatticgames.climbup.sim.CourseGenerator.chunk(21, k, c, t);
+        SaveData d = unstampedFrom(c, 21, 3);
+        assertTrue("unstamped climbs are normally asked about", Legacy.needsPrompt(d, "1.1.3"));
+        assertTrue("but this one can safely carry on", Legacy.tryContinue(d, t));
+        assertFalse("so nobody is asked, and the run is untouched", Legacy.needsPrompt(d, "1.1.3"));
+        assertEquals(21L, d.seed); assertEquals(600f, d.runClock, 0f); assertEquals(0, d.legacy.size());
+        SaveData.LegacyRun none = null; assertNull(none);
+    }
+
+    @Test public void aClimbThatCannotBeExtendedStillGetsTheExplicitChoiceAndNeverThrows() throws Exception {
+        com.hotatticgames.climbup.sim.Tuning t = TestUtil.tuning();
+        String json = new String(Files.readAllBytes(new File("src/test/resources/legacy/build41_seed4_slice7_castle_end.json").toPath()), "UTF-8");   // a real slice from build 41 that ends on castle 1; extending it throws "castle approach out of range"
+        SaveData d = new SaveData(); d.seed = 4; d.slice = 7; d.sliceJson = json; d.climbVersion = ""; d.runClock = 900f;
+        boolean threw = false;
+        try { com.hotatticgames.climbup.sim.CourseGenerator.chunk(4, 8, com.hotatticgames.climbup.sim.CourseIO.fromJson(json), t); } catch (IllegalStateException e) { threw = true; assertTrue(e.getMessage(), e.getMessage().contains("castle approach out of range")); }
+        assertTrue("the stored slice really does break the current generator (this is the exception behind the crash)", threw);
+        assertFalse("so it is not continued silently", Legacy.tryContinue(d, t));
+        assertTrue("the player is asked instead", Legacy.needsPrompt(d, "1.1.3"));
+        assertEquals("and nothing was changed or lost", 900f, d.runClock, 0f);
+    }
+
+    @Test public void anOffGridCastleMarksAnOldLayout() throws Exception {
+        com.hotatticgames.climbup.sim.Tuning t = TestUtil.tuning();
+        com.hotatticgames.climbup.sim.Course c = null; for (int k = 0; k < 9; k++) c = com.hotatticgames.climbup.sim.CourseGenerator.chunk(22, k, c, t);
+        boolean moved = false;
+        for (com.hotatticgames.climbup.sim.Element h : c.hazards) if (h.type == com.hotatticgames.climbup.sim.Element.Type.GATE) { h.y += 40f; moved = true; }
+        if (!moved) return;          // this slice holds no castle: nothing to move
+        assertFalse(Legacy.tryContinue(unstampedFrom(c, 22, 8), t));
+    }
 }

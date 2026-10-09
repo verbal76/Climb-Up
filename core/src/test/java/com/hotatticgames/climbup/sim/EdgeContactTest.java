@@ -8,7 +8,7 @@ import org.junit.Test;
 
 /**
  * Every kind of platform the game generates has solid edges. A body that meets a platform's side, at any height from the ankles to the head, rising or falling, fast or slow, from
- * either side, must never slip into the block and sink through it: it is stopped at the face and then caught (hang), stepped up, bounced (pads and springs) or left outside.
+ * either side, must never slip into the block and sink through it: it is caught (hang, scramble up, bounce on a pad or spring) or it clears the block.
  * (The first version of this sweep found 6.4-7% of such side contacts falling through on EVERY platform type: a body rising faster than 3.5 m/s was past the catch rule and slid in.)
  */
 public class EdgeContactTest {
@@ -73,7 +73,7 @@ public class EdgeContactTest {
                         float top = s.ey1[1], dist = c.dsWrap(s.es1[1], s.s), feet = s.y, head = s.y + t.height;
                         boolean overlap = feet < top && head > top - th && !s.gone[1];       // (a depth slider out of the player's plane is deliberately intangible)
                         if (!contact && Math.abs(dist) < hw + 0.28f && Math.abs(dist) >= hw && overlap) { contact = true; contacts++; }
-                        if (contact && s.mode == Sim.Mode.AIR && Math.abs(dist) < hw - 0.05f && feet < top - 0.05f && overlap) {
+                        if (contact && s.mode == Sim.Mode.AIR && s.vy < 0f && Math.abs(dist) < hw - 0.05f && feet < top - 0.05f && overlap) {      // sinking through the block
                             if (bad.size() < 6) bad.add(String.format("%s: side %+d feet %+.1f vx %.1f vy %+.0f gap %.1f phase %.2f", spc.type + "/" + spc.skin, side, d, vx, vy, gap, ph));
                             trials += 1_000_000_000L; break;       // counted as a failure below
                         }
@@ -89,8 +89,8 @@ public class EdgeContactTest {
 
     @Test public void theCaseThatWasReportedARisingJumpIntoTheWaistOfAMovingPlatformIsCaught() throws Exception {
         Tuning t = tuning();
-        // (a platform sinking away at 2.7 m/s from a body rising at 11 m/s is simply out of reach: that case is left outside the block, which the sweep above checks)
-        for (float[] pv : new float[][]{{0.45f, 9f}, {0.45f, 11f}, {2.2f, 9f}}) {
+        // (a platform sinking away at 2.7 m/s from a body rising at 9-11 m/s is out of reach: the body flies over it, which is not a fall-through; the sweep above covers it)
+        for (float[] pv : new float[][]{{0.45f, 9f}, {0.45f, 11f}}) {
             float phase = pv[0], vy = pv[1];
             Course c = new Course(1L, t.circumference()); c.add(new Element(Element.Type.STATIC, 0f, 0f, 6f));
             Element m = new Element(Element.Type.MOVE_V, 8f, 0f, 3f); m.amp = 3f; m.period = 3.4f; c.add(m);

@@ -24,6 +24,7 @@ public final class Sim {
     public int lastPad = -1;
     public float coyote, jumpBuf, lockout, pullT, pullFromS, pullFromY, pullToS, pullToY;
     public int ledgeSide = 1;
+    private int sideIn = -1, sideDir = 1;      // a platform whose side the body has slipped into while rising fast (see trackSideEntry), and which side it came from
     public float ropeTopT;           // seconds the climber has pushed up against the top of a rope (a short hold mounts the beam)
     public static final float BEAM_MOUNT_TIME = 0.62f, BEAM_TOP = 0.24f, BEAM_HALF = 1.1f, ROPE_TOP_HOLD = 0.22f;
     public boolean jumpedUp;         // current ascent came from a jump (variable height cut applies)
@@ -150,7 +151,7 @@ public final class Sim {
         time = o.time; s = o.s; y = o.y; vx = o.vx; vy = o.vy; facing = o.facing; mode = o.mode; onElem = o.onElem;
         lastPad = o.lastPad; coyote = o.coyote; jumpBuf = o.jumpBuf; lockout = o.lockout; pullT = o.pullT;
         ropeTopT = o.ropeTopT; pullFromS = o.pullFromS; pullFromY = o.pullFromY; pullToS = o.pullToS; pullToY = o.pullToY;
-        ledgeSide = o.ledgeSide; jumpedUp = o.jumpedUp; prevJumpHeld = o.prevJumpHeld; lastGroundY = o.lastGroundY; floorY = o.floorY;
+        ledgeSide = o.ledgeSide; sideIn = o.sideIn; sideDir = o.sideDir; jumpedUp = o.jumpedUp; prevJumpHeld = o.prevJumpHeld; lastGroundY = o.lastGroundY; floorY = o.floorY;
         checkpoint = o.checkpoint; bestElem = o.bestElem; maxHeight = o.maxHeight; won = o.won; falls = o.falls;
         landSpeed = o.landSpeed; events = o.events; assistForgive = o.assistForgive; ps0 = o.ps0; py0 = o.py0; teleported = o.teleported;
         es0 = o.es0.clone(); ey0 = o.ey0.clone(); es1 = o.es1.clone(); ey1 = o.ey1.clone();
@@ -259,6 +260,7 @@ public final class Sim {
             Element e = course.get(j); nes0[j] = e.sAt(time - DT); nes1[j] = e.sAt(time);
             nc[j] = crumbleT[i]; ngone[j] = gone[i]; ngt[j] = goneT[i]; npq[j] = padSquash[i]; ntl[j] = tilt[i]; not[j] = onT[i];
         }
+        sideIn = sideIn >= 0 && sideIn < m.elem.length ? m.elem[sideIn] : -1;
         es0 = nes0; ey0 = ney0; es1 = nes1; ey1 = ney1; crumbleT = nc; gone = ngone; goneT = ngt; padSquash = npq; tilt = ntl; onT = not;
         boolean[] nf = new boolean[Math.max(m.newH, 1) + 8];
         for (int i = 0; i < m.haz.length && i < featDone.length; i++) { int j = m.haz[i]; if (j >= 0) nf[j] = featDone[i]; }
@@ -326,6 +328,7 @@ public final class Sim {
             }
         }
 
+        if (mode != Mode.AIR) sideIn = -1;
         if (in.jumpPressed) jumpBuf = T.jumpBuffer + assistForgive; else jumpBuf = Math.max(0, jumpBuf - dt);
         if (lockout > 0) lockout = Math.max(0, lockout - dt);
 
@@ -519,8 +522,7 @@ public final class Sim {
         float py = y, ps = s;
         // previous feet height relative to previous platform tops handled per element
         s += vx * dt; y += vy * dt;
-        boolean stopped = stopAtEdges();
-        if (stopped && lockout <= 0 && tryGrab(in)) return;          // a body held at a platform's side is caught (hang / step up / bounce) before it can settle back on the platform it just left
+        trackSideEntry();
         // landing
         int best = -1; float bestTop = -1e9f;
         for (int k1 = 0, cnt1 = act == null ? course.size() : act.length; k1 < cnt1; k1++) {
@@ -537,38 +539,41 @@ public final class Sim {
             }
         }
         if (best >= 0) { land(best, in); return; }
+        if (sideIn >= 0 && catchInside(in)) return;
         if (lockout <= 0) { if (tryGrab(in)) return; }
     }
 
-    /** Distance from a platform's centre line at which a body stops against its side: the body's own half width, so the hands reach the face. */
-    private static final float EDGE_STOP = 0.2f;
-
     /**
-     * Edges: the side of a platform is not a doorway. A body that would cross a platform's side face into its footprint while its feet are below the top and its head is above the
-     * underside is stopped at the face (a moving platform pushes it along). From there the grab rules catch it (hang when the hands reach the top, scramble up when the top is between
-     * the feet and the head, bounce on a pad), or it slides down the face. Without this, a fast rising body slipped into the block (the catch is off above 3.5 m/s) and sank through it.
-     * Landing from above and jumping up through the underside are unchanged: neither crosses a side face.
+     * Edges. The grab rules are off while the body rises faster than 3.5 m/s (so a leap past a ledge is not snatched), and a platform's side is not solid, so a fast jump into the side of a block
+     * can slip inside it. Such a body is remembered here; {@link #catchInside} then catches it the moment it slows, instead of letting it sink through the block. Nothing about the flight itself
+     * changes (it may still pass through the block, or clear its top and land on it), so existing routes behave exactly as before; only a body that would otherwise fall through is caught.
      */
-    static final int EDGE_MODE = Integer.getInteger("climb.edge", 1);          // TEMP experiment: 0 off, 1 every side entry, 2 only while rising faster than the catch allows
-    private boolean stopAtEdges() {
-        boolean stopped = false;
-        if (EDGE_MODE == 0 || (EDGE_MODE == 2 && vy <= 3.5f)) return false;
+    private void trackSideEntry() {
         for (int k = 0, cnt = act == null ? course.size() : act.length; k < cnt; k++) {
             int i = act == null ? k : act[k];
             Element el = course.get(i);
             if (!el.isPlatform() || gone[i]) continue;
-            float top = ey1[i];
-            if (y >= top - 0.05f || y + T.height <= top - el.slab() + 0.05f) continue;       // feet above the top (lands) or head below the underside (passes under)
-            float hw = el.halfW(), stop = hw + EDGE_STOP;
+            float top = ey1[i], hw = el.halfW();
+            if (y >= top + sideSlack(el) || y + T.height <= top - el.slab() + 0.05f) continue;       // feet above the top (it lands) or head below the underside (it passes under)
             float dPrev = course.dsWrap(es0[i], ps0), dNow = course.dsWrap(es1[i], s);
-            float aPrev = Math.abs(dPrev), aNow = Math.abs(dNow);
-            if (aPrev < hw - 0.0001f || aNow >= stop || aNow > aPrev + 0.0001f) continue;     // was already inside, or is not coming in
-            float side = dPrev > 0 ? 1f : -1f;                                                   // + : the platform is ahead (+s)
-            s = course.wrap(es1[i] - side * stop);
-            if (vx * side > 0f) vx = 0f;
-            stopped = true;
+            if (Math.abs(dPrev) >= hw && Math.abs(dNow) < hw) { sideIn = i; sideDir = dPrev > 0 ? 1 : -1; }      // + : the platform is ahead (+s)
         }
-        return stopped;
+    }
+
+    /** A flat top is either above the feet (the body lands) or below them; the surface of a ramp or seesaw rises or falls with the body's own position, so a body just above it at the face can end up below it. */
+    private static float sideSlack(Element el) { return el.type == Element.Type.RAMP || el.type == Element.Type.SEESAW ? 0.5f : -0.05f; }
+
+    private boolean catchInside(InputState in) {
+        int i = sideIn; Element el = course.get(i);
+        float top = ey1[i], hw = el.halfW();
+        if (gone[i] || Math.abs(course.dsWrap(es1[i], s)) > hw + 0.28f || y >= top + sideSlack(el) || y + T.height <= top - el.slab()) { sideIn = -1; return false; }   // it left the block, or its feet cleared the top
+        if (y >= top - 0.05f) return false;                                                 // feet at the surface (a slope can still rise past them): nothing to catch yet
+        if (vy > 3.5f) return false;                                                        // still shooting up: wait for it to slow
+        if (y + T.handHeight < top - T.ledgeReachBelow) { sideIn = -1; return false; }      // hands still too far below the top to reach it
+        sideIn = -1;
+        if (el.type == Element.Type.PAD || el.type == Element.Type.SPRING) { y = top; land(i, in); return true; }
+        ledgeSide = sideDir; onElem = i; mode = Mode.PULLUP; pullT = 0; pullFromS = s; pullFromY = y; vx = vy = 0; facing = sideDir; events |= EV_GRAB | EV_PULL;
+        return true;
     }
 
     private void land(int i, InputState in) {
@@ -728,7 +733,8 @@ public final class Sim {
         pullT += dt;
         float k = Math.min(1f, pullT / T.pullUpTime);
         float fromS = pullFromS;       // where the pull began (the hang spot for a ledge grab, or the player's own position for a step-up)
-        float toS = fromS + course.dsWrap(es1[i] - ledgeSide * (el.halfW() - 0.35f), fromS);   // short way round the ring
+        float want = fromS + course.dsWrap(es1[i] - ledgeSide * (el.halfW() - 0.35f), fromS);   // short way round the ring
+        float toS = ledgeSide * (want - fromS) < 0f ? fromS : want;      // a body that slipped in from the side is already further inside than that spot: it is lifted straight up
         // easing: up first, then forward
         float up = Math.min(1f, k * 1.6f), fw = Math.max(0f, (k - 0.45f) / 0.55f);
         y = pullFromY + (ey1[i] - pullFromY) * up;

@@ -7,23 +7,25 @@ import com.badlogic.gdx.ScreenAdapter;
 import com.badlogic.gdx.graphics.GL20;
 import com.hotatticgames.climbup.ui.Ui;
 
-/** Credits and licenses (all external assets are CC0 or Apache-2.0; see ASSETS.md and assets/licenses). */
+/** Credits and licenses (every outside creator is credited, whether or not the licence requires it; see ASSETS.md and assets/licenses). */
 public final class CreditsScreen extends ScreenAdapter {
     private final ClimbGame g; private final Screen back;
     private static final String[] LINES = {
         "CLIMB UP  -  HOT ATTIC GAMES",
         "",
-        "STUDIO LOGO: HOT ATTIC GAMES (OWNER SUPPLIED)",
-        "HERO AND HAZARDS: ULTIMATE PLATFORMER PACK BY QUATERNIUS (CC0)",
-        "ASTRONAUTS, RAMP, PLANETS, ROCKS, SPACESHIPS: ULTIMATE SPACE KIT BY QUATERNIUS (CC0)",
-        "BLOCKS AND PROPS: KENNEY PLATFORMER KIT 3.0 (CC0) - KENNEY.NL",
+        "GAME DESIGN: KEVIN, WITH HIS OWN GAME DESIGNER SOFTWARE",
+        "STUDIO LOGO: HOT ATTIC GAMES",
+        "HERO, HAZARDS, CRAB, BEE: ULTIMATE PLATFORMER PACK BY QUATERNIUS (CC0)",
+        "ASTRONAUTS, RAMP, PLANETS, ROCKS, SHIPS: ULTIMATE SPACE KIT BY QUATERNIUS (CC0)",
+        "BLOCKS AND PROPS: KENNEY PLATFORMER KIT 3.0 BY KENNEY - KENNEY.NL (CC0)",
+        "SOUND EFFECTS: RETRO ACTION PLATFORMER SFX BY JEAGERONI (ITCH.IO)",
+        "MUSIC: GAMEPLAY TRACKS MADE WITH SUNO",
+        "APP ICON ROBOT: FOOZLE, ART BY MAYAKHAN95 (CC0)",
+        "HAMSTER HERO AND FALLING SOUND: SUPPLIED BY THE OWNER",
         "ENGINE: LIBGDX (APACHE-2.0)",
-        "GAMEPLAY MUSIC (4 TRACKS): MADE WITH SUNO. HAMSTER CHARACTER: SUPPLIED BY THE OWNER",
-        "RETRO PLATFORMER SOUND EFFECTS: JEAGERONI (ITCH.IO)",
-        "MENU MUSIC, SOUND EFFECTS, FONT, TITLE ART, ROPES, CABLES, PADS:",
-        "ORIGINAL, GENERATED IN CODE FOR THIS GAME",
+        "MENU MUSIC, FONT, TITLE ART, ROPES, CABLES, PADS: ORIGINAL, MADE IN CODE",
         "",
-        "FULL LICENSE TEXTS ARE SHIPPED IN ASSETS/LICENSES",
+        "THANK YOU TO EVERY CREATOR. LICENSE TEXTS: ASSETS/LICENSES",
     };
     public CreditsScreen(ClimbGame g, Screen back) { this.g = g; this.back = back; }
     @Override public void show() { Gdx.input.setInputProcessor(new InputMultiplexer(g.ui)); }

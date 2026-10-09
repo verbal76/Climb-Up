@@ -21,6 +21,9 @@ public class TowerStreamingTest {
         for (int i = 0; i < steps; i++) { s.step(in); s.consumeEvents(); }
     }
 
+    /** A rebuild changes nothing for a tower that is entirely resident; its driver is told so, and re-plans from the same state at the same moment as the streaming one's. */
+    private static Tower.Remap identity(Sim s) { Tower.Remap id = new Tower.Remap(); id.elem = new int[s.course.size()]; for (int k = 0; k < id.elem.length; k++) id.elem[k] = k; return id; }
+
     private static List<byte[]> history(Tower tw) { List<byte[]> h = new ArrayList<>(); for (int k = 0; k < tw.sliceCount(); k++) h.add(tw.blob(k)); return h; }
 
     @Test public void aTowerRebuiltFromItsStoredHistoryIsTheSameTowerAndGrowsTheSameWay() throws Exception {
@@ -161,5 +164,54 @@ public class TowerStreamingTest {
         if (g2 >= 0) assertTrue("castle 1 is still open", s.featDone[g2]);
         if (k2 >= 0) assertTrue("the taken key is still taken", s.featDone[k2]);
         assertTrue("both were resident again", g2 >= 0 || k2 >= 0);
+    }
+
+    /** The same autopilot climbs a streaming tower (window around the player, rebuilt over and over with different origins) and a tower that is entirely resident: step for step they must be in the same place. */
+    @Test public void anAutopilotClimbsTheStreamingTowerExactlyLikeAWholeTowerThroughManyOriginShifts() throws Exception {
+        Tuning t = TestUtil.tuning();
+        final double TOL = 2e-3;
+        Tower a = new Tower(12, t), b = new Tower(12, t);
+        Sim sa = managed(a, t, 0), sb = managed(b, t, 0); sb.floorOverride = b.floorLocal();
+        InputState ia = new InputState(), ib = new InputState(); int[] za = {a.world.size()}, zb = {b.world.size()};
+        Autopilot.Driver da = new Autopilot.Driver(sa), db = new Autopilot.Driver(sb);
+        int flipStep = -1, lastLink = da.link(), boundaries = 0, explicit = 0, seenA = a.rebuilds, seenB = b.rebuilds; double maxAbs = 0, worst = 0; float maxLocalY = 0; int maxRes = 0;
+        for (int step = 0; step < 60 * 60 * 12 && !da.failed && !db.failed; step++) {
+            if (step % 6 == 0) {
+                while (a.topAbsY() < maxAbs + 150) a.extend();             // synchronous: a test runs far faster than real time
+                while (b.topAbsY() < maxAbs + 150) b.extend();
+                a.maintain(sa); b.maintain(sb);
+                if (a.rebuilds != seenA || b.rebuilds != seenB) {
+                    da.rebase(a.rebuilds != seenA ? a.lastRemap : identity(sa)); db.rebase(b.rebuilds != seenB ? b.lastRemap : identity(sb));
+                    seenA = a.rebuilds; seenB = b.rebuilds;
+                }
+                if (a.world.size() != za[0]) { sa.setRange(0, a.world.size() - 1); za[0] = a.world.size(); }
+                if (b.world.size() != zb[0]) { sb.setRange(0, b.world.size() - 1); zb[0] = b.world.size(); }
+            }
+            boolean preSame = Math.abs(a.absY(sa.y) - b.absY(sb.y)) < 1e-4 && Math.abs(a.world.dsWrap(sa.s, sb.s)) < 1e-4 && sa.vx == sb.vx && sa.vy == sb.vy;
+            da.drive(sa, ia); sa.step(ia); sa.consumeEvents();
+            db.drive(sb, ib); sb.step(ib); sb.consumeEvents();
+            if (preSame && (Math.abs(ia.moveX - ib.moveX) > 1e-6 || ia.jumpPressed != ib.jumpPressed || ia.jumpHeld != ib.jumpHeld || ia.moveY != ib.moveY)) { flipStep = step; break; }
+            double ya = a.absY(sa.y), yb = b.absY(sb.y), ds = Math.abs(a.world.dsWrap(sa.s, sb.s));
+            worst = Math.max(worst, Math.max(Math.abs(ya - yb), ds));
+            if (Math.abs(ya - yb) > TOL || ds > TOL || (sa.mode != sb.mode && step > 0 && Math.abs(ya - yb) > TOL))
+                fail("step " + step + " link " + da.link() + "/" + db.link() + " onElem " + sa.onElem + "/" + sb.onElem + (sa.onElem >= 0 ? " " + sa.course.get(sa.onElem).type + " ref " + a.refOf(sa.onElem).slice + "/" + a.refOf(sa.onElem).local : "") + (sb.onElem >= 0 ? " | " + sb.course.get(sb.onElem).type + " ref " + b.refOf(sb.onElem).slice + "/" + b.refOf(sb.onElem).local : "") + " vx " + sa.vx + "/" + sb.vx + " vy " + sa.vy + "/" + sb.vy + " time " + sa.time + "/" + sb.time + " lastPad " + sa.lastPad + "/" + sb.lastPad + ": streaming " + ya + "/" + sa.s + " " + sa.mode + " vs whole " + yb + "/" + sb.s + " " + sb.mode + " after " + a.rebuilds + " rebuilds");
+            maxAbs = Math.max(maxAbs, ya); maxLocalY = Math.max(maxLocalY, Math.abs(sa.y)); maxRes = Math.max(maxRes, a.res.size());
+            if (da.link() != lastLink) {                                   // a link boundary: rebuild the streaming tower around a new origin, and let both drivers plan afresh from the same state
+                lastLink = da.link(); boundaries++;
+                if (boundaries % 3 == 0) {
+                    int ps = a.sliceAt(ya), below = 1 + boundaries % 3, above = 1 + boundaries % 2;
+                    a.rebuildExplicit(sa, Math.max(0, ps - below), Math.min(a.sliceCount() - 1, ps + above), (boundaries / 3 % 4) * 500.0);
+                    seenA = a.rebuilds; za[0] = a.world.size(); sa.setRange(0, a.world.size() - 1); da.rebase(a.lastRemap); explicit++;
+                    lastLink = da.link();
+                    db.rebase(identity(sb));
+                }
+            }
+        }
+        System.out.printf("streaming vs whole: %.0f m climbed, %d link boundaries, %d forced rebuilds (%d total), worst divergence %.2e m, first controller decision flip at step %d, resident slices <= %d, largest local height %.0f m%n", maxAbs, boundaries, explicit, a.rebuilds, worst, flipStep, maxRes, maxLocalY);
+        // the autopilot is a bang-bang controller: when two worlds differ by ~1e-5 m (float rounding in different local frames) it may eventually take a decision one step apart, and the runs then part legitimately. Until then they must agree to 2 mm.
+        assertTrue("agreed for a long climb (decision flip at step " + flipStep + ")", flipStep < 0 || flipStep > 6000);
+        assertTrue("climbed " + maxAbs, maxAbs >= 120);
+        assertTrue("many origin shifts happened (" + explicit + ")", explicit >= 15);
+        assertTrue(maxLocalY < 1600f);
     }
 }

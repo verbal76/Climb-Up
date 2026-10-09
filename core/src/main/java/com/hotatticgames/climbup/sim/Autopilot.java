@@ -613,6 +613,8 @@ public final class Autopilot {
         private final Policy pull = new PullPolicy();
         public Driver(Sim s) { a = Math.max(0, s.onElem); fallsSeen = s.setbacks(); }
         public int link() { return a; }
+        /** The world was rebuilt around the player (floating origin / window change): carry the link over to the new element numbering and re-plan from the current state. */
+        public void rebase(Tower.Remap m) { if (a >= 0 && a < m.elem.length && m.elem[a] >= 0) a = m.elem[a]; else a = Math.max(0, a); p = null; settling = false; }
 
         public void drive(Sim s, InputState in) {
             in.clear();

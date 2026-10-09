@@ -484,7 +484,7 @@ public final class PlayScreen extends ScreenAdapter {
             switch (e.type) {
                 case PAD: key = "pad"; break; case ROPE: key = "rope"; break; case CRUMBLE: key = "crumble"; break;
                 case MOVE_H: case MOVE_V: key = "move"; break; case CABLE: key = "cable"; break; case SWING: key = "swing"; break; case SPRING: key = "spring"; break; case SEESAW: key = "seesaw"; break; case RAMP: key = e.skin == 1 ? "rampcrumble" : e.skin == 2 ? "rampshake" : e.skin == 3 ? "rampsink" : "ramp"; break;
-                default: if (e.checkpoint && i > 0) key = "checkpoint";
+                default: if (course.isCheckpoint(e) && i > 0) key = "checkpoint";
             }
             if (key == null && i == 1) key = "jump";
             if (key == null) continue;

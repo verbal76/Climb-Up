@@ -427,7 +427,7 @@ public final class Sim {
             return;
         }
         // checkpoint / win
-        if (el.checkpoint && e > checkpoint) { checkpoint = e; events |= EV_CHECKPOINT; }
+        if (course.isCheckpoint(el) && e > checkpoint) { checkpoint = e; events |= EV_CHECKPOINT; }
         if (el.type == Element.Type.GOAL && !won) { won = true; events |= EV_WIN; }
         progress(e);
     }
@@ -484,7 +484,7 @@ public final class Sim {
         }
         vy = 0; mode = Mode.GROUND; onElem = i; jumpedUp = false; coyote = T.coyote + assistForgive;
         events |= EV_LAND;
-        if (el.checkpoint && i > checkpoint) { checkpoint = i; events |= EV_CHECKPOINT; }
+        if (course.isCheckpoint(el) && i > checkpoint) { checkpoint = i; events |= EV_CHECKPOINT; }
         if (el.crumbles() && crumbleT[i] < 0) crumbleT[i] = 0;
         if (el.type == Element.Type.GOAL && !won) { won = true; events |= EV_WIN; }
         progress(i);
@@ -633,7 +633,7 @@ public final class Sim {
         s = course.wrap(fromS + (toS - fromS) * fw);
         if (k >= 1f) {
             s = course.wrap(toS); y = ey1[i]; vx = vy = 0; mode = Mode.GROUND; onElem = i; coyote = T.coyote;
-            if (el.checkpoint && i > checkpoint) { checkpoint = i; events |= EV_CHECKPOINT; }
+            if (course.isCheckpoint(el) && i > checkpoint) { checkpoint = i; events |= EV_CHECKPOINT; }
             if (el.crumbles() && crumbleT[i] < 0) crumbleT[i] = 0;
             if (el.type == Element.Type.GOAL && !won) { won = true; events |= EV_WIN; }
             progress(i);

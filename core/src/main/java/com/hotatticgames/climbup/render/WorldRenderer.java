@@ -500,7 +500,7 @@ public final class WorldRenderer implements Disposable {
             batch.render(p.inst, env);
         }
         if (e.type == Element.Type.MOVE_Z) drawDepthRail(e, es, ey, camS, sim.time);
-        if (e.checkpoint && i > 0 && e.type == Element.Type.STATIC) drawGem(sim, i, es, ey, camS, time);
+        if (course.isCheckpoint(e) && i > 0 && e.type == Element.Type.STATIC) drawGem(sim, i, es, ey, camS, time);
         if (e.type == Element.Type.SWING) drawSwingRopes(e, es, ey, camS);
         if (e.type == Element.Type.MOVE_V) drawRail(e, camS, true);
         if (e.type == Element.Type.MOVE_H) drawRail(e, camS, false);

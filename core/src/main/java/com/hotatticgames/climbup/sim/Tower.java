@@ -37,7 +37,7 @@ public final class Tower {
     /** Resumes at slice {@code index}; {@code data} is that slice exactly as it was generated (null = generate from the bottom). */
     public Tower(long seed, Tuning t, int index, Course data) {
         this.seed = seed; this.T = t;
-        world = new Course(seed, t.circumference());
+        world = new Course(seed, t.circumference()); world.gemCheckpoints = t.castleSpacing > 0f;
         if (data == null) {
             if (index != 0) throw new IllegalArgumentException("slice data required to resume");
             data = CourseGenerator.chunk(seed, 0, null, t);

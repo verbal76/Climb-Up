@@ -126,10 +126,13 @@ public final class CourseGenerator {
             rests = prev.get(rs - 1).zone * 3 + rs;   // keeps the checkpoint cadence varied between slices
         }
         float startY = c.get(ctx - 1).y;
-        castleTarget = 0f; castleDone = false;
-        if (T.castleSpacing > 0f) {          // the castles stand at exact, equal heights (spacing, 2 x spacing ...): the slice that starts within 80 m below one builds it
+        castleTarget = 0f; castleDone = false; exactCastle = false;
+        if (T.castleSpacing > 0f) {          // exact heights: the castles at spacing x N, and ONE red-gem checkpoint halfway between every two castles (and between the start and castle 1)
             int mc = (int) Math.floor((startY + 80f) / T.castleSpacing);
-            if (mc >= 1 && mc * T.castleSpacing > startY) castleTarget = mc * T.castleSpacing;
+            float half = T.castleSpacing * 0.5f;
+            int mg = (int) Math.floor((startY + 80f - half) / T.castleSpacing);
+            if (mc >= 1 && mc * T.castleSpacing > startY) { castleTarget = mc * T.castleSpacing; exactCastle = true; }
+            else if (mg >= 0 && half + mg * T.castleSpacing > startY) { castleTarget = half + mg * T.castleSpacing; exactCastle = false; }
         }
         extend(startY + T.chunkHeight);
         addRest(theme(c.get(c.size() - 1).y));
@@ -144,7 +147,7 @@ public final class CourseGenerator {
         float lastY = c.get(ctx - 1).y;
         for (int i = ctx; i < c.size() - 1; i++) {
             Element e = c.get(i);
-            if (!e.checkpoint) continue;
+            if (!e.checkpoint || e.skin == 3) continue;          // (the halfway gem platform always stays)
             if (e.y - lastY < 0.45f * T.gemSpacing) e.checkpoint = false; else lastY = e.y;
         }
     }
@@ -184,7 +187,7 @@ public final class CourseGenerator {
             float d = diff(last.y);
             int zone = tier(last.y), th = theme(last.y);
             boolean castlePending = castleTarget > 0f && !castleDone;
-            if (castlePending && last.y >= castleTarget - 6f) { buildExactCastle(th); castleDone = true; lastRestY = c.get(c.size() - 1).y; continue; }
+            if (castlePending && last.y >= castleTarget - 6f) { if (exactCastle) buildExactCastle(th); else buildExactGem(th); castleDone = true; lastRestY = c.get(c.size() - 1).y; continue; }
             if (last.y - lastRestY >= nextGap && targetY - last.y > 0.4f * T.gemSpacing && !(castlePending && last.y > castleTarget - 14f)) {      // (not right before the slice's own closing rest)
                 addRest(th); sinceRest = 0; lastRestY = c.get(c.size() - 1).y; nextGap = T.gemSpacing * r(0.85f, 1.15f); maybeCastle(th); continue;
             }
@@ -219,7 +222,7 @@ public final class CourseGenerator {
         tryCastle(th);
     }
 
-    private float castleTarget; private boolean castleDone;
+    private float castleTarget; private boolean castleDone, exactCastle;      // the next exact-height structure of this slice: a castle, or the halfway red-gem platform
 
     /** A module that must not carry the climb past the castle's approach window (keeps the last platform at least 1.6 m below the castle deck). */
     private boolean tryModuleBelow(Kind k, float d, int zone) {
@@ -258,6 +261,28 @@ public final class CourseGenerator {
             return;
         }
         throw new IllegalStateException("castle " + number + " could not be placed");
+    }
+
+    /** The red-gem checkpoint halfway between two castles: a wide rest platform at EXACTLY castleTarget (reached by a short staircase of small steps), marked as the gem platform (skin 3). */
+    private void buildExactGem(int th) {
+        addRest(th);
+        int rIdx = c.size() - 1; Element u = c.get(rIdx);
+        float R = castleTarget - u.y;
+        if (R < 0.05f || R > 7.5f) throw new IllegalStateException("gem approach out of range R=" + R);
+        float d = diff(u.y);
+        for (int attempt = 0; attempt < 10; attempt++) {
+            int k = Math.max(1, (int) Math.ceil(R / 0.7f)); float step = R / k;
+            List<Element> l = new ArrayList<>(); Element pv = u;
+            for (int i = 1; i < k; i++) {
+                float w = 3.0f, gap = reach(step) * lerp(0.45f, 0.7f, d) * (1f - 0.04f * attempt);
+                Element e = plat(Element.Type.STATIC, pv.s + pv.w / 2f + gap + w / 2f, u.y + step * i, w, th); l.add(e); pv = e;
+            }
+            float gapG = reach(step) * lerp(0.5f, 0.75f, d) * (1f - 0.04f * attempt), wG = 6f;
+            Element gem = plat(Element.Type.STATIC, pv.s + pv.w / 2f + gapG + wG / 2f, castleTarget, wG, th);
+            gem.skin = 3; gem.checkpoint = true; l.add(gem);
+            if (commit(l, T.minLinkMargin)) return;
+        }
+        throw new IllegalStateException("gem platform at " + castleTarget + " could not be placed");
     }
 
     private boolean tryCastle(int th) {

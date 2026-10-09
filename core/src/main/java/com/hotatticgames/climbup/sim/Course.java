@@ -11,6 +11,10 @@ public final class Course {
     /** Environmental hazards (saws, cannons, spike traps...). Kept apart from the route so the route stays a simple ascending chain; each is anchored to a route element. */
     public final List<Element> hazards = new ArrayList<>();
 
+    /** Endless climb: only the gem platforms (STATIC skin 3, halfway between castles) are checkpoints; the other 'checkpoint' flags merely mark rest platforms for the generator. */
+    public boolean gemCheckpoints;
+    public boolean isCheckpoint(Element e) { return e.checkpoint && (!gemCheckpoints || (e.type == Element.Type.STATIC && e.skin == 3)); }
+
     public Course(long seed, float circumference) { this.seed = seed; this.circumference = circumference; }
 
     /** Elements [0, routeCount) are the solvable route; anything after is decoy scenery (dead ends, lures), sorted by anchor. */

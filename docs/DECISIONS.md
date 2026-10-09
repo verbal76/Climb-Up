@@ -104,3 +104,7 @@
 - Falling: the fall floor is the lowest platform of the WHOLE map; the simulated window follows a falling player down so every platform below can still catch him. Only falling past all of it (or a hazard) sends him back to the last red-gem checkpoint.
 - New traversal: depth movers (MOVE_Z: slide toward/away from the camera, landable only while in your plane, carry you), crumbling sliders/elevators (skin=1, 1.6 s hold), swing super-jump (jump at the top of the arc: +5.5 vy, +3.5 outward vx; tuning `swingSuper*`). Movers and swings now also appear in the first world.
 - Rope grip: arms cross in front of the chest with hands on the rope.
+
+## Audio provenance (owner statement, 2026-10-09)
+- Gameplay music was generated with Suno (owner's account); the game itself was specified with the owner's own Game Designer software. Suno ownership/commercial rights depend on the owner's Suno plan: fine for a private family playtest, to be re-checked before any wider release.
+- Sound effects: jeageroni "FREE Retro Action Platformer Sound Effects (56 SFX)": commercial and non-commercial use, no attribution required, but "do not redistribute or resell the files as standalone assets". They ship inside the APK and the repo is public, so the raw .ogg files are visible there. Options if that matters: make the repo private (the OTA channel only needs public release assets), or drop the raw files from the repo and keep them only in the build. Not changed; owner to decide. Credits now name jeageroni and Suno.

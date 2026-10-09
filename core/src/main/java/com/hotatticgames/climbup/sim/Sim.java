@@ -519,6 +519,7 @@ public final class Sim {
         float py = y, ps = s;
         // previous feet height relative to previous platform tops handled per element
         s += vx * dt; y += vy * dt;
+        stopAtEdges();
         // landing
         int best = -1; float bestTop = -1e9f;
         for (int k1 = 0, cnt1 = act == null ? course.size() : act.length; k1 < cnt1; k1++) {
@@ -536,6 +537,32 @@ public final class Sim {
         }
         if (best >= 0) { land(best, in); return; }
         if (lockout <= 0) { if (tryGrab(in)) return; }
+    }
+
+    /** Distance from a platform's centre line at which a body stops against its side: the body's own half width, so the hands reach the face. */
+    private static final float EDGE_STOP = 0.2f;
+
+    /**
+     * Edges: the side of a platform is not a doorway. A body that would cross a platform's side face into its footprint while its feet are below the top and its head is above the
+     * underside is stopped at the face (a moving platform pushes it along). From there the grab rules catch it (hang when the hands reach the top, scramble up when the top is between
+     * the feet and the head, bounce on a pad), or it slides down the face. Without this, a fast rising body slipped into the block (the catch is off above 3.5 m/s) and sank through it.
+     * Landing from above and jumping up through the underside are unchanged: neither crosses a side face.
+     */
+    private void stopAtEdges() {
+        for (int k = 0, cnt = act == null ? course.size() : act.length; k < cnt; k++) {
+            int i = act == null ? k : act[k];
+            Element el = course.get(i);
+            if (!el.isPlatform() || gone[i]) continue;
+            float top = ey1[i];
+            if (y >= top - 0.05f || y + T.height <= top - el.slab() + 0.05f) continue;       // feet above the top (lands) or head below the underside (passes under)
+            float hw = el.halfW(), stop = hw + EDGE_STOP;
+            float dPrev = course.dsWrap(es0[i], ps0), dNow = course.dsWrap(es1[i], s);
+            float aPrev = Math.abs(dPrev), aNow = Math.abs(dNow);
+            if (aPrev < hw - 0.0001f || aNow >= stop || aNow > aPrev + 0.0001f) continue;     // was already inside, or is not coming in
+            float side = dPrev > 0 ? 1f : -1f;                                                   // + : the platform is ahead (+s)
+            s = course.wrap(es1[i] - side * stop);
+            if (vx * side > 0f) vx = 0f;
+        }
     }
 
     private void land(int i, InputState in) {

@@ -1,0 +1,13 @@
+plugins { id 'java-library' }
+tasks.withType(JavaCompile).configureEach { options.release = 17; options.encoding = 'UTF-8' }
+dependencies {
+    api project(':modspi')
+    testImplementation 'junit:junit:4.13.2'
+}
+evaluationDependsOn(':modsynthetic')
+test {
+    dependsOn ':modsynthetic:jar'
+    systemProperty 'synthetic.jar', project(':modsynthetic').jar.archiveFile.get().asFile.absolutePath
+    testLogging { events 'passed', 'failed', 'skipped'; exceptionFormat 'full' }
+    maxHeapSize = '512m'
+}

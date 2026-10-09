@@ -1,0 +1,4 @@
+plugins { id 'java-library' }
+tasks.withType(JavaCompile).configureEach { options.release = 17; options.encoding = 'UTF-8' }
+// The interface is owned by the HOST. Game modules compile against it (compileOnly) and never ship it.
+dependencies { api "com.badlogicgames.gdx:gdx:$gdxVersion" }

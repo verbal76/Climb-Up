@@ -1,0 +1,4 @@
+plugins { id 'java-library' }
+tasks.withType(JavaCompile).configureEach { options.release = 17; options.encoding = 'UTF-8' }
+// Synthetic proof module: compiles against the SPI and gdx but must not contain either (the host owns both).
+dependencies { compileOnly project(':modspi'); compileOnly "com.badlogicgames.gdx:gdx:$gdxVersion" }

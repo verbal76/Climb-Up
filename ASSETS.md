@@ -52,3 +52,5 @@ Gaps filled with original/procedural work (no external download was needed): aud
 - Date logged: 2026-10-08.
 | `assets/space/*.g3dj` (ramp, rocks, planets, spaceships, astronauts) | converted from the owner-supplied Quaternius Ultimate Space Kit glTFs by `tools/space_kit_to_g3dj.py` (palette atlas baked to vertex colours) | Quaternius | CC0 1.0 (pack page shows CC0; see section above) | 2026-10-08 |
 | `assets/audio/pack/fall.ogg` (the falling sound) | owner-supplied `____.wav` (3.2 s), converted to mono OGG | the owner (designed by Kevin, generated with Suno) | owner's own creation; Suno plan terms apply (see docs/DECISIONS.md) | 2026-10-08 |
+
+| `assets/pack/tower_door.g3dj` | derived from the Quaternius castle tower (`tower.g3dj`) by `tools/make_tower_door.py`: the arched stone frame and the door leaf cut out as their own model, used as the castle's second door | Quaternius | CC0 1.0 | 2026-10-09 |

@@ -13,11 +13,10 @@ public class GemCheckpointTest {
             Course prev = null; float y = 0; int k = 0; java.util.List<Float> gems = new java.util.ArrayList<>();
             while (y < 2700f) {
                 Course c = CourseGenerator.chunk(seed, k++, prev, t); prev = c; y = c.get(c.routeSize() - 1).y;
-                for (int i = 1; i < c.routeSize(); i++) { Element e = c.get(i); if (e.type == Element.Type.STATIC && e.skin == 3) { assertTrue("a gem sits on a wide platform", e.w >= 5f); assertTrue(e.checkpoint); gems.add(e.y); } }
+                for (int i = 1; i < c.routeSize(); i++) { Element e = c.get(i); if (e.type == Element.Type.STATIC && e.skin == 3) { assertTrue("a gem sits on a wide platform", e.w >= 3.5f); assertTrue(e.checkpoint); gems.add(e.y); } }
             }
             assertTrue("gems for the first five sections (" + gems + ")", gems.size() >= 5);
-            for (int j = 0; j < 5; j++) assertEquals("gem " + (j + 1) + " (seed " + seed + ")", 250f + 500f * j, gems.get(j), 1e-3f);
-            for (int j = 0; j < gems.size(); j++) assertEquals("only one per section", 250f + 500f * j, gems.get(j), 1e-3f);
+            for (int j = 0; j < gems.size(); j++) assertEquals("one per section, on the platform nearest the midpoint: gem " + (j + 1) + " (seed " + seed + ")", 250f + 500f * j, gems.get(j), 6f);
         }
     }
 

@@ -57,7 +57,7 @@ public final class Tower {
         }
         int hz0 = world.hazards.size();
         for (Element h : d.hazards) { Element e = copy(h, -1); e.anchor = sl.toWorld(h.anchor); world.hazards.add(e); }
-        for (int[] k : d.keyRooms) world.keyRooms.add(new int[]{sl.toWorld(k[0]), sl.toWorld(k[1]), k[2], k[3], hz0 + k[4], hz0 + k[5]});
+        for (int[] k : d.keyRooms) world.keyRooms.add(new int[]{sl.toWorld(k[0]), k[1] < 0 ? -1 : sl.toWorld(k[1]), k[2], k[3], hz0 + k[4], k[5] < 0 ? -1 : hz0 + k[5]});
         int last = sl.toWorld(d.routeSize() - 1);
         Slice done = new Slice(index, d, sl.base, first, last);
         slices.add(done);

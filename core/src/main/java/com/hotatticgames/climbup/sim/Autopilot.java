@@ -364,10 +364,10 @@ public final class Autopilot {
         return true;
     }
 
-    /** Fetches the key of a key room and comes back to the anchor platform. */
+    /** Fetches a key and comes back to the anchor platform. kr = {anchor, first branch platform, count, mode, key hazard, gate hazard}; mode 0: chain of platforms, 1: legacy room with a pad back up, 2: the key lies on the anchor platform itself, 3: pad then a perch above. */
     static String why = "";
     static boolean detour(Sim real, int[] kr, InputState in) {
-        Course c = real.course; int r = kr[0], k = kr[1], pIdx = k + 1; boolean pad = kr[3] == 1;
+        Course c = real.course; int r = kr[0], first = kr[1], cnt = Math.max(1, kr[2]), mode = kr[3];
         Element key = c.hazards.get(kr[4]);
         for (int q = 0; q < 24; q++) { in.clear(); real.step(in); }              // arrive, stop, then plan the detour from a standstill
         for (int q = 0; q < 180 && real.mode == Sim.Mode.GROUND && real.onElem == r; q++) {      // settle in the middle of the platform first, like a person lining up the move
@@ -376,7 +376,9 @@ public final class Autopilot {
             in.moveX = Math.abs(dx) < 0.25f ? 0f : Math.signum(dx) * 0.7f; real.step(in);
         }
         for (int q = 0; q < 24; q++) { in.clear(); real.step(in); }
-        why = "out"; if (!execLink(real, r, k, in)) return false;
+        int[] out = mode == 2 ? new int[0] : mode == 3 ? new int[]{first, first + 1} : mode == 1 ? new int[]{first} : chain(first, cnt);
+        int prev = r;
+        for (int idx : out) { why = "out"; if (!execLink(real, prev, idx, in)) return false; prev = idx; }
         for (int q = 0; q < 40 && Math.abs(real.vx) > 0.05f && real.mode == Sim.Mode.GROUND; q++) { in.clear(); real.step(in); }      // brake after landing
         int f0 = real.falls; int guard = (int) (6f / Sim.DT);
         while (guard-- > 0 && (real.keys & (1 << key.color)) == 0) {            // walk across the key platform to the key
@@ -385,7 +387,10 @@ public final class Autopilot {
         }
         if ((real.keys & (1 << key.color)) == 0) { why = "key not taken"; return false; }
         for (int q = 0; q < 24; q++) { in.clear(); real.step(in); }          // come to a stop before heading back
-        boolean back = pad ? execLink(real, k, pIdx, in) && execLink(real, pIdx, r, in) : execLink(real, k, r, in);
+        boolean back = true;
+        if (mode == 1) back = execLink(real, first, first + 1, in) && execLink(real, first + 1, r, in);
+        else if (mode == 3) back = execLink(real, first + 1, r, in);
+        else if (mode == 0) { for (int i = out.length - 1; i >= 0 && back; i--) back = execLink(real, out[i], i == 0 ? r : out[i - 1], in); }
         if (!back) { why = "back"; return false; }
         for (int q = 0; q < 180 && real.mode == Sim.Mode.GROUND && real.onElem == r; q++) {      // walk back to the middle of the platform and stop
             float dx = c.dsWrap(real.es1[r], real.s); in.clear();
@@ -395,6 +400,13 @@ public final class Autopilot {
         for (int q = 0; q < 24; q++) { in.clear(); real.step(in); }
         return real.mode == Sim.Mode.GROUND && real.onElem == r;
     }
+    private static int[] chain(int first, int n) { int[] a = new int[n]; for (int i = 0; i < n; i++) a[i] = first + i; return a; }
+
+    /** True if the planner can get from route/decoy element a to element b and attach to it (the same check the generator proves, re-run on the finished data: used by the tests). */
+    public static boolean linkExists(Course c, Tuning t, int a, int b) {
+        Sim base = Sim.startOn(c, t, a);
+        return planPair(base, a, b, false).ok;
+    }
 
     // ------------------------------------------------------------------ whole-course run
 
@@ -402,6 +414,10 @@ public final class Autopilot {
         Report rep = new Report();
         Sim real = Sim.startOn(c, t, 0);
         real.keysFree = false; real.keys = 0;       // the solver must fetch every key it needs
+        for (Element g : c.hazards) if (g.type == Element.Type.GATE) {      // endless: a castle's key lies in an earlier section, carried here
+            boolean own = false; for (Element k : c.hazards) if (k.type == Element.Type.KEY && k.color == g.color) own = true;
+            if (!own) real.keys |= 1 << g.color;
+        }
         int a = 0;
         java.util.HashSet<Integer> visited = new java.util.HashSet<>();
         InputState in = new InputState();

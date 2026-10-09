@@ -403,7 +403,7 @@ public final class Autopilot {
         if (!r.ok) { if (Boolean.getBoolean("dbg")) System.out.printf("execLink %d->%d plan failed at t=%.2f s=%.2f y=%.2f keys=%d%n", a, b, real.time, real.s, real.y, real.keys); return false; }
         Policy p = r.factory.create(); Policy pull = new PullPolicy();
         int f0 = real.setbacks(); int guard = (int) (14f / Sim.DT);
-        while (guard-- > 0 && !succeededTo(real, b)) { in.clear(); p.act(real, in); real.step(in); if (real.setbacks() != f0) return false; }
+        while (guard-- > 0 && !succeededTo(real, b)) { in.clear(); p.act(real, in); real.step(in); if (real.setbacks() != f0) { if (Boolean.getBoolean("dbg")) System.out.printf("execLink %d->%d setback during exec: mode=%s s=%.2f y=%.2f t=%.2f events=%d hits=%d falls=%d%n", a, b, real.mode, real.s, real.y, real.time, real.events, real.hits, real.falls); return false; } }
         if (!succeededTo(real, b)) { if (Boolean.getBoolean("dbg")) System.out.printf("execLink %d->%d exec failed mode=%s s=%.2f y=%.2f falls=%d%n", a, b, real.mode, real.s, real.y, real.setbacks() - f0); return false; }
         for (int g = 0; g < 120 && (real.mode == Sim.Mode.LEDGE || real.mode == Sim.Mode.PULLUP); g++) { in.clear(); pull.act(real, in); real.step(in); }
         return true;
@@ -437,7 +437,9 @@ public final class Autopilot {
             in.moveX = Math.signum(dx) * 0.7f; real.step(in);
         }
         for (int q = 0; q < 24; q++) { in.clear(); real.step(in); }
-        return real.mode == Sim.Mode.GROUND && real.onElem == r;
+        if (real.mode != Sim.Mode.GROUND) recover(real, r, in);      // like a person: knocked off by a hazard on the way back, so land and carry on from wherever that is (the key is already in hand)
+        if (real.mode == Sim.Mode.GROUND && real.onElem >= 0 && real.onElem < c.routeSize()) return true;
+        why = "back on the route platform"; return false;
     }
     /** Like a person arriving on a platform with momentum: counter-steer to brake and drift to the middle, then stand still. */
     static void settle(Sim real, int r, InputState in) {

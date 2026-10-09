@@ -211,4 +211,14 @@ public class EndlessTest {
             assertTrue("seed " + sk[0] + " slice " + sk[1] + " failed at link " + r.failedLink + " " + r.failInfo, r.completed);
         }
     }
+
+    /** Seed 118 slice 8 of the framed chain (slices as the game stores and reloads them): the solver came back from a key room and a cannon knocked it off its platform just before the end of the detour. It is not a defect of the course; the solver now lands and carries on, as a person does. */
+    @Test public void aFramedSliceWhereTheKeyDetourEndsWithAKnockOffIsCompletedNow() throws Exception {
+        Tuning t = TestUtil.tuning();
+        CourseGenerator.Framed prev = null;
+        for (int k = 0; k <= 8; k++) prev = CourseGenerator.chunkFramed(118, k, prev, t);
+        Course c = SliceCodec.decode(SliceCodec.encode(prev)).c;
+        Autopilot.Report r = Autopilot.run(c, t, 4000f);
+        assertTrue("failed at link " + r.failedLink + " " + r.failInfo, r.completed);
+    }
 }

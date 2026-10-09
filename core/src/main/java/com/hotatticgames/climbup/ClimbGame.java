@@ -6,7 +6,6 @@ import com.hotatticgames.climbup.audio.Audio;
 import com.hotatticgames.climbup.render.Models;
 import com.hotatticgames.climbup.sim.Course;
 import com.hotatticgames.climbup.sim.Tower;
-import com.hotatticgames.climbup.sim.CourseIO;
 import com.hotatticgames.climbup.sim.Tuning;
 import com.hotatticgames.climbup.ui.Ui;
 import java.io.File;
@@ -37,7 +36,7 @@ public class ClimbGame extends Game {
     @Override public void create() {
         demo = "true".equals(System.getProperty("climb.demo"));
         shotDir = System.getProperty("climb.shots");
-        store = new SaveStore(dataDir);
+        store = new SaveStore(dataDir); history = new HistoryStore(dataDir);
         settings = store.loadSettings();
         save = store.loadGame();
         if (System.getProperty("climb.character") != null) settings.character = Integer.getInteger("climb.character");
@@ -96,35 +95,53 @@ public class ClimbGame extends Game {
     /** A climb in progress: the growing tower plus the world element the player stands on. */
     public static final class Run { public Tower tower; public int startIdx; public boolean resumed; }
 
+    public HistoryStore history;
+    /** True if there is a climb in progress whose history is on disk and complete up to its checkpoint. */
+    public boolean climbValid() {
+        if (save.seed == 0 || history == null) return false;
+        java.util.List<byte[]> h = history.read(save.seed);
+        return h != null && h.size() > save.cpSlice;
+    }
+
     /** Opens the saved climb, or starts a new one (fresh seed) when there is none or {@code fresh} is set. */
     public Run openRun(boolean fresh) {
         Run r = new Run();
-        if (!fresh && save.seed != 0 && save.sliceJson != null) {
+        if (!fresh && save.seed != 0) {
             try {
-                Course d = CourseIO.fromJson(save.sliceJson);
-                r.tower = new Tower(save.seed, tuning, save.slice, d);
-                r.startIdx = r.tower.slices.get(0).toWorld(Math.max(0, Math.min(save.sliceCheckpoint, d.routeSize() - 1)));
-                r.resumed = true;
-                return r;
-            } catch (Exception e) { save.seed = 0; save.sliceJson = null; }      // unreadable climb: start a new one rather than crash
+                java.util.List<byte[]> hist = history.read(save.seed);
+                if (hist != null && hist.size() > save.cpSlice) {
+                    r.tower = new Tower(save.seed, tuning, hist, save.cpSlice);
+                    Tower.Ref ref = new Tower.Ref(save.cpSlice, save.cpLocal);
+                    int idx = r.tower.worldIndex(ref);
+                    if (idx >= 0) { r.tower.setCheckpointRef(ref); r.startIdx = idx; r.resumed = true; return r; }
+                }
+            } catch (Exception e) { /* unreadable: fall through to a new climb */ }
+            save.seed = 0;
         }
         String sd = System.getProperty("climb.seed");
         long seed = sd != null ? Long.parseLong(sd) : (System.nanoTime() ^ (System.currentTimeMillis() * 0x9E3779B97F4A7C15L)) & 0x7fffffffL | 1L;
         r.tower = new Tower(seed, tuning); r.startIdx = 0;
         Legacy.stampNewClimb(save, VERSION, appBuild, Legacy.today());
-        save.seed = seed; save.slice = 0; save.sliceCheckpoint = 0; save.sliceJson = CourseIO.toJson(r.tower.slices.get(0).data);
+        save.seed = seed; save.cpSlice = 0; save.cpLocal = 0;
+        try { history.reset(seed); syncHistory(r.tower); } catch (java.io.IOException e) { /* cannot store the climb: it still plays, it just cannot be resumed */ save.seed = 0; }
         return r;
     }
 
-    /** Remembers the checkpoint (world element index) so the climb can be resumed after the app is killed. */
-    public void rememberCheckpoint(Tower tower, int worldIdx) {
-        Tower.Slice sl = tower.sliceOf(worldIdx);
-        if (save.seed != tower.seed) return;
-        if (save.slice != sl.index || save.sliceJson == null) { save.slice = sl.index; save.sliceJson = CourseIO.toJson(sl.data); }
-        save.sliceCheckpoint = sl.toLocal(worldIdx);
+    /** Appends every slice the tower has generated since the last call to the history file. */
+    public void syncHistory(Tower tower) {
+        if (history == null || save.seed != tower.seed) return;
+        try { for (int k = history.count(); k < tower.sliceCount(); k++) history.append(tower.blob(k)); }
+        catch (java.io.IOException e) { /* keep playing; resume will use what was written */ }
     }
 
-    public void forgetRun() { RunRecord.forgetClimb(save); }      // records (bestSplit, bestTotals, bestFinish, lastFinish) are kept
+    /** Remembers the checkpoint so the climb can be resumed after the app is killed. */
+    public void rememberCheckpoint(Tower tower, int worldIdx) {
+        if (save.seed != tower.seed) return;
+        Tower.Ref ref = tower.refOf(worldIdx);
+        save.cpSlice = ref.slice; save.cpLocal = ref.local;
+    }
+
+    public void forgetRun() { RunRecord.forgetClimb(save); if (history != null) history.delete(); }      // records (bestSplit, bestTotals, bestFinish, lastFinish) are kept
 
     public void persist() { store.saveGame(save); store.saveSettings(settings); }
 

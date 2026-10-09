@@ -113,14 +113,15 @@ public final class SpaceScene {
     }
 
     /** Planets and rocks that float inside the spiral (turning with it) and the ship that buzzes the player, drawn with the game camera. */
-    public void renderNear(ModelBatch batch, Environment mainEnv, Placer placer, float camS, float camY, float playerY, float playerZ, boolean reduced) {
-        int b0 = (int) Math.floor((camY - 40f) / 70f), b1 = (int) Math.floor((camY + 40f) / 70f);
-        for (int band = b0; band <= b1; band++) {
+    public void renderNear(ModelBatch batch, Environment mainEnv, Placer placer, float camS, float camY, float playerY, float playerZ, boolean reduced, double originY) {
+        long b0 = (long) Math.floor((camY + originY - 40.0) / 70.0), b1 = (long) Math.floor((camY + originY + 40.0) / 70.0);       // bands are absolute, so scenery stays put when the floating origin moves
+        for (long bandL = b0; bandL <= b1; bandL++) {
+            int band = (int) bandL; float bandY = (float) (bandL * 70.0 - originY);
             long h = mixSeed(band);
             // one planet per band, inside the cylinder (only from dusk onward; the sunny worlds keep the view clear)
             if (zoneNow >= 1.8f) {
             ModelInstance pl = planets[(int) ((h >>> 3) % PLANETS)];
-            float arc = ((h >>> 10) % 1000) / 1000f * circumference, y = band * 70f + ((h >>> 20) % 1000) / 1000f * 60f, r = 3.2f + ((h >>> 30) % 1000) / 1000f * 4.5f;
+            float arc = ((h >>> 10) % 1000) / 1000f * circumference, y = bandY + ((h >>> 20) % 1000) / 1000f * 60f, r = 3.2f + ((h >>> 30) % 1000) / 1000f * 4.5f;
             float sc = 0.45f + ((h >>> 40) % 1000) / 1000f * 0.8f;
             r = inside(r, sc, planetExt[(int) ((h >>> 3) % PLANETS)]);
             alpha(pl, 1f);
@@ -129,7 +130,7 @@ public final class SpaceScene {
             }
             if (spaceW > 0.3f) {            // deep space: a second planet per band
                 ModelInstance p2 = planets[(int) ((h >>> 5) % PLANETS)];
-                float a2 = ((h >>> 12) % 1000) / 1000f * circumference, y2 = band * 70f + ((h >>> 22) % 1000) / 1000f * 60f, r2 = 3.5f + ((h >>> 32) % 1000) / 1000f * 4f, s2 = 0.5f + ((h >>> 42) % 1000) / 1000f * 0.9f;
+                float a2 = ((h >>> 12) % 1000) / 1000f * circumference, y2 = bandY + ((h >>> 22) % 1000) / 1000f * 60f, r2 = 3.5f + ((h >>> 32) % 1000) / 1000f * 4f, s2 = 0.5f + ((h >>> 42) % 1000) / 1000f * 0.9f;
                 r2 = inside(r2, s2, planetExt[(int) ((h >>> 5) % PLANETS)]);
                 alpha(p2, 1f);
                 placer.place(p2, a2, y2, radius - r2, s2, s2, s2, reduced ? 0f : clock * 5f);
@@ -140,7 +141,7 @@ public final class SpaceScene {
                 long g = mixSeed(band * 31 + k + 977);
                 if ((g >>> 50) % 100 >= 20 + 80 * MathUtils.clamp(zoneNow / 3f, 0f, 1f)) continue;       // fewer rocks in the sunny worlds
                 ModelInstance rk = rocks[(int) ((g >>> 4) % ROCKS)];
-                float ra = ((g >>> 12) % 1000) / 1000f * circumference, ry = band * 70f + ((g >>> 22) % 1000) / 1000f * 70f, rr = 2.5f + ((g >>> 32) % 1000) / 1000f * 5.5f;
+                float ra = ((g >>> 12) % 1000) / 1000f * circumference, ry = bandY + ((g >>> 22) % 1000) / 1000f * 70f, rr = 2.5f + ((g >>> 32) % 1000) / 1000f * 5.5f;
                 float rs = 0.3f + ((g >>> 42) % 1000) / 1000f * 0.6f;
                 rr = inside(rr, rs, rockExt[(int) ((g >>> 4) % ROCKS)]);
                 if (rr < 0.3f) continue;

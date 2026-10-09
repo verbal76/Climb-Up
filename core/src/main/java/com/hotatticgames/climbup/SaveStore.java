@@ -46,9 +46,14 @@ public final class SaveStore {
         String t = read("save.json");
         if (t == null) return new SaveData();
         try {
-            JsonValue v = migrate(new JsonReader().parse(t));
+            JsonValue raw = new JsonReader().parse(t);
+            int ver = raw.getInt("version", 0);
+            JsonValue v = migrate(raw);
             SaveData d = json().readValue(SaveData.class, v);
             if (d == null || d.shownTips == null) throw new IllegalStateException("empty");
+            if (ver < 6 && d.seed != 0) {                   // v6 changed how a climb is stored (slice history + floating origin): an older climb cannot carry over. Keep it as a record, tell the player once, start fresh. Records and settings stay.
+                Legacy.archive(d, Legacy.today()); d.noticeOldClimb = true;
+            }
             return sanitize(d);
         } catch (Exception e) { backupCorrupt("save.json"); return new SaveData(); }
     }
@@ -92,7 +97,7 @@ public final class SaveStore {
             if (!v.has("completions")) v.addChild("completions", new JsonValue(0L));
         }
         // v2 -> v3: finite towers became the endless climb; there is no seed yet, so the next Play starts a fresh climb (best height and stats are kept)
-        // v3/v4 -> v5: climbs get a version/build stamp. An unstamped climb in progress is kept; Legacy decides at launch whether the rules changed since it started.
+        // v5 -> v6: the climb in progress is stored as slice history (history.bin); an older climb is archived by loadGame (see there).
         if (v.has("version")) v.remove("version");
         v.addChild("version", new JsonValue((long) SaveData.CURRENT_VERSION));
         return v;

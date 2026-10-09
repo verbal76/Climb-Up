@@ -39,26 +39,6 @@ public class EndlessTest {
         assertNotEquals(CourseIO.toJson(CourseGenerator.chunk(10, 1, CourseGenerator.chunk(10, 0, null, t), t)), CourseIO.toJson(a1));
     }
 
-    @Test public void towerGrowsAndResumesFromASavedSlice() throws Exception {
-        Tuning t = TestUtil.tuning();
-        Tower tw = new Tower(21, t);
-        for (int i = 0; i < 4; i++) tw.extend();
-        assertTrue("tower is taller than four slices of climbing", tw.topY() > 4 * t.chunkHeight * 0.9f);
-        Tower.Slice s2 = tw.slices.get(2);
-        Course saved = CourseIO.fromJson(CourseIO.toJson(s2.data));
-        Tower resumed = new Tower(21, t, s2.index, saved);
-        int idx = resumed.slices.get(0).toWorld(saved.routeSize() - 1);       // the slice's last rest platform
-        assertEquals("same platform after resume", tw.world.get(s2.toWorld(saved.routeSize() - 1)).y, resumed.world.get(idx).y, 1e-4f);
-        resumed.extend();
-        assertEquals("the tower above a resumed slice is identical", CourseIO.toJson(tw.slices.get(3).data), CourseIO.toJson(resumed.slices.get(1).data));
-        // checkpoint round trip: world index -> (slice, local) -> world index
-        for (int w = 0; w < tw.world.size(); w++) {
-            if (tw.world.get(w).anchor >= 0) continue;
-            Tower.Slice sl = tw.sliceOf(w);
-            assertEquals(w, sl.toWorld(sl.toLocal(w)));
-        }
-    }
-
     @Test public void difficultyAndHazardsRiseButNeverBreakFairness() throws Exception {
         Tuning t = TestUtil.tuning();
         EnumMap<Element.Type, Integer> hz = new EnumMap<>(Element.Type.class);

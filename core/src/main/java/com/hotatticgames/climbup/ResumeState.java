@@ -1,14 +1,11 @@
 package com.hotatticgames.climbup;
 
-import com.hotatticgames.climbup.sim.Course;
-import com.hotatticgames.climbup.sim.CourseGenerator;
-import com.hotatticgames.climbup.sim.Element;
 import com.hotatticgames.climbup.sim.Sim;
-import com.hotatticgames.climbup.sim.Tuning;
+import com.hotatticgames.climbup.sim.Tower;
 
 /**
- * What a resumed climb needs beyond geometry. The save keeps only the slice of the last checkpoint, so the keys carried and the castles already opened must be saved too,
- * and a key that lay in a section older than the stored slice (which no longer exists after a restart) must never leave the player stranded in front of a closed castle.
+ * What a resumed climb needs beyond geometry: the keys carried and the castles already opened. (The whole tower is rebuilt from the stored history, so a key that lies below the checkpoint
+ * is still there to be fetched; only what the player has DONE has to be saved.)
  */
 public final class ResumeState {
     private ResumeState() {}
@@ -23,18 +20,10 @@ public final class ResumeState {
     }
 
     /** Re-applies the saved state to a freshly resumed simulation. */
-    public static void restore(SaveData sd, Sim sim, Course world, Tuning t) {
-        if (sd.openedUpTo < sd.towers) sd.openedUpTo = sd.towers;                    // saves from before openedUpTo existed: castles open in order, so the count is the number
+    public static void restore(SaveData sd, Sim sim, Tower tower) {
+        if (sd.openedUpTo < sd.towers) sd.openedUpTo = sd.towers;
         sim.keys = sd.keysHeld;
-        for (int i = 0; i < world.hazards.size(); i++) {
-            Element h = world.hazards.get(i);
-            if (h.type == Element.Type.GATE && h.skin > 0 && h.skin <= sd.openedUpTo && i < sim.featDone.length) sim.featDone[i] = true;       // already opened: stays open
-        }
-        if (t.castleSpacing <= 0f || world.size() == 0) return;
-        int n = sd.openedUpTo + 1;                                                    // the next castle to open
-        int colour = CourseGenerator.castleColor(sd.seed, n);
-        float lowest = Float.MAX_VALUE; for (int i = 0; i < world.size(); i++) lowest = Math.min(lowest, world.get(i).y);
-        boolean haveKey = (sim.keys & (1 << colour)) != 0;
-        if (!haveKey && CourseGenerator.keyHeight(sd.seed, n, t.castleSpacing) < lowest + 40f) sim.keys |= 1 << colour;        // its key lay in a section that no longer exists: never strand the run
+        tower.openedUpTo = sd.openedUpTo;
+        tower.applyDone(sim);
     }
 }

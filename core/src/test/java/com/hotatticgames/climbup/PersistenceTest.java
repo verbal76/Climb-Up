@@ -36,18 +36,32 @@ public class PersistenceTest {
         assertEquals(0f, old.runClock, 0f); assertEquals(0, old.towers); assertNotNull(old.splits); assertEquals(70f, old.bestHeight, 0f);
     }
 
-    @Test public void aClimbSavedByAnOlderBuildSurvivesTheLoadAndIsHandledByLegacy() throws Exception {
+    @Test public void aClimbFromBeforeTheV6SaveFormatIsKeptAsALegacyRecordAndTheRestIsPreserved() throws Exception {
         File dir = tmp(); SaveStore st = new SaveStore(dir);
-        st.writeAtomic("save.json", "{\"version\":3,\"seed\":12345,\"slice\":2,\"sliceJson\":\"{}\",\"sliceCheckpoint\":4,\"runClock\":56.2,\"towers\":1,\"splits\":[10],\"towerTotals\":[10],"
-            + "\"bestHeight\":175,\"falls\":9,\"bestSplit\":42.5,\"bestFinish\":900,\"bestTotals\":[42.5]}");
+        st.writeAtomic("save.json", "{\"version\":5,\"seed\":12345,\"slice\":2,\"sliceJson\":\"{}\",\"sliceCheckpoint\":4,\"runClock\":56.2,\"towers\":1,\"splits\":[10],\"towerTotals\":[10],"
+            + "\"climbHeight\":900,\"climbVersion\":\"1.1.3\",\"climbBuild\":43,\"bestHeight\":2515,\"falls\":9,\"bestSplit\":42.5,\"bestFinish\":900,\"bestTotals\":[42.5]}");
         SaveData d = st.loadGame();
-        assertEquals("the unfinished climb is kept until the player decides", 12345L, d.seed); assertEquals(56.2f, d.runClock, 1e-3f); assertEquals("", d.climbVersion);
-        assertEquals(175f, d.bestHeight, 0f); assertEquals(42.5f, d.bestSplit, 1e-3f); assertEquals(SaveData.CURRENT_VERSION, d.version);
-        assertTrue("unstamped climbs count as older rules", Legacy.needsPrompt(d, ClimbGame.VERSION));
-        st.saveGame(d);
+        assertEquals("no climb carries over", 0L, d.seed); assertTrue("the player is told once", d.noticeOldClimb);
+        assertEquals("the old climb is kept as a stamped record", 1, d.legacy.size()); assertEquals(900f, d.legacy.get(0).height, 0f); assertEquals("1.1.3", d.legacy.get(0).version); assertEquals(43, d.legacy.get(0).build); assertEquals(1, d.legacy.get(0).towers);
+        assertEquals("records are untouched", 2515f, d.bestHeight, 0f); assertEquals(42.5f, d.bestSplit, 1e-3f); assertEquals(900f, d.bestFinish, 1e-3f); assertEquals(9, d.falls);
+        assertEquals(SaveData.CURRENT_VERSION, d.version);
+        d.noticeOldClimb = false; st.saveGame(d);
         SaveData again = st.loadGame();
-        assertEquals("the version is always written, so a save is never mistaken for an old one", SaveData.CURRENT_VERSION, again.version);
-        assertEquals(12345L, again.seed); assertEquals(56.2f, again.runClock, 1e-3f);
+        assertFalse("the notice is shown once", again.noticeOldClimb); assertEquals("and the record is not archived twice", 1, again.legacy.size());
+        d.seed = 77; d.cpSlice = 3; d.cpLocal = 5; d.keysHeld = 5; d.openedUpTo = 2; st.saveGame(d);
+        SaveData r = st.loadGame(); assertEquals(77L, r.seed); assertEquals(3, r.cpSlice); assertEquals(5, r.cpLocal); assertEquals(5, r.keysHeld); assertEquals(2, r.openedUpTo);
+    }
+
+    @Test public void theHistoryFileKeepsEverySliceAndSurvivesATornWrite() throws Exception {
+        File dir = tmp(); HistoryStore h = new HistoryStore(dir);
+        h.reset(42L);
+        byte[][] blobs = {new byte[]{1, 2, 3}, new byte[500], new byte[]{9}};
+        for (byte[] b : blobs) h.append(b);
+        java.util.List<byte[]> back = new HistoryStore(dir).read(42L);
+        assertEquals(3, back.size()); assertArrayEquals(blobs[0], back.get(0)); assertEquals(500, back.get(1).length); assertArrayEquals(blobs[2], back.get(2));
+        assertNull("another seed's history is never used", new HistoryStore(dir).read(43L));
+        try (java.io.FileOutputStream f = new java.io.FileOutputStream(new File(dir, "history.bin"), true)) { f.write(new byte[]{0, 0, 1, 0, 7, 7}); }       // a record cut short by a crash
+        assertEquals("the torn record is ignored, the rest is intact", 3, new HistoryStore(dir).read(42L).size());
     }
 
     @Test public void corruptSaveIsBackedUpAndDefaultsReturned() throws Exception {

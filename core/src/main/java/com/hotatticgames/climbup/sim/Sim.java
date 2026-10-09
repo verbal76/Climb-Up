@@ -41,6 +41,8 @@ public final class Sim {
     public float landSpeed;          // for squash feedback
     public int events;               // accumulated since last consumeEvents()
     public float ps0, py0;           // player position at the start of the last step (render interpolation)
+    public boolean deferRespawn, respawnPending;    // a managed world window: the respawn is completed by Tower.maintain
+    public float floorOverride = Float.NaN;          // managed window: the height of the lowest platform of the WHOLE tower (the resident part is not all of it)
     public boolean teleported;       // set when the last step moved the player discontinuously (respawn)
     public float assistForgive;      // extra coyote/buffer seconds from assists
 
@@ -116,7 +118,7 @@ public final class Sim {
             for (int i = 0; i < course.size(); i++) { Element e = course.get(i); if (e.isPlatform()) fl = Math.min(fl, e.y - Math.abs(e.amp) - 1f); }
             minPlatY = fl; minPlatSize = course.size();
         }
-        floorY = minPlatY == Float.POSITIVE_INFINITY ? Float.NEGATIVE_INFINITY : minPlatY;
+        floorY = !Float.isNaN(floorOverride) ? floorOverride : (minPlatY == Float.POSITIVE_INFINITY ? Float.NEGATIVE_INFINITY : minPlatY);
         hz = course.hazardsFor(lo - 6, hi + 6);
     }
 
@@ -225,13 +227,50 @@ public final class Sim {
     /** Falls to the checkpoint plus hazard knock-offs: any of them means a move was not clean (the solver and the generator proofs reject such moves). */
     public int setbacks() { return falls + hits; }
 
+    /** Falling past the lowest platform of the tower (or being sent back for any reason): back to the checkpoint. A sim whose world window is managed (see Tower.maintain) only flags it, because the checkpoint's slice may need to be loaded first. */
     public void respawn() {
+        if (deferRespawn) { respawnPending = true; return; }
+        completeRespawn(checkpoint);
+    }
+
+    public void completeRespawn(int idx) {
+        respawnPending = false;
         falls++; invuln = 0.7f;
         events |= EV_RESPAWN; teleported = true;
         // restore crumbled platforms so a retry is never stale or soft-locked
         java.util.Arrays.fill(crumbleT, -1f);
         java.util.Arrays.fill(gone, false);
-        spawnAtCheckpoint(checkpoint);
+        spawnAtCheckpoint(idx);
+    }
+
+    /**
+     * The world course was rebuilt around a different set of slices and a new origin (see Tower): carry every index and every height over so the simulation continues exactly where it was.
+     * Indices that are no longer resident become -1.
+     */
+    public void rebase(Tower.Remap m) {
+        int n = m.newN, oldN = es0.length;
+        float[] nes0 = new float[n], ney0 = new float[n], nes1 = new float[n], ney1 = new float[n], nc = new float[n], ngt = new float[n], npq = new float[n], ntl = new float[n], not = new float[n];
+        boolean[] ngone = new boolean[n];
+        java.util.Arrays.fill(nc, -1f);
+        for (int i = 0; i < n; i++) { Element e = course.get(i); nes0[i] = nes1[i] = e.sAt(time); ney0[i] = ney1[i] = e.yAt(time); }
+        for (int i = 0; i < m.elem.length && i < oldN; i++) {
+            int j = m.elem[i]; if (j < 0) continue;
+            nes0[j] = es0[i]; nes1[j] = es1[i]; ney0[j] = ey0[i] - m.dy; ney1[j] = ey1[i] - m.dy;       // heights follow the origin; arcs are wrap-invariant and recomputed above
+            Element e = course.get(j); nes0[j] = e.sAt(time - DT); nes1[j] = e.sAt(time);
+            nc[j] = crumbleT[i]; ngone[j] = gone[i]; ngt[j] = goneT[i]; npq[j] = padSquash[i]; ntl[j] = tilt[i]; not[j] = onT[i];
+        }
+        es0 = nes0; ey0 = ney0; es1 = nes1; ey1 = ney1; crumbleT = nc; gone = ngone; goneT = ngt; padSquash = npq; tilt = ntl; onT = not;
+        boolean[] nf = new boolean[Math.max(m.newH, 1) + 8];
+        for (int i = 0; i < m.haz.length && i < featDone.length; i++) { int j = m.haz[i]; if (j >= 0) nf[j] = featDone[i]; }
+        featDone = nf;
+        onElem = onElem >= 0 && onElem < m.elem.length ? m.elem[onElem] : onElem;
+        lastPad = lastPad >= 0 && lastPad < m.elem.length ? m.elem[lastPad] : lastPad;
+        checkpoint = checkpoint >= 0 && checkpoint < m.elem.length ? m.elem[checkpoint] : checkpoint;
+        bestElem = bestElem >= 0 && bestElem < m.elem.length ? Math.max(0, m.elem[bestElem]) : bestElem;
+        float dy = m.dy;
+        y -= dy; py0 -= dy; lastGroundY -= dy; pullFromY -= dy; pullToY -= dy; hitY -= dy; crabY -= dy; maxHeight -= dy; floorY -= dy;
+        hitBy = null; minPlatSize = -1;
+        setRange(0, n - 1);
     }
 
     // ---------------------------------------------------------------- helpers
@@ -251,6 +290,7 @@ public final class Sim {
     // ---------------------------------------------------------------- step
 
     public void step(InputState in) {
+        if (respawnPending) return;          // frozen until the window has been rebuilt around the checkpoint
         float dt = DT;
         ps0 = s; py0 = y; teleported = false;
         time += dt;

@@ -5,15 +5,14 @@ import java.util.List;
 
 /** Run progress and stats. Versioned; see {@link SaveStore#migrate}. No power progression of any kind is stored. */
 public final class SaveData {
-    public static final int CURRENT_VERSION = 5;
+    public static final int CURRENT_VERSION = 6;
     public int version = CURRENT_VERSION;
     public int courseIndex = 0;          // legacy (v2 finite towers); unused by the endless climb
     public int checkpoint = 0;           // legacy (v2)
-    // endless climb (v3): the climb is a pure function of (seed, slice, previous slice), so we keep just the slice the last checkpoint is in
+    // endless climb (v6): the climb is its seed plus every slice generated so far (history.bin, see HistoryStore); here only where it stands
     public long seed = 0;                // 0 = no climb in progress
-    public int slice = 0;
-    public String sliceJson = null;      // that slice exactly as generated (see CourseIO)
-    public int sliceCheckpoint = 0;      // local element index of the checkpoint inside the slice
+    public int cpSlice = 0, cpLocal = 0; // the last red gem touched: slice index and local element index
+    public boolean noticeOldClimb = false;   // the first launch after the v6 update: tell the player their old climb could not carry over (shown once)
     // which build / version started the climb in progress (empty = started before versions were stamped) - see Legacy
     public String climbVersion = "";
     public int climbBuild = 0;
@@ -21,7 +20,6 @@ public final class SaveData {
     public float climbHeight = 0f;       // highest point reached in the climb in progress
     public int keysHeld = 0;             // keys carried (bit per colour) - a resumed climb only has the stored slice, so this must be saved
     public int openedUpTo = 0;           // highest castle number opened in this climb (castles open in order)
-    public boolean continuedFromOlder = false;   // an unstamped climb from an older build that was checked and can safely carry on (see Legacy.tryContinue)
     public List<LegacyRun> legacy = new ArrayList<>();   // runs set aside when an update changed the rules
     public float bestHeight = 0f;
     public int falls = 0;

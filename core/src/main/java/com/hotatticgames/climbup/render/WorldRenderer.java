@@ -63,6 +63,7 @@ public final class WorldRenderer implements Disposable {
     public boolean reducedMotion;
 
     private float camY, camShake, shakeT, camPull;
+    private double originY, originS;          // the world is expressed relative to a floating origin; absolute height = originY + local y (see Tower)
     private final Color skyTop = new Color(), skyBot = new Color(), tint = new Color(), amb = new Color();
     private final ModelInstance shadow;
     private float renderS, renderY;
@@ -101,6 +102,30 @@ public final class WorldRenderer implements Disposable {
         shadow = new ModelInstance(models.disc);
         shadow.materials.get(0).set(ColorAttribute.createDiffuse(0f, 0f, 0f, 1f), new BlendingAttribute(0.28f));
         shadow.materials.get(0).set(ColorAttribute.createEmissive(0, 0, 0, 1));
+    }
+
+    public void setOrigin(double y, double s) { originY = y; originS = s; }
+
+    /** The tower's world was rebuilt around a different set of slices and origin (see Tower.rebuild): keep the per-element visuals, and shift everything that remembers a height, so nothing visible moves. */
+    public void rebased(com.hotatticgames.climbup.sim.Tower.Remap m, double newOriginY, double newOriginS) {
+        int n = m.newN;
+        java.util.ArrayList<Vis> nv = new java.util.ArrayList<>(n);
+        for (int j = 0; j < n; j++) nv.add(null);
+        float[] nd = new float[Math.max(16, n)], ndv = new float[Math.max(16, n)];
+        for (int i = 0; i < m.elem.length && i < vis.size(); i++) {
+            int j = m.elem[i]; if (j < 0) continue;
+            Vis v = vis.get(i); v.e = course.get(j); nv.set(j, v);
+            if (i < dip.length) { nd[j] = dip[i]; ndv[j] = dipV[i]; }
+        }
+        for (int j = 0; j < n; j++) if (nv.get(j) == null) { Vis v = new Vis(); v.e = course.get(j); nv.set(j, v); }
+        vis.clear(); vis.addAll(nv); dip = nd; dipV = ndv;
+        builtN = 0; for (int j = 0; j < n; j++) if (vis.get(j).built) { if (builtN == builtIdx.length) builtIdx = java.util.Arrays.copyOf(builtIdx, builtN * 2); builtIdx[builtN++] = j; }
+        dipN = 0; dipOn = new boolean[dip.length]; for (int j = 0; j < n; j++) if (dip[j] != 0f || dipV[j] != 0f) { if (dipN == dipAct.length) dipAct = java.util.Arrays.copyOf(dipAct, dipN * 2); dipAct[dipN++] = j; dipOn[j] = true; }
+        float dy = m.dy;
+        camY -= dy; renderY -= dy; heroY -= dy;
+        for (Flung f : flung) f.y -= dy;
+        particles.shiftY(dy);
+        originY = newOriginY; originS = newOriginS;
     }
 
     /** The course grows while climbing (endless mode): keep per-element visuals and spring state in step with it. */
@@ -363,7 +388,8 @@ public final class WorldRenderer implements Disposable {
         float target = py + 0.3f + lead;
         if (sim.teleported) camY = target;
         else camY += (target - camY) * Math.min(1f, (target > camY ? 7f : 10f) * dt);
-        float zf = camY / T.zoneHeight;
+        float bgY = (float) ((camY + originY) % 65536.0);          // continuous across origin moves (and across the shift, nothing pops); wraps only every 65 km
+        float zf = (float) ((camY + originY) / T.zoneHeight);
         float zoneF = Math.min(Palette.ZONES - 0.001f, ((zf % Palette.ZONES) + Palette.ZONES) % Palette.ZONES);        // the five worlds repeat for ever
         Palette.blend(Palette.SKY_TOP, zoneF, skyTop); Palette.blend(Palette.SKY_BOT, zoneF, skyBot);
         Palette.blend(Palette.TINT, zoneF, tint); Palette.blend(Palette.AMBIENT, zoneF, amb);
@@ -400,7 +426,7 @@ public final class WorldRenderer implements Disposable {
         Gdx.gl.glViewport(0, 0, Gdx.graphics.getBackBufferWidth(), Gdx.graphics.getBackBufferHeight());
         Gdx.gl.glClearColor(skyBot.r, skyBot.g, skyBot.b, 1f);
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT | GL20.GL_DEPTH_BUFFER_BIT);
-        bg.render(sb, shapes, skyTop, skyBot, ps, camY, zoneF, T.circumference(), reducedMotion, time);
+        bg.render(sb, shapes, skyTop, skyBot, ps, bgY, zoneF, T.circumference(), reducedMotion, time);
         Gdx.gl.glClear(GL20.GL_DEPTH_BUFFER_BIT);
         if (quality > 0) {                 // planets and sky ships far behind the tower (wide-range camera, drawn first)
             if (space == null) { farCam = new com.badlogic.gdx.graphics.PerspectiveCamera(40f, cam.viewportWidth, cam.viewportHeight); farCam.near = 1f; farCam.far = 2500f; space = new SpaceScene(models, farCam, T.radius); }
@@ -408,7 +434,7 @@ public final class WorldRenderer implements Disposable {
             if (space.whoosh) whooshPending = true;
             farCam.viewportWidth = cam.viewportWidth; farCam.viewportHeight = cam.viewportHeight; farCam.fieldOfView = cam.fieldOfView;
             farCam.position.set(cam.position); farCam.direction.set(cam.direction); farCam.up.set(cam.up); farCam.update();
-            batch.begin(farCam); space.renderFar(batch, ps, camY, zoneF); batch.end();
+            batch.begin(farCam); space.renderFar(batch, ps, bgY, zoneF); batch.end();
             Gdx.gl.glClear(GL20.GL_DEPTH_BUFFER_BIT);
         }
 
@@ -417,6 +443,7 @@ public final class WorldRenderer implements Disposable {
         int lo = Math.max(0, sim.winLo), hi = Math.min(vis.size() - 1, sim.winHi);
         if (clouds == null) clouds = new Clouds(models, T, course);
         boolean inSpace = zoneF >= 3.9f && zoneF < Palette.ZONES - 0.1f;           // no weather in deep space
+        clouds.setOrigin(originY, originS);
         if (!inSpace) clouds.update(ps, camY, ps, py, lo, hi, dt, reducedMotion, quality);
         cloudsBroken += inSpace ? 0 : clouds.brokenThisFrame;
         if (!inSpace) clouds.render(batch, env, (inst, arc, yy, dz, sx, sy, sz, yaw) -> place(inst, arc, yy, dz, ps, sx, sy, sz, yaw), ps, camY);
@@ -432,7 +459,7 @@ public final class WorldRenderer implements Disposable {
             drawElement(sim, i, v, es, ey, ps, time);
         }
         for (int k = 0, cnt = sim.hz == null ? course.hazards.size() : sim.hz.length; k < cnt; k++) { int hi2 = sim.hz == null ? k : sim.hz[k]; drawHazard(course.hazards.get(hi2), sim.time + alpha * Sim.DT, ps, time, hi2 < sim.featDone.length && sim.featDone[hi2]); }
-        if (space != null && quality > 0) space.renderNear(batch, env, (inst, arc, yy, dz, sx, sy, sz, yaw) -> place(inst, arc, yy, dz, ps, sx, sy, sz, yaw), ps, camY, py, 0f, reducedMotion);
+        if (space != null && quality > 0) space.renderNear(batch, env, (inst, arc, yy, dz, sx, sy, sz, yaw) -> place(inst, arc, yy, dz, ps, sx, sy, sz, yaw), ps, camY, py, 0f, reducedMotion, originY);
         // free the model parts of anything the player has left behind, above or below the simulated window (a fall or a long descent can build far more than a climb ever does); freed parts are rebuilt on demand
         for (int q = 0, n = Math.min(builtN, 48); q < n && builtN > 0; q++) {
             if (builtScan >= builtN) builtScan = 0;

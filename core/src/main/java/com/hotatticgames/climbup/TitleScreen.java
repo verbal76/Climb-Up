@@ -9,7 +9,6 @@ import com.hotatticgames.climbup.render.WorldRenderer;
 import com.hotatticgames.climbup.sim.Course;
 import com.hotatticgames.climbup.sim.InputState;
 import com.hotatticgames.climbup.sim.Sim;
-import com.hotatticgames.climbup.sim.CourseIO;
 import com.hotatticgames.climbup.sim.Tower;
 import com.hotatticgames.climbup.ui.Ui;
 
@@ -20,28 +19,31 @@ public final class TitleScreen extends ScreenAdapter {
     private Sim sim;
     private WorldRenderer world;
     private float time;
-    private boolean confirmNew, confirmDiscard;
+    private boolean confirmNew;
     private String lastBub;
     private com.badlogic.gdx.Screen next;   // screen change is applied after ui.end() so the sprite batch is never left open
 
     public TitleScreen(ClimbGame g) { this.g = g; }
 
+    private boolean has;      // a climb in progress that can really be resumed
+
     @Override public void show() {
-        if (Legacy.needsPrompt(g.save, ClimbGame.VERSION) && Legacy.tryContinue(g.save, g.tuning)) g.persist();      // an older climb that can safely carry on does: nobody loses a run that still works
         Tower tw = null; int idx = 0;
-        if (g.save.seed != 0 && g.save.sliceJson != null) {        // backdrop: where the climb in progress stands
+        has = g.climbValid();
+        if (has) {        // backdrop: where the climb in progress stands
             try {
-                Course d = CourseIO.fromJson(g.save.sliceJson);
-                tw = new Tower(g.save.seed, g.tuning, g.save.slice, d);
-                idx = tw.slices.get(0).toWorld(Math.max(0, Math.min(g.save.sliceCheckpoint, d.routeSize() - 1)));
+                tw = new Tower(g.save.seed, g.tuning, g.history.read(g.save.seed), g.save.cpSlice);
+                idx = tw.worldIndex(new Tower.Ref(g.save.cpSlice, g.save.cpLocal));
+                if (idx < 0) { tw = null; idx = 0; }
             } catch (Exception e) { tw = null; idx = 0; }
         }
-        if (tw == null) tw = new Tower(2024L, g.tuning);
+        if (tw == null) { has = false; tw = new Tower(2024L, g.tuning); }
         course = tw.world;
         sim = Sim.startOn(course, g.tuning, idx);
-        sim.setRange(idx - 60, idx + 120);
+        sim.setRange(0, course.size() - 1);
         for (int i = 0; i < 30; i++) sim.step(new InputState());
         world = new WorldRenderer(g.tuning, course, g.models, g.settings.quality, g.settings.character);
+        world.setOrigin(tw.originY, tw.originS);
         world.reducedMotion = g.settings.reducedMotion;
         world.snapCamera(sim);
         Gdx.input.setInputProcessor(new InputMultiplexer(g.ui));
@@ -68,8 +70,7 @@ public final class TitleScreen extends ScreenAdapter {
         lastBub = bub;
         if (bub != null) { float[] hp = new float[2]; world.heroHeadScreen(W, H, hp); ui.bubble(bub, hp[0], hp[1] + 6, world.heroBubbleAlpha()); }
         float bw = 400, bh = 76, bx = Math.max(40f, W / 2 - 640f + 40f);
-        boolean has = g.save.seed != 0 && g.save.sliceJson != null;
-        boolean prompt = Legacy.needsPrompt(g.save, ClimbGame.VERSION);        // a run from an older version is waiting for a decision before anything else
+        boolean prompt = g.save.noticeOldClimb;        // the one-time notice that an old climb could not carry over comes first
         float y0 = H * 0.46f;
         if (!prompt) {
             if (ui.button(has ? "CONTINUE" : "PLAY", bx, y0, bw, bh, true)) { g.audio.play("click"); next = new PlayScreen(g, false); }
@@ -105,23 +106,19 @@ public final class TitleScreen extends ScreenAdapter {
         if (next != null) { Screen n = next; next = null; g.setScreen(n); }
     }
 
-    /** A run from an older version is in progress: it cannot continue under the new rules, so offer to keep it as a stamped record. */
+    /** One-time notice after the save format change: the old climb could not carry over. */
     private void legacyPrompt(Ui ui, float W, float H) {
-        SaveData sd = g.save;
         ui.rect(0, 0, W, H, new Color(0f, 0f, 0.05f, 0.72f));
-        float pw = Math.min(W - 60, 900), ph = 470, px = W / 2 - pw / 2, py = H / 2 - ph / 2;
+        float pw = Math.min(W - 60, 900), ph = 430, px = W / 2 - pw / 2, py = H / 2 - ph / 2;
         ui.panel(px, py, pw, ph);
         float cx = W / 2;
-        ui.textC("A RUN FROM AN OLDER VERSION", cx, py + ph - 56, 4.6f, Ui.ACCENT);
-        ui.textC("STARTED ON  " + Legacy.stampLabel(sd.climbVersion, sd.climbBuild, ClimbGame.VERSION) + (sd.climbDate.isEmpty() ? "" : "   " + sd.climbDate), cx, py + ph - 112, 3.4f, Ui.TEXT);
-        ui.textC((int) sd.climbHeight + " M   " + sd.towers + " CASTLE" + (sd.towers == 1 ? "" : "S") + "   " + PlayScreen.fmtTime(sd.runClock) + (sd.finished ? "   FINISHED" : ""), cx, py + ph - 156, 3.4f, Ui.TEXT);
-        ui.textC("THE RULES CHANGED IN THIS VERSION, SO IT CANNOT BE CONTINUED.", cx, py + ph - 214, 3f, Ui.DIM);
-        ui.textC("SAVE IT AS A LEGACY RUN, STAMPED WITH THE BUILD IT STARTED ON?", cx, py + ph - 246, 3f, Ui.DIM);
-        float bw = Math.min(400, pw / 2 - 40), bh = 80;
-        if (ui.button("SAVE AS LEGACY RUN", cx - bw - 14, py + 40, bw, bh, true)) { g.audio.play("click"); Legacy.archive(sd, Legacy.today()); g.persist(); confirmDiscard = false; }
-        if (ui.button(confirmDiscard ? "TAP AGAIN: DISCARD" : "DISCARD IT", cx + 14, py + 40, bw, bh)) {
-            if (confirmDiscard) { g.forgetRun(); g.persist(); g.audio.play("click"); confirmDiscard = false; } else confirmDiscard = true;
-        }
+        ui.textC("NEW VERSION, NEW TOWER", cx, py + ph - 56, 4.6f, Ui.ACCENT);
+        ui.textC("THIS UPDATE CHANGED HOW A CLIMB IS STORED, SO YOUR", cx, py + ph - 124, 3.2f, Ui.TEXT);
+        ui.textC("UNFINISHED CLIMB COULD NOT CARRY OVER.", cx, py + ph - 158, 3.2f, Ui.TEXT);
+        ui.textC("IT IS KEPT AS A LEGACY RUN. YOUR RECORDS AND SETTINGS ARE SAFE.", cx, py + ph - 214, 3f, Ui.DIM);
+        ui.textC("YOUR NEXT CLIMB STARTS FRESH.", cx, py + ph - 248, 3f, Ui.DIM);
+        float bw = 360, bh = 80;
+        if (ui.button("OK", cx - bw / 2, py + 40, bw, bh, true)) { g.audio.play("click"); g.save.noticeOldClimb = false; g.persist(); }
     }
 
     @Override public void hide() { dispose(); }

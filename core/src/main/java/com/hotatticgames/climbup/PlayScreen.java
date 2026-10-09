@@ -29,7 +29,9 @@ public final class PlayScreen extends ScreenAdapter {
     private final boolean demo;
     private Course course;
     private Tower tower;                 // null only in the scripted demo, which plays one fixed slice
-    private final com.hotatticgames.climbup.sim.WindowFollower follower = new com.hotatticgames.climbup.sim.WindowFollower();
+    private int simSize, seenRebuilds;              // size of the world the sim window was last set for
+    private double maxAbs;            // highest absolute height reached (the sim only knows heights relative to the floating origin)
+    private double absNow() { return tower != null ? tower.absY(sim.y) : sim.y; }
     private Sim sim;
     private WorldRenderer world;
     private final InputState in = new InputState();
@@ -81,7 +83,7 @@ public final class PlayScreen extends ScreenAdapter {
             ClimbGame.Run run = g.openRun(g.runFresh); g.runFresh = false;
             tower = run.tower; course = tower.world;
             int hStart = Integer.getInteger("climb.startHeight", 0);              // test hook: begin partway up
-            while (hStart > 0 && tower.topY() < hStart + 80f) tower.extend();
+            while (hStart > 0 && tower.topAbsY() < hStart + 80f) tower.extend();
             String hzType = System.getProperty("climb.hazard");              // test hook: start beside the first hazard of this type (e.g. CANNON)
             if (hzType != null) {
                 for (int tries = 0; tries < 40; tries++) {
@@ -93,11 +95,13 @@ public final class PlayScreen extends ScreenAdapter {
             }
             sim = Sim.startOn(course, g.tuning, run.startIdx);
             sim.checkpoint = run.startIdx; sim.keysFree = false; sim.keys = 0;
-            if (run.resumed) ResumeState.restore(g.save, sim, course, g.tuning);
+            if (run.resumed) { sim.deferRespawn = true; sim.setRange(0, course.size() - 1); ResumeState.restore(g.save, sim, tower); }
             if (hStart > 0) { int i = 0; while (i < course.size() - 1 && course.get(i + 1).y < hStart) i++; while (i > 0 && course.get(i).anchor >= 0) i--; sim = Sim.startOn(course, g.tuning, i); sim.checkpoint = i; sim.keysFree = false; sim.keys = 0; }
-            updateWindow(true);
+            if (tower != null) { tower.openedUpTo = g.save.openedUpTo; sim.deferRespawn = true; sim.floorOverride = tower.floorLocal(); }
+            sim.setRange(0, course.size() - 1); simSize = course.size(); if (tower != null) seenRebuilds = tower.rebuilds;
         }
         world = new WorldRenderer(g.tuning, course, g.models, g.settings.quality, g.settings.character);
+        if (tower != null) world.setOrigin(tower.originY, tower.originS);
         applySettings();
         world.snapCamera(sim);
         if (demo) driver[0] = new Autopilot.Driver(sim);
@@ -105,7 +109,7 @@ public final class PlayScreen extends ScreenAdapter {
         Gdx.input.setInputProcessor(mux);
         Gdx.input.setCatchKey(Input.Keys.BACK, true);
         g.audio.playlist(Audio.GAME_TRACKS);
-        runTime = 0; milestone = (int) (sim.maxHeight / 50f);
+        runTime = 0; maxAbs = absNow(); milestone = (int) (maxAbs / 50f);
         if (Boolean.getBoolean("climb.finishDemo")) { g.save.runClock = 3723.4f; g.save.finished = true; g.save.finishTime = 3723.4f; finishNewBest = true; state = State.FINISHED; }       // test hook: shows the finish screen
         if (Boolean.getBoolean("climb.ropeScript")) {   // test hook: start low on the first rope; readInput() then climbs it, mounts the beam and jumps (screenshots of the rope top)
             for (int e = 0; e < course.size(); e++) if (course.get(e).type == Element.Type.ROPE && course.get(e).y > 5f) {
@@ -119,9 +123,6 @@ public final class PlayScreen extends ScreenAdapter {
             world.snapCamera(sim);
         }
     }
-
-    /** Endless climb: only the part of the world around the player is simulated. */
-    private void updateWindow(boolean force) { follower.update(sim, course, force); }
 
     private void applySettings() {
         world.reducedMotion = g.settings.reducedMotion;
@@ -213,13 +214,15 @@ public final class PlayScreen extends ScreenAdapter {
             float speed = g.settings.assistSlow ? g.tuning.assistSlowFactor : 1f;
             if (hitstop > 0) hitstop -= dt; else acc += dt * speed;
             if (tower != null) {
-                try { if (tower.poll()) sim.ensureCapacity(); tower.ensureAbove(sim.maxHeight, 75f); }
+                try { tower.openedUpTo = g.save.openedUpTo; tower.ensureAbove(maxAbs, 75f); tower.maintain(sim); }
                 catch (RuntimeException ex) {          // the next stretch of tower could not be built (never expected): keep the run as a stamped record and go back to the title instead of crashing
                     Gdx.app.error("climb", "tower generation failed", ex);
                     if (g.save.seed != 0) Legacy.archive(g.save, Legacy.today());
-                    g.persist(); next = new TitleScreen(g); disposeOnLeave = true;
+                    g.history.delete(); g.persist(); next = new TitleScreen(g); disposeOnLeave = true;
                 }
-                updateWindow(false);
+                if (tower.rebuilds != seenRebuilds) { seenRebuilds = tower.rebuilds; world.rebased(tower.lastRemap, tower.originY, tower.originS); simSize = course.size(); }
+                if (course.size() != simSize) { sim.setRange(0, course.size() - 1); simSize = course.size(); }
+                g.syncHistory(tower);
             }
             int steps = 0;
             while (acc >= Sim.DT && steps < 6) {
@@ -228,7 +231,7 @@ public final class PlayScreen extends ScreenAdapter {
                 in.jumpPressed = false; jumpLatch = false; kJump = false; in.swingPressed = false; swingLatch = false; kSwing = false;
                 runTime += Sim.DT;
                 if (runTime > 15f && g.ota != null) g.ota.confirm();          // live play with the current (possibly OTA) content: a freshly applied update is now trusted
-                if (!demo) { if (!clockLive && (in.moveX != 0f || in.jumpPressed || in.moveY != 0f)) clockLive = true; RunRecord.tick(g.save, Sim.DT, clockLive); if (sim.maxHeight > g.save.climbHeight) g.save.climbHeight = sim.maxHeight; ResumeState.capture(g.save, sim); }
+                if (!demo) { if (!clockLive && (in.moveX != 0f || in.jumpPressed || in.moveY != 0f)) clockLive = true; RunRecord.tick(g.save, Sim.DT, clockLive); if (absNow() > maxAbs) maxAbs = absNow(); if (maxAbs > g.save.climbHeight) g.save.climbHeight = (float) maxAbs; ResumeState.capture(g.save, sim); }
                 handleEvents(sim.consumeEvents());
                 acc -= Sim.DT; steps++;
                 if (state != State.PLAYING) break;
@@ -236,8 +239,8 @@ public final class PlayScreen extends ScreenAdapter {
             if (steps == 6) acc = 0;
             if (world.takeWhoosh()) g.audio.play("whoosh", 0.6f, 1f);
             g.save.playSeconds += dt;
-            if (sim.maxHeight > g.save.bestHeight) g.save.bestHeight = sim.maxHeight;
-            int ms = (int) (sim.maxHeight / 50f);
+            if (maxAbs > g.save.bestHeight) g.save.bestHeight = (float) maxAbs;
+            int ms = (int) (maxAbs / 50f);
             if (ms > milestone) { milestone = ms; toast = ms * 50 + " M!"; toastT = 1.6f; g.audio.play("checkpoint", 0.55f, 1.35f); world.particles.burst(sim.s, sim.y + 1f, 12, gold, 2.6f, 3.2f, 0.1f, -0.5f, 1f); }
             for (int pi = pops.size() - 1; pi >= 0; pi--) { Pop pp = pops.get(pi); pp.age += dt; if (pp.age > 1.1f) pops.remove(pi); }
             autosaveT += dt; if (autosaveT > 8f) { autosaveT = 0; g.persist(); }
@@ -324,7 +327,7 @@ public final class PlayScreen extends ScreenAdapter {
         if (sd.bestTotals.length <= n) sd.bestTotals = java.util.Arrays.copyOf(sd.bestTotals, n + 1);
         boolean hadTotal = sd.bestTotals[n] > 0f, pbTotal = !hadTotal || total < sd.bestTotals[n];
         if (pbTotal) sd.bestTotals[n] = total;
-        sd.towerStartClock = sd.runClock; sd.towerStartHeight = Math.max(0f, sim.maxHeight);
+        sd.towerStartClock = sd.runClock; sd.towerStartHeight = (float) Math.max(0.0, maxAbs);
         toast = KEY_NAMES[sim.lastGateColor] + " CASTLE OPENED!"; toastT = 3.2f;
         toastSub = "TOWER " + (n + 1) + "  " + fmtTime(split) + (pbSplit && hadSplit ? "  FASTEST TOWER!" : "") + "    TOTAL " + fmtTime(total) + (pbTotal && hadTotal ? "  PACE PB!" : "");
         g.persist();
@@ -393,7 +396,6 @@ public final class PlayScreen extends ScreenAdapter {
             toast = "CHECKPOINT"; toastT = 2f; if (tower != null) g.rememberCheckpoint(tower, sim.checkpoint); g.persist(); say("[CHECKPOINT]");
         }
         if ((ev & Sim.EV_RESPAWN) != 0) {
-            if (tower != null) updateWindow(true);
             world.particles.burst(sim.s, sim.y + 0.6f, 18, cyan, 3f, 3.2f, 0.1f, 2f, 0.7f);
             g.audio.play("respawn", 0.8f, 1f); fade = 1f; g.save.falls++; vibrate(40, 1); world.shake(0.5f);
             if ((ev & Sim.EV_HIT) == 0) { toast = "BACK TO CHECKPOINT"; toastT = 1.6f; }
@@ -515,19 +517,20 @@ public final class PlayScreen extends ScreenAdapter {
         float tm = ui.tm();
         // height meter (top-left): current height, best height, and where we are in the repeating worlds
         float zk = Math.min(tm, 1.3f);
-        int Z = Palette.ZONES; int zone = Math.min(Z - 1, (int) (((sim.y / g.tuning.zoneHeight) % Z + Z) % Z)), lap = (int) (sim.y / (g.tuning.zoneHeight * Z));
-        String hs = (int) Math.max(0, sim.y) + " M";
+        double hAbs = absNow();
+        int Z = Palette.ZONES; int zone = Math.min(Z - 1, (int) (((hAbs / g.tuning.zoneHeight) % Z + Z) % Z)), lap = (int) (hAbs / (g.tuning.zoneHeight * Z));
+        String hs = (long) Math.max(0, hAbs) + " M";
         ui.rect(m - 6, H - m - 136 * zk, 380 * zk + 12, 136 * zk + 6, new Color(0.05f, 0.07f, 0.14f, 0.55f));
         ui.text(hs, m, H - m - 30 * zk, 4f * zk, Ui.TEXT);
-        ui.text("BEST " + (int) Math.max(g.save.bestHeight, sim.maxHeight), m, H - m - 56 * zk, 2.6f * zk, Ui.DIM);
+        ui.text("BEST " + (int) Math.max(g.save.bestHeight, maxAbs), m, H - m - 56 * zk, 2.6f * zk, Ui.DIM);
         // speed-run clock: distance and time on the tower being worked towards, and the total time of the climb (always shown)
-        float segM = Math.max(0f, sim.maxHeight - g.save.towerStartHeight);
-        if (g.save.finished) ui.text("INFINITY +" + (int) Math.max(0f, sim.maxHeight - g.tuning.finishCastle * g.tuning.castleSpacing) + " M", m, H - m - 80 * zk, 3f * zk, new Color(1f, 0.82f, 0.3f, 1f));
+        float segM = (float) Math.max(0.0, maxAbs - g.save.towerStartHeight);
+        if (g.save.finished) ui.text("INFINITY +" + (int) Math.max(0.0, maxAbs - g.tuning.finishCastle * g.tuning.castleSpacing) + " M", m, H - m - 80 * zk, 3f * zk, new Color(1f, 0.82f, 0.3f, 1f));
         else ui.text("TOWER " + (int) segM + " M  " + fmtTime(g.save.runClock - g.save.towerStartClock), m, H - m - 80 * zk, 3f * zk, new Color(1f, 0.82f, 0.3f, 1f));
         if (g.save.finished) ui.text("FINISH " + fmtTime(g.save.finishTime), m, H - m - 104 * zk, 3f * zk, new Color(0.45f, 1f, 0.55f, 1f));
         else ui.text("TOTAL " + fmtTime(g.save.runClock), m, H - m - 104 * zk, 3f * zk, Ui.TEXT);
         float barW = 360 * zk, barY = H - m - 126 * zk;
-        float within = ((sim.y / g.tuning.zoneHeight) % Z + Z) % Z / Z;
+        float within = (float) (((hAbs / g.tuning.zoneHeight) % Z + Z) % Z / Z);
         ui.rect(m, barY, barW, 8, new Color(0.2f, 0.22f, 0.32f, 1f));
         for (int z = 0; z < Z; z++) { Color c = Palette.SKY_BOT[z]; ui.rect(m + z * barW / Z + 1, barY + 1, barW / Z - 2, 6, new Color(c.r, c.g, c.b, 0.9f)); }
         ui.rect(m + within * barW - 3, barY - 5, 6, 18, Ui.ACCENT);

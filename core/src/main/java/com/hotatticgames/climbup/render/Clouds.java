@@ -31,7 +31,17 @@ final class Clouds {
     private final HashSet<Long> checked = new HashSet<>(), broken = new HashSet<>();
     private final ArrayList<Puff> puffs = new ArrayList<>();
     public int brokenTotal, brokenThisFrame;
+    private double originY, originS;        // floating origin: cells are absolute, so the scenery stays put when the origin moves
     private final ColorAttribute tintAttr = ColorAttribute.createDiffuse(1f, 1f, 1f, 1f);
+
+    /** The world origin moved: carry the live clouds and puffs along (their cells are absolute and unaffected). */
+    void setOrigin(double oy, double os) {
+        if (oy == originY && os == originS) return;
+        float dy = (float) (oy - originY), ds = (float) (os - originS);
+        for (Cloud c : live.values()) { c.y -= dy; c.s -= ds; }
+        for (Puff p : puffs) { p.y -= dy; p.s -= ds; }
+        originY = oy; originS = os;
+    }
 
     Clouds(Models models, Tuning t, Course course) { this.models = models; T = t; this.course = course; seed = course.seed * 0x9E3779B97F4A7C15L; }
 
@@ -57,7 +67,7 @@ final class Clouds {
         float roll = rnd(h, 0);
         if (roll > 0.62f) return;
         Cloud c = new Cloud();
-        c.s = (cx + 0.1f + 0.8f * rnd(h, 1)) * CELL_S; c.y = (cy + 0.1f + 0.8f * rnd(h, 2)) * CELL_Y;
+        c.s = (float) ((cx + 0.1 + 0.8 * rnd(h, 1)) * CELL_S - originS); c.y = (float) ((cy + 0.1 + 0.8 * rnd(h, 2)) * CELL_Y - originY);
         c.model = (int) (rnd(h, 3) * 2.999f); c.yaw = rnd(h, 4) * 40f - 20f;
         boolean back = rnd(h, 5) < 0.45f;
         if (back) { c.dz = 5f + 9f * rnd(h, 6); c.scale = 0.9f + 1.1f * rnd(h, 7); }
@@ -86,8 +96,8 @@ final class Clouds {
     void update(float camS, float camY, float playerS, float playerY, int lo, int hi, float dt, boolean reduced, int quality) {
         brokenThisFrame = 0;
         if (quality > 0) {
-            int cx0 = (int) Math.floor((camS - SPAN) / CELL_S), cx1 = (int) Math.floor((camS + SPAN) / CELL_S);
-            int cy0 = (int) Math.floor((camY - 16f) / CELL_Y), cy1 = (int) Math.floor((camY + 18f) / CELL_Y);
+            int cx0 = (int) Math.floor((camS + originS - SPAN) / CELL_S), cx1 = (int) Math.floor((camS + originS + SPAN) / CELL_S);
+            int cy0 = (int) Math.floor((camY + originY - 16.0) / CELL_Y), cy1 = (int) Math.floor((camY + originY + 18.0) / CELL_Y);
             for (int cx = cx0; cx <= cx1; cx++) for (int cy = cy0; cy <= cy1; cy++) if (!broken.contains(key(cx, cy))) spawn(cx, cy, lo, hi);
         }
         // break the clouds in the player's plane that the player touches

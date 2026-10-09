@@ -46,6 +46,9 @@ public final class Particles {
         s[i] = arc; y[i] = yy; vs[i] = vS; vy[i] = vY; life[i] = max[i] = life0; size[i] = sz; g[i] = grav; col[i].set(c);
     }
 
+    /** The origin moved by dy: keep every live particle where it is on screen. */
+    public void shiftY(float dy) { for (int i = 0; i < MAX; i++) if (life[i] > 0) y[i] -= dy; }
+
     public void update(float dt) {
         for (int i = 0; i < MAX; i++) if (life[i] > 0) {
             life[i] -= dt; vy[i] -= g[i] * dt; s[i] += vs[i] * dt; y[i] += vy[i] * dt;

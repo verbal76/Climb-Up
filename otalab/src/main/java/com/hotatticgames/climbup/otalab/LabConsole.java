@@ -151,6 +151,8 @@ public class LabConsole extends Activity {
         sb.append("STATE\n").append(stateSummary()).append("\n\nLAST ACTION: ").append(action).append('\n');
         if (!note.isEmpty()) sb.append(note).append('\n');
         List<String> lines = logLines();
+        String us = null; for (String l : lines) { int i = l.indexOf("update status: "); if (i >= 0) us = l.substring(i + 15); }
+        if (us != null) sb.append("UPDATE STATUS: ").append(us).append('\n');
         if (action.equals("equivalence")) {
             Map<String, String> ref = reference(); int same = 0, diff = 0, done = 0; StringBuilder det = new StringBuilder(); String devNote = "";
             for (String l : lines) {

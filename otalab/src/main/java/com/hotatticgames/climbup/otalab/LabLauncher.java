@@ -52,6 +52,7 @@ public class LabLauncher extends AndroidApplication {
         }
         Log.i(TAG, (s.recovery() ? "RECOVERY screen" : "running module v" + s.manifest.moduleVersion) + " active=" + store.st.active + " lastGood=" + store.st.lastGood + " pending=" + store.st.pending
                 + " tries=" + store.st.tries + " staged=" + store.st.staged + " note=[" + s.note + "] rollback=[" + store.st.rollback + "] bootMs=" + (System.nanoTime() - t0) / 1_000_000);
+        Log.i(TAG, "update status: " + com.hotatticgames.climbup.host.UpdateStatus.capture(store, host, "Climb up", null).headline(System.currentTimeMillis()));
         initialize(s.recovery() ? listener : PerfListener.maybeWrap(new FrameFlag(listener), "module-host"), LabCommon.gameConfig());
         if (!s.overrides.isEmpty()) {                       // the module carries game files that replace the APK's: serve them through the overlay (nothing is installed otherwise)
             overlay = new com.hotatticgames.climbup.host.OverlayFiles(com.badlogic.gdx.Gdx.files, s.overrides, store.assets(), msg -> Log.i(TAG, msg));
@@ -63,7 +64,12 @@ public class LabLauncher extends AndroidApplication {
         String base = getIntent() == null ? null : getIntent().getStringExtra("updateBase");      // lab only: where CI serves test bundles
         if (base != null) {
             final String b = base;
-            Thread t = new Thread(() -> Log.i(TAG, "update check: " + new ModuleDownloader(store, new ModuleDownloader.Http(true), b).check()), "lab-update");
+            final HostInfo hostInfo = host;
+            Thread t = new Thread(() -> {
+                ModuleDownloader dl = new ModuleDownloader(store, new ModuleDownloader.Http(true), b);
+                Log.i(TAG, "update check: " + dl.check());
+                Log.i(TAG, "update status: " + com.hotatticgames.climbup.host.UpdateStatus.capture(store, hostInfo, "Climb up", dl).headline(System.currentTimeMillis()));
+            }, "lab-update");
             t.setDaemon(true); t.start();
         }
     }

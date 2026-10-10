@@ -18,7 +18,7 @@ Verification levels used below: **unit** (JVM, one class), **integration** (JVM,
 - **Defect 1 (fixed):** duplicate-by-case detection used the default locale: under `tr_TR`, `ID` and `id` did not collide. Now `Locale.ROOT` (tested in tr, az, lt, US, ROOT).
 - **Defect 2 (fixed):** `OverlayFiles.norm` did not canonicalise `a//b`, `a/./b`, `a/x/../b`, so those spellings silently skipped an override that the exact spelling hit. Now canonicalised; a `..` that would climb above the root is kept (never equals a key) and left to the backend as before. Case is deliberately not folded (the APK lookup is case-sensitive).
 
-Not done yet from (A): every asset type through the overlay on a device (g3dj, obj, png, ogg), asset probe interface for E1.
+Not done yet from (A): every asset type through the overlay on a device (g3dj, obj, png, ogg); the probe class exists (section 6) and waits for the launcher hook.
 
 ## 2. Crash-point fault injection for `ModuleStore` (D)
 
@@ -86,5 +86,35 @@ Tests: the rule is checked exhaustively over all 8 component subsets x 5 check k
 **Integration (E1):** show `capture(...).headline(System.currentTimeMillis())` and `lines(...)` in Settings/About; call `capture` on the thread that owns the store or any thread (the snapshot is synchronized); pass the `ModuleDownloader` instance that ran the check (or null). `UpdateStatus.Component.APP` exists so a future app-update check can be added without changing the rule.
 Not verified: on a device, and the wording has not been reviewed by the owner.
 
-## 6. Not yet done
+## 6. On-device asset probe (A) - `AssetProbe`, `AssetProbeTest` (JVM integration over the game's real asset tree; local 115/115 for hostkit)
+
+`AssetProbe.run(Files files, Collection<String> overrideOnlyPaths, Map<String, Loader> loaders)` walks every internal game file through the given `Files` (on a device: `Gdx.files`, i.e. the overlay when overrides are active), reads and SHA-256-hashes each, runs the launcher-supplied loader for its extension, and returns counts per type, total bytes, a 16-hex digest over every (path, hash), and every failure. `Result.line()` is one greppable line: `ASSETPROBE files=N bytes=B digest=<16hex> fail=F ext=png:12,... [first=<path: reason>]`.
+Tested on the JVM: it reads every file of the real tree (counts and bytes equal a direct file walk); an overlay with no override is digest-identical to the packaged files; one override changes exactly one path's hash and the byte total by exactly the size difference; an override-only file is found through `overrideOnlyPaths`; loaders run per extension and every failure (e.g. a `ClassCastException` from the audio classes) is reported without stopping the walk; an empty tree and an unreadable file are failures, not passes. Mutation-checked (skipping the loaders or corrupting the hash turns three tests red).
+
+**REQUEST to E1 (launcher, the only change needed outside hostkit).** After the first rendered frame, on the GL thread (`Gdx.app.postRunnable`), once per launch, log the line with the host's usual tag and, for the lab hosts only:
+```java
+Map<String, AssetProbe.Loader> L = new HashMap<>();
+L.put("png",  (p, h) -> new Pixmap(h).dispose());
+L.put("json", (p, h) -> new JsonReader().parse(h));
+L.put("g3dj", (p, h) -> new G3dModelLoader(new JsonReader()).loadModelData(h));
+L.put("obj",  (p, h) -> new ObjLoader().loadModel(h).dispose());              // needs GL: hence the GL thread
+L.put("ogg",  (p, h) -> Gdx.audio.newSound(h).dispose());                     // proves the audio handle is the backend's own, overridden or not
+L.put("wav",  (p, h) -> Gdx.audio.newSound(h).dispose());
+Log.i(TAG, AssetProbe.run(Gdx.files, overrideOnlyPaths /* keys of the active overrides */, L).line());
+```
+Then `asset_emulator_test.sh` (mine) will compare the probe line of the un-updated baseline (A1), the updated install (A2: same `files`, same `ext`, `fail=0`, digest different) and, with a delivered g3dj / obj / png / ogg, prove each type is loaded from the store. I will add those checks as soon as the hook exists (adding them first would only fail).
+Not verified: anything on the emulator or a device (the loaders need the real engine).
+
+## 7. Repeated-release stress (D) - `ReleaseStressTest` (JVM integration, real filesystem, in-memory transport; local 117/117 for hostkit)
+
+Thirty consecutive combined code + asset releases through the real downloader and store: each is checked, downloaded, staged, activated at the next start and confirmed, except every fifth (never confirms, must be rolled back and blacklisted) and every seventh raises the save schema (saves migrated, or restored if the release is rolled back). After every step: at most the active and last-good module are installed, no staging debris, every content-store file is referenced by something installed or waiting, the state file stays under 1 KB, a restart keeps the proven release, rolled-back versions are refused when re-offered, the highest-accepted counter equals the number of releases. A second test shows an unchanged shared file crosses the wire exactly once in twelve releases.
+**Defect found (red first) and fixed:** the content store was only garbage-collected on `confirm()`, so a rolled-back release kept its unique game files until some later release was confirmed; a run of bad releases with no good one in between grew the store without bound. `dropActive` now collects after deleting the dropped module (state is already saved by then; injection point `drop.afterGc`, swept by the crash-point harness).
+Not verified: on the emulator or a device; real disk usage under the platform's storage accounting.
+
+## 8. S2 "host paused" intermittent (emulator, `tools/otalab/emulator_test.sh`)
+
+`S2 host paused (waited for /host onPause/)` failed on 2 of 6 `otalab` runs on this branch (`209e68e`, `3edb681`) and passed on the other 4 (`05c9117`, `5cd6462`, `aabf8ec`, `b690969`); in both failures the module's own pause / resume checks and S3-S9 passed. I first called it a flake after one failure; two failures make it a recurring intermittent, so it was analysed instead. Evidence: in both failing runs the later `am start` printed "Activity not started, intent has been delivered to currently running top-most instance", i.e. the game was STILL the top activity, so nothing had covered it and no `onPause` was due. That points at the stimulus (HOME + a Settings activity occasionally does not take on the headless emulator), not at the host. This is an inference from the log, not a proof.
+Change: `cover_game` retries up to three times with a different cover (Settings by action, Settings by component, the home launcher), waits 15 s for `host onPause` after each, and on a miss prints which activity was actually resumed. The assertion is unchanged (the host must have logged `onPause`); if it still fails after three covering attempts the printed resumed activity shows whether the game really was covered (then it is a host bug) or not (then it is the emulator). Not yet verified on CI: whether the miss rate drops, and what the diagnostic shows if one still happens.
+
+## 9. Not yet done
 key rotation / revocation as emulator scenarios, the device scenarios (kill during download/activation, 20+ release stress, real-game SaveGuard, combined code+asset release), and the asset-type/path-safety matrix from (A).

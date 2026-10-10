@@ -561,6 +561,7 @@ public final class WorldRenderer implements Disposable {
     private ColorAttribute gemDiff, gemEmis, glowEmis;
     private BlendingAttribute gemBlend, glowBlend;
     private final java.util.HashMap<Integer, Float> gemAct = new java.util.HashMap<>();
+    private final java.util.HashSet<Integer> gemSeenWaiting = new java.util.HashSet<>();      // checkpoints this renderer has seen not yet reached
     private final Color keyCol = new Color(1f, 1f, 1f, 1f);
     private final Color gemRed = new Color(1f, 0.12f, 0.16f, 1f);
 
@@ -575,8 +576,10 @@ public final class WorldRenderer implements Disposable {
         if (gem == null) initGem();
         boolean active = sim.checkpoint >= i;
         Float t0 = gemAct.get(i);
+        if (!active) gemSeenWaiting.add(i);
         if (active && t0 == null) {
-            if (sim.checkpoint > i) t0 = -1000f; else { t0 = time; particles.burst(es, ey + 1.7f, 16, gemRed, 2.6f, 3.4f, 0.1f, -1f, 1.1f); }
+            // the pop and its red dust only happen when the player really reaches the gem; a hero who simply starts or resumes standing at a checkpoint gets no dust over his head
+            if (sim.checkpoint > i || !gemSeenWaiting.contains(i)) t0 = -1000f; else { t0 = time; particles.burst(es, ey + 1.7f, 16, gemRed, 2.6f, 3.4f, 0.1f, -1f, 1.1f); }
             gemAct.put(i, t0);
         } else if (!active && t0 != null) { gemAct.remove(i); t0 = null; }      // respawned behind a gem that was reached: the world was reset
         float ph = i * 1.7f, base = 0.46f;

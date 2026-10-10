@@ -13,6 +13,8 @@ $ErrorActionPreference = 'Stop'
 $root = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 Set-Location $root
 $out = Join-Path $root 'build\windows'
+$jarDir = Join-Path $root 'desktop\build\windows\input'      # where :desktop:windowsJar writes upwardly.jar
+New-Item -ItemType Directory -Force $out | Out-Null
 $version = (Select-String -Path 'build.gradle' -Pattern "appVersionName = '([^']+)'").Matches[0].Groups[1].Value
 $exeVersion = "$version.$BuildNumber"
 Write-Host "UPWARDLY $version build $BuildNumber ($Channel)"
@@ -33,7 +35,7 @@ $jp = Join-Path $env:JAVA_HOME 'bin\jpackage.exe'
 if (-not (Test-Path $jp)) { $jp = 'jpackage' }
 & $jp --type app-image --name UPWARDLY --app-version $exeVersion --vendor 'Hot Attic Games' `
   --description 'UPWARDLY - a tower that does not exist, a climb that does.' --copyright 'Hot Attic Games' `
-  --icon "$out\upwardly.ico" --input "$out\input" --main-jar upwardly.jar --main-class com.hotatticgames.climbup.desktop.DesktopLauncher `
+  --icon "$out\upwardly.ico" --input $jarDir --main-jar upwardly.jar --main-class com.hotatticgames.climbup.desktop.DesktopLauncher `
   --add-modules 'java.base,java.desktop,java.logging,java.management,java.naming,java.xml,jdk.unsupported' `
   --java-options '-Dfile.encoding=UTF-8' --java-options '-Xms256m' --java-options '-Xmx1024m' --java-options '-XX:+UseG1GC' `
   --dest $dist

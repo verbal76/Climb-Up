@@ -18,7 +18,7 @@ import java.util.function.Consumer;
  * served from the content store, every other path comes from the APK exactly as before. With no overrides the host does not install it at all, so an un-updated install runs the very
  * same file code as the packaged game.
  * <ul>
- * <li>Audio (.wav/.ogg/.mp3) overrides are handed out as the backend's own absolute handle: the Android audio classes cast to their own handle type.</li>
+ * <li>Audio (.wav/.ogg/.mp3) is never wrapped: an override is the backend's own absolute handle and every other audio file is the backend's own internal handle, because the Android audio classes cast to that type.</li>
  * <li>Everything else is an {@link OverlayHandle} that keeps the LOGICAL path (loaders derive texture/material paths from it) and re-resolves {@code child/sibling/parent} through this overlay,
  *     so a model served from the store still finds the textures that stayed in the APK, and the reverse.</li>
  * </ul>
@@ -40,7 +40,7 @@ public final class OverlayFiles implements Files {
         AssetManifest.Asset a = overrides.get(p);
         File f = a == null ? null : store.openVerified(a);
         if (a != null && f == null) diag.accept("override unusable, using the APK copy: " + p);
-        if (f != null && isAudio(p)) return base.absolute(f.getAbsolutePath());
+        if (isAudio(p)) return f != null ? base.absolute(f.getAbsolutePath()) : base.internal(path);        // the Android audio classes cast to the backend's own handle: audio never gets a wrapper
         return new OverlayHandle(p, f, base.internal(path));
     }
     @Override public FileHandle getFileHandle(String path, FileType type) { return type == FileType.Internal ? internal(path) : base.getFileHandle(path, type); }

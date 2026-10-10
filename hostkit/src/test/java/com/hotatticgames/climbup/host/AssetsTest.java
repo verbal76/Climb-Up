@@ -152,6 +152,19 @@ public class AssetsTest {
         assertTrue("an audio file that is not overridden still reads from the APK", o.internal("audio/pack/" + new File(APK, "audio/pack").list()[0]).exists());
     }
 
+    @Test public void everyAudioFileInTheRealTreeIsTheBackendsOwnHandleWhateverIsOverridden() throws Exception {
+        OverlayFiles o = overlay(put("data/tuning.json", "{}".getBytes()), put("models/x.bin", new byte[]{1}));
+        int n = 0;
+        try (java.util.stream.Stream<java.nio.file.Path> w = java.nio.file.Files.walk(APK.toPath())) {
+            for (java.nio.file.Path p : (Iterable<java.nio.file.Path>) w.filter(java.nio.file.Files::isRegularFile)::iterator) {
+                String rel = APK.toPath().relativize(p).toString().replace(File.separatorChar, '/'), l = rel.toLowerCase();
+                if (!(l.endsWith(".wav") || l.endsWith(".ogg") || l.endsWith(".mp3"))) continue;
+                n++; assertTrue("not wrapped (the Android audio classes would throw a ClassCastException): " + rel, o.internal(rel) instanceof ApkFiles.ApkHandle);
+            }
+        }
+        assertTrue("the game has dozens of sounds (" + n + ")", n > 30);
+    }
+
     @Test public void aDamagedOverrideFallsBackToTheApkCopyAndSaysSo() throws Exception {
         byte[] good = "the real content".getBytes(); AssetManifest.Asset a = put("data/sfx.json", good);
         File f = store.file(a.sha256); f.setWritable(true); java.nio.file.Files.write(f.toPath(), "tampered content".getBytes());

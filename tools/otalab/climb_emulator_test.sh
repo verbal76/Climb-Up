@@ -93,10 +93,13 @@ N=$(adb shell "run-as $HOST sh -c 'ls files/host/cas | wc -l'" | tr -d '\r'); [ 
 start "$HOST_ACT" --es prop.climb.start splash >/dev/null
 expect "K6 v6 activated at the next cold start with its override" "asset overrides active: 1 file" 40
 sleep 1.6; shot k6_splash; sleep 7; shot k6_title
-echo "   splash vs the unchanged splash (REF): $(diff k6_splash k1_REF_splash)   title vs REF: $(diff k6_title k1_REF_title)"
-ascii k6_splash
-SP=$(diff k6_splash k1_REF_splash | sed 's/mean=\([0-9.]*\).*/\1/'); awk -v s="$SP" 'BEGIN{exit !(s>20)}' && pass "K6 the delivered file is what the game shows (splash differs by $SP/255)" || fail "K6 splash unchanged ($SP/255)"
-TT=$(diff k6_title k1_REF_title | sed 's/mean=\([0-9.]*\).*/\1/'); awk -v s="$TT" 'BEGIN{exit !(s<3.0)}' && pass "K6 every other file still comes from the APK unchanged (title diff $TT/255)" || fail "K6 title changed ($TT/255)"
+echo "   game process alive: $(adb shell pidof $HOST | tr -d '\r')"; logs | grep -E "FATAL|Exception" | head -5
+echo "   splash  override vs unchanged-HOST: $(diff k6_splash k1_HOST_splash)   title  override vs unchanged-HOST: $(diff k6_title k1_HOST_title)"
+ascii k1_HOST_splash; ascii k6_splash; ascii k1_HOST_title; ascii k6_title
+SP=$(diff k6_splash k1_HOST_splash | sed 's/mean=\([0-9.]*\).*/\1/'); SC=$(diff k6_splash k1_HOST_splash | sed 's/.*corr=\(-\?[0-9.]*\).*/\1/')
+awk -v s="$SP" -v c="$SC" 'BEGIN{exit !(s>8 && c<0.5)}' && pass "K6 the delivered file is what the game shows (splash differs by $SP/255, correlation $SC)" || fail "K6 splash not changed as delivered ($SP/255, corr $SC)"
+TT=$(diff k6_title k1_HOST_title | sed 's/mean=\([0-9.]*\).*/\1/'); awk -v s="$TT" 'BEGIN{exit !(s<3.0)}' && pass "K6 every other file still comes from the APK unchanged (title diff $TT/255)" || fail "K6 title changed ($TT/255)"
+expect "K6 sounds still load (no handle-type errors in the log)" "asset overrides active" 5; logs | grep -q "ClassCast" && fail "K6 ClassCastException" || pass "K6 no ClassCastException"
 
 echo "== P1 delivery-layer measurements (informational on an emulator: software GL, NOT representative of a phone; never fails the run)"
 bash "$HERE/perf_capture.sh" "$OUT/perf" 3 20 2>&1 | tee "$OUT/perf.txt" | sed 's/^/   /' || true

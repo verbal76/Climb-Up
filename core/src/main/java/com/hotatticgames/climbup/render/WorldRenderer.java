@@ -607,6 +607,8 @@ public final class WorldRenderer implements Disposable {
     private static final float PK = 0.37f;                    // pack units -> game units (same scale as the hero)
     private final java.util.HashMap<String, ModelInstance> packInst = new java.util.HashMap<>();
     private static final float CANNON_YAW = -90f;
+    /** Pedestal height: the barrel (model axis through its origin, 1.66 pack units long each way) sits with its axis 2.35 above the platform, the height the ball flies at. */
+    public static final float CANNON_LIFT = 1.94f;      // 2.35 (axis) - 0.35 (barrel radius) - 0.16 (cap) + 0.10 (the barrel rests in the cap)
 
     private ModelInstance pack(String name) {
         ModelInstance m = packInst.get(name);
@@ -743,9 +745,10 @@ public final class WorldRenderer implements Disposable {
             }
             case CANNON: {
                 float base = h.y - 2.35f;
-                drawBox(h.s, base, 0f, camS, 1.25f, 1.5f, 1.25f, 0.42f, 0.38f, 0.5f);
-                drawBox(h.s, base + 1.5f, 0f, camS, 1.45f, 0.16f, 1.45f, 0.3f, 0.27f, 0.36f);
-                drawPack("cannon", h.s, base + 1.66f + 0.12f, 0f, camS, PK, PK, PK, h.dir > 0 ? CANNON_YAW : -CANNON_YAW, 0f);
+                // the barrel's axis is at the ball's height (h.y): the ball is launched from inside it and leaves at its tip (CANNON_TIP ahead of the launch point)
+                drawBox(h.s, base, 0f, camS, 1.25f, CANNON_LIFT, 1.25f, 0.42f, 0.38f, 0.5f);
+                drawBox(h.s, base + CANNON_LIFT, 0f, camS, 1.45f, 0.16f, 1.45f, 0.3f, 0.27f, 0.36f);
+                drawPack("cannon", h.s, h.y, 0f, camS, PK, PK, PK, h.dir > 0 ? CANNON_YAW : -CANNON_YAW, 0f);
                 for (int back = 0; back < CANNON_TRAIL; back++) {          // the lethal ball, then earlier launches still flying: a ball leaves the screen, it never pops out of it
                     float bs = h.cannonBallS(t, back);
                     if (Math.abs(course.dsWrap(bs, camS)) > CANNON_OFFSCREEN) continue;

@@ -33,6 +33,24 @@ class ModuleGame extends ClimbGame {
 
     private int statusTick;
 
+    private String otaLabel;
+
+    /** Title screen: the game version and the update (OTA) version that is running, which is what matters to the player; the build number stays in Settings > About. */
+    @Override public String versionLabel() {
+        if (otaLabel == null) {
+            otaLabel = super.versionLabel();
+            try {
+                java.io.File d = env.moduleDir();
+                if (d != null) {
+                    String m = new String(java.nio.file.Files.readAllBytes(new java.io.File(d, "manifest.json").toPath()), java.nio.charset.StandardCharsets.UTF_8);
+                    java.util.regex.Matcher x = java.util.regex.Pattern.compile("\"moduleVersion\"\\s*:\\s*(\\d+)").matcher(m);
+                    if (x.find()) otaLabel = "V" + VERSION + "  OTA " + x.group(1);
+                }
+            } catch (Throwable ignored) { }
+        }
+        return otaLabel;
+    }
+
     private UpdateGate gate;
 
     @Override public void render() {

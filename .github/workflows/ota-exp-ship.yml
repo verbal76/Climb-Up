@@ -5,7 +5,7 @@ name: OTA experimental channel - ship a signed game update (no APK is built or r
 # branch, the production "ota" release, tags, the rolling APK pre-release and every other branch are never touched. Signs with the OTA key already configured in this repository.
 on:
   push:
-    branches: [exp/ota-full]
+    branches: [exp/ota-ship]
     paths: ['tools/otalab/ship/release.txt']
 permissions:
   contents: write
@@ -13,7 +13,7 @@ concurrency: ota-exp-channel
 
 jobs:
   ship:
-    if: github.ref == 'refs/heads/exp/ota-full'
+    if: github.ref == 'refs/heads/exp/ota-ship'
     runs-on: ubuntu-latest
     timeout-minutes: 120
     steps:
@@ -47,7 +47,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -e
-          read -r N KIND < tools/otalab/ship/release.txt
+          read -r N KIND AUTO < tools/otalab/ship/release.txt
           case "$N" in ''|*[!0-9]*) echo "::error::release.txt must start with a whole version number"; exit 1;; esac
           case "$KIND" in banner|plain) ;; *) echo "::error::kind must be banner or plain"; exit 1;; esac
           BASE=https://raw.githubusercontent.com/${{ github.repository }}/ota-exp-channel/
@@ -74,7 +74,7 @@ jobs:
           assert not bad, bad
           print("baseline inside the APK: v%s, same app id, interface, save schema and generator ruleset as the new release" % m["moduleVersion"])
           PY
-          echo "version=$N" >> "$GITHUB_OUTPUT"; echo "kind=$KIND" >> "$GITHUB_OUTPUT"; echo "base=$BASE" >> "$GITHUB_OUTPUT"
+          echo "version=$N" >> "$GITHUB_OUTPUT"; echo "auto=${AUTO:-no}" >> "$GITHUB_OUTPUT"; echo "kind=$KIND" >> "$GITHUB_OUTPUT"; echo "base=$BASE" >> "$GITHUB_OUTPUT"
       - name: Build the module and sign the release
         run: |
           set -e
@@ -118,7 +118,7 @@ jobs:
           profile: pixel_2
           ram-size: 4096M
           disable-animations: true
-          script: env AUTO_DIR="${{ runner.temp }}/chan2" GH_TOKEN="${{ github.token }}" GITHUB_REPOSITORY="${{ github.repository }}" APK="${{ runner.temp }}/published.apk" CHANNEL="${{ steps.r.outputs.base }}" VERSION="${{ steps.r.outputs.version }}" KIND="${{ steps.r.outputs.kind }}" OUT="${{ runner.temp }}/ship-out" tools/otalab/ship_check.sh
+          script: env AUTO_DIR="$( [ "${{ steps.r.outputs.auto }}" = auto ] && echo ${{ runner.temp }}/chan2 )" GH_TOKEN="${{ github.token }}" GITHUB_REPOSITORY="${{ github.repository }}" APK="${{ runner.temp }}/published.apk" CHANNEL="${{ steps.r.outputs.base }}" VERSION="${{ steps.r.outputs.version }}" KIND="${{ steps.r.outputs.kind }}" OUT="${{ runner.temp }}/ship-out" tools/otalab/ship_check.sh
       - uses: actions/upload-artifact@v4
         if: always()
         with:

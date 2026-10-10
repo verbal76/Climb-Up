@@ -149,6 +149,9 @@ public class ClimbGame extends Game {
     }
 
     /** Hosting hook: a host that can relaunch the app (the OTA module host) overrides both. The packaged / desktop game has no behaviour here. */
+    /** The version text on the title screen. The packaged game shows version and build; a hosted game may add what it is running. */
+    public String versionLabel() { return Legacy.versionLine(VERSION, appBuild); }
+
     public boolean canRestartApp() { return false; }
     public void restartApp() { }
 

@@ -68,7 +68,7 @@ public class FocusAndRemapTest {
         r.src.tapKey(Keys.S); r.frame(0.016f); r.draw();                 // down
         r.src.tapKey(Keys.ENTER); r.frame(0.016f);
         int[] f = r.draw();
-        assertEquals("SETTINGS is focused and activated", 3, f[1]);
+        assertEquals("SETTINGS is focused and activated", 3, f[1] & 3);
         assertEquals(0, f[0] & 2);
     }
 
@@ -91,7 +91,7 @@ public class FocusAndRemapTest {
         r.frame(0.5f); r.draw(); r.frame(0.5f); r.draw();
         p.set(Ctl.DPAD_DOWN, 1f); r.frame(0.016f); r.draw(); p.set(Ctl.DPAD_DOWN, 0f); r.frame(0.016f); r.draw();
         p.set(Ctl.A, 1f); r.frame(0.016f);
-        assertEquals(3, r.draw()[1]);
+        assertEquals(3, r.draw()[1] & 3);
     }
 
     @Test public void volumeStyleRowsAdjustWithLeftAndRight() {

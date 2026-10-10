@@ -16,6 +16,11 @@ public final class GdxPad implements Pad {
     @Override public boolean connected() { return c.isConnected(); }
 
     private boolean b(int code) { return code >= 0 && c.getButton(code); }
+    /** View and Menu: the driver's own mapping first; when it does not name them (or names a button the pad does not have), the raw XInput position. */
+    private boolean menuButton(int mapped, int xinputCode) {
+        if (mapped >= 0) return b(mapped);
+        return b(xinputCode);
+    }
     private float axis(int idx) { if (idx < 0) return 0f; try { return c.getAxis(idx); } catch (RuntimeException e) { return 0f; } }
     private static float pos(float v) { return v > 0f ? v : 0f; }
 
@@ -27,8 +32,8 @@ public final class GdxPad implements Pad {
             case B: return b(m.buttonB) ? 1f : 0f;
             case X: return b(m.buttonX) ? 1f : 0f;
             case Y: return b(m.buttonY) ? 1f : 0f;
-            case BACK: return b(m.buttonBack) ? 1f : 0f;
-            case START: return b(m.buttonStart) ? 1f : 0f;
+            case BACK: return menuButton(m.buttonBack, 6) ? 1f : 0f;
+            case START: return menuButton(m.buttonStart, 7) ? 1f : 0f;
             case L1: return b(m.buttonL1) ? 1f : 0f;
             case R1: return b(m.buttonR1) ? 1f : 0f;
             case L2: return m.buttonL2 >= 0 ? (b(m.buttonL2) ? 1f : 0f) : axis(TRIGGER_LEFT_AXIS);
@@ -52,10 +57,15 @@ public final class GdxPad implements Pad {
 
     @Override public boolean latched(Ctl k) { boolean v = latch[k.ordinal()]; latch[k.ordinal()] = false; return v; }
 
+    private static int xinputOrSdlStart(ControllerMapping m) { return m.buttonStart >= 0 ? m.buttonStart : 7; }
+    private static int xinputOrSdlBack(ControllerMapping m) { return m.buttonBack >= 0 ? m.buttonBack : 6; }
+
     /** Event hook: remember a button press that may be shorter than a frame. */
     void buttonDown(int code) {
         ControllerMapping m = c.getMapping();
         if (m == null || code < 0) return;
+        if (code == xinputOrSdlStart(m) ) latch[Ctl.START.ordinal()] = true;
+        if (code == xinputOrSdlBack(m) ) latch[Ctl.BACK.ordinal()] = true;
         if (code == m.buttonA) latch[Ctl.A.ordinal()] = true; else if (code == m.buttonB) latch[Ctl.B.ordinal()] = true;
         else if (code == m.buttonX) latch[Ctl.X.ordinal()] = true; else if (code == m.buttonY) latch[Ctl.Y.ordinal()] = true;
         else if (code == m.buttonStart) latch[Ctl.START.ordinal()] = true; else if (code == m.buttonBack) latch[Ctl.BACK.ordinal()] = true;

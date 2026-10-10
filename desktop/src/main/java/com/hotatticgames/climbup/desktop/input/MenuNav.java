@@ -66,6 +66,7 @@ public final class MenuNav implements Ui.Navigator {
         if (pointerMoved && px >= x && px <= x + w && py >= y && py <= y + h) { fm.focus = idx; visible = true; }
         boolean focused = idx == fm.focus;
         if (focused && visible) flags |= 1;
+        if (focused) flags |= 4;                  // focused, ring visible or not: this one is the orange button
         if (focused && confirm) { flags |= 2; confirm = false; }
         if (back && (label.equals("BACK") || label.equals("CANCEL"))) { flags |= 2; back = false; }
         if (idx == forced) { flags |= 2; forced = -1; }

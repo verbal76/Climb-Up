@@ -26,7 +26,7 @@ public final class Ui extends InputAdapter implements Disposable {
     /** Keyboard/controller/mouse-hover menu navigation (desktop only; null on mobile, where every code path below is skipped). */
     public interface Navigator {
         void beginFrame(Ui ui);
-        /** Called for every button drawn this frame. Bit 0 of the result: this button has the focus (draw the ring); bit 1: it was activated without a pointer (confirm, or back for a BACK button). */
+        /** Called for every button drawn this frame. Bit 0 of the result: this button has the focus (draw the ring); bit 2: it is the focused one (draw it orange); bit 1: it was activated without a pointer (confirm, or back for a BACK button). */
         int button(String label, float x, float y, float w, float h, boolean accent);
         void endFrame();
         /** Any confirm/back style press this frame (skips the studio splash). */
@@ -96,6 +96,8 @@ public final class Ui extends InputAdapter implements Disposable {
     public boolean button(String label, float x, float y, float w, float h, boolean accent) {
         boolean pressed = down && in(downX, downY, x, y, w, h) && in(curX, curY, x, y, w, h);
         float o = pressed ? 4 : 0;
+        int f = nav != null ? nav.button(label, x, y, w, h, accent) : 0;
+        if (nav != null) accent = (f & 4) != 0;                // with a keyboard, mouse or pad only the highlighted button is orange
         rect(x - 4, y - 4 - 6 + o, w + 8, h + 8, SHADOW);
         rect(x - 4, y - 4 + o, w + 8, h + 8, accent ? EDGE : DIM);
         rect(x, y + o, w, h, accent ? ACCENT : PANEL);
@@ -104,7 +106,6 @@ public final class Ui extends InputAdapter implements Disposable {
         px = Math.max(2f, px);
         text(label, x + w / 2 - font.width(label, px) / 2, y + o + h / 2 - font.height(px) / 2, px, TEXT);
         if (nav != null) {
-            int f = nav.button(label, x, y, w, h, accent);
             if ((f & 1) != 0) focusRing(x, y + o, w, h);
             if ((f & 2) != 0) return true;
         }

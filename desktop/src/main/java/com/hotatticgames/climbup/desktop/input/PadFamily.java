@@ -28,20 +28,20 @@ public enum PadFamily {
             case R1: return ps ? "R1" : sw ? "R" : "RB";
             case L2: return ps ? "L2" : sw ? "ZL" : "LT";
             case R2: return ps ? "R2" : sw ? "ZR" : "RT";
-            case L3: return "L STICK CLICK";
-            case R3: return "R STICK CLICK";
-            case DPAD_UP: return "D-PAD UP";
-            case DPAD_DOWN: return "D-PAD DOWN";
-            case DPAD_LEFT: return "D-PAD LEFT";
-            case DPAD_RIGHT: return "D-PAD RIGHT";
-            case LS_UP: return "L STICK UP";
-            case LS_DOWN: return "L STICK DOWN";
-            case LS_LEFT: return "L STICK LEFT";
-            case LS_RIGHT: return "L STICK RIGHT";
-            case RS_UP: return "R STICK UP";
-            case RS_DOWN: return "R STICK DOWN";
-            case RS_LEFT: return "R STICK LEFT";
-            default: return "R STICK RIGHT";
+            case L3: return "LS CLICK";
+            case R3: return "RS CLICK";
+            case DPAD_UP: return "DPAD UP";
+            case DPAD_DOWN: return "DPAD DOWN";
+            case DPAD_LEFT: return "DPAD LEFT";
+            case DPAD_RIGHT: return "DPAD RIGHT";
+            case LS_UP: return "LS UP";
+            case LS_DOWN: return "LS DOWN";
+            case LS_LEFT: return "LS LEFT";
+            case LS_RIGHT: return "LS RIGHT";
+            case RS_UP: return "RS UP";
+            case RS_DOWN: return "RS DOWN";
+            case RS_LEFT: return "RS LEFT";
+            default: return "RS RIGHT";
         }
     }
 }

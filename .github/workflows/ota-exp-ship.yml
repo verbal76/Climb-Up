@@ -88,6 +88,9 @@ jobs:
           if [ "${{ steps.r.outputs.kind }}" = banner ]; then grep -q "ClimbModuleBanner" "$RUNNER_TEMP/classes.txt" || { echo "::error::banner entry class missing from the release"; exit 1; }; else ! grep -q "Banner" "$RUNNER_TEMP/classes.txt" || { echo "::error::plain release carries banner code"; exit 1; }; fi
           CP="hostkit/build/libs/hostkit-$VER.jar:modspi/build/libs/modspi-$VER.jar:$(find ~/.gradle -name 'gdx-1.14.2.jar' | head -1)"
           java -cp "$CP" com.hotatticgames.climbup.host.VerifyBundleCli "$RUNNER_TEMP/chan" "$RUNNER_TEMP/exp_pub.b64" com.hotatticgames.climbup.otaexp internal
+          # the same module as the next number, published after the first release only to prove the automatic apply on the emulator
+          python3 tools/otalab/make_module.py --jar climbmodule/build/libs/$PFX-$VER.jar --key "$RUNNER_TEMP/exp.pem" --d8 "$BT/d8" --lib "$LIB" --no-props --app com.hotatticgames.climbup.otaexp --entry $ENTRY --save-schema 6 --save-min 6 --ruleset 1 --out "$RUNNER_TEMP/chan2" --version $(( ${{ steps.r.outputs.version }} + 1 ))
+          java -cp "$CP" com.hotatticgames.climbup.host.VerifyBundleCli "$RUNNER_TEMP/chan2" "$RUNNER_TEMP/exp_pub.b64" com.hotatticgames.climbup.otaexp internal
           ls -l "$RUNNER_TEMP/chan"
       - name: Publish to the experimental channel
         env:
@@ -106,6 +109,8 @@ jobs:
           sudo udevadm control --reload-rules; sudo udevadm trigger --name-match=kvm
       - name: The published APK receives it on an emulator (Android 14)
         uses: reactivecircus/android-emulator-runner@v2
+        env:
+          GH_TOKEN: ${{ github.token }}
         with:
           api-level: 34
           arch: x86_64
@@ -113,7 +118,7 @@ jobs:
           profile: pixel_2
           ram-size: 4096M
           disable-animations: true
-          script: env APK="${{ runner.temp }}/published.apk" CHANNEL="${{ steps.r.outputs.base }}" VERSION="${{ steps.r.outputs.version }}" KIND="${{ steps.r.outputs.kind }}" OUT="${{ runner.temp }}/ship-out" tools/otalab/ship_check.sh
+          script: env AUTO_DIR="${{ runner.temp }}/chan2" GH_TOKEN="${{ github.token }}" GITHUB_REPOSITORY="${{ github.repository }}" APK="${{ runner.temp }}/published.apk" CHANNEL="${{ steps.r.outputs.base }}" VERSION="${{ steps.r.outputs.version }}" KIND="${{ steps.r.outputs.kind }}" OUT="${{ runner.temp }}/ship-out" tools/otalab/ship_check.sh
       - uses: actions/upload-artifact@v4
         if: always()
         with:

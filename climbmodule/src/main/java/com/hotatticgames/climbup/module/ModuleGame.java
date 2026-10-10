@@ -33,8 +33,15 @@ class ModuleGame extends ClimbGame {
 
     private int statusTick;
 
+    private UpdateGate gate;
+
     @Override public void render() {
+        if (gate == null) gate = new UpdateGate(env, this);
+        float dt = Math.min(com.badlogic.gdx.Gdx.graphics.getDeltaTime(), 0.1f);
+        boolean onTitle = getScreen() instanceof com.hotatticgames.climbup.TitleScreen;
+        try { gate.before(onTitle, dt); } catch (Throwable ignored) { }
         super.render();
+        try { gate.after(); } catch (Throwable ignored) { }
         if (++statusTick % 30 == 0 && otaClient != null) { try { String s = env.updateStatus(); if (s != null && !s.isEmpty()) otaClient.status = s; } catch (Throwable ignored) { } }
         if (!healthy && getScreen() instanceof PlayScreen) { playSeconds += Math.min(com.badlogic.gdx.Gdx.graphics.getDeltaTime(), 0.25f); if (playSeconds >= HEALTHY_SECONDS) { healthy = true; env.confirmHealthy(); } }
     }

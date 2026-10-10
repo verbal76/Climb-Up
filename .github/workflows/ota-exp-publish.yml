@@ -41,8 +41,10 @@ jobs:
           set -e
           if [ -z "$OTA_SIGNING_PRIVATE_KEY" ] || [ -z "$OTA_SIGNING_KEY_PASSPHRASE" ]; then echo "::error::the OTA signing secrets are not set"; exit 1; fi
           umask 077
-          python3 -c 'import os,sys; open(sys.argv[1],"w").write(os.environ["OTA_SIGNING_PRIVATE_KEY"].strip()+"\n")' "$RUNNER_TEMP/exp.pem"
-          openssl pkey -in "$RUNNER_TEMP/exp.pem" -passin env:OTA_SIGNING_KEY_PASSPHRASE -pubout -outform DER | base64 -w0 > "$RUNNER_TEMP/exp_pub.b64"
+          python3 -c 'import os,sys; open(sys.argv[1],"w").write(os.environ["OTA_SIGNING_PRIVATE_KEY"].strip()+"\n")' "$RUNNER_TEMP/exp_enc.pem"
+          openssl pkey -in "$RUNNER_TEMP/exp_enc.pem" -passin env:OTA_SIGNING_KEY_PASSPHRASE -out "$RUNNER_TEMP/exp.pem"
+          rm -f "$RUNNER_TEMP/exp_enc.pem"
+          openssl pkey -in "$RUNNER_TEMP/exp.pem" -pubout -outform DER | base64 -w0 > "$RUNNER_TEMP/exp_pub.b64"
           [ -s "$RUNNER_TEMP/exp_pub.b64" ] || { echo "::error::the OTA key cannot be opened with its passphrase"; exit 1; }
           [ "$(cat "$RUNNER_TEMP/exp_pub.b64")" = "$(tr -d '\n ' < assets/ota/ota_public_key.b64)" ] || { echo "::error::the OTA key is not the pair of the public key pinned in the app"; exit 1; }
           echo "OTA key opens and matches the pinned public key (fingerprint $(sha256sum "$RUNNER_TEMP/exp_pub.b64" | cut -c1-16))"
@@ -56,14 +58,12 @@ jobs:
           echo "version=$N" >> "$GITHUB_OUTPUT"
           echo "base=https://raw.githubusercontent.com/${{ github.repository }}/ota-exp-channel/" >> "$GITHUB_OUTPUT"
       - name: Build the game module and sign the baseline (v1, inside the APK) and the channel release
-        env:
-          OTA_SIGNING_KEY_PASSPHRASE: ${{ secrets.OTA_SIGNING_KEY_PASSPHRASE }}
         run: |
           set -e
           ./gradlew :climbmodule:moduleJar :hostkit:jar --no-daemon
           BT=$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -1); LIB=$(ls -d $ANDROID_HOME/platforms/android-* | grep -E 'android-[0-9]+$' | sort -V | tail -1)/android.jar
           VER=$(grep -oP "appVersionName = '\K[^']+" build.gradle); JAR=climbmodule/build/libs/climb-module-$VER.jar
-          mk() { python3 tools/otalab/make_module.py --jar "$JAR" --key "$RUNNER_TEMP/exp.pem" --d8 "$BT/d8" --lib "$LIB" --no-props --app com.hotatticgames.climbup.otaexp --entry com.hotatticgames.climbup.module.ClimbModule --save-schema 6 --save-min 6 --ruleset 1 --passphrase-env OTA_SIGNING_KEY_PASSPHRASE "$@"; }
+          mk() { python3 tools/otalab/make_module.py --jar "$JAR" --key "$RUNNER_TEMP/exp.pem" --d8 "$BT/d8" --lib "$LIB" --no-props --app com.hotatticgames.climbup.otaexp --entry com.hotatticgames.climbup.module.ClimbModule --save-schema 6 --save-min 6 --ruleset 1 "$@"; }
           mkdir -p climbhost/src/main/assets
           mk --out climbhost/src/main/assets/baseline --version 1
           mk --out "$RUNNER_TEMP/chan" --version ${{ steps.v.outputs.version }}

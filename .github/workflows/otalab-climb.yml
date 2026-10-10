@@ -21,8 +21,15 @@ jobs:
       - run: ./gradlew :core:test :climbmodule:test :hostkit:test --no-daemon
 
   climb:
+    name: climb (emulator Android ${{ matrix.label }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { api: 34, label: "14 / API 34" }
+          - { api: 36, label: "16 / API 36" }
     runs-on: ubuntu-latest
-    timeout-minutes: 80
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -63,7 +70,9 @@ jobs:
           VER=$(grep -oP "appVersionName = '\K[^']+" build.gradle)
           tools/otalab/jvm_digests.sh climbmodule/build/libs/climb-module-$VER.jar "$(find ~/.gradle -name 'gdx-1.14.2.jar' | head -1)" assets/data/tuning.json "$RUNNER_TEMP/jvm-digests.txt" 3
       - uses: actions/upload-artifact@v4
-        with: { name: jvm-digests, path: "${{ runner.temp }}/jvm-digests.txt" }
+        with:
+          name: "jvm-digests-api${{ matrix.api }}"
+          path: "${{ runner.temp }}/jvm-digests.txt"
       - name: Embed the signed test releases and the reference digests in the host APK (the lab console runs the scenarios from inside the phone)
         run: |
           mkdir -p climbhost/src/main/assets/updates
@@ -82,16 +91,20 @@ jobs:
           BT=$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -1)
           tools/otalab/store_gate.sh "$RUNNER_TEMP/base.apk" "$RUNNER_TEMP/host.apk" "$RUNNER_TEMP/classes.txt" "$BT"
       - uses: actions/upload-artifact@v4
-        with: { name: climb-exp-apks, path: "${{ runner.temp }}/host.apk\n${{ runner.temp }}/ref.apk" }
+        with:
+          name: "climb-exp-apks-api${{ matrix.api }}"
+          path: |
+            ${{ runner.temp }}/host.apk
+            ${{ runner.temp }}/ref.apk
       - name: Enable KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules; sudo udevadm trigger --name-match=kvm
       - run: pip install pillow
-      - name: Emulator run (Android 14 / API 34, x86_64)
+      - name: Emulator run (Android ${{ matrix.label }}, x86_64)
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 34
+          api-level: ${{ matrix.api }}
           arch: x86_64
           target: google_apis
           profile: pixel_2
@@ -100,4 +113,6 @@ jobs:
           script: env JVM_DIGESTS="${{ runner.temp }}/jvm-digests.txt" BASE_APK="${{ runner.temp }}/base.apk" REF_APK="${{ runner.temp }}/ref.apk" HOST_APK="${{ runner.temp }}/host.apk" SERVE="${{ runner.temp }}/serve" OUT="${{ runner.temp }}/climb-out" tools/otalab/climb_emulator_test.sh
       - uses: actions/upload-artifact@v4
         if: always()
-        with: { name: climb-emulator-evidence, path: "${{ runner.temp }}/climb-out" }
+        with:
+          name: "climb-emulator-evidence-api${{ matrix.api }}"
+          path: "${{ runner.temp }}/climb-out"

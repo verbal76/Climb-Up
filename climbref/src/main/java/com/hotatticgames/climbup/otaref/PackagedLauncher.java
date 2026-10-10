@@ -29,7 +29,7 @@ public class PackagedLauncher extends AndroidApplication {
             @Override public void diag(String line) { Log.i(LabCommon.TAG, line); }
         });
         Log.i(LabCommon.TAG, "running PACKAGED game (no loader)");
-        initialize(game, LabCommon.gameConfig());
+        initialize(com.hotatticgames.climbup.otalab.PerfListener.maybeWrap(game, "packaged-ref"), LabCommon.gameConfig());
         LabCommon.startSelfTest(this, module);
     }
 }

@@ -103,8 +103,8 @@ H2=$(adb shell "run-as $HOST sh -c 'cd files; sha256sum history.bin'" | tr -d '\
 adb shell "run-as $HOST sh -c 'cd files; grep -o seed[^,}]* save.json'" | tr -d '\r' | grep -q 777 && pass "K7 save still holds the climb (seed 777)" || fail "K7 save lost the climb"
 stop_server
 
-echo "== P1 delivery-layer measurements (informational on an emulator: software GL, NOT representative of a phone; never fails the run)"
-bash "$HERE/perf_capture.sh" "$OUT/perf" 3 20 2>&1 | tee "$OUT/perf.txt" | sed 's/^/   /' || true
+echo "== P1 delivery-layer measurements: cold start, frame pacing and memory, packaged vs module (informational on an emulator: software GL, NOT representative of a phone; never fails the run)"
+bash "$HERE/perf_capture.sh" "$OUT/perf" 3 30 2 2>&1 | tee "$OUT/perf.txt" | sed 's/^/   /' || true
 
 echo "== summary"; logs | grep -o "bootMs=[0-9]*" | tr '\n' ' '; echo
 [ "$FAILS" -eq 0 ] && { echo "ALL CHECKS PASSED"; exit 0; } || { echo "$FAILS CHECK(S) FAILED"; exit 1; }

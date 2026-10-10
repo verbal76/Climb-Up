@@ -71,6 +71,10 @@ jobs:
           BT=$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -1)
           for a in climbhost climbref android; do f=$(ls $a/build/outputs/apk/debug/*.apk | head -1); echo "== $a: $f"; ls -l "$f" | awk '{print $5" bytes"}'; sha256sum "$f" | cut -c1-64; unzip -l "$f" | grep -E "\.so$|classes[0-9]*\.dex" ; "$BT/aapt2" dump badging "$f" | grep -E "^package|targetSdk|uses-permission"; done
           cp climbhost/build/outputs/apk/debug/*.apk "$RUNNER_TEMP/host.apk"; cp climbref/build/outputs/apk/debug/*.apk "$RUNNER_TEMP/ref.apk"; cp android/build/outputs/apk/debug/*.apk "$RUNNER_TEMP/base.apk"
+      - name: Play-compatible packaging gate (store edition has no loader code; same game classes as the module)
+        run: |
+          BT=$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -1)
+          tools/otalab/store_gate.sh "$RUNNER_TEMP/base.apk" "$RUNNER_TEMP/host.apk" "$RUNNER_TEMP/classes.txt" "$BT"
       - uses: actions/upload-artifact@v4
         with: { name: climb-exp-apks, path: "${{ runner.temp }}/host.apk\n${{ runner.temp }}/ref.apk" }
       - name: Enable KVM

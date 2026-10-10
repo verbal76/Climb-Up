@@ -48,7 +48,7 @@ public class LabLauncher extends AndroidApplication {
         }
         Log.i(TAG, (s.recovery() ? "RECOVERY screen" : "running module v" + s.manifest.moduleVersion) + " active=" + store.st.active + " lastGood=" + store.st.lastGood + " pending=" + store.st.pending
                 + " tries=" + store.st.tries + " staged=" + store.st.staged + " note=[" + s.note + "] rollback=[" + store.st.rollback + "] bootMs=" + (System.nanoTime() - t0) / 1_000_000);
-        initialize(listener, LabCommon.gameConfig());
+        initialize(s.recovery() ? listener : PerfListener.maybeWrap(listener, "module-host"), LabCommon.gameConfig());
         if (!s.overrides.isEmpty()) {                       // the module carries game files that replace the APK's: serve them through the overlay (nothing is installed otherwise)
             overlay = new com.hotatticgames.climbup.host.OverlayFiles(com.badlogic.gdx.Gdx.files, s.overrides, store.assets(), msg -> Log.i(TAG, msg));
             com.badlogic.gdx.Gdx.files = overlay;

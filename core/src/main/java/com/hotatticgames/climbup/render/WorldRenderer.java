@@ -234,7 +234,7 @@ public final class WorldRenderer implements Disposable {
                 int w = Math.max(1, Math.round(e.w));
                 Model m = models.obj(e.type == Element.Type.MOVE_H ? "block-moving-blue" : "block-moving");
                 for (int i = 0; i < w; i++) {
-                    Part p = part(m, i - (w - 1) / 2f, -0.3f, 0f, 0.95f, 1f, 1.7f); p.tinted = false;
+                    Part p = part(m, i - (w - 1) / 2f, moverBlockDy(e.type), 0f, 0.95f, 1f, 1.7f); p.tinted = false;
                     if (e.skin == 1) { p.color = new Color(1f, 0.74f, 0.52f, 1f); p.fall = true; }          // falls apart after you stand on it: the same warm tint as crumbling tiles
                     ps.add(p);
                 }
@@ -320,6 +320,11 @@ public final class WorldRenderer implements Disposable {
     }
 
     /** Space biome platform: a metal deck with beacon lights, hanging from a Space Kit asteroid. */
+    /** Block heights of the two mover models (block-moving-blue.obj is 0.5 m tall, block-moving.obj 0.3 m). */
+    public static final float BLUE_MOVER_BLOCK_H = 0.5f, MOVER_BLOCK_H = 0.3f;
+    /** Vertical offset that puts a mover block's top face exactly on the simulation surface (the blue block used to be placed as if it were 0.3 m tall, so it stood 0.2 m proud and the hero sank into it). */
+    public static float moverBlockDy(Element.Type t) { return -(t == Element.Type.MOVE_H ? BLUE_MOVER_BLOCK_H : MOVER_BLOCK_H); }
+
     private void spacePlatform(Array<Part> ps, Element e, int idx) {
         float w = e.w;
         Color deck = new Color(0.30f, 0.33f, 0.43f, 1f), plate = new Color(0.17f, 0.19f, 0.26f, 1f), glow = new Color(0.35f, 0.92f, 1f, 1f);

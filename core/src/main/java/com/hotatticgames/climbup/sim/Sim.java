@@ -10,7 +10,7 @@ public final class Sim {
     public static final float DT = 1f / 60f, SWING_TIME = 0.34f;
     // event bits
     public static final int EV_JUMP = 1, EV_LAND = 2, EV_BOUNCE = 4, EV_GRAB = 8, EV_PULL = 16, EV_CRUMBLE = 32,
-            EV_CHECKPOINT = 64, EV_RESPAWN = 128, EV_WIN = 256, EV_ROPE = 512, EV_CABLE = 1024, EV_FALL_NEAR = 2048, EV_HIT = 4096, EV_KEY = 8192, EV_DOOR = 16384, EV_BLOCKED = 32768, EV_CLUB = 65536, EV_SWING = 131072, EV_SHOVE = 262144, EV_CRAB_OFF = 524288, EV_FINISH = 1048576;
+            EV_CHECKPOINT = 64, EV_RESPAWN = 128, EV_WIN = 256, EV_ROPE = 512, EV_CABLE = 1024, EV_FALL_NEAR = 2048, EV_HIT = 4096, EV_KEY = 8192, EV_DOOR = 16384, EV_BLOCKED = 32768, EV_CLUB = 65536, EV_SWING = 131072, EV_SHOVE = 262144, EV_CRAB_OFF = 524288, EV_FINISH = 1048576, EV_AIM = 2097152;
 
     public final Course course;
     public final Tuning T;
@@ -60,6 +60,8 @@ public final class Sim {
     public int keys;                              // bit per colour of the keys carried
     public boolean keysFree;                      // planners/demos: every gate simply opens on touch
     public boolean[] featDone = new boolean[0];   // per feature (Course.hazards index): key taken / gate opened
+    public float[] aimAng = new float[0], aimFireT = new float[0];   // aimed cannons (Course.hazards index): barrel angle (0 = along +s, counter-clockwise), time the last ball was fired
+    private boolean[] aimArmed = new boolean[0];                      // this cycle's shot was locked while the player was in range
     public int lastKeyColor, lastGateColor, lastGateNo;
     public boolean finishedRun;         // the finishCastle's door has been walked through (the timed run is over)
     public float clubTime, swingT, shoveCd;       // spiked club carried (seconds left), swing animation clock, grace between shoves
@@ -125,9 +127,17 @@ public final class Sim {
         hz = course.hazardsFor(lo - 6, hi + 6);
     }
 
+    private void growAim(int n) {
+        if (aimAng.length >= n) return;
+        int o = aimAng.length;
+        aimAng = java.util.Arrays.copyOf(aimAng, n); aimFireT = java.util.Arrays.copyOf(aimFireT, n); aimArmed = java.util.Arrays.copyOf(aimArmed, n);
+        java.util.Arrays.fill(aimFireT, o, n, -1e9f);
+    }
+
     /** The course grew (endless mode): extend the per-element state arrays. */
     public void ensureCapacity() {
         if (featDone.length < course.hazards.size()) featDone = java.util.Arrays.copyOf(featDone, Math.max(course.hazards.size(), featDone.length * 3 / 2 + 8));
+        growAim(featDone.length);
         int n = course.size();
         if (n <= es0.length) return;
         int m = Math.max(n, es0.length * 3 / 2 + 16), o = es0.length;
@@ -144,6 +154,7 @@ public final class Sim {
         crumbleT = new float[n]; gone = new boolean[n]; goneT = new float[n]; padSquash = new float[n]; tilt = new float[n]; onT = new float[n];
         java.util.Arrays.fill(crumbleT, -1f);
         featDone = new boolean[c.hazards.size() + 8];
+        growAim(featDone.length);
         refreshElements();
         spawnAtCheckpoint(0);
     }
@@ -158,7 +169,7 @@ public final class Sim {
         landSpeed = o.landSpeed; events = o.events; assistForgive = o.assistForgive; ps0 = o.ps0; py0 = o.py0; teleported = o.teleported;
         es0 = o.es0.clone(); ey0 = o.ey0.clone(); es1 = o.es1.clone(); ey1 = o.ey1.clone();
         crumbleT = o.crumbleT.clone(); gone = o.gone.clone(); goneT = o.goneT.clone(); padSquash = o.padSquash.clone(); tilt = o.tilt.clone(); onT = o.onT.clone();
-        clubTime = o.clubTime; swingT = o.swingT; shoveCd = o.shoveCd; crabS = o.crabS; crabY = o.crabY; keys = o.keys; keysFree = o.keysFree; featDone = o.featDone.clone(); finishedRun = o.finishedRun; lastGateNo = o.lastGateNo; lastKeyColor = o.lastKeyColor; lastGateColor = o.lastGateColor;
+        clubTime = o.clubTime; swingT = o.swingT; shoveCd = o.shoveCd; crabS = o.crabS; crabY = o.crabY; keys = o.keys; keysFree = o.keysFree; featDone = o.featDone.clone(); aimAng = o.aimAng.clone(); aimFireT = o.aimFireT.clone(); aimArmed = o.aimArmed.clone(); finishedRun = o.finishedRun; lastGateNo = o.lastGateNo; lastKeyColor = o.lastKeyColor; lastGateColor = o.lastGateColor;
         act = o.act; hz = o.hz; winLo = o.winLo; winHi = o.winHi; invuln = o.invuln; hits = o.hits; hitS = o.hitS; hitY = o.hitY;
     }
 
@@ -286,6 +297,9 @@ public final class Sim {
         boolean[] nf = new boolean[Math.max(m.newH, 1) + 8];
         for (int i = 0; i < m.haz.length && i < featDone.length; i++) { int j = m.haz[i]; if (j >= 0) nf[j] = featDone[i]; }
         featDone = nf;
+        float[] na = new float[nf.length], nft = new float[nf.length]; boolean[] nar = new boolean[nf.length]; java.util.Arrays.fill(nft, -1e9f);
+        for (int i = 0; i < m.haz.length && i < aimAng.length; i++) { int j = m.haz[i]; if (j >= 0 && j < na.length) { na[j] = aimAng[i]; nft[j] = aimFireT[i]; nar[j] = aimArmed[i]; } }
+        aimAng = na; aimFireT = nft; aimArmed = nar;
         onElem = onElem >= 0 && onElem < m.elem.length ? m.elem[onElem] : onElem;
         lastPad = lastPad >= 0 && lastPad < m.elem.length ? m.elem[lastPad] : lastPad;
         onSlab = onSlab >= 0 && onSlab < m.haz.length ? m.haz[onSlab] : -1;
@@ -372,6 +386,7 @@ public final class Sim {
         if (swingT > 0) swingT = Math.max(0f, swingT - dt);
         else if (in.swingPressed && clubTime > 0f && (mode == Mode.GROUND || mode == Mode.AIR)) { swingT = SWING_TIME; events |= EV_SWING; }
         stepFeatures();
+        stepAimed();
         if (invuln > 0) invuln = Math.max(0f, invuln - dt);
         else if (hazardHit()) { hits++; events |= EV_HIT; hitS = s; hitY = y; knockOff(); }
 
@@ -444,12 +459,53 @@ public final class Sim {
         }
     }
 
+    // ---------------------------------------------------------------- aimed cannons
+
+    private static float angDiff(float a, float b) { float d = (a - b) % (2f * (float) Math.PI); if (d > Math.PI) d -= 2f * (float) Math.PI; else if (d < -Math.PI) d += 2f * (float) Math.PI; return d; }
+
+    /** Where the ball of aimed cannon h is right now (arc, height) if it is in flight, else null. */
+    public float[] aimedBall(int hi, Element h) {
+        if (hi >= aimFireT.length) return null;
+        float age = time - aimFireT[hi];
+        if (age < 0f || age > Element.AIM_LIFE) return null;
+        float d = Element.AIM_SPEED * age;
+        return new float[]{h.s + (float) Math.cos(aimAng[hi]) * d, h.y + (float) Math.sin(aimAng[hi]) * d};
+    }
+
+    /** Aimed cannons: track the player (turning at a limited rate) while awake, lock at AIM_LOCK of the cycle, fire at AIM_FIRE along exactly the locked direction. Asleep (barrel idles up) when the player is out of range. */
+    private void stepAimed() {
+        for (int k = 0, cnt = hz == null ? course.hazards.size() : hz.length; k < cnt; k++) {
+            int hi = hz == null ? k : hz[k];
+            Element h = course.hazards.get(hi);
+            if (h.type != Element.Type.AIMED || hi >= aimAng.length) continue;
+            float c = h.cyc(time), pc = h.cyc(time - DT);
+            float dx = course.dsWrap(s, h.s), dy = y + 0.7f - h.y;
+            boolean awake = dx * dx + dy * dy <= Element.AIM_RANGE * Element.AIM_RANGE;
+            if (c < Element.AIM_LOCK) {
+                float target = awake ? (float) Math.atan2(dy, dx) : (float) Math.PI * 0.5f;
+                float d = angDiff(target, aimAng[hi]), step = Element.AIM_TURN * DT;
+                aimAng[hi] += Math.max(-step, Math.min(step, d));
+            }
+            if (pc < Element.AIM_LOCK && c >= Element.AIM_LOCK) aimArmed[hi] = awake;
+            if (pc < Element.AIM_FIRE && c >= Element.AIM_FIRE && aimArmed[hi]) { aimFireT[hi] = time; aimArmed[hi] = false; events |= EV_AIM; }
+        }
+    }
+
+    private boolean aimedBallHits(int hi, Element h, float hw, float lo, float hiY) {
+        float[] b = aimedBall(hi, h);
+        if (b == null) return false;
+        float dx = Math.abs(course.dsWrap(b[0], s)), ddx = Math.max(0f, dx - hw);
+        float ddy = b[1] < lo ? lo - b[1] : (b[1] > hiY ? b[1] - hiY : 0f);
+        return ddx * ddx + ddy * ddy < Element.AIM_R * Element.AIM_R;
+    }
+
     /** True if the player's body overlaps any lethal hazard right now. */
     private boolean hazardHit() {
         final float hw = T.halfWidth - 0.03f, lo = y + 0.12f, hi = y + T.height - 0.1f;
         for (int k = 0, cnt = hz == null ? course.hazards.size() : hz.length; k < cnt; k++) {
             Element e = course.hazards.get(hz == null ? k : hz[k]);
             hitBy = e;
+            if (e.type == Element.Type.AIMED) { if (aimedBallHits(hz == null ? k : hz[k], e, hw, lo, hi)) return true; continue; }
             if (!e.lethalAt(time)) continue;
             float dx = Math.abs(course.dsWrap(e.sAt(time), s));
             float r = e.discR();

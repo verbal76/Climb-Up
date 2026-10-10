@@ -499,7 +499,7 @@ public final class WorldRenderer implements Disposable {
             if (!v.built) build(i);
             drawElement(sim, i, v, es, ey, ps, time);
         }
-        for (int k = 0, cnt = sim.hz == null ? course.hazards.size() : sim.hz.length; k < cnt; k++) { int hi2 = sim.hz == null ? k : sim.hz[k]; drawHazard(course.hazards.get(hi2), sim.time + alpha * Sim.DT, ps, time, hi2 < sim.featDone.length && sim.featDone[hi2]); }
+        for (int k = 0, cnt = sim.hz == null ? course.hazards.size() : sim.hz.length; k < cnt; k++) { int hi2 = sim.hz == null ? k : sim.hz[k]; rsim = sim; rhz = hi2; drawHazard(course.hazards.get(hi2), sim.time + alpha * Sim.DT, ps, time, hi2 < sim.featDone.length && sim.featDone[hi2]); }
         if (space != null && quality > 0) space.renderNear(batch, env, (inst, arc, yy, dz, sx, sy, sz, yaw) -> place(inst, arc, yy, dz, ps, sx, sy, sz, yaw), ps, camY, py, 0f, reducedMotion, originY);
         // free the model parts of anything the player has left behind, above or below the simulated window (a fall or a long descent can build far more than a climb ever does); freed parts are rebuilt on demand
         for (int q = 0, n = Math.min(builtN, 48); q < n && builtN > 0; q++) {
@@ -773,9 +773,20 @@ public final class WorldRenderer implements Disposable {
     /** A cannonball that has left the screen is dropped: further than the widest view (21:9) reaches, and how many past launches are followed. */
     private static final float CANNON_OFFSCREEN = 14f; private static final int CANNON_TRAIL = 4;
 
+    private Sim rsim; private int rhz;            // the simulation and hazard index being drawn (aimed cannons draw the sim's own aim)
+
+    /** A pack model aimed in the play plane: barrel along +s at angle 0, turned counter-clockwise by {@code deg}, centred at (arc, y). */
+    private void drawPackAimed(String name, float arc, float y, float camS, float deg, float sc) {
+        ModelInstance m = pack(name);
+        float phi = wrapDiff(arc, camS) / T.radius, r = T.radius;
+        m.transform.idt().translate(r * MathUtils.sin(phi), y, -T.radius + r * MathUtils.cos(phi))
+                .rotate(0, 1, 0, phi * MathUtils.radiansToDegrees).rotate(0, 0, 1, deg).rotate(0, 1, 0, CANNON_YAW).scale(sc, sc, sc);
+        batch.render(m, env);
+    }
+
     private void drawHazard(Element h, float t, float camS, float time, boolean done) {
         float cs = h.type == Element.Type.CANNON ? h.s + h.dir * h.len * 0.5f : h.s;
-        float half = h.type == Element.Type.CANNON ? h.len * 0.5f + 1.5f + CANNON_OFFSCREEN : (h.type == Element.Type.SAW_H ? h.amp + 1.5f : 2f);
+        float half = h.type == Element.Type.AIMED ? 17f : h.type == Element.Type.CANNON ? h.len * 0.5f + 1.5f + CANNON_OFFSCREEN : (h.type == Element.Type.SAW_H ? h.amp + 1.5f : 2f);
         float cy = h.type == Element.Type.SAW_V ? h.y + h.amp * 0.5f : h.y;
         if (!visible(cs, cy, camS, half)) return;
         switch (h.type) {
@@ -800,6 +811,22 @@ public final class WorldRenderer implements Disposable {
                     if (Math.abs(course.dsWrap(bs, camS)) > CANNON_OFFSCREEN) continue;
                     drawPack("spikyball", bs, h.yAt(t), 0f, camS, 0.55f, 0.55f, 0.55f, 0f, -bs * 160f);
                 }
+                break;
+            }
+            case AIMED: {
+                // a turret on a pedestal; its barrel is turned by the SIMULATION's own aim, so the picture is where the ball goes. Locked = a red glow that pulses faster; then the ball leaves the barrel's tip.
+                float base = h.y - 2.0f, ang = rsim != null && rhz < rsim.aimAng.length ? rsim.aimAng[rhz] : (float) Math.PI * 0.5f;
+                drawBox(h.s, base, 0f, camS, 1.25f, CANNON_LIFT - 0.1f, 1.25f, 0.34f, 0.31f, 0.40f);
+                drawBox(h.s, base + CANNON_LIFT - 0.1f, 0f, camS, 1.45f, 0.16f, 1.45f, 0.3f, 0.27f, 0.36f);
+                drawPackAimed("cannon", h.s, h.y, camS, ang * MathUtils.radiansToDegrees, PK);
+                float c = h.cyc(t);
+                if (c >= Element.AIM_LOCK && c < Element.AIM_FIRE) {
+                    float k = (c - Element.AIM_LOCK) / (Element.AIM_FIRE - Element.AIM_LOCK), pulse = reducedMotion ? 1f : 0.7f + 0.3f * MathUtils.sin(time * (18f + 30f * k));
+                    float sz = (0.16f + 0.2f * k) * pulse, tip = 0.7f;
+                    drawBox(h.s + (float) Math.cos(ang) * tip - sz * 0.5f, h.y + (float) Math.sin(ang) * tip - sz * 0.5f, 0.2f, camS, sz, sz, sz, 1f, 0.2f, 0.12f);
+                }
+                float[] b = rsim != null ? rsim.aimedBall(rhz, h) : null;
+                if (b != null) drawPack("spikyball", b[0], b[1], 0f, camS, 0.5f, 0.5f, 0.5f, 0f, -b[0] * 160f);
                 break;
             }
             case MORTAR: {

@@ -20,7 +20,9 @@ public final class Element {
         /** Platform that slides toward and away from the camera (amp = depth travel). You can only land on it while it is in your plane (|depth| <= Z_REACH); once you stand on it, it carries you. */
         MOVE_Z,
         /** Mortar: a cannon in the ground BELOW the path that points straight up. Its ball rises from the muzzle (y) by amp, falls back into the barrel, waits to reload, and fires again every period. The ball is a lethal disc (a hit only knocks you away). */
-        MORTAR }
+        MORTAR,
+        /** Aimed cannon (late game): a turret at (s, y) that tracks the player, locks and flashes a warning, then fires a ball along exactly the locked barrel direction. The aim lives in the Sim (per-hazard state); the lethal ball is evaluated there. */
+        AIMED }
 
     public Type type;
     public int zone;
@@ -40,7 +42,7 @@ public final class Element {
     public Element(Type type, float s, float y, float w) { this.type = type; this.s = s; this.y = y; this.w = w; }
 
     public boolean isHazard() {
-        switch (type) { case SAW_H: case SAW_V: case PENDULUM: case CANNON: case SPIKE_TRAP: case SPIKE_BLOCK: case SPIKE_DROP: case MORTAR: return true; default: return false; }
+        switch (type) { case SAW_H: case SAW_V: case PENDULUM: case CANNON: case SPIKE_TRAP: case SPIKE_BLOCK: case SPIKE_DROP: case MORTAR: case AIMED: return true; default: return false; }
     }
     /** Platforms that fall apart soon after being stood on. */
     public boolean crumbles() { return type == Type.CRUMBLE || (type == Type.RAMP && skin == 1) || (skin == 1 && (type == Type.MOVE_H || type == Type.MOVE_V || type == Type.SWING)); }
@@ -49,7 +51,7 @@ public final class Element {
     public boolean isPlatform() { return type != Type.ROPE && type != Type.CABLE && !isHazard(); }
     /** True for anything that changes with time (planner sweeps its phase). */
     public boolean isMoving() {
-        switch (type) { case MOVE_H: case MOVE_V: case MOVE_Z: case SWING: case SAW_H: case SAW_V: case PENDULUM: case CANNON: case SPIKE_TRAP: case SPIKE_DROP: case CRAB: case BEE: case MORTAR: return true; default: return false; }
+        switch (type) { case MOVE_H: case MOVE_V: case MOVE_Z: case SWING: case SAW_H: case SAW_V: case PENDULUM: case CANNON: case SPIKE_TRAP: case SPIKE_DROP: case CRAB: case BEE: case MORTAR: case AIMED: return true; default: return false; }
     }
 
     public static final float CANNON_FLIGHT = 0.7f;      // fraction of the cycle a ball is in the air
@@ -65,6 +67,8 @@ public final class Element {
     public float cannonBallS(float t, int back) { return s + dir * len / (CANNON_FLIGHT * period) * (cyc(t) + back) * period; }
 
     public static final float MORTAR_FLIGHT = 0.82f, MORTAR_R = 0.4f;
+    /** Aimed cannon timing, as fractions of its period: tracks the player until LOCK, holds (warning) until FIRE, fires; the ball flies AIM_LIFE seconds at AIM_SPEED; it only wakes when the player is within AIM_RANGE. */
+    public static final float AIM_LOCK = 0.55f, AIM_FIRE = 0.70f, AIM_SPEED = 9f, AIM_LIFE = 1.6f, AIM_R = 0.35f, AIM_RANGE = 15f, AIM_TURN = 2.4f;
     /** Mortar ball height at time t: a parabola from the muzzle (y) to y + amp and back during the first MORTAR_FLIGHT of the cycle, then it sits in the barrel while the mortar reloads. */
     public float mortarBallY(float t) {
         float c = cyc(t);

@@ -743,11 +743,12 @@ public final class CourseGenerator {
             case PENDULUM: return h.len * (float) Math.sin(h.amp) + Element.BALL_R;
             case CANNON: return h.len * 0.5f + Element.SHOT_R;
             case MORTAR: return Element.MORTAR_R;
+            case AIMED: return 0.6f;
             default: return h.w * 0.5f;
         }
     }
     private static float hzLo(Element h) {
-        switch (h.type) { case SAW_H: case SAW_V: return h.y - Element.SAW_R; case PENDULUM: return h.y - Element.BALL_R; case CANNON: return h.y - Element.SHOT_R; case BEE: return h.y - h.len - 1.4f; default: return h.y; }
+        switch (h.type) { case SAW_H: case SAW_V: return h.y - Element.SAW_R; case PENDULUM: return h.y - Element.BALL_R; case CANNON: return h.y - Element.SHOT_R; case AIMED: return h.y - 0.4f; case BEE: return h.y - h.len - 1.4f; default: return h.y; }
     }
     private static float hzHi(Element h) {
         switch (h.type) {
@@ -756,6 +757,7 @@ public final class CourseGenerator {
             case PENDULUM: return h.y + h.len * (1f - (float) Math.cos(h.amp)) + Element.BALL_R;
             case CANNON: return h.y + Element.SHOT_R;
             case MORTAR: return h.y + h.amp + Element.MORTAR_R;
+            case AIMED: return h.y + 0.6f;
             case SPIKE_TRAP: return h.y + 0.7f;
             case SPIKE_DROP: return h.y + h.amp + Element.DROP_H;
             case GATE: return h.y + h.len;
@@ -969,6 +971,10 @@ public final class CourseGenerator {
                 float muzzle = cur.s - cur.w / 2f + 0.7f;
                 h = hz(Element.Type.CANNON, muzzle, cur.y + 2.35f, 0f, z);
                 h.len = (uR - muzzle) + g + 1.2f; h.dir = 1; h.period = r(3.0f, 4.0f) - 0.5f * inten;
+                if (z >= 3 && rnd.nextFloat() < 0.6f) {          // late game (the night world on): an aimed cannon instead of the side cannon: it turns to the player, locks, flashes, fires along the locked line
+                    h = hz(Element.Type.AIMED, muzzle, cur.y + 2.0f, 0f, z);
+                    h.period = r(4.2f, 5.2f) - 0.4f * inten;
+                }
             }
             h.phase = r(0f, 6.28f); h.anchor = anchor;
             hzOut.add(h);

@@ -252,7 +252,9 @@ public final class HeroRig implements Disposable {
             wz -= ROPE_FRONT * (1f - k * k * (3f - 2f * k));
         }
         float inch = anim == Anim.CLIMB ? INCH * MathUtils.sin(climbPhase * 2f) : 0f;          // inchworm: the whole body compresses, then stretches, with every pull up the rope
+        float hinch = anim == Anim.SHIMMY && !reduced ? 1.6f * INCH * MathUtils.sin(climbPhase * 2f) * MathUtils.clamp(lineMove, 0f, 1f) : 0f;      // the cable's inchworm, sideways: the body stretches along the line with each reach, then draws together
         float sxz = SCALE * (1f - 0.5f * sq - 0.5f * inch), sy = SCALE * (1f + sq + inch);
+        float sx = sxz * (1f + hinch), sz = sxz * (1f - 0.35f * hinch); sy *= 1f - 0.45f * hinch;
         float flip = anim == Anim.BIG_JUMP ? -sim.facing * 360f * (1f - bigT / BIG_TIME) : 0f;                   // somersault on a big bounce
         float knock = anim == Anim.HIT ? hitDir * 26f * Math.max(0f, hitT / HIT_TIME) : 0f;                       // thrown back
         float leanT = 0f;           // lean into the run, tuck up while rising, reach forward while falling
@@ -262,7 +264,7 @@ public final class HeroRig implements Disposable {
         }
         lean = smooth(lean, leanT, 9f, dt);
         inst.transform.idt().translate(wx, wy + 0.6f, wz).rotate(0, 0, 1, flip + knock).translate(0, -0.6f, 0)
-                .rotate(0, 1, 0, phi * MathUtils.radiansToDegrees + yaw).translate(0, 0.5f, 0).rotate(1, 0, 0, lean).translate(0, -0.5f, 0).scale(sxz, sy, sxz);
+                .rotate(0, 1, 0, phi * MathUtils.radiansToDegrees + yaw).translate(0, 0.5f, 0).rotate(1, 0, 0, lean).translate(0, -0.5f, 0).scale(sx, sy, sz);
         if (ham && upL != null) for (Node n : new Node[]{upL, upR, loL, loR}) if (n != null) n.scale.set(1f, 1f, 1f);     // the stretch below is re-applied every frame, never accumulated
         ac.update(reduced ? Math.min(dt, 1f / 30f) : dt);
         // gripping poses: both arms up on the ledge / rope / cable, hands snapped to the sim's grip point
@@ -290,7 +292,7 @@ public final class HeroRig implements Disposable {
                 boolean shimmy = anim == Anim.SHIMMY && !reduced;
                 float roll = shimmy ? 11f * MathUtils.clamp(lineMove, 0f, 1f) * MathUtils.sin(climbPhase + 0.6f) : 0f, pivot = handModelY() * sy;
                 inst.transform.idt().translate(wx, wy + shift * grip, wz - behind).rotate(0, 1, 0, phi * MathUtils.radiansToDegrees + yaw)
-                        .translate(0, pivot, 0).rotate(0, 0, 1, roll).translate(0, -pivot, 0).rotate(0, 0, 1, tremble).scale(sxz, sy, sxz);
+                        .translate(0, pivot, 0).rotate(0, 0, 1, roll).translate(0, -pivot, 0).rotate(0, 0, 1, tremble).scale(sx, sy, sz);
             }
         }
     }

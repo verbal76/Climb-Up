@@ -2,10 +2,13 @@ name: OTA experimental channel - live end-to-end test (publishes to the experime
 # Proves the LIVE update path on a real Android emulator: installs the OTA test APK (baseline v1, channel address inside), then publishes NEW signed releases to the experimental GitHub channel
 # (branch ota-exp-channel) from this workflow while the app is installed, and checks that the app fetches them over the network, verifies, stages and activates them at the next cold start
 # (changed executable code + changed game file), rolls back a release that cannot start, refuses a release signed by an untrusted key, and replaces everything again with a clean release.
-# Manual only. Experimental branch and channel only; the production branch, the production "ota" release, tags and GitHub Releases are never touched. Signs with the OTA key already configured
+# Manual (or push a change to tools/otalab/live_e2e_run.txt). Experimental branch and channel only; the production branch, the production "ota" release, tags and GitHub Releases are never touched. Signs with the OTA key already configured
 # in this repository, by the owner's decision.
 on:
   workflow_dispatch: {}
+  push:
+    branches: [exp/ota-full]
+    paths: ['tools/otalab/live_e2e_run.txt']      # change the number in this file and push to run the test
 permissions:
   contents: write
 concurrency: ota-exp-channel

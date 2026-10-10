@@ -15,3 +15,6 @@ Suggested build order: (1) side cannon faces you + balls fly off-screen, (2) ver
 - **Dead ends.** More dead-end routes (visible, fair, never required) so choosing a path matters.
 - **Parallel routes.** Every now and then the tower offers two or more stacked routes to pick from, each with different traps and different difficulty, that rejoin. Not every section; occasional.
 All need generator and simulation work, a solver proof that every route set is completable and that the alternatives are really different, and a generatorRuleset decision.
+
+# Infinity run record (owner; small, after the backlog)
+After castle 10 the player may keep climbing for ever. In that mode the HUD shows distance (not time) as the flex, and keeps every castle time and the total castle-run time frozen. When the infinite run ends: a summary with total distance run, best infinity distance (a saved record), the frozen finish time and all tower splits, plus the final record. Already in: finish screen with END RUN / KEEP CLIMBING FOR EVER, "INFINITY +m" and the frozen FINISH time in the HUD, tower splits in the pause menu. To add: best infinity distance record and the end-of-run summary.

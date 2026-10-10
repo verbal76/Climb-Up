@@ -67,8 +67,8 @@ f1=$(echo "$LH" | head -1); [ -n "$f1" ] && asciip "$OUT/k3b_HOST/$f1"
 echo "== K4 a climb in progress survives module updates (and a world-changing module waits)"
 start "$HOST_ACT" --es prop.climb.start play --es prop.climb.seed 777 >/dev/null
 expect "K4 climb started: host told" "climbInProgress=true" 40; sleep 4
+go_home; sleep 3                                    # backgrounding persists the save, as on a phone (the climb's slices are written by a generator thread: measure only after that)
 H0=$(adb shell "run-as $HOST sh -c 'cd files; sha256sum history.bin'" | tr -d '\r' | cut -d' ' -f1); [ -n "$H0" ] && pass "K4 climb history exists ($H0)" || fail "K4 no history.bin"
-go_home; sleep 1                                    # backgrounding persists the save, as on a phone
 serve c2_same_world; start "$HOST_ACT" --es prop.climb.start play --es updateBase http://10.0.2.2:8099/ >/dev/null
 expect "K4 same-world v2 staged" "update check: staged v2" 40; go_home; sleep 1
 start "$HOST_ACT" --es prop.climb.start play >/dev/null
@@ -90,22 +90,22 @@ expect "K5 it fails to load; the last proven module (v1; v2 never proved itself)
 stop_server
 
 echo "== K7 a signed release that changes the EXECUTING CODE (not the game) while a climb is in progress, then a hard kill"
+# An unproven module is rolled back after 2 unconfirmed launches, so this scenario uses exactly two launches of v7: the activation launch (which also runs the self-test) and the relaunch after the kill.
 MARK=$(printf '%s' "climb-up signed code update marker" | sha256sum | cut -c1-12)
 go_home; H0=$(adb shell "run-as $HOST sh -c 'cd files; sha256sum history.bin'" | tr -d '\r' | cut -d' ' -f1)
 serve c7_code_change; start "$HOST_ACT" --es updateBase http://10.0.2.2:8099/ >/dev/null
 expect "K7 code release staged" "update check: staged v7" 40
 logs | grep -q "code-marker" && fail "K7 the new code ran before the next cold start" || pass "K7 the running session did not change under the player (activation waits for the next cold start)"
 go_home; sleep 1
-start "$HOST_ACT" >/dev/null
+start "$HOST_ACT" --es selftest "digest:12:7200" >/dev/null
 expect "K7 the new module runs after the cold start" "running module v7" 40
 expect "K7 its new code path executed on the device (marker $MARK)" "code-marker $MARK" 20
 expect "K7 the host found the climb still in progress" "climbInProgress=true" 20
 H1=$(adb shell "run-as $HOST sh -c 'cd files; sha256sum history.bin'" | tr -d '\r' | cut -d' ' -f1); [ -n "$H0" ] && [ "$H0" = "$H1" ] && pass "K7 history.bin byte-identical across the code update" || fail "K7 history changed ($H0 -> $H1)"
-selftests "$HOST_ACT" "digest:12:7200" "$OUT/k7_HOST.txt" 300
-[ "$(grep '^digest:12:7200 ' "$OUT/k7_HOST.txt")" = "$(grep '^digest:12:7200 ' "$OUT/k2_REF.txt")" ] && pass "K7 the updated code plays the same game: the climb digest equals the packaged game's" || fail "K7 digest after the code update differs"
-logs | grep -q "running module v7" && pass "K7 still v7 for the self-test launch" || fail "K7 lost v7"
-echo "   --- hard kill (the app is removed from recents / killed by the system) and relaunch ---"
-start "$HOST_ACT" >/dev/null; sleep 6; adb shell am force-stop $HOST; sleep 1
+wait_count "SELFTEST " 1 300 && logs | grep "SELFTEST " | sed 's/.*SELFTEST \(.*\) -> \(.*\) \[[0-9]* ms\].*/\1 \2/' > "$OUT/k7_HOST.txt"
+[ -s "$OUT/k7_HOST.txt" ] && [ "$(grep '^digest:12:7200 ' "$OUT/k7_HOST.txt")" = "$(grep '^digest:12:7200 ' "$OUT/k2_REF.txt")" ] && pass "K7 the updated code plays the same game: the climb digest equals the packaged game's" || fail "K7 digest after the code update differs or is missing"
+echo "   --- hard kill (no pause: the system or the user's task manager kills it) and relaunch ---"
+adb shell am force-stop $HOST; sleep 1
 start "$HOST_ACT" >/dev/null
 expect "K7 after the kill the same module relaunches" "running module v7" 40
 expect "K7 after the kill the climb is still recognised as resumable" "climbInProgress=true" 20

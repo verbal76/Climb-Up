@@ -15,6 +15,11 @@ declare -A COLDMS
 cold() { local name=$1 act=$2; local pkg=${act%%/*}; local ts=""; for i in $(seq "$COLD"); do adb shell am force-stop "$pkg"; sleep 1; ts="$ts $(adb shell am start -S -W -n "$act" 2>&1 | grep TotalTime | awk '{print $2}' | tr -d '\r')"; sleep 3; done
   COLDMS[$name]=$(echo "$ts" | median); echo "cold start $name (ms, $COLD runs):$ts   median=${COLDMS[$name]}"; }
 cold BASE "$ACT_BASE"; cold REF "$ACT_REF"; cold HOST "$ACT_HOST"
+# The module's dex lives in the app's files, so the installer never compiled it and the first runs interpret it. The system's background optimiser compiles such secondary dex files when the
+# phone is idle and charging; that is simulated here by compiling now, so both numbers (as installed, and after the system has had its idle time) are on record.
+echo "== after ahead-of-time compilation (what the system's background optimiser does when the phone is idle and charging)"
+adb shell cmd package compile -m speed -f "$REF" >/dev/null 2>&1; adb shell cmd package compile -m speed -f --secondary-dex "$HOST" >/dev/null 2>&1
+cold REF_AOT "$ACT_REF"; cold HOST_AOT "$ACT_HOST"
 
 # play NAME ACT TAG RUN: scripted climb (demo mode) with the frame recorder on; waits for the PERF line
 declare -A PERFLINE; declare -A PSS
@@ -27,9 +32,10 @@ play() { local name=$1 act=$2 tag=$3 run=$4; local pkg=${act%%/*}; adb shell am 
 rm -f "$OUT"/perf_*.txt "$OUT"/pss_*.txt
 for r in $(seq "$PLAYS"); do play REF "$ACT_REF" packaged-ref "$r"; play HOST "$ACT_HOST" module-host "$r"; done
 
-python3 - "$OUT" "${COLDMS[BASE]}" "${COLDMS[REF]}" "${COLDMS[HOST]}" "${PERF_STRICT:-0}" <<'P'
+python3 - "$OUT" "${COLDMS[BASE]}" "${COLDMS[REF]}" "${COLDMS[HOST]}" "${PERF_STRICT:-0}" "${COLDMS[REF_AOT]}" "${COLDMS[HOST_AOT]}" <<'P'
 import re, sys, statistics as st
 out, cb, cr, ch, strict = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5] == "1"
+cra, cha = sys.argv[6], sys.argv[7]
 def load(name):
     rows = []
     try:
@@ -56,7 +62,7 @@ else:
 pr, ph = pss("REF"), pss("HOST")
 if pr and ph:
     a, b = st.median(pr), st.median(ph); print("   %-26s REF %8.0f   HOST %8.0f   (HOST/REF %.3f)" % ("process PSS KB", a, b, b / a)); checks.append(("PSS within REF*1.05+8 MB", b <= a * 1.05 + 8192))
-print("== cold start (system-measured ms, median): BASE %s  REF %s  HOST %s" % (cb, cr, ch))
+print("== cold start (system-measured ms, median): BASE %s  REF %s  HOST %s   |   after compilation: REF %s  HOST %s" % (cb, cr, ch, cra, cha))
 try:
     cr_, ch_ = float(cr), float(ch); checks.append(("cold start within REF+150 ms and 1.15x", ch_ <= cr_ + 150 and ch_ <= cr_ * 1.15 + 50))
 except ValueError: checks.append(("cold start data present", False))

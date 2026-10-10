@@ -103,6 +103,27 @@ H2=$(adb shell "run-as $HOST sh -c 'cd files; sha256sum history.bin'" | tr -d '\
 adb shell "run-as $HOST sh -c 'cd files; grep -o seed[^,}]* save.json'" | tr -d '\r' | grep -q 777 && pass "K7 save still holds the climb (seed 777)" || fail "K7 save lost the climb"
 stop_server
 
+RELI=0; [ -f "$HERE/../../docs/ota-full/reliability/RELIABILITY.md" ] && RELI=1
+if [ "$RELI" = 1 ]; then
+echo "== K8 (integrated reliability work) damaged update state cannot reopen the door to an old release"
+go_home
+adb shell "run-as $HOST sh -c 'cd files/host && printf garbage > state.json && rm -f state.json.bak state.json.tmp'"
+serve c2_same_world; start "$HOST_ACT" --es updateBase http://10.0.2.2:8099/ >/dev/null
+expect "K8 the host still starts a verified module with the state file destroyed" "running module v[0-9]+" 40
+expect "K8 the old signed release (v2) is refused after the state was destroyed" "update check: .*(up to date|not newer|rolled back or revoked)" 40
+logs | grep -q "update check: staged v2" && fail "K8 anti-rollback was reset by damaged state: the old v2 was accepted" || pass "K8 anti-rollback survived the damaged state"
+echo "== K9 (integrated reliability work) an interrupted installation leaves nothing behind that blocks the next update"
+go_home
+adb shell "run-as $HOST sh -c 'cd files/host && mkdir -p staging.tmp staged && head -c 100000 /dev/urandom > staging.tmp/module.dex && echo {} > staged/manifest.json'"
+serve c8_after_interrupt; start "$HOST_ACT" --es updateBase http://10.0.2.2:8099/ >/dev/null
+expect "K9 the host starts despite leftovers of an interrupted install" "running module v[0-9]+" 40
+expect "K9 the next update still installs" "update check: staged v8" 40
+go_home; sleep 1; start "$HOST_ACT" >/dev/null; expect "K9 and activates at the next cold start" "running module v8" 40
+stop_server
+else
+echo "== K8/K9 (damaged state, interrupted install) are run on the integration branch once the reliability work is merged: skipped here"
+fi
+
 echo "== P1 delivery-layer measurements: cold start, frame pacing and memory, packaged vs module (informational on an emulator: software GL, NOT representative of a phone; never fails the run)"
 bash "$HERE/perf_capture.sh" "$OUT/perf" 3 30 2 2>&1 | tee "$OUT/perf.txt" | sed 's/^/   /' || true
 

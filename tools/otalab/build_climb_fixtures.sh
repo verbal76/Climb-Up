@@ -11,6 +11,7 @@ mk --out "$SERVE/c2_same_world" --version 2 --ruleset 1                    # a c
 mk --out "$SERVE/c3_new_generator" --version 3 --ruleset 2                 # would change the unseen part of a climb: must wait
 mk --out "$SERVE/c4_tampered" --version 4 --ruleset 1 --tamper dex
 mk --out "$SERVE/c5_no_entry" --version 5 --ruleset 1 --entry com.hotatticgames.climbup.module.Missing
+mk --out "$SERVE/c8_after_interrupt" --version 8 --ruleset 1               # installed after an interrupted installation (integration scenario K9)
 if [ -n "$MARKED" ]; then                                                    # a release whose executing code differs (extra entry class, same game): the real "code update"
   mkj "$MARKED" --out "$SERVE/c7_code_change" --version 7 --ruleset 1 --entry com.hotatticgames.climbup.module.ClimbModuleMarked
 fi

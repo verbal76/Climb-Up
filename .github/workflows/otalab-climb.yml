@@ -56,7 +56,7 @@ jobs:
           grep -q "ClimbModuleMarked" "$RUNNER_TEMP/classes7.txt" && echo "code-update release: $(wc -l < "$RUNNER_TEMP/classes7.txt") classes (baseline has $(wc -l < "$RUNNER_TEMP/classes.txt"))"
           CP="hostkit/build/libs/hostkit-$VER.jar:modspi/build/libs/modspi-$VER.jar:$(find ~/.gradle -name 'gdx-1.14.2.jar' | head -1)"
           java -cp "$CP" com.hotatticgames.climbup.host.VerifyBundleCli climbhost/src/main/assets/baseline "$RUNNER_TEMP/lab_pub.b64" com.hotatticgames.climbup.otaexp internal
-          for ok in c2_same_world c3_new_generator c5_no_entry c7_code_change; do java -cp "$CP" com.hotatticgames.climbup.host.VerifyBundleCli "$RUNNER_TEMP/serve/$ok" "$RUNNER_TEMP/lab_pub.b64" com.hotatticgames.climbup.otaexp internal; done
+          for ok in c2_same_world c3_new_generator c5_no_entry c7_code_change c8_after_interrupt; do java -cp "$CP" com.hotatticgames.climbup.host.VerifyBundleCli "$RUNNER_TEMP/serve/$ok" "$RUNNER_TEMP/lab_pub.b64" com.hotatticgames.climbup.otaexp internal; done
           if java -cp "$CP" com.hotatticgames.climbup.host.VerifyBundleCli "$RUNNER_TEMP/serve/c4_tampered" "$RUNNER_TEMP/lab_pub.b64" com.hotatticgames.climbup.otaexp internal; then echo "::error::host verifier ACCEPTED the tampered module"; exit 1; fi
       - name: Deterministic digests on the JVM (broad seed set; the emulator compares the device with these)
         run: |

@@ -36,7 +36,7 @@ if (-not (Test-Path $jp)) { $jp = 'jpackage' }
 & $jp --type app-image --name UPWARDLY --app-version $exeVersion --vendor 'Hot Attic Games' `
   --description 'UPWARDLY - a tower that does not exist, a climb that does.' --copyright 'Hot Attic Games' `
   --icon "$out\upwardly.ico" --input $jarDir --main-jar upwardly.jar --main-class com.hotatticgames.climbup.desktop.DesktopLauncher `
-  --add-modules 'java.base,java.desktop,java.logging,java.management,java.naming,java.xml,jdk.unsupported' `
+  --add-modules 'java.base,java.desktop,java.logging,java.management,java.naming,java.xml,jdk.unsupported,jdk.crypto.ec'      # jdk.crypto.ec: the shared startup code builds the pinned EC key (needed even though the Windows build never goes online) `
   --java-options '-Dfile.encoding=UTF-8' --java-options '-Xms256m' --java-options '-Xmx1024m' --java-options '-XX:+UseG1GC' `
   --dest $dist
 if ($LASTEXITCODE -ne 0) { throw 'jpackage failed' }

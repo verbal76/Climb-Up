@@ -5,7 +5,7 @@
 ## Build (repeatable)
 `powershell -File tools/windows/package.ps1 -BuildNumber <n>` on Windows with JDK 17+ and Python 3 + Pillow. CI does exactly this (`.github/workflows/windows.yml`, job `windows`), on pushes to `exp/upwardly-windows` only, and uploads the zip as an `EXPERIMENTAL-...` workflow artifact (never a Release).
 
-Steps: `:desktop:windowsJar` (shared game + LWJGL3 + **Windows natives only**) -> `jpackage --type app-image` (EXE, jlink runtime of `java.base, java.desktop, java.logging, java.management, java.naming, java.xml, jdk.unsupported`) -> copy `assets/` to `app/assets` -> `BUILD_INFO.txt`, `SHA256SUMS.txt` -> `steam/content` + VDF templates -> zip.
+Steps: `:desktop:windowsJar` (shared game + LWJGL3 + **Windows natives only**) -> `jpackage --type app-image` (EXE, jlink runtime of `java.base, java.desktop, java.logging, java.management, java.naming, java.xml, jdk.unsupported, jdk.crypto.ec`) -> copy `assets/` to `app/assets` -> `BUILD_INFO.txt`, `SHA256SUMS.txt` -> `steam/content` + VDF templates -> zip.
 
 ## Layout
 ```

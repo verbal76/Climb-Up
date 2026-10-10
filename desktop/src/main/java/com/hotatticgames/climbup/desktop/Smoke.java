@@ -57,6 +57,10 @@ final class Smoke {
             check("controllerLibrary", true, "SDL game-controller library loaded, controllers=" + n);
         } catch (Throwable t) { check("controllerLibrary", false, t.toString()); }
         try {
+            com.hotatticgames.climbup.ota.OtaClient.Endpoint.pinned();      // what ClimbGame.create does at startup: needs the EC crypto provider in the bundled runtime
+            check("startupCrypto", true, "pinned key parsed");
+        } catch (Throwable t) { check("startupCrypto", false, t.toString()); }
+        try {
             Tuning t = Tuning.parse(new String(Files.readAllBytes(tuningFile.toPath()), StandardCharsets.UTF_8));
             Tower tower = new Tower(11L, t);
             Sim sim = Sim.startOn(tower.world, t, 0);

@@ -44,7 +44,7 @@ public final class DesktopLauncher {
                 @Override protected Files createFiles() { return new AssetFiles(assetRoot); }
             };
             DesktopLog.append("clean exit");
-        } catch (Throwable t) { DesktopLog.error("the game stopped with an error", t); throw t; }
+        } catch (Throwable t) { DesktopLog.error("the game stopped with an error", t); t.printStackTrace(); System.exit(1); }       // never leave a half-started process behind
     }
 
     /** -Dclimb.assets, else an "assets" folder next to the jar (the packaged game), else the working directory (development: gradle run uses ../assets). */

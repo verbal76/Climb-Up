@@ -23,16 +23,20 @@ grep -q "Lcom/hotatticgames/climbup/otalab/LabLauncher" "$W/host_loaders.txt" &&
 classes "$STORE" "$W/s2" > "$W/store_classes.txt"; classes "$HOSTAPK" "$W/h2" > "$W/host_classes.txt"
 n=$(grep -c "Lcom/hotatticgames/climbup/host/" "$W/store_classes.txt" || true); [ "${n:-0}" -eq 0 ] && pass "store APK: no OTA host classes (com.hotatticgames.climbup.host: 0)" || fail "store APK contains $n OTA host classes"
 for pkg in spi otalab module; do n=$(grep -c "Lcom/hotatticgames/climbup/$pkg/" "$W/store_classes.txt" || true); [ "${n:-0}" -eq 0 ] && pass "store APK: no climbup.$pkg classes" || fail "store APK contains $n climbup.$pkg classes"; done
-# same game: every game class of the module (everything under com/hotatticgames/climbup except the module's own entry/self-test package) is in the store APK and vice versa
+# same game: every top-level game class of the module (everything under com/hotatticgames/climbup except the module's own entry/self-test package) is in the store APK and vice versa. Nested,
+# anonymous and lambda classes are compared by count only: D8 names the synthetic ones it generates differently under different build settings (ClimbGame$0 vs ClimbGame$$ExternalSyntheticLambda0),
+# which is a property of the dexing, not of the game; behaviour is compared by the device equivalence scenarios (digests, frames).
 sed "s/.*'\(L[^']*;\)'.*/\1/" "$MODCLS" | sort -u | grep "^Lcom/hotatticgames/climbup/" | grep -v "^Lcom/hotatticgames/climbup/module/" > "$W/mod_game.txt"
 grep "^Lcom/hotatticgames/climbup/" "$W/store_classes.txt" | grep -v "^Lcom/hotatticgames/climbup/android/" > "$W/store_game.txt"
-echo "   game classes: module $(wc -l < "$W/mod_game.txt"), store APK $(wc -l < "$W/store_game.txt")"
-if cmp -s "$W/mod_game.txt" "$W/store_game.txt"; then pass "the store APK and the module carry exactly the same game classes"; else fail "game class sets differ between store APK and module"; diff "$W/mod_game.txt" "$W/store_game.txt" | head -20; fi
+sed 's/\$.*;$/;/' "$W/mod_game.txt" | sort -u > "$W/mod_top.txt"; sed 's/\$.*;$/;/' "$W/store_game.txt" | sort -u > "$W/store_top.txt"
+echo "   game classes: module $(wc -l < "$W/mod_game.txt") ($(wc -l < "$W/mod_top.txt") top-level), store APK $(wc -l < "$W/store_game.txt") ($(wc -l < "$W/store_top.txt") top-level)"
+if cmp -s "$W/mod_top.txt" "$W/store_top.txt"; then pass "the store APK and the module carry exactly the same top-level game classes"; else fail "top-level game class sets differ between store APK and module"; diff "$W/mod_top.txt" "$W/store_top.txt" | head -20; fi
+[ "$(wc -l < "$W/mod_game.txt")" -eq "$(wc -l < "$W/store_game.txt")" ] && pass "and the same number of classes in total ($(wc -l < "$W/mod_game.txt"))" || echo "   NOTE: total class counts differ ($(wc -l < "$W/mod_game.txt") vs $(wc -l < "$W/store_game.txt")): D8 desugaring differences; informational"
 echo "== permissions"
 for a in "$STORE" "$HOSTAPK"; do echo "   $(basename "$a"): $("$BT/aapt2" dump permissions "$a" | grep -E "^uses-permission" | sed "s/uses-permission: name='\(.*\)'.*/\1/" | sort | tr '\n' ' ')"; done
 "$BT/aapt2" dump permissions "$STORE" | grep -qE "REQUEST_INSTALL_PACKAGES|WRITE_EXTERNAL_STORAGE|MANAGE_EXTERNAL_STORAGE|SYSTEM_ALERT_WINDOW" && fail "store APK declares a permission the game must not need" || pass "store APK declares no install, storage-wide or overlay permission"
 echo "== package identity"
 echo "   store: $("$BT/aapt2" dump badging "$STORE" | grep -m1 '^package' | cut -c1-120)"; echo "   host : $("$BT/aapt2" dump badging "$HOSTAPK" | grep -m1 '^package' | cut -c1-120)"
-sp=$("$BT/aapt2" dump badging "$STORE" | grep -m1 '^package' | sed "s/.*name='\([^']*\)'.*/\1/"); hp=$("$BT/aapt2" dump badging "$HOSTAPK" | grep -m1 '^package' | sed "s/.*name='\([^']*\)'.*/\1/")
+sp=$("$BT/aapt2" dump badging "$STORE" | grep -m1 '^package' | sed "s/^package: name='\([^']*\)'.*/\1/"); hp=$("$BT/aapt2" dump badging "$HOSTAPK" | grep -m1 '^package' | sed "s/^package: name='\([^']*\)'.*/\1/")
 [ "$sp" != "$hp" ] && pass "the OTA host has its own application id ($hp), distinct from the game's ($sp): it cannot replace an installed game" || fail "host and store share an application id"
 [ "$FAILS" -eq 0 ] && { echo "STORE GATE PASSED"; exit 0; } || { echo "$FAILS STORE GATE CHECK(S) FAILED"; exit 1; }

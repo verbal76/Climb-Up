@@ -39,8 +39,8 @@ public final class SpaceScene {
     private final Far[] farPlanets = new Far[5];
 
     // far clouds: the regular cloud models, very far behind the tower, tinted by the glow of the sky so they read as distant, with slow parallax
-    private static final int FAR_CLOUDS = 16;
-    private static final class FarCloud { float u, v, dist, ang, pkx, pky; ModelInstance inst; }
+    private static final int FAR_CLOUDS = 12;
+    private static final class FarCloud { int band; float u, v, dist, ang, pkx, pky; ModelInstance inst; }
     private final FarCloud[] farClouds = new FarCloud[FAR_CLOUDS];
     /** Colour of the sky glow the far clouds take (set by the renderer from the sky gradient). */
     public final com.badlogic.gdx.graphics.Color cloudGlow = new com.badlogic.gdx.graphics.Color(0.8f, 0.9f, 1f, 1f);
@@ -65,12 +65,14 @@ public final class SpaceScene {
         for (int i = 0; i < SHIPS.length; i++) ships[i] = fade(new ModelInstance(models.space(SHIPS[i])));
         env.set(new ColorAttribute(ColorAttribute.AmbientLight, 0.62f, 0.62f, 0.70f, 1f));
         env.add(new DirectionalLight().set(1f, 0.96f, 0.88f, -0.5f, -0.6f, -0.6f));
-        for (int i = 0; i < FAR_CLOUDS; i++) {
-            FarCloud c = new FarCloud();
-            boolean mid = i < FAR_CLOUDS / 2;         // two depth bands: nearer, bigger clouds that move faster, and very far ones that barely move
-            c.u = (i * 0.618f + 0.11f) % 1f; c.v = (i * 0.4143f + 0.23f) % 1f;
-            c.dist = mid ? 150f + 28f * (i % 3) : 300f + 55f * (i % 4); c.ang = mid ? 6f + 5f * ((i * 0.77f) % 1f) : 4.5f + 4.5f * ((i * 0.77f) % 1f);
-            c.pkx = mid ? 0.11f + 0.05f * (i % 3) : 0.07f + 0.05f * (i % 3); c.pky = mid ? 0.13f + 0.04f * (i % 3) : 0.09f + 0.04f * (i % 3);
+        final float[] bandDist = {130f, 190f, 260f, 350f, 460f}; final int[] bandCount = {2, 2, 3, 3, 2};
+        int n = 0;
+        for (int band = 0; band < bandDist.length; band++) for (int j = 0; j < bandCount[band]; j++, n++) {
+            FarCloud c = new FarCloud(); int i = n;
+            c.band = band;
+            c.u = (i * 0.618f + 0.11f) % 1f; c.v = (i * 0.4143f + 0.23f) % 1f; c.dist = bandDist[band] + 12f * j;
+            c.ang = 5.5f + 4f * ((i * 0.77f) % 1f) - band * 0.4f;                    // farther bands are not drawn bigger: they read as farther
+            c.pkx = 0.16f - 0.025f * band; c.pky = 0.17f - 0.025f * band;            // nearer bands drift faster, farther ones barely move
             c.inst = new ModelInstance(models.pack("cloud_" + (1 + i % 3)));
             for (Material m : c.inst.materials) m.set(new BlendingAttribute(true, 0.6f), ColorAttribute.createDiffuse(1f, 1f, 1f, 1f), ColorAttribute.createEmissive(0.3f, 0.3f, 0.35f, 1f));
             farClouds[i] = c;
@@ -127,9 +129,10 @@ public final class SpaceScene {
             float sc = c.dist * MathUtils.tanDeg(c.ang) / 3.2f;
             c.inst.transform.idt().translate(tmp).rotate(0, 1, 0, 8f).scale(sc * 1.7f, sc * 0.85f, sc);
             for (Material m : c.inst.materials) {
-                ((ColorAttribute) m.get(ColorAttribute.Diffuse)).color.set(cloudGlow);
+                float haze = c.band / 4f;                              // 0 = nearest band, 1 = farthest: farther clouds are hazier and take more of the sky colour
+                ((ColorAttribute) m.get(ColorAttribute.Diffuse)).color.set(1f, 1f, 1f, 1f).lerp(cloudGlow, 0.30f + 0.55f * haze);
                 ((ColorAttribute) m.get(ColorAttribute.Emissive)).color.set(cloudGlow).mul(0.55f);
-                ((BlendingAttribute) m.get(BlendingAttribute.Type)).opacity = cloudA;
+                ((BlendingAttribute) m.get(BlendingAttribute.Type)).opacity = cloudA * (0.95f - 0.45f * haze);
             }
             batch.render(c.inst, env);
         }

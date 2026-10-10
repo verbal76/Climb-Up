@@ -433,6 +433,7 @@ public final class WorldRenderer implements Disposable {
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT | GL20.GL_DEPTH_BUFFER_BIT);
         bg.render(sb, shapes, skyTop, skyBot, ps, bgY, zoneF, T.circumference(), reducedMotion, time);
         Gdx.gl.glClear(GL20.GL_DEPTH_BUFFER_BIT);
+        if (quality > 0) bg.renderGlow(sb, zoneF);
         if (quality > 0) {                 // planets and sky ships far behind the tower (wide-range camera, drawn first)
             if (space == null) { farCam = new com.badlogic.gdx.graphics.PerspectiveCamera(40f, cam.viewportWidth, cam.viewportHeight); farCam.near = 1f; farCam.far = 2500f; space = new SpaceScene(models, farCam, T.radius); }
             space.cloudGlow.set(skyTop).lerp(skyBot, 0.5f).lerp(Color.WHITE, 0.4f);
@@ -444,6 +445,7 @@ public final class WorldRenderer implements Disposable {
             Gdx.gl.glClear(GL20.GL_DEPTH_BUFFER_BIT);
         }
 
+        if (quality > 0) bg.renderShafts(sb, zoneF, reducedMotion, time);
         batch.begin(cam);
         syncVis();
         int lo = Math.max(0, sim.winLo), hi = Math.min(vis.size() - 1, sim.winHi);

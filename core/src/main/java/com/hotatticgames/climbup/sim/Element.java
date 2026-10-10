@@ -18,7 +18,9 @@ public final class Element {
         /** Sloped walkway (amp = height gained per metre toward +s, w = horizontal length, y = height at its middle). skin: 0 plain, 1 crumbles, 2 shakes and bounces you, 3 sinks away when stepped on. */
         RAMP,
         /** Platform that slides toward and away from the camera (amp = depth travel). You can only land on it while it is in your plane (|depth| <= Z_REACH); once you stand on it, it carries you. */
-        MOVE_Z }
+        MOVE_Z,
+        /** Mortar: a cannon in the ground BELOW the path that points straight up. Its ball rises from the muzzle (y) by amp, falls back into the barrel, waits to reload, and fires again every period. The ball is a lethal disc (a hit only knocks you away). */
+        MORTAR }
 
     public Type type;
     public int zone;
@@ -34,7 +36,7 @@ public final class Element {
     public Element(Type type, float s, float y, float w) { this.type = type; this.s = s; this.y = y; this.w = w; }
 
     public boolean isHazard() {
-        switch (type) { case SAW_H: case SAW_V: case PENDULUM: case CANNON: case SPIKE_TRAP: case SPIKE_BLOCK: case SPIKE_DROP: return true; default: return false; }
+        switch (type) { case SAW_H: case SAW_V: case PENDULUM: case CANNON: case SPIKE_TRAP: case SPIKE_BLOCK: case SPIKE_DROP: case MORTAR: return true; default: return false; }
     }
     /** Platforms that fall apart soon after being stood on. */
     public boolean crumbles() { return type == Type.CRUMBLE || (type == Type.RAMP && skin == 1) || (skin == 1 && (type == Type.MOVE_H || type == Type.MOVE_V || type == Type.SWING)); }
@@ -43,7 +45,7 @@ public final class Element {
     public boolean isPlatform() { return type != Type.ROPE && type != Type.CABLE && !isHazard(); }
     /** True for anything that changes with time (planner sweeps its phase). */
     public boolean isMoving() {
-        switch (type) { case MOVE_H: case MOVE_V: case MOVE_Z: case SWING: case SAW_H: case SAW_V: case PENDULUM: case CANNON: case SPIKE_TRAP: case SPIKE_DROP: case CRAB: case BEE: return true; default: return false; }
+        switch (type) { case MOVE_H: case MOVE_V: case MOVE_Z: case SWING: case SAW_H: case SAW_V: case PENDULUM: case CANNON: case SPIKE_TRAP: case SPIKE_DROP: case CRAB: case BEE: case MORTAR: return true; default: return false; }
     }
 
     public static final float CANNON_FLIGHT = 0.7f;      // fraction of the cycle a ball is in the air
@@ -58,9 +60,20 @@ public final class Element {
      */
     public float cannonBallS(float t, int back) { return s + dir * len / (CANNON_FLIGHT * period) * (cyc(t) + back) * period; }
 
+    public static final float MORTAR_FLIGHT = 0.82f, MORTAR_R = 0.4f;
+    /** Mortar ball height at time t: a parabola from the muzzle (y) to y + amp and back during the first MORTAR_FLIGHT of the cycle, then it sits in the barrel while the mortar reloads. */
+    public float mortarBallY(float t) {
+        float c = cyc(t);
+        if (c >= MORTAR_FLIGHT) return y;
+        float u = c / MORTAR_FLIGHT;
+        return y + amp * 4f * u * (1f - u);
+    }
+    /** 0..1 over the reload pause (the warning glow), 0 while the ball is in flight. */
+    public float mortarCharge(float t) { float c = cyc(t); return c < MORTAR_FLIGHT ? 0f : (c - MORTAR_FLIGHT) / (1f - MORTAR_FLIGHT); }
+
     /** Radius of the lethal disc for round hazards (0 = not a disc). */
     public float discR() {
-        switch (type) { case SAW_H: case SAW_V: return SAW_R; case PENDULUM: return BALL_R; case CANNON: return SHOT_R; default: return 0f; }
+        switch (type) { case SAW_H: case SAW_V: return SAW_R; case PENDULUM: return BALL_R; case CANNON: return SHOT_R; case MORTAR: return MORTAR_R; default: return 0f; }
     }
 
     /** Spike trap: 0 retracted, small = warning tips, 0.6 = fully extended. */
@@ -110,6 +123,7 @@ public final class Element {
         switch (type) {
             case SPIKE_TRAP: { float c = cyc(t); return c >= 0.55f + 0.02f && c < 0.55f + amp; }
             case CANNON: return cyc(t) < CANNON_FLIGHT;
+            case MORTAR: return mortarBallY(t) > y + 0.35f;          // inside the barrel (or just leaving it) the ball hurts nobody
             case SPIKE_BLOCK: case SPIKE_DROP: case SAW_H: case SAW_V: case PENDULUM: return true;
             default: return false;
         }
@@ -139,6 +153,7 @@ public final class Element {
         switch (type) {
             case MOVE_V: case SAW_V: return y + amp * 0.5f * (1f - (float) Math.cos(ang(t)));
             case SWING: case PENDULUM: return y + len - len * (float) Math.cos(amp * Math.sin(ang(t)));
+            case MORTAR: return mortarBallY(t);
             default: return y;
         }
     }

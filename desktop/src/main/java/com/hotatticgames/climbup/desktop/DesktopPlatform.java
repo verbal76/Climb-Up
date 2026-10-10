@@ -61,12 +61,20 @@ public final class DesktopPlatform implements Platform {
     /** desktop.log in the data folder: startup time and frame pacing of this run (the evidence the packaged build can give without a console). */
     private void trace(long nowNs) {
         frames++;
-        if (frames == 1) startupLog.append("first frame ").append((nowNs - startNs) / 1_000_000L).append(" ms after the launcher started\n");
-        else if (lastNs != 0) { double ms = (nowNs - lastNs) / 1e6; if (frames > 10) { sumMs += ms; maxMs = Math.max(maxMs, ms); } }
+        if (frames == 1) {
+            startupLog.append("first frame ").append((nowNs - startNs) / 1_000_000L).append(" ms after the launcher started\n");
+            try { startupLog.append("gpu: ").append(Gdx.gl.glGetString(com.badlogic.gdx.graphics.GL20.GL_RENDERER)).append(" | ").append(Gdx.gl.glGetString(com.badlogic.gdx.graphics.GL20.GL_VERSION)).append(" | backbuffer ").append(Gdx.graphics.getBackBufferWidth()).append("x").append(Gdx.graphics.getBackBufferHeight()).append(Gdx.graphics.isFullscreen() ? " fullscreen" : " windowed").append("\n"); } catch (RuntimeException ignored) { }
+        }
+        else if (lastNs != 0) {
+            double ms = (nowNs - lastNs) / 1e6;
+            if (frames > 10) { sumMs += ms; maxMs = Math.max(maxMs, ms); }
+            if (frames > 10 && ms > 200 && hitches < 25) { hitches++; DesktopLog.append(String.format(java.util.Locale.ROOT, "hitch %.0f ms at frame %d (%.1f s after start)", ms, frames, (nowNs - startNs) / 1e9)); }      // what a freeze looked like, so it can be traced
+        }
         lastNs = nowNs;
         if (frames == 600) { startupLog.append(String.format(java.util.Locale.ROOT, "frames 11..600: avg %.2f ms, max %.2f ms\n", sumMs / 590.0, maxMs)); flushLog(); }
         if (frames == 1) flushLog();
     }
+    private int hitches;
     private void flushLog() { DesktopLog.append(startupLog.toString().trim()); startupLog.setLength(0); }
 
     @Override public void frame(float dt) {

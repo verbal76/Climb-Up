@@ -280,11 +280,12 @@ public final class PlayScreen extends ScreenAdapter {
             if (d > 14f) continue;
             float vol = Math.max(0f, 1f - d / 14f);
             switch (h.type) {
-                case CANNON: case SPIKE_TRAP: {
-                    int cyc = (int) Math.floor(h.type == Element.Type.CANNON ? sim.time / h.period + h.phase / 6.2832f : (sim.time / h.period + h.phase / 6.2832f - 0.55f));
+                case CANNON: case SPIKE_TRAP: case MORTAR: {
+                    int cyc = (int) Math.floor(h.type == Element.Type.CANNON || h.type == Element.Type.MORTAR ? sim.time / h.period + h.phase / 6.2832f : (sim.time / h.period + h.phase / 6.2832f - 0.55f));
                     Integer prev = cycleSeen.put(h, cyc);
                     if (prev != null && prev != cyc) {
-                        if (h.type == Element.Type.CANNON) { g.audio.play("cannon", 0.9f * vol + 0.1f, 1f); world.particles.burst(h.s + h.dir * 0.8f, h.y, 6, dust, 1.5f, 0.6f, 0.12f, 0f, 0.4f); world.shake(0.15f * vol); say("[BOOM]"); }
+                        if (h.type == Element.Type.MORTAR) { g.audio.play("cannon", 0.7f * vol + 0.05f, 1.25f); world.particles.burst(h.s, h.y + 0.5f, 6, dust, 1.2f, 1.6f, 0.12f, 0f, 0.4f); }
+                        else if (h.type == Element.Type.CANNON) { g.audio.play("cannon", 0.9f * vol + 0.1f, 1f); world.particles.burst(h.s + h.dir * 0.8f, h.y, 6, dust, 1.5f, 0.6f, 0.12f, 0f, 0.4f); world.shake(0.15f * vol); say("[BOOM]"); }
                         else g.audio.play("spikes", 0.7f * vol + 0.05f, 1f);
                     }
                     break;

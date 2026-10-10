@@ -623,6 +623,15 @@ public final class WorldRenderer implements Disposable {
         return m;
     }
 
+    /** A pack model stood on end (its barrel axis, model z, pointing up), centred at (arc, y). */
+    private void drawPackUp(String name, float arc, float y, float camS, float sc) {
+        ModelInstance m = pack(name);
+        float phi = wrapDiff(arc, camS) / T.radius, r = T.radius;
+        m.transform.idt().translate(r * MathUtils.sin(phi), y, -T.radius + r * MathUtils.cos(phi))
+                .rotate(0, 1, 0, phi * MathUtils.radiansToDegrees).rotate(1, 0, 0, 90f).scale(sc, sc, sc);
+        batch.render(m, env);
+    }
+
     private void drawPack(String name, float arc, float y, float dz, float camS, float sx, float sy, float sz, float yaw, float roll) {
         ModelInstance m = pack(name);
         float phi = wrapDiff(arc, camS) / T.radius, r = T.radius - dz;
@@ -757,6 +766,16 @@ public final class WorldRenderer implements Disposable {
                     if (Math.abs(course.dsWrap(bs, camS)) > CANNON_OFFSCREEN) continue;
                     drawPack("spikyball", bs, h.yAt(t), 0f, camS, 0.55f, 0.55f, 0.55f, 0f, -bs * 160f);
                 }
+                break;
+            }
+            case MORTAR: {
+                // a cannon standing in the ground below the path, pointing straight up; its tip is the muzzle (h.y) the ball leaves from and falls back into
+                drawBox(h.s, h.y - 2.6f, 0f, camS, 1.5f, 2.0f, 1.3f, 0.34f, 0.31f, 0.40f);
+                drawBox(h.s, h.y - 0.7f, 0f, camS, 1.7f, 0.18f, 1.5f, 0.30f, 0.27f, 0.36f);
+                drawPackUp("cannon", h.s, h.y - 0.61f, camS, PK);
+                float charge = h.mortarCharge(t);           // the reload pause: the muzzle glows brighter and brighter, then the ball bursts out (warning for the timing)
+                if (charge > 0f) { float pulse = reducedMotion ? 1f : 0.75f + 0.25f * MathUtils.sin(time * 28f); float k = (0.12f + 0.28f * charge) * pulse; drawBox(h.s - k * 0.5f, h.y - k * 0.5f, 0f, camS, k, k, k, 1f, 0.55f + 0.3f * charge, 0.15f); }
+                if (h.lethalAt(t)) drawPack("spikyball", h.s, h.yAt(t), 0f, camS, 0.55f, 0.55f, 0.55f, 0f, -h.yAt(t) * 160f);
                 break;
             }
             case SPIKE_TRAP: {

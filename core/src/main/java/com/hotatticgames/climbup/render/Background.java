@@ -74,7 +74,7 @@ public final class Background implements Disposable {
         float wrap = MathUtils.clamp((zoneF - Palette.ZONES + 0.25f) / 0.25f, 0f, 1f);       // the last quarter-zone blends back to the meadows
         float cloudA = (1f - 0.8f * MathUtils.clamp((zoneF - 2.4f) / 0.8f, 0f, 1f) * (1f - wrap)) * (1f - MathUtils.clamp((zoneF - 3.6f) / 0.5f, 0f, 1f) * (1f - wrap));      // fewer clouds at night, none in deep space
         float scale = h / 720f;
-        for (int k = 0; k < 2; k++) {
+        for (int k = 0; k < FLAT_CLOUD_LAYERS; k++) {       // the flat, bar-like cloud strips are retired: the 3D cloud models (Clouds) are the clouds now
             float par = k == 0 ? 7f : 13f;                   // pixels per arc unit: far layer slower
             float off = (reduced ? 0 : camS * par * scale);
             float drift = reduced ? 0f : time * (k == 0 ? 2f : 4f);
@@ -90,6 +90,8 @@ public final class Background implements Disposable {
         sb.setColor(Color.WHITE);
         sb.end();
     }
+
+    private static final int FLAT_CLOUD_LAYERS = 0;
 
     @Override public void dispose() { for (Texture t : clouds) t.dispose(); stars.dispose(); }
 }

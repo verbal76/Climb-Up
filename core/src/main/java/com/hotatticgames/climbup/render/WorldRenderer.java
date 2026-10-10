@@ -274,8 +274,8 @@ public final class WorldRenderer implements Disposable {
                 int knots = (int) e.len;
                 for (int k = 1; k <= knots; k++) ps.add(boxPart(0, -k + 0.5f, 0, 0.2f, 0.12f, 0.2f, new Color(0.7f, 0.52f, 0.28f, 1f)));
                 ps.add(boxPart(0, 0.12f, -0.05f, 2.4f, 0.24f, 0.26f, beam));           // a thin standing board: the climber hauls himself up from behind it
-                ps.add(boxPart(-1.1f, -0.9f, -0.05f, 0.2f, 1.7f, 0.2f, beam));
-                ps.add(boxPart(1.1f, -0.9f, -0.05f, 0.2f, 1.7f, 0.2f, beam));
+                ps.add(boxPart(-1.1f, -0.8f, -0.05f, 0.2f, 1.9f, 0.2f, beam));        // the posts run up into the board (they used to stop 0.05 short of it, leaving a gap)
+                ps.add(boxPart(1.1f, -0.8f, -0.05f, 0.2f, 1.9f, 0.2f, beam));
                 break;
             }
             case CABLE: {

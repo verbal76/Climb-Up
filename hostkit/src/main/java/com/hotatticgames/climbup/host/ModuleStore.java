@@ -51,13 +51,13 @@ public final class ModuleStore {
     public ModuleStore withFault(Fault f) { this.fault = f; return this; }
     private void at(String point) { fault.at(point); }
 
-    private final File root, modDir, stagedDir, tmpDir, stateFile, stateBak;
+    private final File root, modDir, stagedDir, tmpDir, stateFile, stateBak, floorFile;
     private final TrustedKeys keys; private final HostInfo host; private final AssetStore assets; private SaveGuard guard;
     public State st = new State();
 
     public ModuleStore(File root, TrustedKeys keys, HostInfo host) {
         this.root = root; this.keys = keys; this.host = host; modDir = new File(root, "mod"); stagedDir = new File(root, "staged");
-        tmpDir = new File(root, "staging.tmp"); stateFile = new File(root, "state.json"); stateBak = new File(root, "state.json.bak"); assets = new AssetStore(root);
+        tmpDir = new File(root, "staging.tmp"); stateFile = new File(root, "state.json"); stateBak = new File(root, "state.json.bak"); floorFile = new File(root, "floor"); assets = new AssetStore(root);
     }
 
     public AssetStore assets() { return assets; }
@@ -84,6 +84,7 @@ public final class ModuleStore {
         forgave = false;
         root.mkdirs(); modDir.mkdirs();
         try { loadState(); } catch (Exception e) { st = derive(); }
+        int[] floor = readFloor(); st.highest = Math.max(st.highest, floor[0]); st.revokeFloor = Math.max(st.revokeFloor, floor[1]);
         reconcileStaged();
         at("boot.afterLoad");
         Hashing.deleteTree(tmpDir);                                   // an interrupted download is discarded
@@ -216,7 +217,7 @@ public final class ModuleStore {
     public synchronized void confirm() {
         if (st.pending == 0) return;
         boolean dropSnapshot = st.snapshotFor == st.active && guard != null; String snapshot = "v" + st.active;
-        st.snapshotFor = 0;
+        forgave = false; st.snapshotFor = 0;
         st.lastGood = st.active; st.pending = 0; st.tries = 0; st.lastResult = "confirmed v" + st.active; st.rollback = "";
         boolean saved = saveState(); at("confirm.afterSave");
         if (saved && dropSnapshot) guard.discard(snapshot);          // only after the confirmation is durable: a snapshot is the only way back until then
@@ -236,6 +237,17 @@ public final class ModuleStore {
         return saved;
     }
     private boolean forgave;
+
+    /**
+     * The reverse of {@link #forgiveCleanPause}: the player came back (onResume) to a module that is still unconfirmed, so this launch counts again. Without it a module that is paused
+     * once and then crashes after the resume would die with {@code tries} already forgiven and never roll back. No-op unless this launch was forgiven; idempotent; durable before it returns.
+     */
+    public synchronized boolean recountAfterResume() {
+        if (!forgave || st.pending == 0) { forgave = false; return false; }
+        forgave = false; st.tries++;
+        boolean saved = saveState(); at("recount.afterSave");
+        return saved;
+    }
 
     /** Keeps only the store files the active module, the safety net and a waiting staged release name (an update re-downloads nothing it already has). */
     private void collectAssets() {
@@ -376,6 +388,36 @@ public final class ModuleStore {
         return d;
     }
 
+    // A tiny separate monotonic record of the two numbers anti-rollback depends on ("F1:<sha256 of body>\n<highest>,<revokeFloor>"). It is written durably, before the state, only when a number
+    // rises, and applied at every boot, so a release that was rolled back (its directory deleted) stays refused even if state.json AND its backup are both lost.
+    private static final String FLOOR_MAGIC = "F1:";
+
+    private int[] readFloor() {
+        int[] none = new int[2];
+        try {
+            if (!floorFile.isFile()) return none;
+            String s = new String(Files.readAllBytes(floorFile.toPath()), StandardCharsets.UTF_8);
+            int nl = s.indexOf('\n');
+            if (!s.startsWith(FLOOR_MAGIC) || nl != FLOOR_MAGIC.length() + 64) return none;
+            String body = s.substring(nl + 1);
+            if (!Hashing.sha256(body.getBytes(StandardCharsets.UTF_8)).equals(s.substring(FLOOR_MAGIC.length(), nl))) return none;
+            String[] p = body.split(",");
+            if (p.length != 2) return none;
+            int h = Integer.parseInt(p[0]), r = Integer.parseInt(p[1]);
+            return h < 0 || r < 0 ? none : new int[]{h, r};
+        } catch (Exception e) { return none; }
+    }
+
+    private void raiseFloor() throws IOException {
+        int[] f = readFloor();
+        if (st.highest <= f[0] && st.revokeFloor <= f[1]) return;
+        String body = Math.max(f[0], st.highest) + "," + Math.max(f[1], st.revokeFloor);
+        File tmp = new File(root, "floor.tmp");
+        writeDurably(tmp, (FLOOR_MAGIC + Hashing.sha256(body.getBytes(StandardCharsets.UTF_8)) + "\n" + body).getBytes(StandardCharsets.UTF_8));
+        Files.move(tmp.toPath(), floorFile.toPath(), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+        at("floor.afterWrite");
+    }
+
     private static void writeDurably(File f, byte[] data) throws IOException {
         try (java.io.FileOutputStream o = new java.io.FileOutputStream(f)) { o.write(data); o.getFD().sync(); }
     }
@@ -398,6 +440,9 @@ public final class ModuleStore {
             Files.move(tmp.toPath(), stateFile.toPath(), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
             at("state.afterMove");
             syncDir(root);
+            // The floor follows the state, never leads it: if it ran ahead, a death in between would leave it claiming a version whose activation the state never recorded, and that update
+            // could then neither be adopted nor delivered again. A floor that lags by one save is harmless (it catches up on the next save) and only matters if the state is lost.
+            try { raiseFloor(); } catch (Exception ignored) { /* redundant record: the state itself was saved */ }
             return true;
         } catch (Exception e) { return false; }      // e.g. storage full: the in-memory state stays authoritative for this run and the next save retries
     }

@@ -194,6 +194,86 @@ public class CrashPointTest {
         c.open().boot(); assertFalse("never below zero, nothing pending", c.store.forgiveCleanPause());
     }
 
+    @Test public void aCrashAfterAResumeStillCountsButAPauseThenAKillDoesNot() throws Exception {
+        // (a) first frame, Home (forgiven), back (counted again), the module crashes: three such launches must roll back and blacklist
+        Env e = new Env(); assertEquals(1, e.launch(true)); assertNull(e.stage(new Bundles.Spec().v(2)));
+        for (int i = 0; i < 2; i++) {
+            assertEquals("launch " + i, 2, e.open().boot().manifest.moduleVersion);
+            assertFalse("nothing to recount before any forgiveness", e.store.recountAfterResume());
+            assertTrue(e.store.forgiveCleanPause()); assertTrue("coming back counts the launch again", e.store.recountAfterResume());
+            assertFalse("idempotent per forgiveness", e.store.recountAfterResume());
+        }
+        assertEquals("the third launch that crashed after a resume is rolled back", 1, e.open().boot().manifest.moduleVersion);
+        assertTrue("and the release is blacklisted", e.store.st.bad.contains(2));
+        // pause -> resume -> pause again forgives again
+        Env p = new Env(); assertEquals(1, p.launch(true)); assertNull(p.stage(new Bundles.Spec().v(2)));
+        p.open().boot(); assertTrue(p.store.forgiveCleanPause()); assertTrue(p.store.recountAfterResume()); assertTrue(p.store.forgiveCleanPause()); assertEquals(0, p.store.st.tries);
+        // (b) pause with no resume, then the process is killed: not counted, however often it happens
+        Env k = new Env(); assertEquals(1, k.launch(true)); assertNull(k.stage(new Bundles.Spec().v(2)));
+        for (int i = 0; i < 8; i++) { assertEquals("kill " + i, 2, k.open().boot().manifest.moduleVersion); assertTrue(k.store.forgiveCleanPause()); }
+        assertEquals("then it confirms normally", 2, k.launch(true)); assertFalse(k.store.recountAfterResume());
+        // a confirmed module is never recounted
+        k.open().boot(); assertFalse(k.store.forgiveCleanPause()); assertFalse(k.store.recountAfterResume());
+    }
+
+    @Test public void pauseResumeForgiveAndRecountAreCrashSafeWhereverTheProcessDies() throws Exception {
+        int runs = sweep(new Scenario("forgive + recount", proven, new Step() { public void run(Env e) throws Exception {
+            assertNull(e.stage(new Bundles.Spec().v(2)));
+            e.open().boot(); e.store.forgiveCleanPause(); e.store.recountAfterResume(); e.store.forgiveCleanPause();      // first frame, Home, back, Home
+            e.open().boot(); e.store.confirm();
+        } }, true, 2, 1, null));
+        System.out.println("CrashPoint recount: " + runs + " death scenarios");
+    }
+
+    // ---------------------------------------------------------------- legacy state files and the monotonic floor
+
+    static String text(File f) throws Exception { return new String(Files.readAllBytes(f.toPath())); }
+
+    @Test public void aLegacyBareJsonStateLoadsAndIsRewrittenAsS1WithTheLegacyCopyAsBackup() throws Exception {
+        Env e = new Env(); assertEquals(1, e.launch(true));
+        File main = new File(e.root, "state.json"), bak = new File(e.root, "state.json.bak");
+        String s1 = text(main), legacy = s1.substring(s1.indexOf('\n') + 1);                    // exactly what the pre-S1 code wrote
+        Files.write(main.toPath(), legacy.getBytes()); bak.delete();
+        assertEquals("the legacy file loads", 1, e.launch(true));
+        assertEquals(1, e.store.st.active); assertEquals(1, e.store.st.lastGood); assertEquals(1, e.store.st.highest);
+        assertTrue("the next save rewrites it as S1", text(main).startsWith("S1:"));
+        assertEquals("and the legacy copy is kept as the backup", legacy, text(bak));
+        assertEquals("the rewritten file loads", 1, e.launch(true));
+    }
+
+    @Test public void aTruncatedS1StateWithALegacyBackupRecoversFromTheBackup() throws Exception {
+        Env e = new Env(); assertEquals(1, e.launch(true));
+        File main = new File(e.root, "state.json"), bak = new File(e.root, "state.json.bak");
+        String s1 = text(main), legacy = s1.substring(s1.indexOf('\n') + 1);
+        Files.write(bak.toPath(), legacy.getBytes()); Files.write(main.toPath(), s1.substring(0, s1.length() / 2).getBytes());
+        assertEquals("recovered from the legacy backup", 1, e.launch(true)); assertEquals(1, e.store.st.highest);
+        assertTrue("the main file is repaired", text(main).startsWith("S1:")); assertEquals("a damaged main never replaces the good backup", legacy, text(bak));
+        assertEquals(1, e.launch(true));
+    }
+
+    @Test public void aRolledBackReleaseStaysRefusedEvenWhenBothStateCopiesAreLost() throws Exception {
+        Env e = new Env(); assertEquals(1, e.launch(true)); assertNull(e.stage(new Bundles.Spec().v(8)));
+        e.open().boot(); e.open().boot();                                                      // v8 never confirms
+        assertEquals("rolled back", 1, e.open().boot().manifest.moduleVersion);
+        assertFalse("the broken module's directory is gone, so derive() alone could not know about v8", new File(e.root, "mod/v8").exists());
+        new File(e.root, "state.json").delete(); new File(e.root, "state.json.bak").delete();
+        ModuleStore s = e.open(); s.boot();
+        assertTrue("the floor file remembers v8: highest=" + s.st.highest, s.st.highest >= 8);
+        assertNotNull("v8 must not be accepted again", e.stage(new Bundles.Spec().v(8))); assertNotNull(e.stage(new Bundles.Spec().v(7)));
+        assertNull("a newer release still can be", e.stage(new Bundles.Spec().v(9)));
+    }
+
+    @Test public void aDamagedOrTamperedFloorFileIsIgnoredNotTrustedAndNeverCrashes() throws Exception {
+        Env e = new Env(); assertEquals(1, e.launch(true)); File floor = new File(e.root, "floor");
+        assertTrue(floor.isFile()); String good = text(floor);
+        String[] damaged = {"", "garbage", good.substring(0, good.length() / 2), good.replace("1,0", "999,0"), "F1:" + "0".repeat(64) + "\n5,0", good + "x", "F1:" + "a".repeat(64) + "\n-1,0"};
+        for (String d : damaged) {
+            Files.write(floor.toPath(), d.getBytes());
+            assertEquals("[" + d + "]", 1, e.launch(true));
+            assertTrue("a floor that does not verify must not raise anything: " + d, e.store.st.highest <= 1);
+        }
+    }
+
     @Test public void forgivingACleanPauseIsCrashSafeWhereverTheProcessDies() throws Exception {
         int runs = sweep(new Scenario("forgive clean pause", proven, new Step() { public void run(Env e) throws Exception {
             assertNull(e.stage(new Bundles.Spec().v(2)));

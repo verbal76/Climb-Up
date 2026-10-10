@@ -218,6 +218,28 @@ public final class Tower {
     /** Rebuilds with an explicit slice range and origin (tests: a window that covers the whole tower is the reference for what falls and jumps should do). */
     public void rebuildExplicit(Sim sim, int lo, int hi, double originYNew) { rebuildFor(sim, lo, hi, originYNew, sBase[lo]); }
 
+    /** Stable identity of a resident world element / hazard (slice * 65536 + local); it survives unloading and rebuilding the window. */
+    public long elemKeyAt(int worldIdx) { return worldIdx >= 0 && worldIdx < elemKey.length ? elemKey[worldIdx] : -1L; }
+    public long hazKeyAt(int hazIdx) { return hazIdx >= 0 && hazIdx < hazKey.length ? hazKey[hazIdx] : -1L; }
+    /** World index of the element with this identity, or -1 if its slice is not resident. */
+    public int indexOfElemKey(long key) { for (int i = 0; i < world.size() && i < elemKey.length; i++) if (elemKey[i] == key) return i; return -1; }
+    public int sliceCountResident() { return res.size(); }
+
+    /** Every feature (key taken, gate opened, crab knocked off) that has been done in this climb so far, resident or not. */
+    public java.util.List<Long> doneKeys(Sim sim) {
+        java.util.HashSet<Long> out = new java.util.HashSet<>(doneFeat);
+        for (int i = 0; i < hazKey.length && i < sim.featDone.length; i++) if (sim.featDone[i]) out.add(hazKey[i]);
+        java.util.ArrayList<Long> l = new java.util.ArrayList<>(out); java.util.Collections.sort(l); return l;
+    }
+    public void addDone(long[] keys) { for (long k : keys) doneFeat.add(k); }
+
+    /** Moves the resident window (and the floating origin) around an absolute height without a simulation to remap: for a tower that is about to get its sim, as when a saved climb is restored. */
+    public void windowAroundAbs(double centreAbs) {
+        int[] r = rangeFor(centreAbs);
+        rebuild(r[0], r[1], originFor(centreAbs), sBase[r[0]]);
+    }
+    public int sliceAtAbs(double abs) { return sliceAt(abs); }
+
     public Ref checkpointRef() { return cpRef; }
     public void setCheckpointRef(Ref r) { cpRef = r; lastCp = -2; }
 

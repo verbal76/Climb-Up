@@ -171,6 +171,25 @@ public final class Sim {
         }
     }
 
+    /**
+     * After a saved state was written into this sim (time, position, tilt of seesaws and ramps): puts every element where it is at {@link #time}, so the first step sees no phantom platform motion.
+     * Slopes and tipping planks report their surface at the player's own position, exactly as {@link #step} does.
+     */
+    public void syncElements() {
+        refreshElements();
+        for (int i = 0; i < course.size(); i++) {
+            Element e = course.get(i);
+            if (e.type == Element.Type.SEESAW) {
+                float hw = e.halfW(), x = Math.max(-hw, Math.min(hw, course.dsWrap(s, es1[i])));
+                ey0[i] = ey1[i] = e.y + tilt[i] * x;
+            } else if (e.type == Element.Type.RAMP) {
+                float hw = e.halfW(), x = Math.max(-hw, Math.min(hw, course.dsWrap(s, es1[i])));
+                ey0[i] = ey1[i] = e.y + e.amp * x - (e.skin == 3 ? tilt[i] : 0f);
+            }
+        }
+        sideIn = -1;
+    }
+
     public int consumeEvents() { int e = events; events = 0; return e; }
 
     // ---------------------------------------------------------------- spawning

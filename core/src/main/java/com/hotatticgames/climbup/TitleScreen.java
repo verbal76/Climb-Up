@@ -71,16 +71,14 @@ public final class TitleScreen extends ScreenAdapter {
         lastBub = bub;
         if (bub != null) { float[] hp = new float[2]; world.heroHeadScreen(W, H, hp); ui.bubble(bub, hp[0], hp[1] + 6, world.heroBubbleAlpha()); }
         float bw = 400, bh = 76, bx = Math.max(40f, W / 2 - 640f + 40f);
-        boolean prompt = g.save.noticeOldClimb;        // the one-time notice that an old climb could not carry over comes first
+        boolean notice = g.save.noticeOldClimb;        // the one-time notice that an old climb could not carry over comes first
+        boolean prompt = notice || confirmNew;         // either dialog hides the menu behind it
         float y0 = H * 0.46f;
         if (!prompt) {
             if (ui.button(has ? "CONTINUE" : "PLAY", bx, y0, bw, bh, true)) { g.audio.play("click"); next = new PlayScreen(g, false); }
             float yy = y0 - 88;
             if (has) {
-                if (ui.button(confirmNew ? "TAP AGAIN: NEW CLIMB" : "NEW CLIMB", bx, yy, bw, bh)) {
-                    if (confirmNew) { g.forgetRun(); g.save.falls = 0; g.runFresh = true; g.persist(); g.audio.play("click"); next = new PlayScreen(g, false); }
-                    confirmNew = true;
-                }
+                if (ui.button("NEW RUN", bx, yy, bw, bh)) { g.audio.play("click"); confirmNew = true; }       // replaces the saved climb: asks first
                 yy -= 88;
             }
             if (!g.save.legacy.isEmpty()) {
@@ -101,10 +99,28 @@ public final class TitleScreen extends ScreenAdapter {
         ui.rect(0, 0, W, 54, new Color(0.05f, 0.07f, 0.14f, 0.7f)); ui.text(stat, 24, 18, 3f, Ui.TEXT);
         String ver = Legacy.versionLine(ClimbGame.VERSION, ClimbGame.appBuild);          // always visible: which build is this?
         ui.text(ver, W - 24 - ui.font.width(ver, 3.6f), 17, 3.6f, Ui.ACCENT);
-        if (prompt) legacyPrompt(ui, W, H);
+        if (notice) legacyPrompt(ui, W, H); else if (confirmNew) newRunPrompt(ui, W, H);
         ui.end();
         g.autoShot("title", dt);
         if (next != null) { Screen n = next; next = null; g.setScreen(n); }
+    }
+
+    /** NEW RUN over a saved climb: nothing is lost unless the player confirms; CANCEL (the highlighted button) leaves the saved climb exactly as it was. */
+    private void newRunPrompt(Ui ui, float W, float H) {
+        ui.rect(0, 0, W, H, new Color(0f, 0f, 0.05f, 0.72f));
+        float scale = Math.min(ui.tm(), 1.3f), pw = Math.min(W - 60, 880), ph = 440 * Math.max(1f, scale * 0.9f), bw = Math.min(380, (pw - 90) / 2), bh = 84;
+        float px = W / 2 - pw / 2, py = Math.max(20, H / 2 - ph / 2);
+        ui.panel(px, py, pw, ph);
+        float t = 4.6f * scale, b = 3.2f * scale;
+        String l1 = "YOUR SAVED CLIMB (" + (int) g.save.climbHeight + " M) WILL BE REPLACED.";
+        java.util.List<String> body = TextWrap.wrap(l1, str -> ui.font.width(str, b), pw - 80);
+        ui.textC("START A NEW RUN?", W / 2, py + ph - 40 - ui.font.height(t), t, Ui.ACCENT);
+        float y = py + ph - 40 - ui.font.height(t) - 40;
+        for (String line : body) { y -= ui.font.height(b); ui.textC(line, W / 2, y, b, Ui.TEXT); y -= 14; }
+        if (ui.button("CANCEL", W / 2 - bw - 14, py + 40, bw, bh, true)) { g.audio.play("click"); confirmNew = false; }
+        if (ui.button("NEW RUN", W / 2 + 14, py + 40, bw, bh)) {
+            confirmNew = false; g.forgetRun(); g.save.falls = 0; g.runFresh = true; g.persist(); g.audio.play("click"); next = new PlayScreen(g, false);
+        }
     }
 
     private static final String[] NOTICE_A = {"THIS UPDATE CHANGED HOW A CLIMB IS STORED, SO YOUR", "UNFINISHED CLIMB COULD NOT CARRY OVER."};

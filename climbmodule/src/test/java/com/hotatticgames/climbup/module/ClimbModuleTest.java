@@ -84,4 +84,32 @@ public class ClimbModuleTest {
         assertNotEquals("a different seed is a different climb", direct, SelfTest.digest(tuning, 13, 3600));
         assertEquals("and the digest is repeatable", direct, SelfTest.digest(tuning, 12, 3600));
     }
+
+    static File markedJar() { return new File(System.getProperty("climb.markedJar")); }
+
+    /** The code-update test release: a different entry class and extra code, the identical game. */
+    @Test public void theCodeUpdateReleaseChangesTheExecutingCodeAndNothingOfTheGame() throws Exception {
+        Set<String> plain = new HashSet<>(), marked = new HashSet<>();
+        java.util.Map<String, byte[]> a = new java.util.HashMap<>(), b = new java.util.HashMap<>();
+        try (ZipFile z = new ZipFile(jar())) { for (Enumeration<? extends ZipEntry> en = z.entries(); en.hasMoreElements(); ) { ZipEntry e = en.nextElement(); if (e.getName().endsWith(".class")) { plain.add(e.getName()); a.put(e.getName(), z.getInputStream(e).readAllBytes()); } } }
+        try (ZipFile z = new ZipFile(markedJar())) { for (Enumeration<? extends ZipEntry> en = z.entries(); en.hasMoreElements(); ) { ZipEntry e = en.nextElement(); if (e.getName().endsWith(".class")) { marked.add(e.getName()); b.put(e.getName(), z.getInputStream(e).readAllBytes()); } } }
+        Set<String> added = new HashSet<>(marked); added.removeAll(plain);
+        assertEquals(new HashSet<>(java.util.Arrays.asList("com/hotatticgames/climbup/module/CodeMarker.class", "com/hotatticgames/climbup/module/ClimbModuleMarked.class")), added);
+        assertTrue("nothing removed", marked.containsAll(plain));
+        for (String n : plain) assertArrayEquals("identical in both releases: " + n, a.get(n), b.get(n));
+
+        URLClassLoader mod = new URLClassLoader(new URL[]{markedJar().toURI().toURL()}, hostLoader());
+        GameModule m = (GameModule) Class.forName("com.hotatticgames.climbup.module.ClimbModuleMarked", true, mod).getDeclaredConstructor().newInstance();
+        String expected; { byte[] h = java.security.MessageDigest.getInstance("SHA-256").digest("climb-up signed code update marker".getBytes("UTF-8")); StringBuilder sb = new StringBuilder(); for (int i = 0; i < 6; i++) sb.append(String.format("%02x", h[i])); expected = sb.toString(); }
+        assertEquals("the new code runs and says so", expected, m.selfTest("marker"));
+        final java.util.List<String> diag = new java.util.ArrayList<>();
+        ApplicationListener l = m.create(new HostEnv() {
+            public File dataDir() { return new File("build/modtest-data2"); } public int appBuild() { return 7; } public int hostLevel() { return 1; } public File moduleDir() { return null; }
+            public void confirmHealthy() { } public void climbInProgress(boolean x) { } public void diag(String s) { diag.add(s); }
+        });
+        assertEquals(java.util.Collections.singletonList("code-marker " + expected), diag);
+        assertSame(Class.forName("com.hotatticgames.climbup.ClimbGame", false, mod), l.getClass().getSuperclass());
+        String plainDigest = SelfTest.digest(new String(Files.readAllBytes(Paths.get("../assets/data/tuning.json")), "UTF-8"), 12, 1800);
+        assertEquals("the game plays exactly the same climb", plainDigest, m.selfTest("digest:12:1800"));
+    }
 }

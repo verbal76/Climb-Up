@@ -10,6 +10,8 @@ serve() { stop_server; python3 -m http.server 8099 --bind 0.0.0.0 --directory "$
 go_home() { adb shell input keyevent KEYCODE_HOME; sleep 1; adb shell am start -a android.settings.SETTINGS >/dev/null; sleep 2; }      # a full-screen activity from another app: backgrounding the game is deterministic
 ascii() { echo "   --- $1 ---"; python3 "$HERE/ascii.py" "$OUT/$1.png" 64 | sed 's/^/   | /'; }
 wait_for() { local pat=$1 t=${2:-60} i; for i in $(seq "$t"); do logs | grep -Eq "$pat" && return 0; sleep 1; done; return 1; }
+# wait_count PATTERN N [SECONDS]: waits until the log holds at least N matching lines
+wait_count() { local pat=$1 n=$2 t=${3:-60} i; for i in $(seq "$t"); do [ "$(logs | grep -Ec "$pat")" -ge "$n" ] && return 0; sleep 1; done; return 1; }
 expect() { local what=$1 pat=$2 t=${3:-60}; if wait_for "$pat" "$t"; then pass "$what"; else fail "$what (waited for /$pat/)"; logs | tail -25; fi; }
 # start <activity> [am extras...]: cold start, prints "TotalTime" (ms) the system measured
 start() { local act=$1; shift; adb logcat -c; adb shell am start -S -W -n "$act" "$@" 2>&1 | grep -E "TotalTime" | tr -d '\r'; }
@@ -37,3 +39,7 @@ asciip() { echo "   --- $1 ---"; python3 "$HERE/ascii.py" "$1" 64 | sed 's/^/   
 meanof() { sed 's/.*mean=\([0-9.]*\).*/\1/'; }
 corrof() { sed 's/.*corr=\(-\?[0-9.]*\).*/\1/'; }
 
+# selftests ACT REQUEST_LIST OUTFILE TIMEOUT: runs the comma separated self-test requests in one launch of ACT and writes "request result" lines (times removed), sorted, to OUTFILE
+selftests() { local act=$1 reqs=$2 out=$3 t=${4:-600} n; n=$(echo "$reqs" | tr ',' '\n' | wc -l); start "$act" --es selftest "$reqs" >/dev/null
+  wait_count "SELFTEST " "$n" "$t" || echo "   selftests: only $(logs | grep -c 'SELFTEST ') of $n finished"
+  logs | grep "SELFTEST " | sed 's/.*SELFTEST \(.*\) -> \(.*\) \[[0-9]* ms\].*/\1 \2/' | sort > "$out"; }

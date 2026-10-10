@@ -30,9 +30,11 @@ public final class LabCommon {
         final String req = a.getIntent() == null ? null : a.getIntent().getStringExtra("selftest");
         if (req == null || module == null) return;
         Thread t = new Thread(() -> {
-            long t0 = System.nanoTime();
-            String r = module.selfTest(req);
-            Log.i(TAG, "SELFTEST " + req + " -> " + r + " [" + (System.nanoTime() - t0) / 1_000_000 + " ms]");
+            for (String one : req.split(",")) {                // several requests may be given, comma separated; they run one after the other
+                long t0 = System.nanoTime();
+                String r = module.selfTest(one);
+                Log.i(TAG, "SELFTEST " + one + " -> " + r + " [" + (System.nanoTime() - t0) / 1_000_000 + " ms]");
+            }
         }, "lab-selftest");
         t.setDaemon(true); t.start();
     }

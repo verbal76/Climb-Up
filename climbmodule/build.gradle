@@ -13,6 +13,10 @@ dependencies {
     testImplementation "com.badlogicgames.gdx:gdx:$gdxVersion"
 }
 
+// Test release whose entry class differs from the shipped module's (it runs extra code and reports it). Everything else in it is identical, :core included.
+sourceSets { marked { java.srcDir 'src/marked/java'; compileClasspath += sourceSets.main.output + configurations.compileClasspath } }
+configurations { markedCompileOnly.extendsFrom compileOnly }
+
 tasks.register('moduleJar', Jar) {
     archiveBaseName = 'climb-module'
     dependsOn ':core:classes', 'classes'
@@ -22,8 +26,18 @@ tasks.register('moduleJar', Jar) {
     preserveFileTimestamps = false; reproducibleFileOrder = true
 }
 
+tasks.register('markedModuleJar', Jar) {
+    archiveBaseName = 'climb-module-marked'
+    dependsOn ':core:classes', 'classes', 'markedClasses'
+    from sourceSets.main.output
+    from project(':core').sourceSets.main.output
+    from sourceSets.marked.output
+    preserveFileTimestamps = false; reproducibleFileOrder = true
+}
+
 test {
-    dependsOn 'moduleJar'
+    dependsOn 'moduleJar', 'markedModuleJar'
+    systemProperty 'climb.markedJar', tasks.named('markedModuleJar').get().archiveFile.get().asFile.absolutePath
     systemProperty 'climb.moduleJar', tasks.named('moduleJar').get().archiveFile.get().asFile.absolutePath
     systemProperty 'climb.coreClasses', project(':core').sourceSets.main.output.classesDirs.asPath
     testLogging { events 'passed', 'failed', 'skipped'; exceptionFormat 'full'; showStandardStreams = true }

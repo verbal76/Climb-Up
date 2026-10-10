@@ -15,13 +15,16 @@ ap.add_argument("--interface", type=int, default=1); ap.add_argument("--host-min
 ap.add_argument("--save-schema", type=int, default=6); ap.add_argument("--save-min", type=int, default=6); ap.add_argument("--ruleset", type=int, default=1)
 ap.add_argument("--revoke-floor", type=int, default=0); ap.add_argument("--content", type=int, default=1)
 ap.add_argument("--source-sha", default="0123456789abcdef0123456789abcdef01234567")
+ap.add_argument("--assets-dir", help="game files this release serves instead of the APK's (relative paths under this directory); blobs go to <out>/assets/<sha256>")
 ap.add_argument("--no-props", action="store_true", help="real game module: do not inject the synthetic module's behaviour file")
 ap.add_argument("--tamper", choices=["none", "dex", "manifest", "signature"], default="none", help="test fixtures only: produce a deliberately broken bundle")
 a = ap.parse_args()
 
 def die(m): sys.exit("make_module: " + m)
 os.makedirs(a.out, exist_ok=True)
-for f in os.listdir(a.out): os.remove(os.path.join(a.out, f))
+import shutil
+for f in os.listdir(a.out):
+    pth = os.path.join(a.out, f); shutil.rmtree(pth) if os.path.isdir(pth) else os.remove(pth)
 
 with tempfile.TemporaryDirectory() as tmp:
     # 1. the module jar with this release's behaviour switches (synthetic module only; the real game module has no such file)
@@ -45,6 +48,15 @@ with tempfile.TemporaryDirectory() as tmp:
     hello = (a.hello or ("hello from v%d" % a.version)).encode()
     files = [(code_name, code), ("hello.txt", hello)]
     if not a.no_props: files.append(("synthetic.properties", ("version=%d\nmode=%s\nhue=%.2f\n" % (a.version, a.mode, (0.37 * a.version) % 1.0)).encode()))      # a dex carries no resources: the behaviour switches are a signed bundle file
+    blobs = {}
+    if a.assets_dir:
+        entries = []
+        for dp, dn, fn in os.walk(a.assets_dir):
+            for f in sorted(fn):
+                full = os.path.join(dp, f); rel = os.path.relpath(full, a.assets_dir).replace(os.sep, "/"); data = open(full, "rb").read()
+                sha = hashlib.sha256(data).hexdigest(); blobs[sha] = data; entries.append({"path": rel, "sha256": sha, "size": len(data)})
+        entries.sort(key=lambda e: e["path"])
+        files.append(("assets.json", json.dumps({"schema": 1, "assets": entries}, separators=(",", ":")).encode()))
     # 3. manifest
     pub = subprocess.run(["openssl", "pkey", "-in", a.key, "-pubout", "-outform", "DER"] + (["-passin", "env:" + a.passphrase_env] if a.passphrase_env else []), capture_output=True)
     if pub.returncode: die("cannot read the signing key")
@@ -65,5 +77,8 @@ with tempfile.TemporaryDirectory() as tmp:
     if a.tamper == "manifest": mbytes = mbytes.replace(b'"moduleVersion":%d' % a.version, b'"moduleVersion":%d' % (a.version + 50))
     if a.tamper == "signature": sig = base64.b64encode(os.urandom(70))
     for n, b in files: open(os.path.join(a.out, n), "wb").write(b)
+    if blobs:
+        os.makedirs(os.path.join(a.out, "assets"), exist_ok=True)
+        for sha, data in blobs.items(): open(os.path.join(a.out, "assets", sha), "wb").write(data)
     open(os.path.join(a.out, "manifest.json"), "wb").write(mbytes); open(os.path.join(a.out, "manifest.sig"), "wb").write(sig)
     print("module v%d %s -> %s (keyId %s, %s %d bytes)" % (a.version, a.mode, a.out, key_id, code_name, len(code)))

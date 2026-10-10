@@ -17,21 +17,30 @@ import java.security.MessageDigest;
  */
 public final class ModuleDownloader {
     /** Opens a URL; tests use a local server, the app uses {@link Http}. */
-    public interface Fetcher { InputStream open(String url, long maxBytes) throws IOException; }
+    public interface Fetcher {
+        /** Opens {@code url} positioned at byte {@code from} (a resumed download); at most {@code maxBytes} more bytes are expected. */
+        InputStream open(String url, long from, long maxBytes) throws IOException;
+        default InputStream open(String url, long maxBytes) throws IOException { return open(url, 0, maxBytes); }
+    }
 
     public static final class Http implements Fetcher {
         private final boolean allowPlainHttp;
         public Http() { this(false); }
         /** Debug/lab builds only: allow cleartext to a LAN or loopback test server. The release form is https-only. */
         public Http(boolean allowPlainHttp) { this.allowPlainHttp = allowPlainHttp; }
-        @Override public InputStream open(String url, long maxBytes) throws IOException {
+        @Override public InputStream open(String url, long from, long maxBytes) throws IOException {
             if (!url.startsWith("https://") && !(allowPlainHttp && url.startsWith("http://"))) throw new IOException("https only");
             HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();
             c.setConnectTimeout(8000); c.setReadTimeout(15000); c.setInstanceFollowRedirects(true); c.setUseCaches(false);
             c.setRequestProperty("Accept", "application/octet-stream");
-            if (c.getResponseCode() != 200) { c.disconnect(); throw new IOException("http " + c.getResponseCode()); }
-            if (c.getContentLengthLong() > maxBytes) { c.disconnect(); throw new IOException("too large"); }
-            return c.getInputStream();
+            if (from > 0) c.setRequestProperty("Range", "bytes=" + from + "-");
+            int code = c.getResponseCode();
+            if (code != 200 && code != 206) { c.disconnect(); throw new IOException("http " + code); }
+            long allowed = (from > 0 && code == 200) ? from + maxBytes : maxBytes;            // a server that ignores Range sends the whole file
+            if (c.getContentLengthLong() > allowed) { c.disconnect(); throw new IOException("too large"); }
+            InputStream in = c.getInputStream();
+            if (from > 0 && code == 200) { long skipped = 0; while (skipped < from) { long n = in.skip(from - skipped); if (n <= 0) { if (in.read() < 0) break; n = 1; } skipped += n; } }     // a server that ignores Range sends everything: skip what we already have
+            return in;
         }
     }
 
@@ -54,6 +63,7 @@ public final class ModuleDownloader {
         try {
             Files.write(new File(dir, "manifest.json").toPath(), mb); Files.write(new File(dir, "manifest.sig").toPath(), sb);
             for (ModuleManifest.FileEntry e : m.files) fetchFile(e, new File(dir, e.name));
+            fetchAssets(AssetManifest.read(dir));
         } catch (Exception e) { deleteQuietly(dir); throw e; }
         String refused = store.commitStaging();
         return refused == null ? "staged v" + m.moduleVersion + " (applies on next start)" : "refused: " + refused;
@@ -70,6 +80,24 @@ public final class ModuleDownloader {
         }
         if (total != e.size) throw new IOException("truncated download: " + e.name);                  // an interrupted transfer is never used
         if (!Hashing.hex(md.digest()).equals(e.sha256)) throw new IOException("checksum mismatch: " + e.name);
+    }
+
+    /** Downloads the game files this release needs and the store does not have yet. A partial file from an interrupted attempt is resumed; the finished file must match its signed size and SHA-256. */
+    private void fetchAssets(AssetManifest am) throws Exception {
+        AssetStore cas = store.assets();
+        for (AssetManifest.Asset a : am.all()) {
+            if (cas.has(a)) continue;
+            File part = cas.partFile(a.sha256); long have = part.isFile() ? part.length() : 0;
+            if (have > a.size) { part.delete(); have = 0; }
+            if (have < a.size) {
+                try (InputStream in = fetcher.open(base + "assets/" + a.sha256, have, a.size - have); java.io.FileOutputStream o = new java.io.FileOutputStream(part, have > 0)) {
+                    byte[] buf = new byte[1 << 16]; int n; long total = have;
+                    while ((n = in.read(buf)) > 0) { total += n; if (total > a.size) { part.delete(); throw new IOException("larger than declared: " + a.path); } o.write(buf, 0, n); }
+                }
+            }
+            if (part.length() != a.size) throw new IOException("incomplete download kept for resume: " + a.path);        // the partial file stays; the next check continues it
+            try { cas.publish(a, part); } catch (IOException e) { part.delete(); throw e; }                              // corrupt: discarded, the next check starts it over
+        }
     }
 
     private static byte[] readAll(InputStream in, int max) throws IOException {

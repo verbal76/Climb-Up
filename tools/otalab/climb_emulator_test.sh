@@ -86,5 +86,17 @@ start "$HOST_ACT" >/dev/null; # v2 was applied in K4 but never played 15 s, so i
 expect "K5 it fails to load; the last proven module (v1; v2 never proved itself) runs in the same launch" "rolled back v5 to v1.*failed to load" 40; expect "K5 the real game keeps running" "running module v1" 20
 stop_server
 
+echo "== K6 a signed release delivers a changed GAME FILE (lab fixture: inverted studio splash); only that file changes"
+serve c6_assets; start "$HOST_ACT" --es updateBase http://10.0.2.2:8099/ >/dev/null
+expect "K6 v6 and its game file downloaded into the content store and staged" "update check: staged v6" 60
+N=$(adb shell "run-as $HOST sh -c 'ls files/host/cas | wc -l'" | tr -d '\r'); [ "$N" -ge 1 ] && pass "K6 content store holds $N verified file(s)" || fail "K6 content store empty"
+start "$HOST_ACT" --es prop.climb.start splash >/dev/null
+expect "K6 v6 activated at the next cold start with its override" "asset overrides active: 1 file" 40
+sleep 1.6; shot k6_splash; sleep 7; shot k6_title
+echo "   splash vs the unchanged splash (REF): $(diff k6_splash k1_REF_splash)   title vs REF: $(diff k6_title k1_REF_title)"
+ascii k6_splash
+SP=$(diff k6_splash k1_REF_splash | sed 's/mean=\([0-9.]*\).*/\1/'); awk -v s="$SP" 'BEGIN{exit !(s>20)}' && pass "K6 the delivered file is what the game shows (splash differs by $SP/255)" || fail "K6 splash unchanged ($SP/255)"
+TT=$(diff k6_title k1_REF_title | sed 's/mean=\([0-9.]*\).*/\1/'); awk -v s="$TT" 'BEGIN{exit !(s<3.0)}' && pass "K6 every other file still comes from the APK unchanged (title diff $TT/255)" || fail "K6 title changed ($TT/255)"
+
 echo "== summary"; logs | grep -o "bootMs=[0-9]*" | tr '\n' ' '; echo
 [ "$FAILS" -eq 0 ] && { echo "ALL CHECKS PASSED"; exit 0; } || { echo "$FAILS CHECK(S) FAILED"; exit 1; }

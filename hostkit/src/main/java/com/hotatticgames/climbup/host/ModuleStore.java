@@ -34,17 +34,35 @@ public final class ModuleStore {
     /** The outcome of a cold start: which verified module directory to load, or none (run the built-in recovery). */
     public static final class Boot {
         public final File dir; public final ModuleManifest manifest; public final String note;
-        Boot(File d, ModuleManifest m, String n) { dir = d; manifest = m; note = n; }
+        /** Files this module serves in place of the APK's (empty for a module without asset overrides). */
+        public final java.util.Map<String, AssetManifest.Asset> overrides;
+        Boot(File d, ModuleManifest m, String n) { this(d, m, n, java.util.Collections.<String, AssetManifest.Asset>emptyMap()); }
+        Boot(File d, ModuleManifest m, String n, java.util.Map<String, AssetManifest.Asset> o) { dir = d; manifest = m; note = n; overrides = o; }
         public boolean recovery() { return dir == null; }
     }
 
     private final File root, modDir, stagedDir, tmpDir, stateFile;
-    private final TrustedKeys keys; private final HostInfo host;
+    private final TrustedKeys keys; private final HostInfo host; private final AssetStore assets;
     public State st = new State();
 
     public ModuleStore(File root, TrustedKeys keys, HostInfo host) {
         this.root = root; this.keys = keys; this.host = host; modDir = new File(root, "mod"); stagedDir = new File(root, "staged");
-        tmpDir = new File(root, "staging.tmp"); stateFile = new File(root, "state.json");
+        tmpDir = new File(root, "staging.tmp"); stateFile = new File(root, "state.json"); assets = new AssetStore(root);
+    }
+
+    public AssetStore assets() { return assets; }
+
+    /** Verifies a module directory AND that every game file it serves is in the content store (so a module is never run, or activated, with its assets missing). */
+    private ModuleVerifier.Result verifyWithAssets(File dir) {
+        ModuleVerifier.Result r = ModuleVerifier.verify(dir, keys, host);
+        if (!r.ok()) return r;
+        try { for (AssetManifest.Asset a : AssetManifest.read(dir).all()) if (!assets.has(a)) return new ModuleVerifier.Result(null, "game file missing from the store: " + a.path); }
+        catch (Exception e) { return new ModuleVerifier.Result(null, "assets.json: " + e.getMessage()); }
+        return r;
+    }
+
+    private java.util.Map<String, AssetManifest.Asset> overridesOf(File dir) {
+        try { return AssetManifest.read(dir).byPath; } catch (Exception e) { return java.util.Collections.emptyMap(); }
     }
 
     // ------------------------------------------------------------ cold start
@@ -60,10 +78,10 @@ public final class ModuleStore {
             if (st.tries > MAX_UNCONFIRMED_LAUNCHES) dropActive("not confirmed after " + (st.tries - 1) + " launches", true);
         }
         for (int guard = 0; guard < 3 && st.active != 0; guard++) {
-            ModuleVerifier.Result r = ModuleVerifier.verify(dirOf(st.active), keys, host);
+            ModuleVerifier.Result r = verifyWithAssets(dirOf(st.active));
             if (r.ok() && r.manifest.moduleVersion >= st.revokeFloor) {
                 saveState();
-                return new Boot(dirOf(st.active), r.manifest, note);
+                return new Boot(dirOf(st.active), r.manifest, note, overridesOf(dirOf(st.active)));
             }
             dropActive(r.ok() ? "revoked (below floor " + st.revokeFloor + ")" : "verification failed: " + r.reason, false);
         }
@@ -73,7 +91,7 @@ public final class ModuleStore {
 
     private String activateStaged() throws IOException {
         if (!stagedDir.isDirectory()) return "";
-        ModuleVerifier.Result r = ModuleVerifier.verify(stagedDir, keys, host);
+        ModuleVerifier.Result r = verifyWithAssets(stagedDir);
         if (!r.ok()) { Hashing.deleteTree(stagedDir); st.staged = 0; return "staged module rejected: " + r.reason; }
         ModuleManifest m = r.manifest;
         if (m.moduleVersion <= st.highest || st.bad.contains(m.moduleVersion) || m.moduleVersion < st.revokeFloor) { Hashing.deleteTree(stagedDir); st.staged = 0; return "staged v" + m.moduleVersion + " rejected: not newer / blacklisted"; }
@@ -116,7 +134,7 @@ public final class ModuleStore {
         if (blame && dropped != 0 && !st.bad.contains(dropped)) st.bad.add(dropped);
         int back = st.lastGood != dropped ? st.lastGood : 0;
         if (back != 0) {
-            ModuleVerifier.Result r = ModuleVerifier.verify(dirOf(back), keys, host);
+            ModuleVerifier.Result r = verifyWithAssets(dirOf(back));
             if (!r.ok() || r.manifest.moduleVersion < st.revokeFloor) back = 0;
         }
         st.active = back; st.pending = 0; st.tries = 0; if (back == 0) st.lastGood = 0;
@@ -134,15 +152,25 @@ public final class ModuleStore {
     public synchronized void confirm() {
         if (st.pending == 0) return;
         st.lastGood = st.active; st.pending = 0; st.tries = 0; st.lastResult = "confirmed v" + st.active; st.rollback = "";
-        pruneOld(); saveState();
+        pruneOld(); collectAssets(); saveState();
+    }
+
+    /** Keeps only the store files the active module, the safety net and a waiting staged release name (an update re-downloads nothing it already has). */
+    private void collectAssets() {
+        java.util.Set<String> keep = new java.util.HashSet<>();
+        for (File d : new File[]{dirOf(st.active), dirOf(st.lastGood), stagedDir, tmpDir}) {
+            if (d.getName().equals("v0")) continue;
+            try { for (AssetManifest.Asset a : AssetManifest.read(d).all()) keep.add(a.sha256); } catch (Exception ignored) { }
+        }
+        assets.gc(keep);
     }
 
     /** The loader could not instantiate the module (class missing, wrong interface, constructor threw): drop it now rather than after two crashes. */
     public synchronized Boot loadFailed(String why) {
         dropActive("failed to load: " + why, true); saveState();
         if (st.active == 0) return new Boot(null, null, st.rollback);
-        ModuleVerifier.Result r = ModuleVerifier.verify(dirOf(st.active), keys, host);
-        return r.ok() ? new Boot(dirOf(st.active), r.manifest, st.rollback) : new Boot(null, null, st.rollback);
+        ModuleVerifier.Result r = verifyWithAssets(dirOf(st.active));
+        return r.ok() ? new Boot(dirOf(st.active), r.manifest, st.rollback, overridesOf(dirOf(st.active))) : new Boot(null, null, st.rollback);
     }
 
     /**
@@ -178,7 +206,7 @@ public final class ModuleStore {
      */
     public synchronized String commitStaging() {
         try {
-            ModuleVerifier.Result r = ModuleVerifier.verify(tmpDir, keys, host);
+            ModuleVerifier.Result r = verifyWithAssets(tmpDir);
             if (!r.ok()) { Hashing.deleteTree(tmpDir); return r.reason; }
             ModuleManifest m = r.manifest;
             if (m.moduleVersion <= Math.max(st.highest, st.staged) || st.bad.contains(m.moduleVersion) || m.moduleVersion < st.revokeFloor) { Hashing.deleteTree(tmpDir); return "v" + m.moduleVersion + " is not newer than v" + Math.max(st.highest, st.staged); }

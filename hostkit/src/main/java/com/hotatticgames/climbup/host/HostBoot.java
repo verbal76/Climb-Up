@@ -17,7 +17,9 @@ public final class HostBoot {
 
     public static final class Started {
         public final GameModule module; public final ModuleManifest manifest; public final File dir; public final String note;
-        Started(GameModule m, ModuleManifest mf, File d, String n) { module = m; manifest = mf; dir = d; note = n; }
+        /** Game files this module serves in place of the APK's; the host installs an {@link OverlayFiles} only when this is not empty. */
+        public final java.util.Map<String, AssetManifest.Asset> overrides;
+        Started(GameModule m, ModuleManifest mf, File d, String n, java.util.Map<String, AssetManifest.Asset> o) { module = m; manifest = mf; dir = d; note = n; overrides = o; }
         public boolean recovery() { return module == null; }
     }
 
@@ -46,12 +48,12 @@ public final class HostBoot {
                 if (!GameModule.class.isAssignableFrom(c)) throw new IllegalStateException(b.manifest.entry + " does not implement the host's GameModule");
                 GameModule m = (GameModule) c.getDeclaredConstructor().newInstance();
                 if (m.interfaceVersion() != b.manifest.interfaceVersion || m.interfaceVersion() != GameModule.INTERFACE_VERSION) throw new IllegalStateException("module reports interface " + m.interfaceVersion());
-                return new Started(m, b.manifest, b.dir, b.note);
+                return new Started(m, b.manifest, b.dir, b.note, b.overrides);
             } catch (Throwable t) {
                 b = store.loadFailed(t.getClass().getSimpleName() + ": " + t.getMessage());
             }
         }
-        return new Started(null, null, null, b.note);
+        return new Started(null, null, null, b.note, java.util.Collections.<String, AssetManifest.Asset>emptyMap());
     }
 
     /** The module must see the host's own copy of the SPI and libGDX, never a second one (that would split static state, the GL context and the native libraries). */

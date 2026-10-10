@@ -27,6 +27,10 @@ public class LabLauncher extends AndroidApplication {
     @Override protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         LabCommon.applyTestProps(this);
+        final Thread.UncaughtExceptionHandler previousHandler = Thread.getDefaultUncaughtExceptionHandler();
+        Thread.setDefaultUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {            // marks the launch as crashing BEFORE the platform's handler starts tearing the app down
+            @Override public void uncaughtException(Thread t, Throwable e) { crashing = true; if (previousHandler != null) previousHandler.uncaughtException(t, e); }
+        });
         long t0 = System.nanoTime();
         File root = new File(getFilesDir(), "host");
         HostInfo host = new HostInfo(getPackageName(), HostInfo.HOST_LEVEL, "internal");
@@ -104,6 +108,9 @@ public class LabLauncher extends AndroidApplication {
 
     /** Set once the module has drawn a frame: from then on a clean back-out (Home, recents, screen off) is not evidence of a failed start. */
     private volatile boolean firstFrame;
+    /** Time of the last completed frame (a hung render loop stops updating it) and whether the process is going down because of an uncaught exception. */
+    private volatile long lastFrameNs;
+    private volatile boolean crashing;
 
     /** Delegates everything to the module's listener and notes that a first frame was rendered. Changes nothing the game sees. */
     private final class FrameFlag implements ApplicationListener {
@@ -111,7 +118,7 @@ public class LabLauncher extends AndroidApplication {
         FrameFlag(ApplicationListener in) { this.in = in; }
         @Override public void create() { in.create(); }
         @Override public void resize(int w, int h) { in.resize(w, h); }
-        @Override public void render() { in.render(); firstFrame = true; }
+        @Override public void render() { in.render(); firstFrame = true; lastFrameNs = System.nanoTime(); }
         @Override public void pause() { in.pause(); }
         @Override public void resume() { in.resume(); }
         @Override public void dispose() { in.dispose(); }
@@ -124,7 +131,11 @@ public class LabLauncher extends AndroidApplication {
      */
     @Override protected void onPause() {
         Log.i(TAG, "host onPause");
-        if (firstFrame && store != null && store.forgiveCleanPause()) Log.i(TAG, "clean pause after a rendered frame: this launch is not counted as a failed start");
+        // Found by the lab's crash scenarios on a real Android: when a thread dies of an uncaught exception the system still runs onPause on the main thread before it kills the process, so "a crash
+        // never reaches onPause" is false. Forgive only when no exception is in flight AND frames were still being drawn a moment ago (a hung render loop is not a clean pause either).
+        boolean drawing = firstFrame && System.nanoTime() - lastFrameNs < 1_500_000_000L;
+        if (!crashing && drawing && store != null && store.forgiveCleanPause()) Log.i(TAG, "clean pause while frames were being drawn: this launch is not counted as a failed start");
+        else Log.i(TAG, "pause not forgiven (crashing=" + crashing + " drawing=" + drawing + ")");
         super.onPause();
     }
     /** libGDX re-publishes its own {@code Gdx.files} on every resume, which would silently drop the overlay before the game's {@code create()} runs; put it back. */

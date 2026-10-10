@@ -542,9 +542,16 @@ public final class PlayScreen extends ScreenAdapter {
         if (g.save.finished) ui.text("FINISH " + fmtTime(g.save.finishTime), m, H - m - 104 * zk, 3f * zk, new Color(0.45f, 1f, 0.55f, 1f));
         else ui.text("TOTAL " + fmtTime(g.save.runClock), m, H - m - 104 * zk, 3f * zk, Ui.TEXT);
         float barW = 360 * zk, barY = H - m - 126 * zk;
-        float within = (float) (((hAbs / g.tuning.zoneHeight) % Z + Z) % Z / Z);
+        // ten towers (castle to castle): finished towers green, the one being climbed yellow, the rest black; the orange tick is where you are right now
+        int N = Math.max(1, (int) g.tuning.finishCastle); double span = g.tuning.castleSpacing;
+        int cur = Math.min(N - 1, (int) (Math.max(0.0, maxAbs) / span));
+        float within = (float) Math.max(0.0, Math.min(1.0, hAbs / (span * N)));
         ui.rect(m, barY, barW, 8, new Color(0.2f, 0.22f, 0.32f, 1f));
-        for (int z = 0; z < Z; z++) { Color c = Palette.SKY_BOT[z]; ui.rect(m + z * barW / Z + 1, barY + 1, barW / Z - 2, 6, new Color(c.r, c.g, c.b, 0.9f)); }
+        for (int z = 0; z < N; z++) {
+            boolean done = g.save.finished || z < cur, active = !g.save.finished && z == cur;
+            Color c = done ? new Color(0.25f, 0.85f, 0.35f, 1f) : (active ? new Color(1f, 0.9f, 0.2f, 1f) : new Color(0.02f, 0.02f, 0.04f, 1f));
+            ui.rect(m + z * barW / N + 1, barY + 1, barW / N - 2, 6, c);
+        }
         ui.rect(m + within * barW - 3, barY - 5, 6, 18, Ui.ACCENT);
         // keys carried
         float kx0 = m, ky0 = barY - 44 * zk;

@@ -48,5 +48,18 @@ Observations NOT changed (design decisions for E1/owner):
 
 Model limits: deaths are modelled BETWEEN steps; torn writes inside one syscall, power loss with an unflushed page cache, and storage-full are not injected (not verified).
 
-## 3. Not yet done
-B (download/installation hardening: Content-Range validation, https/redirect policy, size/time bounds), C (parser fuzzing, key rotation/revocation device scenarios), E (`UpdateStatus`), the device scenarios (kill during download/activation, 20+ release stress, real-game SaveGuard, combined code+asset release), and the asset-type/path-safety matrix from (A).
+## 3. Download hardening (B) - `ModuleDownloader`, `DownloadHardeningTest` (integration, real local HTTP server; local 90/90 for hostkit)
+
+| Gap found | Fix |
+|---|---|
+| Redirects were followed by `HttpURLConnection` itself (up to 20 hops, no policy) | Followed by hand: at most `MAX_REDIRECTS=5` hops, https only (http only for lab servers and never from an https URL), no credentials in the URL, relative `Location` resolved, `Range` re-sent on each hop. Policy is a pure function, tested with 10 refused targets (downgrade, ftp, file, jar, javascript, empty, userinfo). |
+| `206` accepted without checking where it starts | `Content-Range` must be present, start exactly at the offset asked for, and fit the remaining declared size; otherwise the response is refused and nothing is appended. |
+| `416` left the partial file in place, so every later check failed the same way | `RangeRejected` discards the partial file; the next check starts over (tested end to end). |
+| Only a per-read socket timeout: a slow drip never ended | Wall-clock budget per check (default 15 min, `withTimeBudgetMillis`); partial asset downloads are kept and resumed by the next check. |
+| No free-space check | Required bytes (manifest files; then missing assets minus what is already partially downloaded) plus a 4 MiB margin are checked BEFORE anything is created; a full disk mid-write leaves no staging and does not touch the install. |
+
+Mutation check: disabling the offset check and the discard-on-416 turned exactly the two matching tests red; restored afterwards. One existing fixture (`AssetDeliveryTest`) answered `206` without `Content-Range`, which RFC 9110 forbids for a single range; I made the fixture protocol-correct rather than relaxing the production check.
+Not verified: https against a real CDN (cleartext lab server only), a real `ENOSPC` (simulated by a failing stream), device runs.
+
+## 4. Not yet done
+C (parser fuzzing, key rotation/revocation device scenarios), E (`UpdateStatus`), the device scenarios (kill during download/activation, 20+ release stress, real-game SaveGuard, combined code+asset release), and the asset-type/path-safety matrix from (A).

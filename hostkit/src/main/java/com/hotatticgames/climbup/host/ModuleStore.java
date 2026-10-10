@@ -334,6 +334,12 @@ public final class ModuleStore {
 
     public synchronized int stagedVersion() { return st.staged; }
 
+    /** Free bytes where the store lives (nearest existing parent while the store directory is not created yet). */
+    public long usableBytes() {
+        File f = root; while (f != null && !f.exists()) f = f.getParentFile();
+        return f == null ? 0 : f.getUsableSpace();
+    }
+
     // ------------------------------------------------------------ helpers
 
     public File dirOf(int version) { return new File(modDir, "v" + version); }

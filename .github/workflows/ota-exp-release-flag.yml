@@ -23,5 +23,7 @@ jobs:
             gh release delete-asset ota-lab-latest UPWARDLY.apk --repo "$REPO" -y      # asset names are case-insensitive: the old one has to go first
             gh release upload ota-lab-latest "$RUNNER_TEMP/rel/Upwardly.apk" --repo "$REPO"
           fi
-          gh release edit ota-lab-latest --repo "$REPO" --prerelease=false --latest
+          SUM=$(gh release view ota-lab-latest --repo "$REPO" --json body -q .body | grep -o 'APK sha256 [0-9a-f]*' | cut -d' ' -f3)
+          NOTES="Upwardly for Android: the current production release. It installs as its own app (application id com.hotatticgames.climbup.otaexp, so settings and saves from older builds do not carry over) and updates itself from the GitHub channel when you open it. APK sha256 ${SUM}."
+          gh release edit ota-lab-latest --repo "$REPO" --prerelease=false --title "Upwardly for Android" --notes "$NOTES"
           gh release view ota-lab-latest --repo "$REPO" --json name,isPrerelease,assets -q '{name:.name,prerelease:.isPrerelease,assets:[.assets[].name]}'

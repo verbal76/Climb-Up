@@ -139,9 +139,10 @@ public class LabLauncher extends AndroidApplication {
         Log.i(TAG, "host onPause");
         // Found by the lab's crash scenarios on a real Android: when a thread dies of an uncaught exception the system still runs onPause on the main thread before it kills the process, so "a crash
         // never reaches onPause" is false. Forgive only when no exception is in flight AND frames were still being drawn a moment ago (a hung render loop is not a clean pause either).
-        boolean drawing = firstFrame && System.nanoTime() - lastFrameNs < 1_500_000_000L;
-        if (!crashing && drawing && store != null && store.forgiveCleanPause()) Log.i(TAG, "clean pause while frames were being drawn: this launch is not counted as a failed start");
-        else Log.i(TAG, "pause not forgiven (crashing=" + crashing + " drawing=" + drawing + ")");
+        long ageMs = (System.nanoTime() - lastFrameNs) / 1_000_000L;
+        boolean drawing = firstFrame && ageMs < 4000;               // a frame within the last 4 s: a slow phone may stall a frame while loading, a hung render loop stops completely
+        if (!crashing && drawing && store != null && store.forgiveCleanPause()) Log.i(TAG, "clean pause while frames were being drawn (last frame " + ageMs + " ms ago): this launch is not counted as a failed start");
+        else Log.i(TAG, "pause not forgiven (crashing=" + crashing + " firstFrame=" + firstFrame + " lastFrameMsAgo=" + ageMs + ")");
         super.onPause();
     }
     /** libGDX re-publishes its own {@code Gdx.files} on every resume, which would silently drop the overlay before the game's {@code create()} runs; put it back. */

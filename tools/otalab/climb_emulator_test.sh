@@ -133,7 +133,7 @@ stop_server
 
 echo "== K10 (integrated reliability work) a player who backs out of an unproven release is never penalised; a release that crashes after a resume still is"
 # K10a: v8 is active and unproven. Four cycles of: launch, let it draw, Home (a clean pause), kill. Without forgiveness the third launch would roll v8 back and blacklist it.
-for i in 1 2 3 4; do start "$HOST_ACT" >/dev/null; wait_for "running module v8" 30; sleep 7; go_home; sleep 2; adb shell am force-stop $HOST; sleep 1; done
+for i in 1 2 3 4; do start "$HOST_ACT" >/dev/null; wait_for "running module v8" 30; sleep 7; go_home; sleep 2; echo "   K10a cycle $i: $(logs | grep -E 'running module|pause|forgiv|counts again' | sed 's/.*OTALAB *([0-9]*): //' | cut -c1-170 | tr '\n' '|')"; adb shell am force-stop $HOST; sleep 1; done
 start "$HOST_ACT" >/dev/null
 expect "K10a the unproven v8 survived four clean back-outs" "running module v8" 40
 logs | grep -q "rolled back v8" && fail "K10a a healthy release was rolled back by a player leaving early" || pass "K10a no rollback for clean back-outs (forgiven launches were not counted)"
@@ -149,6 +149,9 @@ fi
 
 echo "== K11 ONE signed release changes both the executing code and a game file; the saved climb is untouched"
 go_home; sleep 2; H0=$(adb shell "run-as $HOST sh -c 'cd files; sha256sum history.bin'" | tr -d '\r' | cut -d' ' -f1)
+gameshots k11_PRE $HOST "$HOST_ACT"                  # this very app, same saved climb, before the update: the reference for "only the delivered file changes"
+SPL_P=$(firstof k11_PRE splash); TIT_P=$(firstof k11_PRE title)
+go_home; sleep 1
 serve c10_code_and_assets; start "$HOST_ACT" --es updateBase http://10.0.2.2:8099/ >/dev/null
 expect "K11 v10 (code + game file) downloaded, verified and staged" "update check: staged v10" 60
 N=$(adb shell "run-as $HOST sh -c 'ls files/host/cas | wc -l'" | tr -d '\r'); [ "${N:-0}" -ge 1 ] && pass "K11 the content store holds $N verified file(s)" || fail "K11 content store empty"
@@ -159,8 +162,8 @@ expect "K11 its new code executed (marker $MARK)" "code-marker $MARK" 5
 expect "K11 its game-file override is active" "asset overrides active: 1 file" 5
 logs | grep -q "ClassCastException" && fail "K11 a sound failed to load through the overlay" || pass "K11 no ClassCastException (sounds load)"
 SPL_C=$(firstof k11_HOST splash); TIT_C=$(firstof k11_HOST title)
-if [ -n "$SPL_C" ] && [ -n "$SPL_R" ]; then R=$(diffp "$OUT/k11_HOST/$SPL_C" "$OUT/k1_REF/$SPL_R"); echo "   splash with the delivered file vs the APK's: $R"; awk -v s="$(echo "$R" | meanof)" 'BEGIN{exit !(s>20)}' && pass "K11 the delivered game file is on screen (the splash is inverted)" || fail "K11 the splash did not change ($R)"; else fail "K11 splash frames missing"; fi
-if [ -n "$TIT_C" ] && [ -n "$TIT_R" ]; then R=$(diffp "$OUT/k11_HOST/$TIT_C" "$OUT/k1_REF/$TIT_R"); echo "   title with the override active vs the packaged game: $R"; awk -v s="$(echo "$R" | meanof)" -v c="$(echo "$R" | corrof)" 'BEGIN{exit !(s<3 && c>0.97)}' && pass "K11 every other file still comes from the APK unchanged" || fail "K11 the title differs from the packaged game ($R)"; else fail "K11 title frames missing"; fi
+if [ -n "$SPL_C" ] && [ -n "$SPL_P" ]; then R=$(diffp "$OUT/k11_HOST/$SPL_C" "$OUT/k11_PRE/$SPL_P"); echo "   splash with the delivered file vs before the update: $R"; awk -v s="$(echo "$R" | meanof)" 'BEGIN{exit !(s>20)}' && pass "K11 the delivered game file is on screen (the splash is inverted)" || fail "K11 the splash did not change ($R)"; else fail "K11 splash frames missing"; fi
+if [ -n "$TIT_C" ] && [ -n "$TIT_P" ]; then R=$(diffp "$OUT/k11_HOST/$TIT_C" "$OUT/k11_PRE/$TIT_P"); echo "   title with the override active vs before the update: $R"; awk -v s="$(echo "$R" | meanof)" -v c="$(echo "$R" | corrof)" 'BEGIN{exit !(s<3 && c>0.97)}' && pass "K11 every other file still comes from the APK unchanged" || fail "K11 the title changed ($R)"; else fail "K11 title frames missing"; fi
 H1=$(adb shell "run-as $HOST sh -c 'cd files; sha256sum history.bin'" | tr -d '\r' | cut -d' ' -f1); [ -n "$H0" ] && [ "$H0" = "$H1" ] && pass "K11 history.bin byte-identical across the combined update" || fail "K11 history changed ($H0 -> $H1)"
 adb shell "run-as $HOST sh -c 'cd files; grep -o seed[^,}]* save.json'" | tr -d '\r' | grep -q 777 && pass "K11 save still holds the climb (seed 777)" || fail "K11 save lost the climb"
 stop_server

@@ -806,7 +806,9 @@ public final class CourseGenerator {
         for (int i = n0; i < c.size() && ok; i++) ok = clearOfOtherLayers(i);
         if (!ok) failLayer++;
         for (Element h : hz) { if (!ok) break; if (h.type == Element.Type.CLUB) continue; ok = hazardOk(h, ownerOf(h)); if (!ok) failHaz++; }
-        for (int i = n0 - 1; i < c.size() - 1 && ok; i++) {
+        int from = n0 - 1;
+        for (Element h : hz) if (h.type == Element.Type.CANNON && h.anchor == n0 - 1 && n0 >= 2) from = n0 - 2;          // a cannon fires across the platform the previous link LANDS on: that link must be proven with the cannon there too
+        for (int i = from; i < c.size() - 1 && ok; i++) {
             Sim sim = Sim.startOn(c, T, i);
             Autopilot.Result res = Autopilot.plan(sim, i, true);
             boolean touched = false;

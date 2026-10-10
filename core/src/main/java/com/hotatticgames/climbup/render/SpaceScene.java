@@ -39,7 +39,7 @@ public final class SpaceScene {
     private final Far[] farPlanets = new Far[5];
 
     // far clouds: the regular cloud models, very far behind the tower, tinted by the glow of the sky so they read as distant, with slow parallax
-    private static final int FAR_CLOUDS = 10;
+    private static final int FAR_CLOUDS = 16;
     private static final class FarCloud { float u, v, dist, ang, pkx, pky; ModelInstance inst; }
     private final FarCloud[] farClouds = new FarCloud[FAR_CLOUDS];
     /** Colour of the sky glow the far clouds take (set by the renderer from the sky gradient). */
@@ -67,8 +67,10 @@ public final class SpaceScene {
         env.add(new DirectionalLight().set(1f, 0.96f, 0.88f, -0.5f, -0.6f, -0.6f));
         for (int i = 0; i < FAR_CLOUDS; i++) {
             FarCloud c = new FarCloud();
-            c.u = (i * 0.618f + 0.11f) % 1f; c.v = (i * 0.4143f + 0.23f) % 1f; c.dist = 300f + 55f * (i % 4); c.ang = 4.5f + 4.5f * ((i * 0.77f) % 1f);
-            c.pkx = 0.07f + 0.05f * (i % 3); c.pky = 0.09f + 0.04f * (i % 3);
+            boolean mid = i < FAR_CLOUDS / 2;         // two depth bands: nearer, bigger clouds that move faster, and very far ones that barely move
+            c.u = (i * 0.618f + 0.11f) % 1f; c.v = (i * 0.4143f + 0.23f) % 1f;
+            c.dist = mid ? 150f + 28f * (i % 3) : 300f + 55f * (i % 4); c.ang = mid ? 6f + 5f * ((i * 0.77f) % 1f) : 4.5f + 4.5f * ((i * 0.77f) % 1f);
+            c.pkx = mid ? 0.11f + 0.05f * (i % 3) : 0.07f + 0.05f * (i % 3); c.pky = mid ? 0.13f + 0.04f * (i % 3) : 0.09f + 0.04f * (i % 3);
             c.inst = new ModelInstance(models.pack("cloud_" + (1 + i % 3)));
             for (Material m : c.inst.materials) m.set(new BlendingAttribute(true, 0.6f), ColorAttribute.createDiffuse(1f, 1f, 1f, 1f), ColorAttribute.createEmissive(0.3f, 0.3f, 0.35f, 1f));
             farClouds[i] = c;
@@ -123,7 +125,7 @@ public final class SpaceScene {
             float y = mod(c.v * H - camY * c.pky * c.dist * 0.1f, H) - H / 2f;
             tmp.set(far.position).mulAdd(fwd, c.dist).mulAdd(right, x).mulAdd(up, y);
             float sc = c.dist * MathUtils.tanDeg(c.ang) / 3.2f;
-            c.inst.transform.idt().translate(tmp).rotate(0, 1, 0, 8f).scale(sc, sc * 0.9f, sc);
+            c.inst.transform.idt().translate(tmp).rotate(0, 1, 0, 8f).scale(sc * 1.7f, sc * 0.85f, sc);
             for (Material m : c.inst.materials) {
                 ((ColorAttribute) m.get(ColorAttribute.Diffuse)).color.set(cloudGlow);
                 ((ColorAttribute) m.get(ColorAttribute.Emissive)).color.set(cloudGlow).mul(0.55f);

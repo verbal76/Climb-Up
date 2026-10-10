@@ -27,7 +27,7 @@ if [ -n "$SPL_A" ] && [ -n "$SPL_H" ]; then
   R=$(diffp "$OUT/a2_HOST/$SPL_A" "$OUT/a1_HOST/$SPL_H"); echo "   splash with the delivered file vs the APK's: $R"; asciip "$OUT/a2_HOST/$SPL_A"
   # The fixture is the APK splash with its colours inverted (alpha kept), so the delivered frame must (a) differ clearly from the APK's and (b) be much CLOSER to invert(APK frame) than to the
   # APK frame, measured on the logo pixels only (the dark background is shared by both and is what pushed a plain correlation to ~0.2). Frame timing (fade) may differ slightly, hence a ratio.
-  IV=$(python3 -I - "$OUT/a2_HOST/$SPL_A" "$OUT/a1_HOST/$SPL_H" <<'PY'
+  IV=$(python3 - "$OUT/a2_HOST/$SPL_A" "$OUT/a1_HOST/$SPL_H" <<'PY'
 import sys
 from PIL import Image, ImageOps
 a = Image.open(sys.argv[1]).convert("RGB"); b = Image.open(sys.argv[2]).convert("RGB")

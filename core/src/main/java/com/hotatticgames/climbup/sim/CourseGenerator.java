@@ -565,10 +565,12 @@ public final class CourseGenerator {
         for (int a = lo; a < Math.min(rs - 4, hi + 1); a++) {
             Element p = c.get(a);
             if (p.type != Element.Type.STATIC || p.w < 3f) continue;
-            if (dr.nextFloat() > 0.30f + 0.08f * tier(p.y)) continue;
-            pendingHaz = new ArrayList<>();
-            List<Element> es = buildDecoy(p, a, dr);
-            if (tryDecoy(es, pendingHaz, a)) decoys += es.size();
+            if (dr.nextFloat() > 0.44f + 0.08f * tier(p.y)) continue;          // more dead ends than before (was 0.30)
+            for (int again = 0; again < 2; again++) {          // a second, different try when the first does not fit the surrounding geometry
+                pendingHaz = new ArrayList<>();
+                List<Element> es = buildDecoy(p, a, dr);
+                if (tryDecoy(es, pendingHaz, a)) { decoys += es.size(); break; }
+            }
         }
         addKeyRooms();          // last, so every key-room link is proven against the final geometry
     }
@@ -576,8 +578,10 @@ public final class CourseGenerator {
     /** Dead-end spurs (forward and gently down, or backward and up), crumbling lures, unreachable stepping stones, and trapped ledges guarded by hazards. */
     private List<Element> buildDecoy(Element p, int a, Random dr) {
         List<Element> l = new ArrayList<>();
-        int kind = dr.nextInt(10);
+        int kind = dr.nextInt(12);
         float inten = intensity(p.y);
+        boolean longSpur = kind >= 10;           // a longer dead end: four to six steps ending on a wide, plainly safe platform
+        if (longSpur) kind = dr.nextInt(7);
         if (kind >= 8 && inten <= 0f) kind = dr.nextInt(8);
         if (kind >= 8) {
             // bait ledge: a wide, tempting platform forward and slightly down, guarded by a trap in the middle or a saw across the approach
@@ -599,14 +603,13 @@ public final class CourseGenerator {
         if (kind < 7) {
             boolean forward = kind < 4;
             float edge = forward ? p.s + p.w / 2f : p.s - p.w / 2f, y = p.y;
-            int n = 2 + dr.nextInt(2);
+            int n = longSpur ? 4 + dr.nextInt(3) : 2 + dr.nextInt(2);
             for (int k = 0; k < n; k++) {
-                float dy = forward ? -(0.35f + dr.nextFloat() * 0.35f) : 0.3f + dr.nextFloat() * 0.8f;
+                float dy = forward ? -(longSpur ? 0.15f + dr.nextFloat() * 0.25f : 0.35f + dr.nextFloat() * 0.35f) : (longSpur ? 0.2f + dr.nextFloat() * 0.4f : 0.3f + dr.nextFloat() * 0.8f);
                 float gap = reach(Math.max(dy, 0f)) * (0.40f + 0.2f * dr.nextFloat());
-                float w = k == n - 1 ? 1f : 1f + dr.nextInt(2);
+                float w = k == n - 1 ? (longSpur ? 3f : 1f) : 1f + dr.nextInt(2);
                 float s = forward ? edge + gap + w / 2f : edge - gap - w / 2f; y += dy;
-                boolean trap = k == n - 1 && dr.nextInt(10) < 3;
-                Element d = plat(trap ? Element.Type.CRUMBLE : Element.Type.STATIC, s, y, w, p.zone); d.anchor = a;
+                Element d = plat(Element.Type.STATIC, s, y, w, p.zone); d.anchor = a;       // a dead end costs only the walk back: no trap at the end
                 l.add(d); edge = forward ? s + w / 2f : s - w / 2f;
             }
         } else {                                         // lures: scattered blocks that look like stepping stones but lead nowhere

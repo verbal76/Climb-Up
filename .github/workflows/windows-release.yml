@@ -1,0 +1,48 @@
+name: Upwardly for Windows - publish the built EXE zip as a normal GitHub Release
+# Takes the Windows build that CI already made (artifact of the exp/upwardly-windows run named in tools/otalab/windows_release.txt) and publishes it, unchanged, as the release
+# tagged upwardly-windows-latest with the file Upwardly-Windows.zip. Nothing is built or rebuilt here and no other release or tag is touched.
+on:
+  push:
+    branches: [exp/windows-release]
+    paths: ['tools/otalab/windows_release.txt']
+permissions:
+  contents: write
+  actions: read
+jobs:
+  release:
+    if: github.ref == 'refs/heads/exp/windows-release'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Which build
+        id: b
+        run: |
+          read -r RUN ART < tools/otalab/windows_release.txt
+          echo "run=$RUN" >> "$GITHUB_OUTPUT"; echo "art=$ART" >> "$GITHUB_OUTPUT"
+      - uses: actions/download-artifact@v4
+        with:
+          name: ${{ steps.b.outputs.art }}
+          run-id: ${{ steps.b.outputs.run }}
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          path: dl
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -e
+          ls -la dl
+          Z=$(find dl -maxdepth 2 -name '*.zip' | head -1)
+          if [ -z "$Z" ]; then (cd dl && zip -qr ../Upwardly-Windows.zip .); else cp "$Z" Upwardly-Windows.zip; fi
+          unzip -l Upwardly-Windows.zip | grep -i 'Upwardly.exe' || { echo "::error::no Upwardly.exe inside the zip"; exit 1; }
+          SHA=$(git ls-remote "https://github.com/$REPO" refs/heads/exp/upwardly-windows | cut -f1)
+          SUM=$(sha256sum Upwardly-Windows.zip | cut -d' ' -f1)
+          NOTES="Upwardly for Windows (experimental build for testing). Same gameplay as the Android game with the cleanup fixes. Source $SHA, CI run ${{ steps.b.outputs.run }}. zip sha256 $SUM. Not verified: game controllers, real GPU and fullscreen, Windows audio, Steam Deck."
+          if gh release view upwardly-windows-latest --repo "$REPO" >/dev/null 2>&1; then
+            gh release upload upwardly-windows-latest Upwardly-Windows.zip --repo "$REPO" --clobber
+            gh release edit upwardly-windows-latest --repo "$REPO" --prerelease=false --notes "$NOTES"
+          else
+            gh release create upwardly-windows-latest Upwardly-Windows.zip --repo "$REPO" --target "$SHA" --title "Upwardly for Windows" --notes "$NOTES"
+          fi
+          echo "https://github.com/$REPO/releases/download/upwardly-windows-latest/Upwardly-Windows.zip"

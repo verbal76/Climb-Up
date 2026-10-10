@@ -54,6 +54,16 @@ start "$REF_ACT" --es prop.climb.demo true >/dev/null; sleep 5; shot k3_REF_a
 echo "   gameplay frame at 5 s  HOST vs REF: $(diff k3_HOST_a k3_REF_a)"
 adb shell input tap 1200 600; sleep 1; logs | grep -q "FATAL" && fail "K3 touch crashed the game" || pass "K3 touch input handled without error"
 
+echo "== K3b gameplay frames from the game's own framebuffer, module vs packaged (the scripted climb at ten moments; motion makes them differ slightly, a missing model, texture or light would not)"
+gameshots k3b_REF $REF "$REF_ACT" --es prop.climb.demo true; gameshots k3b_HOST $HOST "$HOST_ACT" --es prop.climb.demo true
+LR=$(ls "$OUT/k3b_REF" | grep '^play' | head -8); LH=$(ls "$OUT/k3b_HOST" | grep '^play' | head -8)
+pairs=0; badp=0; for pr in $(paste -d, <(echo "$LR") <(echo "$LH")); do fr=${pr%%,*}; fh=${pr##*,}; [ -z "$fr" ] || [ -z "$fh" ] && continue
+  R=$(diffp "$OUT/k3b_HOST/$fh" "$OUT/k3b_REF/$fr"); pairs=$((pairs+1)); echo "   $fh (HOST) vs $fr (REF): $R"
+  awk -v s="$(echo "$R" | meanof)" -v c="$(echo "$R" | corrof)" 'BEGIN{exit !(s<20 && c>0.80)}' || badp=$((badp+1)); done
+[ "$pairs" -ge 3 ] && pass "K3b $pairs gameplay frame pairs compared" || fail "K3b too few gameplay frames ($pairs)"
+[ "$badp" -eq 0 ] && pass "K3b every gameplay frame pair is close (mean<20, corr>0.80)" || fail "K3b $badp gameplay frame pair(s) differ strongly"
+f1=$(echo "$LH" | head -1); [ -n "$f1" ] && asciip "$OUT/k3b_HOST/$f1"
+
 echo "== K4 a climb in progress survives module updates (and a world-changing module waits)"
 start "$HOST_ACT" --es prop.climb.start play --es prop.climb.seed 777 >/dev/null
 expect "K4 climb started: host told" "climbInProgress=true" 40; sleep 4

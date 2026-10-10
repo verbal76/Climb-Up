@@ -84,6 +84,7 @@ jobs:
           BT=$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -1)
           "$BT/aapt2" dump badging "$A" > "$RUNNER_TEMP/badging.txt"; grep -E "^package|uses-permission|launchable-activity" "$RUNNER_TEMP/badging.txt"
           grep -q "^package: name='com.hotatticgames.climbup.otaexp'" "$RUNNER_TEMP/badging.txt" || { echo "::error::wrong package identity"; exit 1; }
+          grep -q "^application-label:'UPWARDLY'" "$RUNNER_TEMP/badging.txt" || { echo "::error::the app label is not UPWARDLY"; exit 1; }
           grep -q "uses-permission: name='android.permission.INTERNET'" "$RUNNER_TEMP/badging.txt" || { echo "::error::INTERNET permission missing"; exit 1; }
           grep -q "launchable-activity: name='com.hotatticgames.climbup.otalab.LabLauncher'" "$RUNNER_TEMP/badging.txt" || { echo "::error::launcher activity missing"; exit 1; }
           "$BT/apksigner" verify --verbose --print-certs "$A" | grep -E "Verifies|Signer #1 certificate SHA-256"
@@ -116,12 +117,13 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -e
-          cp "$RUNNER_TEMP/ota-test.apk" "$RUNNER_TEMP/climbup-ota-lab.apk"; SUM=$(sha256sum "$RUNNER_TEMP/climbup-ota-lab.apk" | cut -d' ' -f1)
-          NOTES="Experimental OTA test app (com.hotatticgames.climbup.otaexp; installs next to the game, never replaces it). Source ${GITHUB_SHA}. Channel ${{ steps.v.outputs.base }} serves module v${{ steps.v.outputs.version }}. APK sha256 ${SUM}. Not the production release."
+          cp "$RUNNER_TEMP/ota-test.apk" "$RUNNER_TEMP/UPWARDLY.apk"; SUM=$(sha256sum "$RUNNER_TEMP/UPWARDLY.apk" | cut -d' ' -f1)
+          NOTES="UPWARDLY for Android, build ${{ github.run_number }} (application id com.hotatticgames.climbup.otaexp, separate from the production app; updates itself from the GitHub channel). Source ${GITHUB_SHA}. Channel ${{ steps.v.outputs.base }} serves module v${{ steps.v.outputs.version }}. APK sha256 ${SUM}. Not the production release."
           if gh release view ota-lab-latest >/dev/null 2>&1; then
-            gh release upload ota-lab-latest "$RUNNER_TEMP/climbup-ota-lab.apk" --clobber
-            gh release edit ota-lab-latest --prerelease --notes "$NOTES"
+            gh release upload ota-lab-latest "$RUNNER_TEMP/UPWARDLY.apk" --clobber
+            gh release delete-asset ota-lab-latest climbup-ota-lab.apk -y || true
+            gh release edit ota-lab-latest --prerelease --title "UPWARDLY Android - build ${{ github.run_number }}" --notes "$NOTES"
           else
-            gh release create ota-lab-latest "$RUNNER_TEMP/climbup-ota-lab.apk" --prerelease --target "$GITHUB_SHA" --title "OTA lab APK (experimental)" --notes "$NOTES"
+            gh release create ota-lab-latest "$RUNNER_TEMP/UPWARDLY.apk" --prerelease --target "$GITHUB_SHA" --title "UPWARDLY Android - build ${{ github.run_number }}" --notes "$NOTES"
           fi
-          echo "https://github.com/${{ github.repository }}/releases/download/ota-lab-latest/climbup-ota-lab.apk"
+          echo "https://github.com/${{ github.repository }}/releases/download/ota-lab-latest/UPWARDLY.apk"

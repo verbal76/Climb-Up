@@ -62,17 +62,31 @@ public class LabLauncher extends AndroidApplication {
         LabCommon.startSelfTest(this, s.module);
 
         String base = getIntent() == null ? null : getIntent().getStringExtra("updateBase");      // lab only: where CI serves test bundles
-        if (base == null) base = channelBase();                                                    // the OTA test app: the experimental GitHub channel written into the APK by the publish workflow
-        if (base != null) {
-            final String b = base;
-            final HostInfo hostInfo = host;
-            Thread t = new Thread(() -> {
+        if (base == null) base = channelBase();                                                    // the OTA app: the GitHub channel written into the APK by the publish workflow
+        updateBase = base; updateHost = host;
+        statusLine = "OTA: " + com.hotatticgames.climbup.host.UpdateStatus.capture(store, host, "UPWARDLY", null).headline(System.currentTimeMillis());
+        runUpdateCheck();
+    }
+
+    private volatile String updateBase, statusLine = "";
+    private volatile HostInfo updateHost;
+    private final java.util.concurrent.atomic.AtomicBoolean checking = new java.util.concurrent.atomic.AtomicBoolean();
+
+    /** One silent background check of the channel (at start and from the game's Settings > About > CHECK). Never blocks play; a staged release applies at the next cold start. */
+    private void runUpdateCheck() {
+        final String b = updateBase;
+        if (b == null || !checking.compareAndSet(false, true)) return;
+        Thread t = new Thread(() -> {
+            try {
                 ModuleDownloader dl = new ModuleDownloader(store, new ModuleDownloader.Http(true), b);
                 Log.i(TAG, "update check: " + dl.check());
-                Log.i(TAG, "update status: " + com.hotatticgames.climbup.host.UpdateStatus.capture(store, hostInfo, "Climb up", dl).headline(System.currentTimeMillis()));
-            }, "lab-update");
-            t.setDaemon(true); t.start();
-        }
+                String h = com.hotatticgames.climbup.host.UpdateStatus.capture(store, updateHost, "UPWARDLY", dl).headline(System.currentTimeMillis());
+                statusLine = "OTA: " + h;
+                Log.i(TAG, "update status: " + h);
+            } catch (Throwable e) { Log.w(TAG, "update check failed: " + e);
+            } finally { checking.set(false); }
+        }, "lab-update");
+        t.setDaemon(true); t.start();
     }
 
     /** The experimental channel address baked into the OTA test APK (assets/update_base.txt), or null in the CI test builds, which only update when a test run says where. */
@@ -89,6 +103,8 @@ public class LabLauncher extends AndroidApplication {
             @Override public void confirmHealthy() { store.confirm(); Log.i(TAG, "confirmed healthy: " + store.st.lastResult); }
             @Override public void climbInProgress(boolean v) { Log.i(TAG, "climbInProgress=" + v); store.setClimbInProgress(v); }
             @Override public void diag(String line) { Log.i(TAG, line); }
+            @Override public void checkForUpdates() { runUpdateCheck(); }
+            @Override public String updateStatus() { return statusLine; }
         };
     }
 

@@ -21,4 +21,8 @@ public interface HostEnv {
     void climbInProgress(boolean inProgress);
     /** Diagnostics line for the host log (Settings/About reads these); never required for play. */
     void diag(String line);
+    /** Asks the host to check its update channel now (the game's Settings > About > CHECK). Asynchronous; a staged release applies at the next cold start. Hosts without a channel ignore it. */
+    default void checkForUpdates() { }
+    /** One line describing the host's update state (active content version, staged release, last result), or empty. Cheap; may be called every second. */
+    default String updateStatus() { return ""; }
 }

@@ -21,8 +21,17 @@ class ModuleGame extends ClimbGame {
         env.climbInProgress(climbValid());
     }
 
+    /** Settings > About > CHECK: the game's own check as before, plus the host's channel check for signed game updates (a host without it ignores the call). */
+    @Override public void startOtaCheck(boolean force) {
+        super.startOtaCheck(force);
+        if (force) { try { env.checkForUpdates(); } catch (Throwable ignored) { } }
+    }
+
+    private int statusTick;
+
     @Override public void render() {
         super.render();
+        if (++statusTick % 30 == 0 && otaClient != null) { try { String s = env.updateStatus(); if (s != null && !s.isEmpty()) otaClient.status = s; } catch (Throwable ignored) { } }
         if (!healthy && getScreen() instanceof PlayScreen) { playSeconds += Math.min(com.badlogic.gdx.Gdx.graphics.getDeltaTime(), 0.25f); if (playSeconds >= HEALTHY_SECONDS) { healthy = true; env.confirmHealthy(); } }
     }
 

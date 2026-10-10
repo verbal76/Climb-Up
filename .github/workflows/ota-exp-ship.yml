@@ -55,7 +55,7 @@ jobs:
           [ "$N" -gt "$CUR" ] || { echo "::error::version $N is not higher than the channel's v$CUR"; exit 1; }
           echo "channel serves v$CUR; publishing v$N ($KIND)"
           # the published APK: its embedded channel address, trusted key and package, and that the new release is compatible with its baseline
-          URL=https://github.com/${{ github.repository }}/releases/download/ota-lab-latest/climbup-ota-lab.apk
+          URL=https://github.com/${{ github.repository }}/releases/download/ota-lab-latest/UPWARDLY.apk
           curl -fsSL -m 300 -o "$RUNNER_TEMP/published.apk" "$URL"
           WANT=$(gh release view ota-lab-latest --json body -q .body | grep -o 'APK sha256 [0-9a-f]*' | cut -d' ' -f3)
           GOT=$(sha256sum "$RUNNER_TEMP/published.apk" | cut -d' ' -f1)

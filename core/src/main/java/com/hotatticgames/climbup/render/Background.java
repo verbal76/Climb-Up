@@ -111,29 +111,34 @@ public final class Background implements Disposable {
 
     private static final int FLAT_CLOUD_LAYERS = 0;
 
-    private float dayLight(float zoneF) { return 1f - MathUtils.clamp((zoneF - 1.8f) / 1.0f, 0f, 1f); }       // the sun is only in the bright worlds
+    private final Color lightCol = new Color();
 
-    /** The glow of the sun, in the sky behind the far clouds. */
+    /** The glow of the sun, the low sun at dusk or the moon (each world has its own place, size and colour), in the sky behind the far clouds. */
     public void renderGlow(SpriteBatch sb, float zoneF) {
-        float day = dayLight(zoneF); if (day < 0.02f) return;
-        float base = Math.min(w, h), sx = w * 0.80f, sy = h * 0.90f;
+        float a = Palette.blendF(Palette.LIGHT_GLOW, zoneF); if (a < 0.01f) return;
+        float base = Math.min(w, h), size = Palette.blendF(Palette.LIGHT_SIZE, zoneF);
+        float sx = w * Palette.blendF(Palette.LIGHT_X, zoneF), sy = h * Palette.blendF(Palette.LIGHT_Y, zoneF);
+        Palette.blend(Palette.SUN, zoneF, lightCol);
         sb.getProjectionMatrix().setToOrtho2D(0, 0, w, h); sb.setTransformMatrix(new com.badlogic.gdx.math.Matrix4());
         sb.begin(); sb.setBlendFunction(GL20.GL_SRC_ALPHA, GL20.GL_ONE);
-        sb.setColor(1f, 0.93f, 0.72f, 0.34f * day); sb.draw(glow, sx - base * 0.6f, sy - base * 0.6f, base * 1.2f, base * 1.2f);
+        sb.setColor(lightCol.r, lightCol.g, lightCol.b, a); sb.draw(glow, sx - base * 0.5f * size, sy - base * 0.5f * size, base * size, base * size);
         sb.setColor(Color.WHITE); sb.setBlendFunction(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA); sb.end();
     }
 
-    /** Soft shafts of light that filter through, drawn over the far clouds and behind the tower. */
+    /** Soft shafts of light from that same light toward the middle of the screen, drawn over the far clouds and behind the tower. */
     public void renderShafts(SpriteBatch sb, float zoneF, boolean reduced, float time) {
-        float day = dayLight(zoneF); if (day < 0.02f) return;
-        float base = Math.min(w, h), sx = w * 0.80f, sy = h * 0.90f, sway = reduced ? 0f : MathUtils.sin(time * 0.17f) * 3f;
+        float day = Palette.blendF(Palette.LIGHT_SHAFT, zoneF); if (day < 0.005f) return;
+        float base = Math.min(w, h), sx = w * Palette.blendF(Palette.LIGHT_X, zoneF), sy = h * Palette.blendF(Palette.LIGHT_Y, zoneF);
+        float aim = MathUtils.atan2(-(w * 0.5f - sx), (h * 0.45f - sy)) * MathUtils.radDeg;       // the strip points up at rotation 0: turn it toward the middle of the screen
+        float sway = reduced ? 0f : MathUtils.sin(time * 0.17f) * 3f;
+        Palette.blend(Palette.SUN, zoneF, lightCol);
         sb.getProjectionMatrix().setToOrtho2D(0, 0, w, h); sb.setTransformMatrix(new com.badlogic.gdx.math.Matrix4());
         sb.begin(); sb.setBlendFunction(GL20.GL_SRC_ALPHA, GL20.GL_ONE);
-        final float[] rot = {150f, 158f, 166f, 175f};
-        for (int i = 0; i < rot.length; i++) {
-            float wd = base * (0.13f + 0.04f * (i % 2)), len = base * 1.9f, a = (0.10f + 0.03f * (i % 3)) * day * (reduced ? 0.8f : 1f + 0.25f * MathUtils.sin(time * 0.3f + i));
-            sb.setColor(1f, 0.95f, 0.78f, a);
-            sb.draw(shaftR, sx - wd / 2f, sy, wd / 2f, 0f, wd, len, 1f, 1f, rot[i] + sway * (i % 2 == 0 ? 1f : -1f));
+        final float[] spread = {-17f, -6f, 5f, 16f};
+        for (int i = 0; i < spread.length; i++) {
+            float wd = base * (0.13f + 0.04f * (i % 2)), len = base * 1.9f, a = day * (0.9f + 0.3f * (i % 3)) * (reduced ? 0.8f : 1f + 0.25f * MathUtils.sin(time * 0.3f + i));
+            sb.setColor(lightCol.r, lightCol.g, lightCol.b, a);
+            sb.draw(shaftR, sx - wd / 2f, sy, wd / 2f, 0f, wd, len, 1f, 1f, aim + spread[i] + sway * (i % 2 == 0 ? 1f : -1f));
         }
         sb.setColor(Color.WHITE); sb.setBlendFunction(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA); sb.end();
     }

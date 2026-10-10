@@ -82,7 +82,8 @@ logs | grep -q "running module v3" && fail "K4 v3 activated over a climb in prog
 echo "== K5 forged, broken and unreadable releases cannot disturb the real game"
 serve c4_tampered; start "$HOST_ACT" --es updateBase http://10.0.2.2:8099/ >/dev/null; expect "K5 tampered module refused" "update check: .*checksum mismatch" 40
 serve c5_no_entry; start "$HOST_ACT" --es updateBase http://10.0.2.2:8099/ >/dev/null; expect "K5 module with a missing entry class staged (it is signed and well-formed)" "update check: staged v5" 40
-start "$HOST_ACT" >/dev/null; expect "K5 it fails to load and the previous module runs in the same launch" "rolled back v5 to v2.*failed to load" 40; expect "K5 the real game keeps running on v2" "running module v2" 20
+start "$HOST_ACT" >/dev/null; # v2 was applied in K4 but never played 15 s, so it is still unproven and is NOT the safety net: the last PROVEN module (the baseline v1) is
+expect "K5 it fails to load; the last proven module (v1; v2 never proved itself) runs in the same launch" "rolled back v5 to v1.*failed to load" 40; expect "K5 the real game keeps running" "running module v1" 20
 stop_server
 
 echo "== summary"; logs | grep -o "bootMs=[0-9]*" | tr '\n' ' '; echo

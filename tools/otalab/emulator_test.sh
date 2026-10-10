@@ -11,7 +11,7 @@ fail() { echo "FAIL  $*"; FAILS=$((FAILS+1)); }
 logs() { adb logcat -d -v brief -s OTALAB:I AndroidRuntime:E 2>/dev/null; }
 stop_server() { [ -n "$SERVER_PID" ] && kill "$SERVER_PID" 2>/dev/null; SERVER_PID=""; }
 serve() { stop_server; python3 -m http.server 8099 --bind 0.0.0.0 --directory "$SERVE/$1" >/dev/null 2>&1 & SERVER_PID=$!; sleep 1; }
-go_home() { adb shell am start -W -a android.intent.action.MAIN -c android.intent.category.HOME >/dev/null; sleep 1; }
+go_home() { adb shell input keyevent KEYCODE_HOME; sleep 1; adb shell am start -a android.settings.SETTINGS >/dev/null; sleep 2; }      # a full-screen activity from another app: backgrounding the game is deterministic
 # cold start (force-stop first); $1 = optional update base URL
 launch() { adb logcat -c; if [ -n "${1:-}" ]; then adb shell am start -S -W -n "$ACT" --es updateBase "$1" >/dev/null; else adb shell am start -S -W -n "$ACT" >/dev/null; fi; }
 wait_for() { local pat=$1 t=${2:-45} i; for i in $(seq "$t"); do logs | grep -Eq "$pat" && return 0; sleep 1; done; return 1; }

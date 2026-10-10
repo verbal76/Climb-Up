@@ -61,5 +61,21 @@ Model limits: deaths are modelled BETWEEN steps; torn writes inside one syscall,
 Mutation check: disabling the offset check and the discard-on-416 turned exactly the two matching tests red; restored afterwards. One existing fixture (`AssetDeliveryTest`) answered `206` without `Content-Range`, which RFC 9110 forbids for a single range; I made the fixture protocol-correct rather than relaxing the production check.
 Not verified: https against a real CDN (cleartext lab server only), a real `ENOSPC` (simulated by a failing stream), device runs.
 
-## 4. Not yet done
-C (parser fuzzing, key rotation/revocation device scenarios), E (`UpdateStatus`), the device scenarios (kill during download/activation, 20+ release stress, real-game SaveGuard, combined code+asset release), and the asset-type/path-safety matrix from (A).
+## 4. Security (C) - `SecurityFuzzTest`, `KeyRotationTest`, `SecretHygieneTest` (unit / JVM integration; local 105/105 for hostkit)
+
+**Fuzz / property tests (fixed seeds).** About 6,000 mutations each of the manifest and of `assets.json` (bit flips, truncation, range delete / duplicate, junk insertion, numbers replaced by `1e999`, `NaN`, hex, `"7"`, `null`, `[]`; strings replaced by NUL, RLO, fullwidth dots, lone surrogates, 70 KB strings; nesting up to 30,000 levels). Properties: only `IllegalArgumentException` escapes; `peekKeyId` (which runs on unauthenticated bytes BEFORE the signature check) never throws; whatever parses satisfies the format invariants; a manifest that differs from the signed bytes by one byte never verifies (4,000 mutations); 3,000 random DER mutations and random signature texts never verify and never throw. No pre-authentication crash was found.
+
+Defects found (red first) and fixed:
+1. **Signature text spellings.** `TrustedKeys.verify` used the MIME base64 decoder, which silently discards junk, so a valid signature hidden among garbage verified. Now strict base64 (surrounding whitespace and line breaks tolerated; openssl wraps at 64).
+2. **Duplicate JSON keys** in the manifest, in file entries, in `assets.json` and its entries were accepted (parsers disagree about which value wins). Now refused.
+3. **`assets.json` had no size limit of its own** (the signed manifest allows a file up to 256 MB, which would be read into memory). Now 8 MiB, checked on the file length before reading.
+4. libGDX JSON accessors can throw other runtime types for mismatched value kinds; both parsers now convert any runtime exception into their documented `IllegalArgumentException`.
+Not changed on purpose: ECDSA signature malleability ((r,s) vs (r,n-s)): the signature value is never used as an identifier, hash input or cache key, so both forms verify the same signed bytes; rejecting high-S would reject half of all legitimate signatures.
+
+**Key rotation, revocation, revokeFloor, adversarial staging (full store scenarios).** Two pinned keys both work; a manifest naming key A but signed by B is refused; old-host / new-host / later-host rotation never strands an install and never reopens the retired key; a pinned-but-revoked key invalidates what it signed with no soft lock (recovery, then a baseline signed by the new key restores play, stable across restarts); a `revokeFloor` makes the rollback target unusable so a bad release cannot fall back to a known-vulnerable one, and the old baseline is refused; 120 random adversarial stagings accept exactly the strictly-newer ones and leave no debris. All passed on first run (no defect found in these paths) - they are regression guards.
+
+**Secrets hygiene (static scan of the checked-out tree, not of uploaded artifacts).** No private-key body anywhere; no workflow or lab script prints a private key file; the lab workflows are `contents: read`, use no repository secrets, never publish, generate their keys inside the run, and no artifact path can include a key file or the whole temp directory. Mutation-checked: a planted PEM body, a `cat lab.pem`, an artifact path `.../lab.pem` and an artifact path of the whole temp dir each turn a test red (the first version of the artifact-path check missed the planted path and was fixed).
+Not verified: the contents of artifacts CI actually uploaded (the sandbox cannot download them), key rotation as an emulator scenario.
+
+## 5. Not yet done
+E (`UpdateStatus`), key rotation / revocation as emulator scenarios, the device scenarios (kill during download/activation, 20+ release stress, real-game SaveGuard, combined code+asset release), and the asset-type/path-safety matrix from (A).

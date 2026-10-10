@@ -27,15 +27,27 @@ public final class AssetManifest {
 
     public final Map<String, Asset> byPath = new LinkedHashMap<>();
 
+    /** The list is small by construction (MAX_ASSETS entries of at most a few hundred bytes); anything bigger is refused before it is parsed, whatever size the signed manifest allowed for the file. */
+    public static final int MAX_JSON_BYTES = 8 * 1024 * 1024;
+
     public static AssetManifest parse(byte[] json) throws IllegalArgumentException {
+        try { return parse0(json); }
+        catch (IllegalArgumentException e) { throw e; }
+        catch (RuntimeException e) { throw new IllegalArgumentException("assets.json malformed"); }       // the JSON accessors throw other types for mismatched value kinds
+    }
+
+    private static AssetManifest parse0(byte[] json) {
+        if (json == null || json.length > MAX_JSON_BYTES) throw new IllegalArgumentException("assets.json too large");
         JsonValue r;
         try { r = new JsonReader().parse(new String(json, StandardCharsets.UTF_8)); } catch (Exception e) { throw new IllegalArgumentException("assets.json not JSON"); }
         if (r == null || !r.isObject()) throw new IllegalArgumentException("assets.json not an object");
+        ModuleManifest.noDuplicateKeys(r);
         if (r.getInt("schema", 0) != SCHEMA) throw new IllegalArgumentException("assets.json schema");
         JsonValue arr = r.get("assets");
         if (arr == null || !arr.isArray() || arr.size > MAX_ASSETS) throw new IllegalArgumentException("assets list");
         AssetManifest m = new AssetManifest(); long total = 0; Set<String> seen = new HashSet<>();
         for (JsonValue a = arr.child; a != null; a = a.next) {
+            if (!a.isObject()) throw new IllegalArgumentException("asset entry"); ModuleManifest.noDuplicateKeys(a);
             String path = a.getString("path", ""), sha = a.getString("sha256", ""); JsonValue sz = a.get("size");
             if (path.length() > 200 || !PATH.matcher(path).matches() || path.contains("..")) throw new IllegalArgumentException("bad asset path");
             if (!HEX.matcher(sha).matches() || sz == null || !sz.isNumber()) throw new IllegalArgumentException("bad asset entry " + path);
@@ -50,6 +62,7 @@ public final class AssetManifest {
     /** The assets a module directory declares (empty if it has none). */
     public static AssetManifest read(File moduleDir) throws java.io.IOException {
         File f = new File(moduleDir, FILE);
+        if (f.isFile() && f.length() > MAX_JSON_BYTES) throw new IllegalArgumentException("assets.json too large");       // before reading it into memory
         return f.isFile() ? parse(Files.readAllBytes(f.toPath())) : new AssetManifest();
     }
 

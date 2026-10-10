@@ -4,3 +4,4 @@
 - Release file names are plain: `Upwardly.apk` (capital U only, not all capitals).
 - Keep answers short, yes/no where possible. Answer a question as a question; do not start work on it.
 - Do not repeat the 21ee43b explanation; do not ask for approval for work already authorised.
+- The public name is written "Upwardly" (capital U, rest lowercase), not all capitals: Android app label on the next APK, Windows EXE name and window title, release file names.

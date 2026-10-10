@@ -27,6 +27,10 @@ class ModuleGame extends ClimbGame {
         if (force) { try { env.checkForUpdates(); } catch (Throwable ignored) { } }
     }
 
+    @Override public boolean canRestartApp() { return true; }
+
+    @Override public void restartApp() { HostRestart.relaunch(); }
+
     private int statusTick;
 
     @Override public void render() {

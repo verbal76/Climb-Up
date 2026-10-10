@@ -24,4 +24,4 @@ A change needed in a file you do not own is a **REQUEST**, sent with `send_messa
 E2 pushes only `exp/ota-reliability` (workflows: `otalab.yml`, `otalab-assets.yml`, `otalab-reliability*.yml`; all non-publishing, `contents: read`, no secrets). E1 merges `origin/exp/ota-reliability` into `exp/ota-full` at milestones with an ordinary merge commit (disjoint ownership, so no conflicts by construction), runs the full integrated validation, and fixes only E1-owned fallout; E2-owned defects go back to E2 as a REQUEST with the failing log. E1 merges `exp/ota-full` into E2's view only by E2 pulling it (`git merge origin/exp/ota-full`) when it needs new E1 work. Nobody rebases, force-pushes or rewrites the other's history.
 
 ## Handoff record
-Handoff SHA (E2's branch point): see the first line of `HANDOFF_E2.txt` next to this file, written at the moment of branching.
+Handoff SHA (E2's branch point): E2 records it as the first line of `docs/ota-full/reliability/BRANCH_POINT.txt` in its first commit (the SHA is also in E2's start message). E1 does not rewrite or force-push anything at or below that SHA.

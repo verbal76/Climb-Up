@@ -22,6 +22,8 @@ public final class Sim {
     public Mode mode = Mode.AIR;
     public int onElem = -1;          // standing / hanging / roping element index
     public int lastPad = -1;
+    public int onSlab = -1;          // hazard index of the spike slab whose (safe) top the hero stands on; mode GROUND with onElem < 0
+    public static final float SLAB_BOUNCE_SPEED = 6f, SLAB_SLAM_SPEED = 6f;
     public float coyote, jumpBuf, lockout, pullT, pullFromS, pullFromY, pullToS, pullToY;
     public int ledgeSide = 1;
     private int sideIn = -1, sideDir = 1;      // a platform whose side the body has slipped into while rising fast (see trackSideEntry), and which side it came from
@@ -149,7 +151,7 @@ public final class Sim {
     private Sim(Sim o) {
         course = o.course; T = o.T;
         time = o.time; s = o.s; y = o.y; vx = o.vx; vy = o.vy; facing = o.facing; mode = o.mode; onElem = o.onElem;
-        lastPad = o.lastPad; coyote = o.coyote; jumpBuf = o.jumpBuf; lockout = o.lockout; pullT = o.pullT;
+        lastPad = o.lastPad; onSlab = o.onSlab; coyote = o.coyote; jumpBuf = o.jumpBuf; lockout = o.lockout; pullT = o.pullT;
         ropeTopT = o.ropeTopT; pullFromS = o.pullFromS; pullFromY = o.pullFromY; pullToS = o.pullToS; pullToY = o.pullToY;
         ledgeSide = o.ledgeSide; sideIn = o.sideIn; sideDir = o.sideDir; jumpedUp = o.jumpedUp; prevJumpHeld = o.prevJumpHeld; lastGroundY = o.lastGroundY; floorY = o.floorY;
         checkpoint = o.checkpoint; bestElem = o.bestElem; maxHeight = o.maxHeight; won = o.won; falls = o.falls;
@@ -199,7 +201,7 @@ public final class Sim {
         Element e = course.get(idx);
         s = course.wrap(es1[idx]); y = ey1[idx]; vx = vy = 0;
         mode = Mode.GROUND; onElem = idx; lastGroundY = y; coyote = 0; jumpBuf = 0; lockout = 0.1f;
-        jumpedUp = false; facing = 1;
+        jumpedUp = false; facing = 1; onSlab = -1;
         progress(idx);
     }
 
@@ -286,6 +288,7 @@ public final class Sim {
         featDone = nf;
         onElem = onElem >= 0 && onElem < m.elem.length ? m.elem[onElem] : onElem;
         lastPad = lastPad >= 0 && lastPad < m.elem.length ? m.elem[lastPad] : lastPad;
+        onSlab = onSlab >= 0 && onSlab < m.haz.length ? m.haz[onSlab] : -1;
         checkpoint = checkpoint >= 0 && checkpoint < m.elem.length ? m.elem[checkpoint] : checkpoint;
         bestElem = bestElem >= 0 && bestElem < m.elem.length ? Math.max(0, m.elem[bestElem]) : bestElem;
         float dy = m.dy;
@@ -352,7 +355,7 @@ public final class Sim {
         if (lockout > 0) lockout = Math.max(0, lockout - dt);
 
         switch (mode) {
-            case GROUND: stepGround(in, dt); break;
+            case GROUND: if (onElem < 0 && onSlab >= 0) stepSlab(in, dt); else stepGround(in, dt); break;
             case AIR: stepAir(in, dt); break;
             case ROPE: stepRope(in, dt); break;
             case CABLE: stepCable(in, dt); break;
@@ -458,7 +461,7 @@ public final class Sim {
                 if (dx < e.w * 0.5f + hw && y > e.y - 0.5f && y < e.y + e.spikeHeight(time) - 0.08f) return true;
             } else if (e.type == Element.Type.SPIKE_DROP) {
                 float b = e.dropBottom(time);
-                if (dx < e.w * 0.5f + hw && hi > b && lo < b + Element.DROP_H) return true;
+                if (dx < e.w * 0.5f + hw && hi > b && lo < b + Element.DROP_SPIKE_H) return true;          // only the spiked underside hurts; the top of the slab is a surface
             } else {   // spike block: a solid lethal box [y, y+len]
                 if (dx < e.w * 0.5f + hw && hi > e.y && lo < e.y + e.len) return true;
             }
@@ -559,8 +562,48 @@ public final class Sim {
         }
         if (best >= 0) { land(best, in); return; }
         if (landOnSlope(in, py)) return;
+        if (landOnSlab(in, py)) return;
         if (sideIn >= 0 && catchInside(in)) return;
         if (lockout <= 0) { if (tryGrab(in)) return; }
+    }
+
+    /** The top of a spike slab is a surface: a body falling onto it from above stands on it, and the slab carries it up and down like an elevator (see {@link #stepSlab}). */
+    private boolean landOnSlab(InputState in, float py) {
+        int best = -1; float bestTop = -1e9f;
+        for (int k = 0, cnt = hz == null ? course.hazards.size() : hz.length; k < cnt; k++) {
+            int hi = hz == null ? k : hz[k];
+            Element h = course.hazards.get(hi);
+            if (h.type != Element.Type.SPIKE_DROP) continue;
+            float top = h.dropTop(time), prev = h.dropTop(time - DT);
+            if (Math.abs(course.dsWrap(h.sAt(time), s)) > h.w * 0.5f + T.edgeOverhang) continue;
+            if (vy - (top - prev) / DT > 0f) continue;
+            if (py >= prev - 0.08f && y <= top + 0.0001f && top > bestTop) { bestTop = top; best = hi; }
+        }
+        if (best < 0) return false;
+        y = bestTop; landSpeed = Math.max(0f, -vy); vy = 0; mode = Mode.GROUND; onElem = -1; onSlab = best; jumpedUp = false; coyote = T.coyote + assistForgive;
+        events |= EV_LAND;
+        if (jumpBuf > 0) { doJump(Math.max(0f, (bestTop - course.hazards.get(best).dropTop(time - DT)) / DT) * 0.6f); onSlab = -1; }
+        return true;
+    }
+
+    /** Standing on a slab's top: carried with it; a fast slam throws the hero gently off (no ride down, no hurt); jump and walking off work as on any platform. */
+    private void stepSlab(InputState in, float dt) {
+        Element h = course.hazards.get(onSlab);
+        float top = h.dropTop(time), pv = (top - h.dropTop(time - dt)) / dt;
+        if (pv < -SLAB_SLAM_SPEED) {
+            mode = Mode.AIR; onSlab = -1; vy = SLAB_BOUNCE_SPEED; jumpedUp = false; coyote = 0; events |= EV_BOUNCE; y = top + 0.0f;
+            return;
+        }
+        y = top;
+        float target = in.moveX * T.runSpeed;
+        float a = (Math.abs(target) > 0.01f && Math.signum(target) == Math.signum(vx) || Math.abs(vx) < 0.01f) ? T.groundAccel : T.groundDecel;
+        if (Math.abs(target) < 0.01f) a = T.groundDecel;
+        vx = approach(vx, target, a * dt);
+        if (Math.abs(in.moveX) > 0.15f) facing = in.moveX > 0 ? 1 : -1;
+        s += vx * dt;
+        coyote = T.coyote + assistForgive;
+        if (jumpBuf > 0) { int was = onSlab; doJump(Math.max(0f, pv) * 0.6f); onSlab = -1; return; }
+        if (Math.abs(course.dsWrap(s, h.sAt(time))) > h.w * 0.5f + T.edgeOverhang) { mode = Mode.AIR; onSlab = -1; vy = Math.min(0f, pv); jumpedUp = false; }
     }
 
     /**

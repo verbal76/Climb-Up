@@ -82,6 +82,10 @@ public final class Element {
         return lo + (hi - lo) * (c - 0.80f) / 0.20f;
     }
     public static final float DROP_H = 1.0f;
+    /** The slab is a 0.5 m stone block whose underside carries the spikes: only the lower SPIKE_H of the DROP_H box hurts; the top is a safe surface (see Sim.landOnSlab). */
+    public static final float DROP_SPIKE_H = 0.5f;
+    /** Height of the slab's top face at time t. */
+    public float dropTop(float t) { return dropBottom(t) + DROP_H; }
 
     // ---- bee: a visit takes BEE_VISIT of the cycle; it enters high from one side, buzzes around (s, y) with amplitude amp (arc) and len (height), dives, and leaves high on the other side
     public static final float BEE_VISIT = 0.58f, BEE_R = 0.5f;

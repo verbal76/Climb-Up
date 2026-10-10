@@ -9,3 +9,9 @@ Cannonballs: they keep flying until they leave the screen, then disappear (no po
 
 Constraints (owner rules): every section must stay completable (solver proof over many seeds); every cannon needs a readable warning and a workable timing window; a hit knocks you away (no damage, no death, no checkpoint teleport); visual aiming must match where the ball really goes; reduced-motion respected. Needs: simulation change, level generator placement and fairness rules, rendering (barrel rotation), animation, tests.
 Suggested build order: (1) side cannon faces you + balls fly off-screen, (2) vertical mortars with stagger patterns, (3) aimed cannons.
+
+# Level design additions (owner, same package family; not started)
+- **Spike slab top is safe.** The slab that slams down on a beat (spikes underneath) must NOT hurt when you stand or land on its top. Its top is a surface: it carries you up and down like an elevator, so the player can use it to reach new routes. Only the spiked underside hurts.
+- **Dead ends.** More dead-end routes (visible, fair, never required) so choosing a path matters.
+- **Parallel routes.** Every now and then the tower offers two or more stacked routes to pick from, each with different traps and different difficulty, that rejoin. Not every section; occasional.
+All need generator and simulation work, a solver proof that every route set is completable and that the alternatives are really different, and a generatorRuleset decision.

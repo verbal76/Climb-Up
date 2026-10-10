@@ -48,7 +48,7 @@ public class LabLauncher extends AndroidApplication {
         }
         Log.i(TAG, (s.recovery() ? "RECOVERY screen" : "running module v" + s.manifest.moduleVersion) + " active=" + store.st.active + " lastGood=" + store.st.lastGood + " pending=" + store.st.pending
                 + " tries=" + store.st.tries + " staged=" + store.st.staged + " note=[" + s.note + "] rollback=[" + store.st.rollback + "] bootMs=" + (System.nanoTime() - t0) / 1_000_000);
-        initialize(s.recovery() ? listener : PerfListener.maybeWrap(listener, "module-host"), LabCommon.gameConfig());
+        initialize(s.recovery() ? listener : PerfListener.maybeWrap(new FrameFlag(listener), "module-host"), LabCommon.gameConfig());
         if (!s.overrides.isEmpty()) {                       // the module carries game files that replace the APK's: serve them through the overlay (nothing is installed otherwise)
             overlay = new com.hotatticgames.climbup.host.OverlayFiles(com.badlogic.gdx.Gdx.files, s.overrides, store.assets(), msg -> Log.i(TAG, msg));
             com.badlogic.gdx.Gdx.files = overlay;
@@ -102,10 +102,35 @@ public class LabLauncher extends AndroidApplication {
 
     private static void deleteTree(File f) { File[] k = f.listFiles(); if (k != null) for (File c : k) deleteTree(c); f.delete(); }
 
-    @Override protected void onPause() { Log.i(TAG, "host onPause"); super.onPause(); }
+    /** Set once the module has drawn a frame: from then on a clean back-out (Home, recents, screen off) is not evidence of a failed start. */
+    private volatile boolean firstFrame;
+
+    /** Delegates everything to the module's listener and notes that a first frame was rendered. Changes nothing the game sees. */
+    private final class FrameFlag implements ApplicationListener {
+        private final ApplicationListener in;
+        FrameFlag(ApplicationListener in) { this.in = in; }
+        @Override public void create() { in.create(); }
+        @Override public void resize(int w, int h) { in.resize(w, h); }
+        @Override public void render() { in.render(); firstFrame = true; }
+        @Override public void pause() { in.pause(); }
+        @Override public void resume() { in.resume(); }
+        @Override public void dispose() { in.dispose(); }
+    }
+
+    /**
+     * A player who leaves during the first seconds of an unproven module must not get a healthy release rolled back, so a clean pause after the first rendered frame forgives this launch
+     * (a hang in create() never renders, and a crash never reaches onPause, so real failures still count); coming back counts it again (onResume), so a module that crashes only after a
+     * resume is still caught. Both calls are on the very ModuleStore instance that booted this launch.
+     */
+    @Override protected void onPause() {
+        Log.i(TAG, "host onPause");
+        if (firstFrame && store != null && store.forgiveCleanPause()) Log.i(TAG, "clean pause after a rendered frame: this launch is not counted as a failed start");
+        super.onPause();
+    }
     /** libGDX re-publishes its own {@code Gdx.files} on every resume, which would silently drop the overlay before the game's {@code create()} runs; put it back. */
     @Override protected void onResume() {
         Log.i(TAG, "host onResume"); super.onResume();
+        if (store != null && store.recountAfterResume()) Log.i(TAG, "back in an unconfirmed module: this launch counts again");
         if (overlay != null && com.badlogic.gdx.Gdx.files != overlay) { com.badlogic.gdx.Gdx.files = overlay; Log.i(TAG, "asset overlay re-installed after resume"); }
     }
 }

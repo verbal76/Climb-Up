@@ -130,8 +130,21 @@ expect "K9 the host starts despite leftovers of an interrupted install" "running
 expect "K9 the next update still installs" "update check: staged v8" 40
 go_home; sleep 1; start "$HOST_ACT" >/dev/null; expect "K9 and activates at the next cold start" "running module v8" 40
 stop_server
+
+echo "== K10 (integrated reliability work) a player who backs out of an unproven release is never penalised; a release that crashes after a resume still is"
+# K10a: v8 is active and unproven. Four cycles of: launch, let it draw, Home (a clean pause), kill. Without forgiveness the third launch would roll v8 back and blacklist it.
+for i in 1 2 3 4; do start "$HOST_ACT" >/dev/null; wait_for "running module v8" 30; sleep 7; go_home; sleep 2; adb shell am force-stop $HOST; sleep 1; done
+start "$HOST_ACT" >/dev/null
+expect "K10a the unproven v8 survived four clean back-outs" "running module v8" 40
+logs | grep -q "rolled back v8" && fail "K10a a healthy release was rolled back by a player leaving early" || pass "K10a no rollback for clean back-outs (forgiven launches were not counted)"
+# K10b: v9 crashes (is killed) after every resume. Each launch: draw, Home (forgiven), come back (recounted), die. Three such launches must roll v9 back.
+go_home; serve c9_resume_crash; start "$HOST_ACT" --es updateBase http://10.0.2.2:8099/ >/dev/null; expect "K10b v9 staged" "update check: staged v9" 40
+for i in 1 2 3 4; do start "$HOST_ACT" >/dev/null; wait_for "running module v[0-9]+" 30; sleep 7; go_home; sleep 2; adb shell am start -n "$HOST_ACT" >/dev/null; sleep 3; adb shell am force-stop $HOST; sleep 1; done
+start "$HOST_ACT" >/dev/null
+expect "K10b the release that dies after every resume was rolled back" "rolled back v9" 40
+stop_server
 else
-echo "== K8/K9 (damaged state, interrupted install) are run on the integration branch once the reliability work is merged: skipped here"
+echo "== K8/K9/K10 (damaged state, interrupted install, pause forgiveness) are run on the integration branch once the reliability work is merged: skipped here"
 fi
 
 echo "== P1 delivery-layer measurements: cold start, frame pacing and memory, packaged vs module (informational on an emulator: software GL, NOT representative of a phone; never fails the run)"

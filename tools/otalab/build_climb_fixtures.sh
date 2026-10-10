@@ -12,6 +12,7 @@ mk --out "$SERVE/c3_new_generator" --version 3 --ruleset 2                 # wou
 mk --out "$SERVE/c4_tampered" --version 4 --ruleset 1 --tamper dex
 mk --out "$SERVE/c5_no_entry" --version 5 --ruleset 1 --entry com.hotatticgames.climbup.module.Missing
 mk --out "$SERVE/c8_after_interrupt" --version 8 --ruleset 1               # installed after an interrupted installation (integration scenario K9)
+mk --out "$SERVE/c9_resume_crash" --version 9 --ruleset 1                  # an unproven release used to show that pause forgiveness is recounted on resume (scenario K10)
 if [ -n "$MARKED" ]; then                                                    # a release whose executing code differs (extra entry class, same game): the real "code update"
   mkj "$MARKED" --out "$SERVE/c7_code_change" --version 7 --ruleset 1 --entry com.hotatticgames.climbup.module.ClimbModuleMarked
 fi

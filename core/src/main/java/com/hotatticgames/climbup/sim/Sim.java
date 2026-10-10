@@ -558,8 +558,32 @@ public final class Sim {
             }
         }
         if (best >= 0) { land(best, in); return; }
+        if (landOnSlope(in, py)) return;
         if (sideIn >= 0 && catchInside(in)) return;
         if (lockout <= 0) { if (tryGrab(in)) return; }
+    }
+
+    /**
+     * A ramp's surface height depends on where along it the body is, and the landing test above measures it where the body WAS at the start of the step. A body running up a ramp while it
+     * jumps is carried into the slope: the surface climbs past its feet faster than the jump rises, and since a rising body is never landed, at the top of the arc it is already inside the ramp and
+     * falls straight through it. So when nothing else caught the body, a ramp whose surface at the body's NEW position has reached its feet (they were above that ramp before the move) is landed on there.
+     * Only bodies that would have sunk into the slope are affected; every landing the test above makes is unchanged.
+     */
+    private boolean landOnSlope(InputState in, float py) {
+        int best = -1; float bestSurf = -1e9f;
+        for (int k = 0, cnt = act == null ? course.size() : act.length; k < cnt; k++) {
+            int i = act == null ? k : act[k];
+            Element el = course.get(i);
+            if (el.type != Element.Type.RAMP || gone[i]) continue;
+            float hw = el.halfW(), x = course.dsWrap(s, es1[i]);
+            if (Math.abs(x) > hw + T.edgeOverhang) continue;
+            float surf = el.y + el.amp * Math.max(-hw, Math.min(hw, x)) - (el.skin == 3 ? tilt[i] : 0f);
+            if (py >= ey0[i] - 0.08f && y <= surf + 0.0001f && surf > bestSurf) { bestSurf = surf; best = i; }
+        }
+        if (best < 0) return false;
+        vy = Math.min(vy, 0f);          // a rising body is stopped by the slope; a falling one lands as it always did
+        land(best, in, bestSurf);
+        return true;
     }
 
     /**
@@ -595,9 +619,11 @@ public final class Sim {
         return true;
     }
 
-    private void land(int i, InputState in) {
+    private void land(int i, InputState in) { land(i, in, ey1[i]); }
+
+    private void land(int i, InputState in, float surface) {
         Element el = course.get(i);
-        y = ey1[i];
+        y = surface;
         landSpeed = -vy;
         if (el.type == Element.Type.PAD || el.type == Element.Type.SPRING) {
             float v = in.jumpHeld ? T.padBounceHeld : T.padBounce;

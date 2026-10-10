@@ -4,7 +4,7 @@ name: OTA lab (experimental, never publishes)
 on:
   workflow_dispatch: {}
   push:
-    branches: [exp/ota-full]
+    branches: [exp/ota-full, exp/ota-reliability]
 permissions:
   contents: read
 

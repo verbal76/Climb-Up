@@ -73,7 +73,7 @@ public class ClimbModuleTest {
         ClassLoader host = hostLoader();
         URLClassLoader mod = new URLClassLoader(new URL[]{jar().toURI().toURL()}, host);
         GameModule m = (GameModule) Class.forName("com.hotatticgames.climbup.module.ClimbModule", true, mod).getDeclaredConstructor().newInstance();
-        String viaModule = m.selfTest("digest|12|3600");
+        String viaModule = m.selfTest("digest:12:3600");
         System.out.println("direct : " + direct + "\nmodule : " + viaModule);
         assertEquals("exact agreement, no tolerance", direct, viaModule);
         assertTrue("it actually climbed", direct.contains("failed=false"));

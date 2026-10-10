@@ -15,14 +15,14 @@ import java.nio.file.Paths;
 /**
  * Validation-only: a deterministic headless climb. The same autopilot, the same seed and the same fixed-step simulation the game uses climb a streaming tower for N steps (with the
  * tower rebuilt around new origins along the way) and every step's state is folded into a SHA-256. Two builds of the same code on the same machine must give the same digest;
- * the digest of the module-loaded game is compared with the packaged game's, and with the JVM's. Request format: {@code digest|seed|steps} (tuning read from the game's assets).
+ * the digest of the module-loaded game is compared with the packaged game's, and with the JVM's. Request format: {@code digest:seed:steps} (tuning read from the game's assets).
  */
 public final class SelfTest {
     private SelfTest() {}
 
     public static String run(String request) {
         try {
-            String[] p = request.split("\\|");
+            String[] p = request.split(":");
             if (!p[0].equals("digest")) return null;
             String json = Gdx.files != null ? Gdx.files.internal("data/tuning.json").readString("UTF-8")
                     : new String(Files.readAllBytes(Paths.get(System.getProperty("climb.tuning", "../assets/data/tuning.json"))), StandardCharsets.UTF_8);

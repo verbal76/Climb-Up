@@ -10,7 +10,8 @@ pass() { echo "PASS  $*"; }
 fail() { echo "FAIL  $*"; FAILS=$((FAILS+1)); }
 logs() { adb logcat -d -v brief -s OTALAB:I AndroidRuntime:E 2>/dev/null; }
 stop_server() { [ -n "$SERVER_PID" ] && kill "$SERVER_PID" 2>/dev/null; SERVER_PID=""; }
-serve() { stop_server; (cd "$SERVE/$1" && python3 -m http.server 8099 --bind 0.0.0.0 >/dev/null 2>&1 & echo $! > "$OUT/server.pid"); SERVER_PID=$(cat "$OUT/server.pid"); sleep 1; }
+serve() { stop_server; python3 -m http.server 8099 --bind 0.0.0.0 --directory "$SERVE/$1" >/dev/null 2>&1 & SERVER_PID=$!; sleep 1; }
+go_home() { adb shell am start -W -a android.intent.action.MAIN -c android.intent.category.HOME >/dev/null; sleep 1; }
 # cold start (force-stop first); $1 = optional update base URL
 launch() { adb logcat -c; if [ -n "${1:-}" ]; then adb shell am start -S -W -n "$ACT" --es updateBase "$1" >/dev/null; else adb shell am start -S -W -n "$ACT" >/dev/null; fi; }
 wait_for() { local pat=$1 t=${2:-45} i; for i in $(seq "$t"); do logs | grep -Eq "$pat" && return 0; sleep 1; done; return 1; }
@@ -34,7 +35,7 @@ sleep 2; shot s1; C1=$(color s1); echo "   screen colour: $C1"; echo "$C1" | gre
 
 echo "== S2 input and lifecycle reach the module"
 adb shell input tap 400 300; expect "S2 touch delivered to module" "module 1 touch"
-adb shell input keyevent KEYCODE_HOME; expect "S2 host paused" "host onPause"; expect "S2 module paused" "module 1 pause"
+go_home; expect "S2 host paused" "host onPause"; expect "S2 module paused" "module 1 pause"
 adb shell am start -n "$ACT" >/dev/null; expect "S2 module resumed" "module 1 resume"
 
 echo "== S3 download v2 while v1 plays: staged, NOT activated"

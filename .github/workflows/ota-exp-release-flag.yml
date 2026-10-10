@@ -20,8 +20,8 @@ jobs:
           if gh release view ota-lab-latest --repo "$REPO" --json assets -q '.assets[].name' | grep -qx UPWARDLY.apk; then
             gh release download ota-lab-latest --repo "$REPO" -p UPWARDLY.apk -D "$RUNNER_TEMP/rel"
             mv "$RUNNER_TEMP/rel/UPWARDLY.apk" "$RUNNER_TEMP/rel/Upwardly.apk"
-            gh release upload ota-lab-latest "$RUNNER_TEMP/rel/Upwardly.apk" --repo "$REPO" --clobber
-            gh release delete-asset ota-lab-latest UPWARDLY.apk --repo "$REPO" -y
+            gh release delete-asset ota-lab-latest UPWARDLY.apk --repo "$REPO" -y      # asset names are case-insensitive: the old one has to go first
+            gh release upload ota-lab-latest "$RUNNER_TEMP/rel/Upwardly.apk" --repo "$REPO"
           fi
           gh release edit ota-lab-latest --repo "$REPO" --prerelease=false
           gh release view ota-lab-latest --repo "$REPO" --json name,isPrerelease,assets -q '{name:.name,prerelease:.isPrerelease,assets:[.assets[].name]}'

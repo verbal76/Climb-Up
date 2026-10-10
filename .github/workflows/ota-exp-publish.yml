@@ -120,8 +120,8 @@ jobs:
           cp "$RUNNER_TEMP/ota-test.apk" "$RUNNER_TEMP/Upwardly.apk"; SUM=$(sha256sum "$RUNNER_TEMP/Upwardly.apk" | cut -d' ' -f1)
           NOTES="UPWARDLY for Android, build ${{ github.run_number }} (application id com.hotatticgames.climbup.otaexp, separate from the production app; updates itself from the GitHub channel). Source ${GITHUB_SHA}. Channel ${{ steps.v.outputs.base }} serves module v${{ steps.v.outputs.version }}. APK sha256 ${SUM}. Not the production release."
           if gh release view ota-lab-latest >/dev/null 2>&1; then
-            gh release upload ota-lab-latest "$RUNNER_TEMP/Upwardly.apk" --clobber
             gh release delete-asset ota-lab-latest UPWARDLY.apk -y || true; gh release delete-asset ota-lab-latest climbup-ota-lab.apk -y || true
+            gh release upload ota-lab-latest "$RUNNER_TEMP/Upwardly.apk" --clobber
             gh release edit ota-lab-latest --prerelease=false --title "UPWARDLY Android - build ${{ github.run_number }}" --notes "$NOTES"
           else
             gh release create ota-lab-latest "$RUNNER_TEMP/Upwardly.apk" --target "$GITHUB_SHA" --title "UPWARDLY Android - build ${{ github.run_number }}" --notes "$NOTES"

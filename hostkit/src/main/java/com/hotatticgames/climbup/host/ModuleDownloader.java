@@ -87,6 +87,10 @@ public final class ModuleDownloader {
     private final ModuleStore store; private final Fetcher fetcher; private final String base;
     private long budgetMillis = 15L * 60 * 1000, deadlineNanos; private java.util.function.LongSupplier freeSpace;
     public volatile String status = "";
+    /** Structured result of the last check (the {@link #status} text is for humans; {@link UpdateStatus} reads these). */
+    public volatile UpdateStatus.Check outcome = UpdateStatus.Check.NEVER;
+    /** NO_NEWER_RELEASE: the newest version this install has ever accepted; STAGED: the version now waiting. */
+    public volatile int outcomeVersion; public volatile long checkedAtMillis;
 
     public ModuleDownloader(ModuleStore store, Fetcher fetcher, String baseUrl) { this.store = store; this.fetcher = fetcher; this.base = baseUrl.endsWith("/") ? baseUrl : baseUrl + "/"; this.freeSpace = store::usableBytes; }
 
@@ -105,13 +109,18 @@ public final class ModuleDownloader {
     /** Runs one check. Returns a short status; "staged vN" means a verified module now waits for the next cold start. */
     public String check() {
         deadlineNanos = System.nanoTime() + budgetMillis * 1_000_000L;
-        try { return status = run(); } catch (Exception e) { return status = "offline or failed: " + e.getClass().getSimpleName() + (e.getMessage() == null ? "" : " " + e.getMessage()); }
+        try { String r = run(); checkedAtMillis = System.currentTimeMillis(); return status = r; }
+        catch (Exception e) { outcome = UpdateStatus.Check.FAILED; outcomeVersion = 0; checkedAtMillis = System.currentTimeMillis(); return status = "offline or failed: " + e.getClass().getSimpleName() + (e.getMessage() == null ? "" : " " + e.getMessage()); }
     }
 
     private String run() throws Exception {
         byte[] mb = readAll(fetcher.open(base + "manifest.json", ModuleManifest.MAX_BYTES), ModuleManifest.MAX_BYTES), sb = readAll(fetcher.open(base + "manifest.sig", 1024), 1024);
         String no = store.preflight(mb, sb);
-        if (no != null) return no;
+        if (no != null) {
+            if (no.startsWith(ModuleStore.UP_TO_DATE)) { ModuleStore.Snapshot s = store.snapshot(); outcome = UpdateStatus.Check.NO_NEWER_RELEASE; outcomeVersion = Math.max(s.highest, s.staged); }
+            else { outcome = UpdateStatus.Check.REFUSED; outcomeVersion = 0; }
+            return no;
+        }
         ModuleManifest m = ModuleManifest.parse(mb);
         long need = 0; for (ModuleManifest.FileEntry e : m.files) need += e.size;
         requireSpace(need);                                                                           // before anything is created: a full disk leaves no staging behind
@@ -122,7 +131,9 @@ public final class ModuleDownloader {
             fetchAssets(AssetManifest.read(dir));
         } catch (Exception e) { deleteQuietly(dir); throw e; }
         String refused = store.commitStaging();
-        return refused == null ? "staged v" + m.moduleVersion + " (applies on next start)" : "refused: " + refused;
+        if (refused != null) { outcome = UpdateStatus.Check.REFUSED; outcomeVersion = 0; return "refused: " + refused; }
+        outcome = UpdateStatus.Check.STAGED; outcomeVersion = m.moduleVersion;
+        return "staged v" + m.moduleVersion + " (applies on next start)";
     }
 
     private void fetchFile(ModuleManifest.FileEntry e, File out) throws Exception {

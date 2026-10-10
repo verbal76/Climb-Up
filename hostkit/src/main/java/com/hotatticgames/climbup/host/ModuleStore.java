@@ -327,12 +327,24 @@ public final class ModuleStore {
         if (!m.channel.equals(host.channel)) return "wrong channel";
         if (m.interfaceVersion != host.interfaceVersion) return "needs a different interface (" + m.interfaceVersion + ")";
         if (host.hostLevel < m.hostMin || host.hostLevel > m.hostMax) return "needs a different host (" + m.hostMin + ".." + m.hostMax + ")";
-        if (m.moduleVersion <= Math.max(st.highest, st.staged)) return "up to date (v" + Math.max(st.highest, st.staged) + ")";
+        if (m.moduleVersion <= Math.max(st.highest, st.staged)) return UP_TO_DATE + " (v" + Math.max(st.highest, st.staged) + ")";
         if (st.bad.contains(m.moduleVersion) || m.moduleVersion < st.revokeFloor) return "v" + m.moduleVersion + " was rolled back or revoked";
         return null;
     }
 
     public synchronized int stagedVersion() { return st.staged; }
+
+    /** Prefix of the {@link #preflight} answer when nothing newer than what this install has already accepted is offered (shared so the downloader can tell it from a refusal). */
+    public static final String UP_TO_DATE = "up to date";
+
+    /** A consistent, immutable copy of what the status display needs (taken under the store's lock). */
+    public static final class Snapshot {
+        public final int active, lastGood, pending, staged, highest, revokeFloor; public final String lastResult, rollback; public final File activeDir;
+        Snapshot(int active, int lastGood, int pending, int staged, int highest, int revokeFloor, String lastResult, String rollback, File activeDir) {
+            this.active = active; this.lastGood = lastGood; this.pending = pending; this.staged = staged; this.highest = highest; this.revokeFloor = revokeFloor; this.lastResult = lastResult; this.rollback = rollback; this.activeDir = activeDir;
+        }
+    }
+    public synchronized Snapshot snapshot() { return new Snapshot(st.active, st.lastGood, st.pending, st.staged, st.highest, st.revokeFloor, st.lastResult, st.rollback, st.active == 0 ? null : dirOf(st.active)); }
 
     /** Free bytes where the store lives (nearest existing parent while the store directory is not created yet). */
     public long usableBytes() {

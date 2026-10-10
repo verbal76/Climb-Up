@@ -46,7 +46,7 @@ public final class RunSnapshot {
         r.time = sim.time; r.vx = sim.vx; r.vy = sim.vy; r.coyote = sim.coyote; r.jumpBuf = sim.jumpBuf; r.lockout = sim.lockout; r.pullT = sim.pullT; r.ropeTopT = sim.ropeTopT;
         r.invuln = sim.invuln; r.clubTime = sim.clubTime; r.swingT = sim.swingT; r.shoveCd = sim.shoveCd;
         r.facing = sim.facing; r.ledgeSide = sim.ledgeSide; r.falls = sim.falls; r.hits = sim.hits; r.keys = sim.keys; r.lastKeyColor = sim.lastKeyColor;
-        r.mode = sim.mode.name();
+        r.mode = (sim.mode == Sim.Mode.GROUND && sim.onElem < 0) ? Sim.Mode.AIR.name() : sim.mode.name();      // standing on a spike slab's top: restored just above it, it lands again at once
         r.jumpedUp = sim.jumpedUp; r.prevJumpHeld = sim.prevJumpHeld; r.won = sim.won; r.finishedRun = sim.finishedRun;
         r.absS = tower.originS + sim.s; r.absY = tower.absY(sim.y); r.lastGroundAbs = tower.absY(sim.lastGroundY); r.maxAbs = tower.absY(sim.maxHeight);
         r.pullFromAbsS = tower.originS + sim.pullFromS; r.pullFromAbsY = tower.absY(sim.pullFromY); r.pullToAbsS = tower.originS + sim.pullToS; r.pullToAbsY = tower.absY(sim.pullToY);

@@ -38,6 +38,13 @@ public final class SpaceScene {
     private static final class Far { int planet; float u, v, dist, ang, pkx, pky, spin; }
     private final Far[] farPlanets = new Far[5];
 
+    // far clouds: the regular cloud models, very far behind the tower, tinted by the glow of the sky so they read as distant, with slow parallax
+    private static final int FAR_CLOUDS = 12;
+    private static final class FarCloud { int band; float u, v, dist, ang, pkx, pky; ModelInstance inst; }
+    private final FarCloud[] farClouds = new FarCloud[FAR_CLOUDS];
+    /** Colour of the sky glow the far clouds take (set by the renderer from the sky gradient). */
+    public final com.badlogic.gdx.graphics.Color cloudGlow = new com.badlogic.gdx.graphics.Color(0.8f, 0.9f, 1f, 1f);
+
     // sky ship: crosses the sky slowly; close ship: a short fast fly-by in front of the player
     private float skyT = -1, skyDur, skyY, skyDist, skyDir, nextSky = 6f; private int skyShip;
     private float buzzT = -1, buzzDir, buzzY, nextBuzz = 30f, clock; private int buzzShip;
@@ -58,6 +65,18 @@ public final class SpaceScene {
         for (int i = 0; i < SHIPS.length; i++) ships[i] = fade(new ModelInstance(models.space(SHIPS[i])));
         env.set(new ColorAttribute(ColorAttribute.AmbientLight, 0.62f, 0.62f, 0.70f, 1f));
         env.add(new DirectionalLight().set(1f, 0.96f, 0.88f, -0.5f, -0.6f, -0.6f));
+        final float[] bandDist = {130f, 190f, 260f, 350f, 460f}; final int[] bandCount = {2, 2, 3, 3, 2};
+        int n = 0;
+        for (int band = 0; band < bandDist.length; band++) for (int j = 0; j < bandCount[band]; j++, n++) {
+            FarCloud c = new FarCloud(); int i = n;
+            c.band = band;
+            c.u = (i * 0.618f + 0.11f) % 1f; c.v = (i * 0.4143f + 0.23f) % 1f; c.dist = bandDist[band] + 12f * j;
+            c.ang = 5.5f + 4f * ((i * 0.77f) % 1f) - band * 0.4f;                    // farther bands are not drawn bigger: they read as farther
+            c.pkx = 0.16f - 0.025f * band; c.pky = 0.17f - 0.025f * band;            // nearer bands drift faster, farther ones barely move
+            c.inst = new ModelInstance(models.pack("cloud_" + (1 + i % 3)));
+            for (Material m : c.inst.materials) m.set(new BlendingAttribute(true, 0.6f), ColorAttribute.createDiffuse(1f, 1f, 1f, 1f), ColorAttribute.createEmissive(0.3f, 0.3f, 0.35f, 1f));
+            farClouds[i] = c;
+        }
         for (int i = 0; i < farPlanets.length; i++) {
             Far f = new Far(); f.planet = (i * 5 + 2) % PLANETS; f.u = (i * 0.618f) % 1f; f.v = ((i * 0.37f) % 1f);
             f.dist = 380f + 90f * (i % 3); f.ang = 1.8f + 3.2f * ((i * 0.73f) % 1f); f.pkx = 0.010f + 0.010f * (i % 3); f.pky = 0.020f + 0.012f * (i % 3); f.spin = 1.2f + i;
@@ -100,6 +119,22 @@ public final class SpaceScene {
             float sc = f.dist * MathUtils.tanDeg(f.ang * (1f + 0.9f * spaceW)) / 1.9f;
             pl.transform.idt().translate(tmp).rotate(0, 1, 0, clock * f.spin).rotate(1, 0, 0, 12f).scale(sc, sc, sc);
             alpha(pl, a); batch.render(pl, env);
+        }
+        float cloudA = (1f - 0.8f * MathUtils.clamp((zoneF - 2.4f) / 0.8f, 0f, 1f) * (1f - wrap)) * (1f - spaceW) * 0.65f;      // fewer at night, none in deep space
+        if (cloudA > 0.02f) for (FarCloud c : farClouds) {
+            float W = 1.7f * c.dist, H = 1.2f * c.dist;
+            float x = mod(c.u * W - camS * c.pkx * c.dist * 0.1f, W) - W / 2f;
+            float y = mod(c.v * H - camY * c.pky * c.dist * 0.1f, H) - H / 2f;
+            tmp.set(far.position).mulAdd(fwd, c.dist).mulAdd(right, x).mulAdd(up, y);
+            float sc = c.dist * MathUtils.tanDeg(c.ang) / 3.2f;
+            c.inst.transform.idt().translate(tmp).rotate(0, 1, 0, 8f).scale(sc * 1.7f, sc * 0.85f, sc);
+            for (Material m : c.inst.materials) {
+                float haze = c.band / 4f;                              // 0 = nearest band, 1 = farthest: farther clouds are hazier and take more of the sky colour
+                ((ColorAttribute) m.get(ColorAttribute.Diffuse)).color.set(1f, 1f, 1f, 1f).lerp(cloudGlow, 0.30f + 0.55f * haze);
+                ((ColorAttribute) m.get(ColorAttribute.Emissive)).color.set(cloudGlow).mul(0.55f);
+                ((BlendingAttribute) m.get(BlendingAttribute.Type)).opacity = cloudA * (0.95f - 0.45f * haze);
+            }
+            batch.render(c.inst, env);
         }
         if (skyT >= 0) {
             float u = skyT / skyDur, dist = skyDist, W = 1.7f * dist;

@@ -252,7 +252,9 @@ public final class HeroRig implements Disposable {
             wz -= ROPE_FRONT * (1f - k * k * (3f - 2f * k));
         }
         float inch = anim == Anim.CLIMB ? INCH * MathUtils.sin(climbPhase * 2f) : 0f;          // inchworm: the whole body compresses, then stretches, with every pull up the rope
+        float hinch = anim == Anim.SHIMMY && !reduced ? 1.6f * INCH * MathUtils.sin(climbPhase * 2f) * MathUtils.clamp(lineMove, 0f, 1f) : 0f;      // the cable's inchworm, sideways: the body stretches along the line with each reach, then draws together
         float sxz = SCALE * (1f - 0.5f * sq - 0.5f * inch), sy = SCALE * (1f + sq + inch);
+        float sx = sxz * (1f + hinch), sz = sxz * (1f - 0.35f * hinch); sy *= 1f - 0.45f * hinch;
         float flip = anim == Anim.BIG_JUMP ? -sim.facing * 360f * (1f - bigT / BIG_TIME) : 0f;                   // somersault on a big bounce
         float knock = anim == Anim.HIT ? hitDir * 26f * Math.max(0f, hitT / HIT_TIME) : 0f;                       // thrown back
         float leanT = 0f;           // lean into the run, tuck up while rising, reach forward while falling
@@ -262,7 +264,7 @@ public final class HeroRig implements Disposable {
         }
         lean = smooth(lean, leanT, 9f, dt);
         inst.transform.idt().translate(wx, wy + 0.6f, wz).rotate(0, 0, 1, flip + knock).translate(0, -0.6f, 0)
-                .rotate(0, 1, 0, phi * MathUtils.radiansToDegrees + yaw).translate(0, 0.5f, 0).rotate(1, 0, 0, lean).translate(0, -0.5f, 0).scale(sxz, sy, sxz);
+                .rotate(0, 1, 0, phi * MathUtils.radiansToDegrees + yaw).translate(0, 0.5f, 0).rotate(1, 0, 0, lean).translate(0, -0.5f, 0).scale(sx, sy, sz);
         if (ham && upL != null) for (Node n : new Node[]{upL, upR, loL, loR}) if (n != null) n.scale.set(1f, 1f, 1f);     // the stretch below is re-applied every frame, never accumulated
         ac.update(reduced ? Math.min(dt, 1f / 30f) : dt);
         // gripping poses: both arms up on the ledge / rope / cable, hands snapped to the sim's grip point
@@ -286,7 +288,11 @@ public final class HeroRig implements Disposable {
                 float shift = (sim.y + sim.T.handHeight) - handWorld;
                 float tremble = sim.mode == Sim.Mode.LEDGE && !reduced ? MathUtils.sin(time * 22f) * (0.4f + Math.min(0.8f, hangT * 0.3f)) : 0f;
                 float behind = line ? ROPE_FRONT * grip : 0f;
-                inst.transform.idt().translate(wx, wy + shift * grip, wz - behind).rotate(0, 1, 0, phi * MathUtils.radiansToDegrees + yaw).rotate(0, 0, 1, tremble).scale(sxz, sy, sxz);
+                // cable shimmy: the whole body swings side to side under the hands with each hand-over-hand, like a playful monkey swing (not with reduced motion)
+                boolean shimmy = anim == Anim.SHIMMY && !reduced;
+                float roll = shimmy ? 11f * MathUtils.clamp(lineMove, 0f, 1f) * MathUtils.sin(climbPhase + 0.6f) : 0f, pivot = handModelY() * sy;
+                inst.transform.idt().translate(wx, wy + shift * grip, wz - behind).rotate(0, 1, 0, phi * MathUtils.radiansToDegrees + yaw)
+                        .translate(0, pivot, 0).rotate(0, 0, 1, roll).translate(0, -pivot, 0).rotate(0, 0, 1, tremble).scale(sx, sy, sz);
             }
         }
     }
@@ -318,7 +324,7 @@ public final class HeroRig implements Disposable {
             float reach = MathUtils.lerp(side == 0 ? 0.95f : 0.62f, 0.5f + 0.5f * MathUtils.sin(phase + side * MathUtils.PI), moving);
             float sgn = Math.signum(pB.x == 0f ? (side == 0 ? 1f : -1f) : pB.x);
             // rope: arms cross in front of the chest, one hand stepping up the rope while the other pulls down; cable: hands reach up and out along the line
-            float ty = cable ? pB.y + len * (0.42f + 0.50f * reach) : pB.y + len * (-0.10f + 0.42f * reach);
+            float ty = cable ? pB.y + len * (0.26f + 0.68f * reach) : pB.y + len * (-0.10f + 0.42f * reach);
             float tx = cable ? sgn * len * (0.10f + 0.30f * (1f - reach)) : sgn * len * 0.45f;
             float tz = cable ? pB.z + ROPE_FRONT / SCALE : pB.z + len * 0.95f;                          // the line hangs in front of him (he is drawn a little behind it); hands sit just in front of it
             tgt.set(tx - pB.x, ty - pB.y, tz - pB.z).nor();         // (aim() reuses 'dir' internally, so the target lives in its own vector)

@@ -52,6 +52,12 @@ public final class Element {
     /** Position in the repeating cycle, 0..1. */
     public float cyc(float t) { float c = t / period + phase / (2f * (float) Math.PI); return c - (float) Math.floor(c); }
 
+    /**
+     * Where the ball of the launch {@code back} cycles ago is at time t, if it simply kept flying at the speed it was fired with. For back = 0 during the flight this is exactly {@link #sAt}
+     * (the lethal ball); beyond the flight, and for earlier launches, it is the continued straight path, which the renderer draws until the ball is off screen. Never used for hits.
+     */
+    public float cannonBallS(float t, int back) { return s + dir * len / (CANNON_FLIGHT * period) * (cyc(t) + back) * period; }
+
     /** Radius of the lethal disc for round hazards (0 = not a disc). */
     public float discR() {
         switch (type) { case SAW_H: case SAW_V: return SAW_R; case PENDULUM: return BALL_R; case CANNON: return SHOT_R; default: return 0f; }
@@ -76,6 +82,10 @@ public final class Element {
         return lo + (hi - lo) * (c - 0.80f) / 0.20f;
     }
     public static final float DROP_H = 1.0f;
+    /** The slab is a 0.5 m stone block whose underside carries the spikes: only the lower SPIKE_H of the DROP_H box hurts; the top is a safe surface (see Sim.landOnSlab). */
+    public static final float DROP_SPIKE_H = 0.5f;
+    /** Height of the slab's top face at time t. */
+    public float dropTop(float t) { return dropBottom(t) + DROP_H; }
 
     // ---- bee: a visit takes BEE_VISIT of the cycle; it enters high from one side, buzzes around (s, y) with amplitude amp (arc) and len (height), dives, and leaves high on the other side
     public static final float BEE_VISIT = 0.58f, BEE_R = 0.5f;

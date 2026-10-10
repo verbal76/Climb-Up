@@ -433,8 +433,10 @@ public final class WorldRenderer implements Disposable {
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT | GL20.GL_DEPTH_BUFFER_BIT);
         bg.render(sb, shapes, skyTop, skyBot, ps, bgY, zoneF, T.circumference(), reducedMotion, time);
         Gdx.gl.glClear(GL20.GL_DEPTH_BUFFER_BIT);
+        if (quality > 0) bg.renderGlow(sb, zoneF);
         if (quality > 0) {                 // planets and sky ships far behind the tower (wide-range camera, drawn first)
             if (space == null) { farCam = new com.badlogic.gdx.graphics.PerspectiveCamera(40f, cam.viewportWidth, cam.viewportHeight); farCam.near = 1f; farCam.far = 2500f; space = new SpaceScene(models, farCam, T.radius); }
+            space.cloudGlow.set(skyTop).lerp(skyBot, 0.5f).lerp(Color.WHITE, 0.4f);
             space.update(frameDt, py, reducedMotion);
             if (space.whoosh) whooshPending = true;
             farCam.viewportWidth = cam.viewportWidth; farCam.viewportHeight = cam.viewportHeight; farCam.fieldOfView = cam.fieldOfView;
@@ -443,6 +445,7 @@ public final class WorldRenderer implements Disposable {
             Gdx.gl.glClear(GL20.GL_DEPTH_BUFFER_BIT);
         }
 
+        if (quality > 0) bg.renderShafts(sb, zoneF, reducedMotion, time);
         batch.begin(cam);
         syncVis();
         int lo = Math.max(0, sim.winLo), hi = Math.min(vis.size() - 1, sim.winHi);
@@ -607,6 +610,8 @@ public final class WorldRenderer implements Disposable {
     private static final float PK = 0.37f;                    // pack units -> game units (same scale as the hero)
     private final java.util.HashMap<String, ModelInstance> packInst = new java.util.HashMap<>();
     private static final float CANNON_YAW = -90f;
+    /** Pedestal height: the barrel (model axis through its origin, 1.66 pack units long each way) sits with its axis 2.35 above the platform, the height the ball flies at. */
+    public static final float CANNON_LIFT = 1.94f;      // 2.35 (axis) - 0.35 (barrel radius) - 0.16 (cap) + 0.10 (the barrel rests in the cap)
 
     private ModelInstance pack(String name) {
         ModelInstance m = packInst.get(name);
@@ -722,9 +727,12 @@ public final class WorldRenderer implements Disposable {
      */
     public static final float SPIKE_MAT_BOTTOM = -0.04f, SPIKE_MAT_TOP = 0.06f, SHADOW_LIFT = 0.03f, SHADOW_THICK = 0.02f;
 
+    /** A cannonball that has left the screen is dropped: further than the widest view (21:9) reaches, and how many past launches are followed. */
+    private static final float CANNON_OFFSCREEN = 14f; private static final int CANNON_TRAIL = 4;
+
     private void drawHazard(Element h, float t, float camS, float time, boolean done) {
         float cs = h.type == Element.Type.CANNON ? h.s + h.dir * h.len * 0.5f : h.s;
-        float half = h.type == Element.Type.CANNON ? h.len * 0.5f + 1.5f : (h.type == Element.Type.SAW_H ? h.amp + 1.5f : 2f);
+        float half = h.type == Element.Type.CANNON ? h.len * 0.5f + 1.5f + CANNON_OFFSCREEN : (h.type == Element.Type.SAW_H ? h.amp + 1.5f : 2f);
         float cy = h.type == Element.Type.SAW_V ? h.y + h.amp * 0.5f : h.y;
         if (!visible(cs, cy, camS, half)) return;
         switch (h.type) {
@@ -740,10 +748,15 @@ public final class WorldRenderer implements Disposable {
             }
             case CANNON: {
                 float base = h.y - 2.35f;
-                drawBox(h.s, base, 0f, camS, 1.25f, 1.5f, 1.25f, 0.42f, 0.38f, 0.5f);
-                drawBox(h.s, base + 1.5f, 0f, camS, 1.45f, 0.16f, 1.45f, 0.3f, 0.27f, 0.36f);
-                drawPack("cannon", h.s, base + 1.66f + 0.12f, 0f, camS, PK, PK, PK, h.dir > 0 ? CANNON_YAW : -CANNON_YAW, 0f);
-                if (h.lethalAt(t)) drawPack("spikyball", h.sAt(t), h.yAt(t), 0f, camS, 0.55f, 0.55f, 0.55f, 0f, -h.sAt(t) * 160f);
+                // the barrel's axis is at the ball's height (h.y): the ball is launched from inside it and leaves at its tip (CANNON_TIP ahead of the launch point)
+                drawBox(h.s, base, 0f, camS, 1.25f, CANNON_LIFT, 1.25f, 0.42f, 0.38f, 0.5f);
+                drawBox(h.s, base + CANNON_LIFT, 0f, camS, 1.45f, 0.16f, 1.45f, 0.3f, 0.27f, 0.36f);
+                drawPack("cannon", h.s, h.y, 0f, camS, PK, PK, PK, h.dir > 0 ? CANNON_YAW : -CANNON_YAW, 0f);
+                for (int back = 0; back < CANNON_TRAIL; back++) {          // the lethal ball, then earlier launches still flying: a ball leaves the screen, it never pops out of it
+                    float bs = h.cannonBallS(t, back);
+                    if (Math.abs(course.dsWrap(bs, camS)) > CANNON_OFFSCREEN) continue;
+                    drawPack("spikyball", bs, h.yAt(t), 0f, camS, 0.55f, 0.55f, 0.55f, 0f, -bs * 160f);
+                }
                 break;
             }
             case SPIKE_TRAP: {
@@ -862,14 +875,16 @@ public final class WorldRenderer implements Disposable {
         float phi = 0f; // player is the anchor: always at centre, tangent = camera-facing
         // shadow blob on the nearest platform below
         if (quality > 0) {
-            float gy = groundBelow(sim, ps, py);
+            float gy = groundBelow(sim, ps, py, alpha);
             if (gy > -1e8f && py - gy < 9f) {
                 float k = MathUtils.clamp(1f - (py - gy) / 9f, 0.2f, 1f);
-                shadow.transform.idt().translate(0, gy + SHADOW_LIFT, 0.2f).scale(0.55f * k + 0.15f, 1f, 0.4f * k + 0.15f);
+                shadow.transform.idt().translate(0, gy + SHADOW_LIFT + 0.4f * Math.abs(groundSlope) * (0.55f * k + 0.15f), 0.2f).rotate(0, 0, 1, MathUtils.atan(groundSlope) * MathUtils.radiansToDegrees).scale(0.55f * k + 0.15f, 1f, 0.4f * k + 0.15f);
                 batch.render(shadow, env);
             }
         }
-        float wy = py; heroY = py;
+        float onRampLift = 0f;
+        if (quality > 0 && sim.mode == Sim.Mode.GROUND && sim.onElem >= 0 && course.get(sim.onElem).type == Element.Type.RAMP) onRampLift = 0.07f;      // the ramp's edge never cuts across his legs
+        float wy = py + onRampLift; heroY = py;
         float heroZ = 0f;
         if ((sim.mode == Sim.Mode.GROUND) && sim.onElem >= 0 && course.get(sim.onElem).type == Element.Type.MOVE_Z) heroZ = -course.get(sim.onElem).zAt(sim.time);      // carried toward / away from the camera with the platform
         hero.update(sim, dt, time, 0f, wy, heroZ, phi, reducedMotion);
@@ -884,15 +899,18 @@ public final class WorldRenderer implements Disposable {
         }
     }
 
-    private float groundBelow(Sim sim, float ps, float py) {
-        float best = -1e9f;
+    private float groundSlope; private boolean groundOnRamp;       // of the surface groundBelow found: the shadow lies along it
+    private float groundBelow(Sim sim, float ps, float py, float alpha) {
+        float best = -1e9f; groundSlope = 0f; groundOnRamp = false;
         for (int i = Math.max(0, sim.winLo); i <= Math.min(vis.size() - 1, sim.winHi); i++) {
             Element e = vis.get(i).e;
             if (!e.isPlatform() || sim.gone[i]) continue;
-            float top = sim.ey1[i];
+            // the surface exactly as it is drawn (interpolated for movers, minus the landing dip of a platform), so the shadow never clips in and out of it
+            float top = e.isMoving() ? sim.ey0[i] + (sim.ey1[i] - sim.ey0[i]) * alpha : sim.ey1[i];
+            if (e.isPlatform() && e.type != Element.Type.RAMP && e.type != Element.Type.SEESAW) top -= Math.max(-0.1f, Math.min(0.22f, dip[i]));
             if (top > py + 0.05f || py - top > 9f) continue;
             if (Math.abs(course.dsWrap(sim.es1[i], ps)) > e.halfW() + 0.1f) continue;
-            if (top > best) best = top;
+            if (top > best) { best = top; groundSlope = e.type == Element.Type.RAMP ? e.amp : (e.type == Element.Type.SEESAW ? sim.tilt[i] : 0f); groundOnRamp = e.type == Element.Type.RAMP; }
         }
         return best;
     }

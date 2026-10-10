@@ -16,6 +16,12 @@ public final class Palette {
     public static final Color[] RIM = {c(0.55f, 0.75f, 1.00f), c(1.00f, 0.80f, 0.60f), c(0.40f, 0.80f, 1.00f), c(1.00f, 0.70f, 0.40f), c(0.30f, 1.00f, 0.90f)};
     public static final float[][] SUN_DIR = {{-0.5f, -0.9f, -0.6f}, {-0.4f, -0.95f, -0.5f}, {-0.85f, -0.35f, -0.55f}, {-0.3f, -0.9f, -0.5f}, {-0.7f, -0.5f, -0.4f}};
     public static final float[] VIGNETTE = {0.22f, 0.20f, 0.30f, 0.40f, 0.45f};
+    // the light in the sky, per world: sun / low sun / moon / nothing (Meadow, Frost, Dusk, Night, Deep Space). Position as a fraction of the screen, glow size and strength, strength of the light shafts.
+    public static final float[] LIGHT_X = {0.80f, 0.78f, 0.74f, 0.20f, 0.50f};
+    public static final float[] LIGHT_Y = {0.90f, 0.88f, 0.34f, 0.86f, 0.50f};
+    public static final float[] LIGHT_SIZE = {1.2f, 1.0f, 1.9f, 0.65f, 0.5f};
+    public static final float[] LIGHT_GLOW = {0.34f, 0.26f, 0.42f, 0.22f, 0f};
+    public static final float[] LIGHT_SHAFT = {0.10f, 0.07f, 0.13f, 0.045f, 0f};
     public static final String[] NAMES = {"Meadow Base", "Frost Ridge", "Dusk Spire", "Night Summit", "Deep Space"};
     public static final int ZONES = NAMES.length, SPACE = 4;
 

@@ -722,9 +722,12 @@ public final class WorldRenderer implements Disposable {
      */
     public static final float SPIKE_MAT_BOTTOM = -0.04f, SPIKE_MAT_TOP = 0.06f, SHADOW_LIFT = 0.03f, SHADOW_THICK = 0.02f;
 
+    /** A cannonball that has left the screen is dropped: further than the widest view (21:9) reaches, and how many past launches are followed. */
+    private static final float CANNON_OFFSCREEN = 14f; private static final int CANNON_TRAIL = 4;
+
     private void drawHazard(Element h, float t, float camS, float time, boolean done) {
         float cs = h.type == Element.Type.CANNON ? h.s + h.dir * h.len * 0.5f : h.s;
-        float half = h.type == Element.Type.CANNON ? h.len * 0.5f + 1.5f : (h.type == Element.Type.SAW_H ? h.amp + 1.5f : 2f);
+        float half = h.type == Element.Type.CANNON ? h.len * 0.5f + 1.5f + CANNON_OFFSCREEN : (h.type == Element.Type.SAW_H ? h.amp + 1.5f : 2f);
         float cy = h.type == Element.Type.SAW_V ? h.y + h.amp * 0.5f : h.y;
         if (!visible(cs, cy, camS, half)) return;
         switch (h.type) {
@@ -743,7 +746,11 @@ public final class WorldRenderer implements Disposable {
                 drawBox(h.s, base, 0f, camS, 1.25f, 1.5f, 1.25f, 0.42f, 0.38f, 0.5f);
                 drawBox(h.s, base + 1.5f, 0f, camS, 1.45f, 0.16f, 1.45f, 0.3f, 0.27f, 0.36f);
                 drawPack("cannon", h.s, base + 1.66f + 0.12f, 0f, camS, PK, PK, PK, h.dir > 0 ? CANNON_YAW : -CANNON_YAW, 0f);
-                if (h.lethalAt(t)) drawPack("spikyball", h.sAt(t), h.yAt(t), 0f, camS, 0.55f, 0.55f, 0.55f, 0f, -h.sAt(t) * 160f);
+                for (int back = 0; back < CANNON_TRAIL; back++) {          // the lethal ball, then earlier launches still flying: a ball leaves the screen, it never pops out of it
+                    float bs = h.cannonBallS(t, back);
+                    if (Math.abs(course.dsWrap(bs, camS)) > CANNON_OFFSCREEN) continue;
+                    drawPack("spikyball", bs, h.yAt(t), 0f, camS, 0.55f, 0.55f, 0.55f, 0f, -bs * 160f);
+                }
                 break;
             }
             case SPIKE_TRAP: {

@@ -93,9 +93,20 @@ public final class PlayScreen extends ScreenAdapter {
                     tower.extend();
                 }
             }
-            sim = Sim.startOn(course, g.tuning, run.startIdx);
-            sim.checkpoint = run.startIdx; sim.keysFree = false; sim.keys = 0;
-            if (run.resumed) { sim.deferRespawn = true; sim.setRange(0, course.size() - 1); ResumeState.restore(g.save, sim, tower); }
+            boolean fromSnapshot = false;
+            if (run.resumed && run.snapshot != null) {            // CONTINUE after SAVE & EXIT: the climb exactly as it was left
+                Sim ss = new Sim(course, g.tuning);
+                ss.keysFree = false; ss.deferRespawn = true; ss.floorOverride = tower.floorLocal(); ss.setRange(0, course.size() - 1);
+                tower.openedUpTo = g.save.openedUpTo;
+                ResumeState.restore(g.save, ss, tower);
+                if (run.snapshot.apply(ss, tower)) { sim = ss; fromSnapshot = true; }
+                else { g.store.deleteRun(); run = g.openRun(false); tower = run.tower; course = tower.world; }       // does not fit the world on disk: resume from the checkpoint
+            }
+            if (!fromSnapshot) {
+                sim = Sim.startOn(course, g.tuning, run.startIdx);
+                sim.checkpoint = run.startIdx; sim.keysFree = false; sim.keys = 0;
+                if (run.resumed) { sim.deferRespawn = true; sim.setRange(0, course.size() - 1); ResumeState.restore(g.save, sim, tower); }
+            }
             if (hStart > 0) { int i = 0; while (i < course.size() - 1 && course.get(i + 1).y < hStart) i++; while (i > 0 && course.get(i).anchor >= 0) i--; sim = Sim.startOn(course, g.tuning, i); sim.checkpoint = i; sim.keysFree = false; sim.keys = 0; }
             if (tower != null) { tower.openedUpTo = g.save.openedUpTo; sim.deferRespawn = true; sim.floorOverride = tower.floorLocal(); }
             sim.setRange(0, course.size() - 1); simSize = course.size(); if (tower != null) seenRebuilds = tower.rebuilds;
@@ -243,7 +254,7 @@ public final class PlayScreen extends ScreenAdapter {
             int ms = (int) (maxAbs / 50f);
             if (ms > milestone) { milestone = ms; toast = ms * 50 + " M!"; toastT = 1.6f; g.audio.play("checkpoint", 0.55f, 1.35f); world.particles.burst(sim.s, sim.y + 1f, 12, gold, 2.6f, 3.2f, 0.1f, -0.5f, 1f); }
             for (int pi = pops.size() - 1; pi >= 0; pi--) { Pop pp = pops.get(pi); pp.age += dt; if (pp.age > 1.1f) pops.remove(pi); }
-            autosaveT += dt; if (autosaveT > 8f) { autosaveT = 0; g.persist(); }
+            autosaveT += dt; if (autosaveT > 8f) { autosaveT = 0; g.persist(); saveRun(); }
             ambientSounds(dt);
             juice(dt);
             updateTips(dt);
@@ -694,17 +705,19 @@ public final class PlayScreen extends ScreenAdapter {
             if (confirmRestart) { sim.respawn(); sim.consumeEvents(); world.snapCamera(sim); confirmRestart = false; resumePlay(); } else confirmRestart = true;
         }
         if (ui.button("SETTINGS", bx, y + ph - 408, bw, bh)) { g.audio.play("click"); g.persist(); next = new SettingsScreen(g, this); disposeOnLeave = false; }
-        if (ui.button("MAIN MENU", bx, y + ph - 512, bw, bh)) { g.audio.play("click"); g.persist(); next = new TitleScreen(g); disposeOnLeave = true; }
+        if (ui.button(tower != null ? "SAVE & EXIT" : "MAIN MENU", bx, y + ph - 512, bw, bh)) { g.audio.play("click"); saveRun(); g.persist(); next = new TitleScreen(g); disposeOnLeave = true; }
     }
 
     // ------------------------------------------------------------------ lifecycle
 
-    private void pauseGame() { if (state == State.PLAYING) { g.audio.fallStop(); state = State.PAUSED; confirmRestart = false; stickPtr = jumpPtr = -1; jumpHeldTouch = false; g.audio.play("click"); g.persist(); } }
+    private void pauseGame() { if (state == State.PLAYING) { g.audio.fallStop(); state = State.PAUSED; confirmRestart = false; stickPtr = jumpPtr = -1; jumpHeldTouch = false; g.audio.play("click"); g.persist(); saveRun(); } }
+    /** Writes the exact moment of the climb (not in the scripted demo, and not once the finish screen is up: that run is over). */
+    private void saveRun() { if (tower != null && !demo && state != State.FINISHED) g.saveRun(tower, sim); }
     private void resumePlay() { state = State.PLAYING; acc = 0; g.audio.play("click"); }
     public void resumeFromSettings() { applySettings(); }
 
     @Override public void hide() { g.audio.fallStop(); g.persist(); }
-    @Override public void pause() { /* app backgrounded */ g.audio.fallStop(); if (state == State.PLAYING) { state = State.PAUSED; confirmRestart = false; stickPtr = jumpPtr = -1; jumpHeldTouch = false; } g.persist(); g.audio.pauseMusic(); }
+    @Override public void pause() { /* app backgrounded */ g.audio.fallStop(); if (state == State.PLAYING) { state = State.PAUSED; confirmRestart = false; stickPtr = jumpPtr = -1; jumpHeldTouch = false; } g.persist(); saveRun(); g.audio.pauseMusic(); }
     @Override public void resume() { g.audio.resumeMusic(); }
 
     @Override public void dispose() { g.audio.fallStop(); if (world != null) { world.dispose(); world = null; } shapes.dispose(); }

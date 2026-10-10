@@ -11,7 +11,7 @@ import com.hotatticgames.climbup.ui.Ui;
 public final class CreditsScreen extends ScreenAdapter {
     private final ClimbGame g; private final Screen back;
     private static final String[] LINES = {
-        "CLIMB UP  -  HOT ATTIC GAMES",
+        "UPWARDLY  -  HOT ATTIC GAMES",
         "",
         "GAME DESIGN: KEVIN. FIRST PROMPT BUILT WITH GAME DESIGNER BY HOT ATTIC GAMES",
         "STUDIO LOGO: HOT ATTIC GAMES",

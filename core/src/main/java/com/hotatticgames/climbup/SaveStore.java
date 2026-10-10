@@ -65,7 +65,22 @@ public final class SaveStore {
         catch (Exception e) { backupCorrupt("settings.json"); return new Settings(); }
     }
 
-    public void eraseAll() { new File(dir, "save.json").delete(); new File(dir, "settings.json").delete(); }
+    /** The mid-climb snapshot (see {@link RunSnapshot}) lives in its own file so that writing it can never damage save.json. Returns false if it could not be written; the previous snapshot is then untouched. */
+    public boolean saveRun(RunSnapshot r) {
+        if (r == null || !r.valid()) return false;
+        try { writeAtomic("run.json", r.toJson()); return true; } catch (IOException e) { return false; }
+    }
+    /** The stored snapshot, or null if there is none or it is damaged (a damaged one is set aside as run.json.corrupt). */
+    public RunSnapshot loadRun() {
+        String t = read("run.json");
+        if (t == null) return null;
+        RunSnapshot r = RunSnapshot.fromJson(t);
+        if (r == null) backupCorrupt("run.json");
+        return r;
+    }
+    public void deleteRun() { new File(dir, "run.json").delete(); new File(dir, "run.json.tmp").delete(); }
+
+    public void eraseAll() { new File(dir, "save.json").delete(); new File(dir, "settings.json").delete(); deleteRun(); }
 
     private static SaveData sanitize(SaveData d) {
         d.courseIndex = Math.max(0, d.courseIndex); d.checkpoint = Math.max(0, d.checkpoint);

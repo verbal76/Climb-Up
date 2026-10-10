@@ -234,7 +234,7 @@ public final class WorldRenderer implements Disposable {
                 int w = Math.max(1, Math.round(e.w));
                 Model m = models.obj(e.type == Element.Type.MOVE_H ? "block-moving-blue" : "block-moving");
                 for (int i = 0; i < w; i++) {
-                    Part p = part(m, i - (w - 1) / 2f, -0.3f, 0f, 0.95f, 1f, 1.7f); p.tinted = false;
+                    Part p = part(m, i - (w - 1) / 2f, moverBlockDy(e.type), 0f, 0.95f, 1f, 1.7f); p.tinted = false;
                     if (e.skin == 1) { p.color = new Color(1f, 0.74f, 0.52f, 1f); p.fall = true; }          // falls apart after you stand on it: the same warm tint as crumbling tiles
                     ps.add(p);
                 }
@@ -318,6 +318,11 @@ public final class WorldRenderer implements Disposable {
             for (Part q : f) { q.fixed = true; ps.add(q); }
         }
     }
+
+    /** Block heights of the two mover models (block-moving-blue.obj is 0.5 m tall, block-moving.obj 0.3 m). */
+    public static final float BLUE_MOVER_BLOCK_H = 0.5f, MOVER_BLOCK_H = 0.3f;
+    /** Vertical offset that puts a mover block's top face exactly on the simulation surface (the blue block used to be placed as if it were 0.3 m tall, so it stood 0.2 m proud and the hero sank into it). */
+    public static float moverBlockDy(Element.Type t) { return -(t == Element.Type.MOVE_H ? BLUE_MOVER_BLOCK_H : MOVER_BLOCK_H); }
 
     /** Space biome platform: a metal deck with beacon lights, hanging from a Space Kit asteroid. */
     private void spacePlatform(Array<Part> ps, Element e, int idx) {
@@ -711,6 +716,12 @@ public final class WorldRenderer implements Disposable {
     }
     private final java.util.HashMap<Integer, ModelInstance> boxByColour = new java.util.HashMap<>();
 
+    /**
+     * The red spike mat lies on its platform: its bottom is buried in the slab, its top face used to be only 0.03 above the platform top and 0.01 under the player's blob shadow
+     * (which lies 0.02-0.04 above whatever he stands over), so the three nearly coplanar surfaces fought for the depth buffer and the retracted mat flickered. The top now clears both by a safe margin.
+     */
+    public static final float SPIKE_MAT_BOTTOM = -0.04f, SPIKE_MAT_TOP = 0.06f, SHADOW_LIFT = 0.03f, SHADOW_THICK = 0.02f;
+
     private void drawHazard(Element h, float t, float camS, float time, boolean done) {
         float cs = h.type == Element.Type.CANNON ? h.s + h.dir * h.len * 0.5f : h.s;
         float half = h.type == Element.Type.CANNON ? h.len * 0.5f + 1.5f : (h.type == Element.Type.SAW_H ? h.amp + 1.5f : 2f);
@@ -737,7 +748,7 @@ public final class WorldRenderer implements Disposable {
             }
             case SPIKE_TRAP: {
                 float sp = h.spikeHeight(t);
-                drawBox(h.s, h.y - 0.04f, 0f, camS, h.w + 0.3f, 0.07f, 1.5f, 0.55f, 0.2f, 0.18f);
+                drawBox(h.s, h.y + SPIKE_MAT_BOTTOM, 0f, camS, h.w + 0.3f, SPIKE_MAT_TOP - SPIKE_MAT_BOTTOM, 1.5f, 0.55f, 0.2f, 0.18f);
                 if (sp > 0.02f) {
                     float hk = sp / (3.4f * 0.37f);
                     for (int k = -1; k <= 1; k++) drawPack("spikes", h.s + k * h.w * 0.32f, h.y, 0f, camS, 0.3f, 0.37f * hk * 1.3f, 0.3f, 0f, 0f);
@@ -855,7 +866,7 @@ public final class WorldRenderer implements Disposable {
             float gy = groundBelow(sim, ps, py);
             if (gy > -1e8f && py - gy < 9f) {
                 float k = MathUtils.clamp(1f - (py - gy) / 9f, 0.2f, 1f);
-                shadow.transform.idt().translate(0, gy + 0.03f, 0.2f).scale(0.55f * k + 0.15f, 1f, 0.4f * k + 0.15f);
+                shadow.transform.idt().translate(0, gy + SHADOW_LIFT, 0.2f).scale(0.55f * k + 0.15f, 1f, 0.4f * k + 0.15f);
                 batch.render(shadow, env);
             }
         }

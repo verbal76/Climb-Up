@@ -19,6 +19,7 @@ public final class DesktopLauncher {
         if (System.getProperty("climb.iconShot") != null) { c.setWindowedMode(256, 256); new Lwjgl3Application(new IconShot(), c); return; }     // dev tool: render a character to a transparent PNG
         assetRoot = assetRoot();
         File dir = DataDirs.dataDir();
+        DesktopLog.start(dir);
         DesktopPlatform platform = new DesktopPlatform(dir);
         DesktopConfig cfg = platform.cfg;
         int w = Integer.getInteger("climb.w", cfg.width), h = Integer.getInteger("climb.h", cfg.height);
@@ -38,9 +39,12 @@ public final class DesktopLauncher {
             @Override public void focusLost() { try { game.pause(); } catch (RuntimeException ignored) { } }      // alt-tab pauses the run (the pause menu is shown on return)
             @Override public void focusGained() { try { game.resume(); } catch (RuntimeException ignored) { } }
         });
-        new Lwjgl3Application(game, c) {
-            @Override protected Files createFiles() { return new AssetFiles(assetRoot); }
-        };
+        try {
+            new Lwjgl3Application(game, c) {
+                @Override protected Files createFiles() { return new AssetFiles(assetRoot); }
+            };
+            DesktopLog.append("clean exit");
+        } catch (Throwable t) { DesktopLog.error("the game stopped with an error", t); throw t; }
     }
 
     /** -Dclimb.assets, else an "assets" folder next to the jar (the packaged game), else the working directory (development: gradle run uses ../assets). */

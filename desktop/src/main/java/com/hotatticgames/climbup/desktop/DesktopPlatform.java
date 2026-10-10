@@ -52,6 +52,7 @@ public final class DesktopPlatform implements Platform {
     @Override public GameInput gameInput() { return input; }
 
     @Override public void attach(ClimbGame game) {
+        DesktopLog.append("window and GL context created; attaching input");
         g = game; sources = sourceFactory.get(); input = new InputManager(cfg, sources); nav = new MenuNav(input);
         game.ui.nav = nav;
         if (cfg.display == DesktopConfig.DisplayMode.FULLSCREEN) { /* the launcher already opened the window fullscreen */ }
@@ -66,7 +67,7 @@ public final class DesktopPlatform implements Platform {
         if (frames == 600) { startupLog.append(String.format(java.util.Locale.ROOT, "frames 11..600: avg %.2f ms, max %.2f ms\n", sumMs / 590.0, maxMs)); flushLog(); }
         if (frames == 1) flushLog();
     }
-    private void flushLog() { try { java.nio.file.Files.write(new File(configFile.getParentFile(), "desktop.log").toPath(), startupLog.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8)); } catch (Exception ignored) { } }
+    private void flushLog() { DesktopLog.append(startupLog.toString().trim()); startupLog.setLength(0); }
 
     @Override public void frame(float dt) {
         trace(System.nanoTime());

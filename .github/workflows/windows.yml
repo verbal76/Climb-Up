@@ -101,9 +101,10 @@ jobs:
           $env:APPDATA = "$env:RUNNER_TEMP\appdata2"; New-Item -ItemType Directory -Force $env:APPDATA | Out-Null
           $p = Start-Process -FilePath "$env:RUNNER_TEMP\glapp\UPWARDLY.exe" -PassThru
           Start-Sleep -Seconds 40
-          "still running after 40 s (window open, game rendering): " + (-not $p.HasExited)
+          "process alive after 40 s: " + (-not $p.HasExited)
           $log = "$env:APPDATA\HotAtticGames\Upwardly\desktop.log"
-          if (Test-Path $log) { Get-Content $log } else { "no desktop.log: the game never rendered a frame" }
+          if (Test-Path $log) { Get-Content $log } else { "no desktop.log was written" }
+          Get-ChildItem "$env:RUNNER_TEMP\glapp" -Filter *.dll | Select-Object -First 8 Name
           if (-not $p.HasExited) { $null = $p.CloseMainWindow(); Start-Sleep -Seconds 5; "exited after close request: " + $p.HasExited; if (-not $p.HasExited) { $p.Kill() } }
       - uses: actions/upload-artifact@v4
         with:

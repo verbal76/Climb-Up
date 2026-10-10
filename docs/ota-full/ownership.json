@@ -1,0 +1,62 @@
+{
+  "_comment": "Machine-readable file ownership for the two Android OTA engineers (human summary: OWNERSHIP.md). Rules are evaluated top to bottom; the FIRST match owns the file. FROZEN = nobody edits it on an OTA branch (gameplay reference, production release automation, other platforms). Checked by tools/otalab/check_ownership.py.",
+  "engineers": {
+    "E1": "OTA ENGINEER 1 - executable game modules, equivalence, performance, integration",
+    "E2": "OTA ENGINEER 2 - UPDATE RELIABILITY: assets, download/installation, security, recovery"
+  },
+  "rules": [
+    {"pattern": "core/**", "owner": "FROZEN"},
+    {"pattern": "android/**", "owner": "FROZEN"},
+    {"pattern": "desktop/**", "owner": "FROZEN"},
+    {"pattern": "assets/**", "owner": "FROZEN"},
+    {"pattern": "branding/**", "owner": "FROZEN"},
+    {"pattern": "design-package/**", "owner": "FROZEN"},
+    {"pattern": "game-designer/**", "owner": "FROZEN"},
+    {"pattern": "gradle/**", "owner": "FROZEN"},
+    {"pattern": "gradlew", "owner": "FROZEN"},
+    {"pattern": "gradlew.bat", "owner": "FROZEN"},
+    {"pattern": "tools/ota/**", "owner": "FROZEN"},
+    {"pattern": "tools/ci/**", "owner": "FROZEN"},
+    {"pattern": "tools/hamster/**", "owner": "FROZEN"},
+    {"pattern": "tools/icon/**", "owner": "FROZEN"},
+    {"pattern": "tools/*.py", "owner": "FROZEN"},
+    {"pattern": ".github/workflows/android.yml", "owner": "FROZEN"},
+    {"pattern": ".github/workflows/ota-publish.yml", "owner": "FROZEN"},
+    {"pattern": ".gitignore", "owner": "E1"},
+
+    {"pattern": "hostkit/src/main/java/com/hotatticgames/climbup/host/HostBoot.java", "owner": "E1"},
+    {"pattern": "hostkit/src/main/java/com/hotatticgames/climbup/host/HostInfo.java", "owner": "E1"},
+    {"pattern": "hostkit/src/test/java/com/hotatticgames/climbup/host/HostBoot*Test*.java", "owner": "E1"},
+    {"pattern": "hostkit/build.gradle", "owner": "E2"},
+    {"pattern": "hostkit/**", "owner": "E2"},
+    {"pattern": "modsynthetic/**", "owner": "E2"},
+
+    {"pattern": "modspi/**", "owner": "E1"},
+    {"pattern": "climbmodule/**", "owner": "E1"},
+    {"pattern": "climbhost/**", "owner": "E1"},
+    {"pattern": "climbref/**", "owner": "E1"},
+    {"pattern": "otalab/**", "owner": "E1"},
+    {"pattern": "labcommon/**", "owner": "E1"},
+    {"pattern": "settings.gradle", "owner": "E1"},
+    {"pattern": "build.gradle", "owner": "E1"},
+    {"pattern": "gradle.properties", "owner": "E1"},
+
+    {"pattern": "tools/otalab/make_module.py", "owner": "E2"},
+    {"pattern": "tools/otalab/build_fixtures.sh", "owner": "E2"},
+    {"pattern": "tools/otalab/build_asset_fixtures.sh", "owner": "E2"},
+    {"pattern": "tools/otalab/emulator_test.sh", "owner": "E2"},
+    {"pattern": "tools/otalab/asset_emulator_test.sh", "owner": "E2"},
+    {"pattern": "tools/otalab/reliability/**", "owner": "E2"},
+    {"pattern": "tools/otalab/**", "owner": "E1"},
+
+    {"pattern": ".github/workflows/otalab.yml", "owner": "E2"},
+    {"pattern": ".github/workflows/otalab-assets.yml", "owner": "E2"},
+    {"pattern": ".github/workflows/otalab-reliability*.yml", "owner": "E2"},
+    {"pattern": ".github/workflows/otalab-climb.yml", "owner": "E1"},
+
+    {"pattern": "docs/ota-full/reliability/**", "owner": "E2"},
+    {"pattern": "docs/ota-full/**", "owner": "E1"},
+    {"pattern": "docs/**", "owner": "E1"},
+    {"pattern": "*.md", "owner": "E1"}
+  ]
+}

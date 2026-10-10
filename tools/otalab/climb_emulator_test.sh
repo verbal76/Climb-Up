@@ -5,40 +5,7 @@ set -u
 BASE=com.hotatticgames.climbup; REF=com.hotatticgames.climbup.otaref; HOST=com.hotatticgames.climbup.otaexp
 BASE_ACT=$BASE/com.hotatticgames.climbup.android.AndroidLauncher; REF_ACT=$REF/com.hotatticgames.climbup.otaref.PackagedLauncher; HOST_ACT=$HOST/com.hotatticgames.climbup.otalab.LabLauncher
 : "${BASE_APK:?}" "${REF_APK:?}" "${HOST_APK:?}" "${SERVE:?}" "${OUT:?}"; mkdir -p "$OUT"
-HERE=$(dirname "$0"); FAILS=0; SERVER_PID=""
-pass() { echo "PASS  $*"; }; fail() { echo "FAIL  $*"; FAILS=$((FAILS+1)); }
-logs() { adb logcat -d -v brief -s OTALAB:I AndroidRuntime:E 2>/dev/null; }
-stop_server() { [ -n "$SERVER_PID" ] && kill "$SERVER_PID" 2>/dev/null; SERVER_PID=""; }
-serve() { stop_server; python3 -m http.server 8099 --bind 0.0.0.0 --directory "$SERVE/$1" >/dev/null 2>&1 & SERVER_PID=$!; sleep 1; }
-go_home() { adb shell input keyevent KEYCODE_HOME; sleep 1; adb shell am start -a android.settings.SETTINGS >/dev/null; sleep 2; }      # a full-screen activity from another app: backgrounding the game is deterministic
-ascii() { echo "   --- $1 ---"; python3 "$HERE/ascii.py" "$OUT/$1.png" 64 | sed 's/^/   | /'; }
-wait_for() { local pat=$1 t=${2:-60} i; for i in $(seq "$t"); do logs | grep -Eq "$pat" && return 0; sleep 1; done; return 1; }
-expect() { local what=$1 pat=$2 t=${3:-60}; if wait_for "$pat" "$t"; then pass "$what"; else fail "$what (waited for /$pat/)"; logs | tail -25; fi; }
-# start <activity> [am extras...]: cold start, prints "TotalTime" (ms) the system measured
-start() { local act=$1; shift; adb logcat -c; adb shell am start -S -W -n "$act" "$@" 2>&1 | grep -E "TotalTime" | tr -d '\r'; }
-shot() { adb exec-out screencap -p > "$OUT/$1.png"; }
-lum() { python3 - "$OUT/$1.png" <<'P'
-import sys
-from PIL import Image
-im = Image.open(sys.argv[1]).convert("L"); px = list(im.getdata()); n = len(px); m = sum(px) / n; v = sum((p - m) ** 2 for p in px) / n
-print("%.1f %.1f" % (m, v ** 0.5))
-P
-}
-diff() { python3 "$HERE/imgdiff.py" "$OUT/$1.png" "$OUT/$2.png"; }
-
-
-# gameshots NAME PKG ACT [am extras...]: runs the game with its OWN framebuffer screenshots (climb.shots: files are named by the screen that drew them, e.g. splash_00.png, title_02.png),
-# waits for ten of them and pulls them to $OUT/NAME/. Independent of device compositor timing, so the same screen can be compared across builds.
-gameshots() { local name=$1 pkg=$2 act=$3; shift 3; local d=$OUT/$name i n; rm -rf "$d"; mkdir -p "$d"; adb shell "run-as $pkg rm -rf files/shots" >/dev/null 2>&1; adb logcat -c
-  adb shell am start -S -W -n "$act" --es prop.climb.shots "/data/data/$pkg/files/shots" --es prop.climb.shotEvery 1.0 --es prop.climb.shotCount 10 "$@" >/dev/null
-  for i in $(seq 150); do n=$(adb shell "run-as $pkg ls files/shots 2>/dev/null | wc -l" | tr -d '\r'); [ "${n:-0}" -ge 10 ] && break; sleep 1; done
-  for f in $(adb shell "run-as $pkg ls files/shots" | tr -d '\r'); do adb exec-out "run-as $pkg cat files/shots/$f" > "$d/$f"; done
-  echo "   $name frames: $(ls "$d" | tr '\n' ' ')"; }
-firstof() { ls "$OUT/$1" | grep "^$2_" | head -1; }
-diffp() { python3 "$HERE/imgdiff.py" "$1" "$2"; }
-asciip() { echo "   --- $1 ---"; python3 "$HERE/ascii.py" "$1" 64 | sed 's/^/   | /'; }
-meanof() { sed 's/.*mean=\([0-9.]*\).*/\1/'; }
-corrof() { sed 's/.*corr=\(-\?[0-9.]*\).*/\1/'; }
+HERE=$(dirname "$0"); . "$HERE/lib.sh"
 
 echo "== install (three separate applications; none replaces anything the owner has)"
 for a in "$BASE_APK" "$REF_APK" "$HOST_APK"; do adb install -r "$a" >/dev/null && pass "installs: $(basename "$a")" || { fail "install $a"; exit 1; }; done
@@ -102,24 +69,6 @@ serve c5_no_entry; start "$HOST_ACT" --es updateBase http://10.0.2.2:8099/ >/dev
 start "$HOST_ACT" >/dev/null; # v2 was applied in K4 but never played 15 s, so it is still unproven and is NOT the safety net: the last PROVEN module (the baseline v1) is
 expect "K5 it fails to load; the last proven module (v1; v2 never proved itself) runs in the same launch" "rolled back v5 to v1.*failed to load" 40; expect "K5 the real game keeps running" "running module v1" 20
 stop_server
-
-echo "== K6 a signed release delivers a changed GAME FILE (lab fixture: inverted studio splash); only that file changes"
-serve c6_assets; start "$HOST_ACT" --es updateBase http://10.0.2.2:8099/ >/dev/null
-expect "K6 v6 and its game file downloaded into the content store and staged" "update check: staged v6" 60
-N=$(adb shell "run-as $HOST sh -c 'ls files/host/cas | wc -l'" | tr -d '\r'); [ "$N" -ge 1 ] && pass "K6 content store holds $N verified file(s)" || fail "K6 content store empty"
-gameshots k6_HOST $HOST "$HOST_ACT"
-expect "K6 v6 activated at the next cold start with its override" "asset overrides active: 1 file" 5
-SPL_6=$(firstof k6_HOST splash); TIT_6=$(firstof k6_HOST title)
-if [ -n "$SPL_6" ] && [ -n "$SPL_H" ]; then
-  R=$(diffp "$OUT/k6_HOST/$SPL_6" "$OUT/k1_HOST/$SPL_H"); echo "   splash with the delivered file vs the APK's: $R"; asciip "$OUT/k6_HOST/$SPL_6"
-  awk -v s="$(echo "$R" | meanof)" -v c="$(echo "$R" | corrof)" 'BEGIN{exit !(s>20 && c<0.2)}' && pass "K6 the game now draws the delivered file ($R)" || fail "K6 splash not changed as delivered ($R)"
-else fail "K6 no splash frame (override $SPL_6 / baseline $SPL_H)"; fi
-if [ -n "$TIT_6" ] && [ -n "$TIT_H" ]; then
-  R=$(diffp "$OUT/k6_HOST/$TIT_6" "$OUT/k1_HOST/$TIT_H"); echo "   title with an override active vs without: $R"
-  awk -v s="$(echo "$R" | meanof)" -v c="$(echo "$R" | corrof)" 'BEGIN{exit !(s<3.0 && c>0.97)}' && pass "K6 every other file still comes from the APK unchanged ($R)" || fail "K6 title changed ($R)"
-else fail "K6 no title frame"; fi
-logs | grep -q "ClassCast" && fail "K6 ClassCastException" || pass "K6 no ClassCastException (sounds load)"
-echo "   game process alive: $(adb shell pidof $HOST | tr -d '\r')"
 
 echo "== P1 delivery-layer measurements (informational on an emulator: software GL, NOT representative of a phone; never fails the run)"
 bash "$HERE/perf_capture.sh" "$OUT/perf" 3 20 2>&1 | tee "$OUT/perf.txt" | sed 's/^/   /' || true

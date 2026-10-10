@@ -206,6 +206,7 @@ public final class ModuleStore {
         saveState(); at("drop.afterSave");                                             // the verdict (and the cleared restore marker) is durable before anything is deleted
         if (dropped != 0 && dropped != back) Hashing.deleteTree(dirOf(dropped));       // the broken one only; the safety net is never touched
         at("drop.afterDelete");
+        collectAssets(); at("drop.afterGc");                                           // the rolled-back release's own game files go too; only confirm() collected before, so a run of bad releases with no good one in between grew the store without bound
     }
 
     private void pruneOld() {

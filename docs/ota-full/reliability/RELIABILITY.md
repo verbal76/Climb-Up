@@ -105,5 +105,11 @@ Log.i(TAG, AssetProbe.run(Gdx.files, overrideOnlyPaths /* keys of the active ove
 Then `asset_emulator_test.sh` (mine) will compare the probe line of the un-updated baseline (A1), the updated install (A2: same `files`, same `ext`, `fail=0`, digest different) and, with a delivered g3dj / obj / png / ogg, prove each type is loaded from the store. I will add those checks as soon as the hook exists (adding them first would only fail).
 Not verified: anything on the emulator or a device (the loaders need the real engine).
 
-## 7. Not yet done
+## 7. Repeated-release stress (D) - `ReleaseStressTest` (JVM integration, real filesystem, in-memory transport; local 117/117 for hostkit)
+
+Thirty consecutive combined code + asset releases through the real downloader and store: each is checked, downloaded, staged, activated at the next start and confirmed, except every fifth (never confirms, must be rolled back and blacklisted) and every seventh raises the save schema (saves migrated, or restored if the release is rolled back). After every step: at most the active and last-good module are installed, no staging debris, every content-store file is referenced by something installed or waiting, the state file stays under 1 KB, a restart keeps the proven release, rolled-back versions are refused when re-offered, the highest-accepted counter equals the number of releases. A second test shows an unchanged shared file crosses the wire exactly once in twelve releases.
+**Defect found (red first) and fixed:** the content store was only garbage-collected on `confirm()`, so a rolled-back release kept its unique game files until some later release was confirmed; a run of bad releases with no good one in between grew the store without bound. `dropActive` now collects after deleting the dropped module (state is already saved by then; injection point `drop.afterGc`, swept by the crash-point harness).
+Not verified: on the emulator or a device; real disk usage under the platform's storage accounting.
+
+## 8. Not yet done
 key rotation / revocation as emulator scenarios, the device scenarios (kill during download/activation, 20+ release stress, real-game SaveGuard, combined code+asset release), and the asset-type/path-safety matrix from (A).

@@ -28,12 +28,19 @@ public final class OverlayFiles implements Files {
 
     public OverlayFiles(Files base, Map<String, AssetManifest.Asset> overrides, AssetStore store, Consumer<String> diag) { this.base = base; this.overrides = overrides; this.store = store; this.diag = diag; }
 
+    /**
+     * Canonical spelling of a request: Windows separators become '/', empty and "." segments vanish, "x/.." cancels. A ".." that would climb above the root is kept, so such a request can
+     * never equal an override key (keys are plain names) and is left to the backend exactly as before. Case is NOT folded: the APK's asset lookup is case-sensitive.
+     */
     static String norm(String path) {
-        String p = path.replace('\\', '/'); while (p.startsWith("./")) p = p.substring(2); while (p.startsWith("/")) p = p.substring(1);
-        while (p.endsWith("/") && p.length() > 1) p = p.substring(0, p.length() - 1);
-        return p;
+        java.util.ArrayList<String> out = new java.util.ArrayList<>();
+        for (String seg : path.replace('\\', '/').split("/")) {
+            if (seg.isEmpty() || seg.equals(".")) continue;
+            if (seg.equals("..") && !out.isEmpty() && !out.get(out.size() - 1).equals("..")) out.remove(out.size() - 1); else out.add(seg);
+        }
+        return String.join("/", out);
     }
-    private static boolean isAudio(String p) { String l = p.toLowerCase(); return l.endsWith(".wav") || l.endsWith(".ogg") || l.endsWith(".mp3"); }
+    private static boolean isAudio(String p) { String l = p.toLowerCase(java.util.Locale.ROOT); return l.endsWith(".wav") || l.endsWith(".ogg") || l.endsWith(".mp3"); }
 
     @Override public FileHandle internal(String path) {
         String p = norm(path);

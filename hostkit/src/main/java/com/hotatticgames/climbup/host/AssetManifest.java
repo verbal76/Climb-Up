@@ -40,7 +40,7 @@ public final class AssetManifest {
             if (path.length() > 200 || !PATH.matcher(path).matches() || path.contains("..")) throw new IllegalArgumentException("bad asset path");
             if (!HEX.matcher(sha).matches() || sz == null || !sz.isNumber()) throw new IllegalArgumentException("bad asset entry " + path);
             long size = sz.asLong(); if (size < 0 || size > MAX_ASSET_BYTES) throw new IllegalArgumentException("asset size " + path);
-            if (!seen.add(path.toLowerCase())) throw new IllegalArgumentException("duplicate asset " + path);
+            if (!seen.add(path.toLowerCase(java.util.Locale.ROOT))) throw new IllegalArgumentException("duplicate asset " + path);
             total += size; if (total > MAX_TOTAL_BYTES) throw new IllegalArgumentException("assets too large");
             m.byPath.put(path, new Asset(path, sha, size));
         }

@@ -23,6 +23,17 @@ public final class Ui extends InputAdapter implements Disposable {
     private boolean down, tapped; private float downX, downY, tapX, tapY, curX, curY;
     public boolean captured;     // set by screens that handle raw touch themselves
 
+    /** Keyboard/controller/mouse-hover menu navigation (desktop only; null on mobile, where every code path below is skipped). */
+    public interface Navigator {
+        void beginFrame(Ui ui);
+        /** Called for every button drawn this frame. Bit 0 of the result: this button has the focus (draw the ring); bit 1: it was activated without a pointer (confirm, or back for a BACK button). */
+        int button(String label, float x, float y, float w, float h, boolean accent);
+        void endFrame();
+        /** Any confirm/back style press this frame (skips the studio splash). */
+        boolean anyPress();
+    }
+    public Navigator nav;
+
     public Ui(Settings s) { settings = s; }
 
     public float w() { return viewport.getWorldWidth(); }
@@ -36,18 +47,19 @@ public final class Ui extends InputAdapter implements Disposable {
 
     public void begin() {
         clock += Gdx.graphics.getDeltaTime();
+        if (nav != null) nav.beginFrame(this);
         if (nextTap < scriptedTaps.length) {
             String[] a = scriptedTaps[nextTap].split("[,@]");
             if (clock >= Float.parseFloat(a[2])) { tapX = Float.parseFloat(a[0]); tapY = Float.parseFloat(a[1]); tapped = true; nextTap++; }
         }
         viewport.apply(); batch.setProjectionMatrix(viewport.getCamera().combined); batch.begin(); }
-    public void end() { batch.end(); tapped = false; }
+    public void end() { batch.end(); tapped = false; if (nav != null) nav.endFrame(); }
 
     // ---- input
-    @Override public boolean touchDown(int sx, int sy, int p, int b) { if (p != 0) return false; unproject(sx, sy); down = true; downX = curX = v.x; downY = curY = v.y; return false; }
+    @Override public boolean touchDown(int sx, int sy, int p, int b) { if (p != 0 || (nav != null && b != com.badlogic.gdx.Input.Buttons.LEFT)) return false; unproject(sx, sy); down = true; downX = curX = v.x; downY = curY = v.y; return false; }
     @Override public boolean touchDragged(int sx, int sy, int p) { if (p != 0) return false; unproject(sx, sy); curX = v.x; curY = v.y; return false; }
     @Override public boolean touchUp(int sx, int sy, int p, int b) {
-        if (p != 0) return false; unproject(sx, sy); down = false;
+        if (p != 0 || (nav != null && b != com.badlogic.gdx.Input.Buttons.LEFT)) return false; unproject(sx, sy); down = false;
         if (Math.hypot(v.x - downX, v.y - downY) < 60) { tapped = true; tapX = v.x; tapY = v.y; }
         return false;
     }
@@ -91,15 +103,26 @@ public final class Ui extends InputAdapter implements Disposable {
         float px = Math.min(5f * tm(), (w - 24) / Math.max(1, label.length() * PixelFont.ADV - 1));
         px = Math.max(2f, px);
         text(label, x + w / 2 - font.width(label, px) / 2, y + o + h / 2 - font.height(px) / 2, px, TEXT);
+        if (nav != null) {
+            int f = nav.button(label, x, y, w, h, accent);
+            if ((f & 1) != 0) focusRing(x, y + o, w, h);
+            if ((f & 2) != 0) return true;
+        }
         if (tapped && in(tapX, tapY, x, y, w, h)) { tapped = false; return true; }
         return false;
+    }
+
+    private void focusRing(float x, float y, float w, float h) {
+        float t = 4f, g = 10f;
+        rect(x - g, y - g, w + 2 * g, t, TEXT); rect(x - g, y + h + g - t, w + 2 * g, t, TEXT);
+        rect(x - g, y - g, t, h + 2 * g, TEXT); rect(x + w + g - t, y - g, t, h + 2 * g, TEXT);
     }
 
     public boolean tappedIn(float x, float y, float w, float h) {
         if (tapped && in(tapX, tapY, x, y, w, h)) { tapped = false; return true; }
         return false;
     }
-    public boolean anyTap() { boolean t = tapped; tapped = false; return t; }
+    public boolean anyTap() { boolean t = tapped || (nav != null && nav.anyPress()); tapped = false; return t; }
 
     @Override public void dispose() { batch.dispose(); font.dispose(); }
 }

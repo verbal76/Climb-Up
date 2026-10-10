@@ -3,6 +3,7 @@ package com.hotatticgames.climbup;
 import com.badlogic.gdx.Game;
 import com.badlogic.gdx.Gdx;
 import com.hotatticgames.climbup.audio.Audio;
+import com.hotatticgames.climbup.platform.Platform;
 import com.hotatticgames.climbup.render.Models;
 import com.hotatticgames.climbup.sim.Course;
 import com.hotatticgames.climbup.sim.Tower;
@@ -31,7 +32,11 @@ public class ClimbGame extends Game {
     public String shotDir;
     public boolean runFresh;                 // set by the title screen's NEW CLIMB: the next PlayScreen starts a new seed
 
-    public ClimbGame(File dataDir) { this.dataDir = dataDir; }
+    /** The launcher's platform services (Android: {@link Platform#MOBILE}, unchanged behaviour). */
+    public final Platform platform;
+
+    public ClimbGame(File dataDir) { this(dataDir, Platform.MOBILE); }
+    public ClimbGame(File dataDir, Platform platform) { this.dataDir = dataDir; this.platform = platform; }
 
     @Override public void create() {
         demo = "true".equals(System.getProperty("climb.demo"));
@@ -44,7 +49,7 @@ public class ClimbGame extends Game {
         // OTA (see docs/OTA.md): an applied payload (signed manifest, verified checksum, validated numbers) may replace the bundled tuning numbers; anything wrong falls back to the bundled file
         ota = new com.hotatticgames.climbup.ota.OtaStore(new File(dataDir, "ota"));
         String over = null;
-        try { over = ota.startup(); } catch (Throwable t) { over = null; }
+        try { over = platform.networkAllowed() ? ota.startup() : null; } catch (Throwable t) { over = null; }
         Tuning tn = null;
         if (over != null) { try { tn = Tuning.parse(over); } catch (Throwable t) { tn = null; } }
         tuning = tn != null ? tn : Tuning.parse(bundled);
@@ -53,6 +58,7 @@ public class ClimbGame extends Game {
         ui = new Ui(settings);
         audio = new Audio(settings);
         models = new Models();
+        platform.attach(this);
         String start = System.getProperty("climb.start", demo ? "play" : "splash");
         switch (start) {
             case "title": setScreen(new TitleScreen(this)); break;
@@ -65,6 +71,7 @@ public class ClimbGame extends Game {
 
     /** Silent background check (never blocks play, never shows anything; the result only appears in Settings > About). */
     public void startOtaCheck(boolean force) {
+        if (!platform.networkAllowed()) return;           // the Windows build makes no network call at all
         final com.hotatticgames.climbup.ota.OtaClient c = otaClient;
         Thread t = new Thread(() -> { try { c.check(System.currentTimeMillis(), force); } catch (Throwable ignored) { } }, "ota-check");
         t.setDaemon(true); t.start();
@@ -72,7 +79,9 @@ public class ClimbGame extends Game {
 
     private int shotCount;
     private float shotClock;
-    @Override public void render() { super.render(); if (audio != null) audio.update(Math.min(Gdx.graphics.getDeltaTime(), 0.25f)); }
+    @Override public void render() { platform.frame(Gdx.graphics.getDeltaTime()); super.render(); if (audio != null) audio.update(Math.min(Gdx.graphics.getDeltaTime(), 0.25f)); }
+
+    @Override public void setScreen(com.badlogic.gdx.Screen screen) { super.setScreen(screen); platform.screenChanged(); }
 
     /** Desktop test hook: -Dclimb.shots=DIR writes a numbered screenshot about every 1.5s and exits after climb.shotCount frames. */
     public void autoShot(String prefix, float dt) {
@@ -148,6 +157,6 @@ public class ClimbGame extends Game {
     @Override public void dispose() {
         persist();
         if (getScreen() != null) getScreen().dispose();
-        audio.dispose(); models.dispose(); ui.dispose();
+        audio.dispose(); models.dispose(); ui.dispose(); platform.dispose();
     }
 }

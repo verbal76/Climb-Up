@@ -12,6 +12,7 @@ permissions:
   contents: write
 jobs:
   publish:
+    if: github.ref == 'refs/heads/ccr-cb458cd1-w4dh5c'   # branch guard: a dispatch from any other branch can never publish
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

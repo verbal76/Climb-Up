@@ -5,6 +5,9 @@ dependencies {
     implementation project(':core')
     implementation "com.badlogicgames.gdx:gdx-backend-lwjgl3:$gdxVersion"
     implementation "com.badlogicgames.gdx:gdx-platform:$gdxVersion:natives-desktop"
+    implementation "com.badlogicgames.gdx-controllers:gdx-controllers-core:$controllersVersion"
+    implementation "com.badlogicgames.gdx-controllers:gdx-controllers-desktop:$controllersVersion"
+    testImplementation 'junit:junit:4.13.2'
 }
 tasks.named('run') {
     workingDir = file('../assets')

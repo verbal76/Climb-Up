@@ -72,7 +72,8 @@ public final class PlayScreen extends ScreenAdapter {
     @Override public void show() {
         if (world != null) { // returning from the settings screen: keep the run exactly as it was
             applySettings();
-            Gdx.input.setInputProcessor(new InputMultiplexer(g.ui, new Touch()));
+            Gdx.input.setInputProcessor(processors());
+            if (gi() != null) gi().clear();
             g.audio.playlist(Audio.GAME_TRACKS);
             return;
         }
@@ -105,8 +106,7 @@ public final class PlayScreen extends ScreenAdapter {
         applySettings();
         world.snapCamera(sim);
         if (demo) driver[0] = new Autopilot.Driver(sim);
-        InputMultiplexer mux = new InputMultiplexer(g.ui, new Touch());
-        Gdx.input.setInputProcessor(mux);
+        Gdx.input.setInputProcessor(processors());
         Gdx.input.setCatchKey(Input.Keys.BACK, true);
         g.audio.playlist(Audio.GAME_TRACKS);
         runTime = 0; maxAbs = absNow(); milestone = (int) (maxAbs / 50f);
@@ -135,6 +135,10 @@ public final class PlayScreen extends ScreenAdapter {
     @Override public void resize(int w, int h) { g.ui.resize(w, h); world.resize(w, h); }
 
     // ------------------------------------------------------------------ input
+
+    /** Touch + legacy keys on mobile; on desktop only the UI (keyboard, mouse and controller reach the sim through {@link GameInput}; a mouse click never steers the hero). */
+    private InputMultiplexer processors() { return g.platform.desktop() ? new InputMultiplexer(g.ui) : new InputMultiplexer(g.ui, new Touch()); }
+    private com.hotatticgames.climbup.platform.GameInput gi() { return g.platform.gameInput(); }
 
     private final class Touch extends InputAdapter {
         private boolean stickSide(float x) { return g.settings.leftHanded ? x > g.ui.w() * 0.5f : x < g.ui.w() * 0.5f; }
@@ -179,6 +183,8 @@ public final class PlayScreen extends ScreenAdapter {
 
     private void readInput() {
         in.moveX = in.moveY = 0;
+        if (gi() != null) gi().read(in);
+        else {
         if (stickPtr >= 0) {
             float dx = stickKnob.x - stickBase.x, dy = stickKnob.y - stickBase.y;
             float len = (float) Math.hypot(dx, dy);
@@ -195,6 +201,7 @@ public final class PlayScreen extends ScreenAdapter {
         in.jumpHeld = jumpHeldTouch || kJumpHeld;
         in.jumpPressed = jumpLatch || kJump;
         in.swingPressed = swingLatch || kSwing;
+        }
         if (Boolean.getBoolean("climb.ropeScript")) {
             scriptT += Sim.DT;
             in.moveY = sim.mode == Sim.Mode.ROPE || sim.mounting() ? 1f : 0f; in.moveX = 0f;
@@ -209,6 +216,10 @@ public final class PlayScreen extends ScreenAdapter {
         dt = Math.min(dt, 0.1f);
         time += dt;
         if (OVERLAY != null && time > 0.8f && state == State.PLAYING) { if (OVERLAY.equals("pause")) pauseGame(); }
+        if (gi() != null) {                                              // desktop: pause / resume from the keyboard or controller (the pause button and menus work through the mouse and the focus ring)
+            boolean p = gi().pausePressed(), b = gi().backPressed();
+            if (state == State.PLAYING && p) pauseGame(); else if (state == State.PAUSED && (p || b)) resumePlay();
+        }
         boolean play = state == State.PLAYING;
         if (play) {
             float speed = g.settings.assistSlow ? g.tuning.assistSlowFactor : 1f;
@@ -229,6 +240,7 @@ public final class PlayScreen extends ScreenAdapter {
                 if (demo) { driver[0].drive(sim, in); } else readInput();
                 sim.step(in);
                 in.jumpPressed = false; jumpLatch = false; kJump = false; in.swingPressed = false; swingLatch = false; kSwing = false;
+                if (gi() != null) gi().stepDone();
                 runTime += Sim.DT;
                 if (runTime > 15f && g.ota != null) g.ota.confirm();          // live play with the current (possibly OTA) content: a freshly applied update is now trusted
                 if (!demo) { if (!clockLive && (in.moveX != 0f || in.jumpPressed || in.moveY != 0f)) clockLive = true; RunRecord.tick(g.save, Sim.DT, clockLive); if (absNow() > maxAbs) maxAbs = absNow(); if (maxAbs > g.save.climbHeight) g.save.climbHeight = (float) maxAbs; ResumeState.capture(g.save, sim); }
@@ -403,7 +415,7 @@ public final class PlayScreen extends ScreenAdapter {
         }
         if ((ev & Sim.EV_CLUB) != 0) {
             g.audio.play("key", 0.9f, 0.8f); world.particles.burst(s, y + 1f, 14, gold, 3f, 3.2f, 0.12f, -1f, 0.9f); vibrate(25, 1);
-            toast = "SPIKED CLUB! TAP SWING TO KNOCK CRABS AND BEES OFF"; toastT = 3f; say("[CLUB]");
+            toast = g.platform.tip("SPIKED CLUB! TAP SWING TO KNOCK CRABS AND BEES OFF"); toastT = 3f; say("[CLUB]");
         }
         if ((ev & Sim.EV_SWING) != 0) { g.audio.play("swing", 0.8f, 0.95f + MathUtils.random(0.1f)); vibrate(10, 2); }
         if ((ev & Sim.EV_SHOVE) != 0) { g.audio.play("bonk", 0.9f, 0.9f + MathUtils.random(0.2f)); world.shake(0.4f); freeze(0.05f); vibrate(25, 1); pop("OOF!", Color.WHITE); say("[BONK]"); }
@@ -504,7 +516,7 @@ public final class PlayScreen extends ScreenAdapter {
     private boolean tipFor(String key) {
         if (g.save.shownTips.contains(key)) return false;
         g.save.shownTips.add(key);
-        for (String[] t : TIPS) if (t[0].equals(key)) { tip = t[1]; tipT = 5f; }
+        for (String[] t : TIPS) if (t[0].equals(key)) { tip = g.platform.tip(t[1]); tipT = 5f; }
         return true;
     }
 
@@ -553,8 +565,10 @@ public final class PlayScreen extends ScreenAdapter {
         }
         // pause button
         float pb = 96f; float px = g.settings.leftHanded ? m : W - m - pb, py = H - m - pb;
+        if (!g.platform.drawPauseButton(ui, px, py, pb)) {
         ui.rect(px - 3, py - 3, pb + 6, pb + 6, Ui.EDGE); ui.rect(px, py, pb, pb, Ui.PANEL);
         ui.rect(px + 28, py + 24, 14, 48, Ui.TEXT); ui.rect(px + 54, py + 24, 14, 48, Ui.TEXT);
+        }
         if (state == State.PLAYING && ui.tappedIn(px - 10, py - 10, pb + 20, pb + 20)) pauseGame();
         // zone banner
         int zoneKey = zone + 4 * lap;
@@ -576,7 +590,7 @@ public final class PlayScreen extends ScreenAdapter {
         }
         drawHeroBubble();
         drawPops();
-        if (state == State.PLAYING) drawControls();
+        if (state == State.PLAYING) { if (g.platform.touchControls()) drawControls(); else g.platform.drawPlayHints(ui, sim.clubTime > 0f, W, H); }
         if (fade > 0) ui.rect(0, 0, W, H, new Color(0, 0, 0, fade));
         if (state == State.PAUSED) pauseMenu();
         if (state == State.FINISHED) finishMenu();
@@ -699,8 +713,8 @@ public final class PlayScreen extends ScreenAdapter {
 
     // ------------------------------------------------------------------ lifecycle
 
-    private void pauseGame() { if (state == State.PLAYING) { g.audio.fallStop(); state = State.PAUSED; confirmRestart = false; stickPtr = jumpPtr = -1; jumpHeldTouch = false; g.audio.play("click"); g.persist(); } }
-    private void resumePlay() { state = State.PLAYING; acc = 0; g.audio.play("click"); }
+    private void pauseGame() { if (state == State.PLAYING) { if (gi() != null) gi().clear(); g.audio.fallStop(); state = State.PAUSED; confirmRestart = false; stickPtr = jumpPtr = -1; jumpHeldTouch = false; g.audio.play("click"); g.persist(); } }
+    private void resumePlay() { if (gi() != null) gi().clear(); state = State.PLAYING; acc = 0; g.audio.play("click"); }
     public void resumeFromSettings() { applySettings(); }
 
     @Override public void hide() { g.audio.fallStop(); g.persist(); }

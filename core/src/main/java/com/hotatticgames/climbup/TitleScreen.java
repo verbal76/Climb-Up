@@ -60,7 +60,7 @@ public final class TitleScreen extends ScreenAdapter {
         float W = ui.w(), H = ui.h();
         // title lettering: chunky two-layer voxel look
         float px = 15f;
-        String t1 = "CLIMB UP";
+        String t1 = g.platform.title();
         float tw = ui.font.width(t1, px);
         float tx = W / 2 - tw / 2, ty = H - 190 + (float) Math.sin(time * 1.6f) * 4f;
         ui.font.drawShadow(ui.batch, t1, tx + 6, ty - 8, px, new Color(0.35f, 0.12f, 0.02f, 1f), new Color(0, 0, 0, 0.6f));

@@ -12,10 +12,12 @@ import com.hotatticgames.climbup.ui.Ui;
 public final class SettingsScreen extends ScreenAdapter {
     private final ClimbGame g;
     private final Screen back;
-    private int page = Integer.getInteger("climb.page", 0);
+    private int page;
     private boolean confirmReset;
 
-    public SettingsScreen(ClimbGame g, Screen back) { this.g = g; this.back = back; }
+    public SettingsScreen(ClimbGame g, Screen back) { this(g, back, Integer.getInteger("climb.page", 0)); }
+    /** @param page 0..2 are the shared tabs, 3 and up are the launcher's extra tabs (see {@link com.hotatticgames.climbup.platform.Platform#settingsTabs}). */
+    public SettingsScreen(ClimbGame g, Screen back, int page) { this.g = g; this.back = back; this.page = page; }
 
     @Override public void show() { Gdx.input.setInputProcessor(new InputMultiplexer(g.ui)); }
     @Override public void resize(int w, int h) { g.ui.resize(w, h); }
@@ -23,7 +25,10 @@ public final class SettingsScreen extends ScreenAdapter {
     private float rowY;
     private static final String[] Q = {"LOW", "MEDIUM", "HIGH"}, TXT = {"100%", "130%", "160%"}, HAP = {"OFF", "LOW", "HIGH"};
 
-    private void row(String label, String value, Runnable minus, Runnable plus, Runnable tap) {
+    public float rowTop() { return rowY; }
+    public void skip(float dy) { rowY -= dy; }
+
+    public void row(String label, String value, Runnable minus, Runnable plus, Runnable tap) {
         Ui ui = g.ui; float W = ui.w();
         float cw = Math.min(980, W - 100), x = W / 2 - cw / 2, h = 64;
         float px = Math.max(3.2f, Math.min(4f * ui.tm(), (cw * 0.5f) / (label.length() * 6f)));
@@ -37,7 +42,7 @@ public final class SettingsScreen extends ScreenAdapter {
         rowY -= h + 10;
     }
 
-    private void toggle(String label, boolean v, Runnable flip) { row(label, v ? "ON" : "OFF", null, null, flip); }
+    public void toggle(String label, boolean v, Runnable flip) { row(label, v ? "ON" : "OFF", null, null, flip); }
 
     @Override public void render(float dt) {
         Settings s = g.settings;
@@ -46,12 +51,23 @@ public final class SettingsScreen extends ScreenAdapter {
         float W = ui.w(), H = ui.h();
         ui.textC("SETTINGS", W / 2, H - 78, 7f, Ui.TEXT);
         if (ui.button("BACK", 40, H - 100, 200, 64, true)) { g.audio.play("click"); g.persist(); if (back instanceof PlayScreen) ((PlayScreen) back).resumeFromSettings(); g.setScreen(back); ui.end(); return; }
-        float x0 = W / 2 - 470;
-        if (ui.button("AUDIO + DISPLAY", x0, H - 168, 330, 60, page == 0)) page = 0;
-        if (ui.button("CONTROLS + ACCESS", x0 + 342, H - 168, 380, 60, page == 1)) page = 1;
-        if (ui.button("ABOUT", x0 + 734, H - 168, 206, 60, page == 2)) page = 2;
+        java.util.List<com.hotatticgames.climbup.platform.Platform.SettingsTab> extra = g.platform.settingsTabs();
+        if (extra.isEmpty()) {
+            float x0 = W / 2 - 470;
+            if (ui.button("AUDIO + DISPLAY", x0, H - 168, 330, 60, page == 0)) page = 0;
+            if (ui.button("CONTROLS + ACCESS", x0 + 342, H - 168, 380, 60, page == 1)) page = 1;
+            if (ui.button("ABOUT", x0 + 734, H - 168, 206, 60, page == 2)) page = 2;
+        } else {                                                    // desktop: the three shared tabs plus the launcher's own (window, controls) on one row
+            String[] names = new String[3 + extra.size()];
+            names[0] = "AUDIO + GAME"; names[1] = "ACCESS"; names[2] = "ABOUT";
+            for (int i = 0; i < extra.size(); i++) names[3 + i] = extra.get(i).name();
+            float total = Math.min(W - 80, 1180), gap = 10, bw = (total - gap * (names.length - 1)) / names.length, x0 = W / 2 - total / 2;
+            for (int i = 0; i < names.length; i++) if (ui.button(names[i], x0 + i * (bw + gap), H - 168, bw, 60, page == i)) page = i;
+        }
         rowY = H - 176 - 64;
-        if (page == 0) {
+        if (page >= 3 && page - 3 < extra.size()) {
+            extra.get(page - 3).draw(g, this);
+        } else if (page == 0) {
             row("CHARACTER", com.hotatticgames.climbup.render.Characters.name(s.character), null, null, () -> s.character = com.hotatticgames.climbup.render.Characters.next(s.character));
             row("MUSIC VOLUME", String.valueOf(s.music), () -> s.music = Math.max(0, s.music - 1), () -> s.music = Math.min(10, s.music + 1), null);
             row("EFFECTS VOLUME", String.valueOf(s.sfx), () -> s.sfx = Math.max(0, s.sfx - 1), () -> s.sfx = Math.min(10, s.sfx + 1), null);
@@ -60,20 +76,24 @@ public final class SettingsScreen extends ScreenAdapter {
             toggle("REDUCED MOTION", s.reducedMotion, () -> s.reducedMotion = !s.reducedMotion);
             toggle("CAPTIONS FOR SOUNDS", s.captions, () -> s.captions = !s.captions);
         } else if (page == 2) {
-            rowY -= 24; ui.textC("CLIMB UP  " + Legacy.versionLine(ClimbGame.VERSION, ClimbGame.appBuild), W / 2, rowY + 30, 4.5f, Ui.TEXT); rowY -= 72;
+            rowY -= 24; ui.textC(g.platform.title() + "  " + Legacy.versionLine(ClimbGame.VERSION, ClimbGame.appBuild), W / 2, rowY + 30, 4.5f, Ui.TEXT); rowY -= 72;
             ui.textC("CONTENT: " + g.ota.describe(), W / 2, rowY + 30, 3.0f, Ui.DIM); rowY -= 54;
-            ui.textC("UPDATES ARE SIGNED AND VERIFIED. " + (g.otaClient.status.isEmpty() ? "" : g.otaClient.status.toUpperCase()), W / 2, rowY + 30, 2.4f, Ui.DIM); rowY -= 54;
-            toggle("CHECK FOR GAME UPDATES", s.otaEnabled, () -> s.otaEnabled = !s.otaEnabled);
-            row("UPDATE NOW", "CHECK", null, null, () -> g.startOtaCheck(true));
+            if (g.platform.networkAllowed()) { ui.textC("UPDATES ARE SIGNED AND VERIFIED. " + (g.otaClient.status.isEmpty() ? "" : g.otaClient.status.toUpperCase()), W / 2, rowY + 30, 2.4f, Ui.DIM); rowY -= 54; }
+            if (g.platform.networkAllowed()) {
+                toggle("CHECK FOR GAME UPDATES", s.otaEnabled, () -> s.otaEnabled = !s.otaEnabled);
+                row("UPDATE NOW", "CHECK", null, null, () -> g.startOtaCheck(true));
+            } else { ui.textC("THIS BUILD NEVER CONNECTS TO THE INTERNET.", W / 2, rowY + 30, 2.8f, Ui.DIM); rowY -= 64; }
             ui.textC(g.audio.diag(), W / 2, rowY + 30, 2.8f, Ui.DIM); rowY -= 64;
             row("RESTART AUDIO", "RESTART", null, null, () -> g.audio.restart());
         } else {
-            row("HAPTICS", HAP[s.haptics], null, null, () -> s.haptics = (s.haptics + 1) % 3);
-            toggle("LEFT-HANDED LAYOUT", s.leftHanded, () -> s.leftHanded = !s.leftHanded);
+            if (!g.platform.desktop()) {                              // touch-only options
+                row("HAPTICS", HAP[s.haptics], null, null, () -> s.haptics = (s.haptics + 1) % 3);
+                toggle("LEFT-HANDED LAYOUT", s.leftHanded, () -> s.leftHanded = !s.leftHanded);
+            }
             toggle("ASSIST: SLOWER SPEED", s.assistSlow, () -> s.assistSlow = !s.assistSlow);
             toggle("ASSIST: JUMP FORGIVENESS", s.assistForgive, () -> s.assistForgive = !s.assistForgive);
             toggle("CONTEXTUAL TIPS", s.tips, () -> s.tips = !s.tips);
-            toggle("HIGH-CONTRAST CONTROLS", s.highContrast, () -> s.highContrast = !s.highContrast);
+            if (!g.platform.desktop()) toggle("HIGH-CONTRAST CONTROLS", s.highContrast, () -> s.highContrast = !s.highContrast);
             row("ERASE SAVE DATA", confirmReset ? "TAP TO CONFIRM" : "ERASE", null, null, () -> {
                 if (confirmReset) { g.store.eraseAll(); g.save = new SaveData(); g.settings = new Settings(); confirmReset = false; }
                 else confirmReset = true;

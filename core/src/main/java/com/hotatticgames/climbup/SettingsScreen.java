@@ -94,7 +94,7 @@ public final class SettingsScreen extends ScreenAdapter {
             toggle("ASSIST: JUMP FORGIVENESS", s.assistForgive, () -> s.assistForgive = !s.assistForgive);
             toggle("CONTEXTUAL TIPS", s.tips, () -> s.tips = !s.tips);
             if (!g.platform.desktop()) toggle("HIGH-CONTRAST CONTROLS", s.highContrast, () -> s.highContrast = !s.highContrast);
-            row("ERASE SAVE DATA", confirmReset ? "TAP TO CONFIRM" : "ERASE", null, null, () -> {
+            row("ERASE SAVE DATA", confirmReset ? g.platform.tip("TAP TO CONFIRM") : "ERASE", null, null, () -> {
                 if (confirmReset) { g.store.eraseAll(); g.save = new SaveData(); g.settings = new Settings(); confirmReset = false; }
                 else confirmReset = true;
             });

@@ -21,15 +21,23 @@ public final class MenuNav implements Ui.Navigator {
     public void reset() { fm.reset(); visible = false; forced = -1; lock = 0.45f; }
 
     @Override public void beginFrame(Ui ui) {
-        fm.beginFrame();
         v.set(in.sources().mouseX(), in.sources().mouseY()); ui.viewport.unproject(v); px = v.x; py = v.y;
         pointerMoved = !Float.isNaN(lastPx) && Math.abs(px - lastPx) + Math.abs(py - lastPy) > 3f;
         lastPx = px; lastPy = py;
-        lock = Math.max(0f, lock - com.badlogic.gdx.Gdx.graphics.getDeltaTime());
-        confirm = in.justPressed(Act.CONFIRM) && lock <= 0f; back = in.justPressed(Act.BACK);
-        any = confirm || back;
-        step(in.sources().takeScroll());
+        frame(com.badlogic.gdx.Gdx.graphics.getDeltaTime(), in.sources().takeScroll());
     }
+
+    /** Everything beginFrame does except reading the pointer; tests drive menus through this. */
+    public void frame(float dt, float wheel) {
+        fm.beginFrame();
+        lock = Math.max(0f, lock - dt);
+        confirm = in.justPressed(Act.CONFIRM) && lock <= 0f; back = in.justPressed(Act.BACK);
+        any = in.justPressed(Act.CONFIRM) || back;
+        step(wheel);
+    }
+
+    /** Test hook: where the pointer is (menu coordinates) and whether it just moved. */
+    public void pointer(float x, float y, boolean moved) { px = x; py = y; pointerMoved = moved; }
 
     /** Applies this frame's directional presses (and wheel) to the focus; separated so tests can drive it without a window. */
     public void step(float wheel) {

@@ -25,7 +25,7 @@ public final class InputManager implements GameInput {
     private final boolean[] prevPad = new boolean[Ctl.values().length];
     private Pad active;
     private Device device = Device.KEYBOARD;
-    private float clock, lastSwitch = -10f, mouseAcc;
+    private float clock, lastSwitch = -10f;
     private int lastMx = Integer.MIN_VALUE, lastMy;
     private boolean jumpLatch, swingLatch;
     private float moveX, moveY;
@@ -47,8 +47,7 @@ public final class InputManager implements GameInput {
         int any = src.anyJustPressed();
         if (any >= 0) kbUsed = true;
         if (lastMx == Integer.MIN_VALUE) { lastMx = src.mouseX(); lastMy = src.mouseY(); }
-        mouseAcc += Math.abs(src.mouseX() - lastMx) + Math.abs(src.mouseY() - lastMy); lastMx = src.mouseX(); lastMy = src.mouseY();
-        if (mouseAcc >= MOUSE_MOVE_PX) { kbUsed = true; mouseAcc = 0f; }
+        if (Math.abs(src.mouseX() - lastMx) + Math.abs(src.mouseY() - lastMy) >= MOUSE_MOVE_PX) { kbUsed = true; lastMx = src.mouseX(); lastMy = src.mouseY(); }    // measured from where the pointer last counted, so jitter never adds up
         padUsed = padActivity;
 
         Bindings<Integer> kb = cfg.keyboard;
@@ -211,7 +210,7 @@ public final class InputManager implements GameInput {
             return c == null ? "-" : family().label(c);
         }
         Integer k = cfg.keyboard.first(a);
-        return k == null ? "-" : Keys.name(k);
+        return k == null ? "-" : KeyCodes.name(k);
     }
 
     /** The prompt for a pair of directions, e.g. "A/D" or "L STICK". */

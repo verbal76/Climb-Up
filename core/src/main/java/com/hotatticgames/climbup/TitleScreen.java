@@ -77,7 +77,7 @@ public final class TitleScreen extends ScreenAdapter {
             if (ui.button(has ? "CONTINUE" : "PLAY", bx, y0, bw, bh, true)) { g.audio.play("click"); next = new PlayScreen(g, false); }
             float yy = y0 - 88;
             if (has) {
-                if (ui.button(confirmNew ? "TAP AGAIN: NEW CLIMB" : "NEW CLIMB", bx, yy, bw, bh)) {
+                if (ui.button(confirmNew ? g.platform.tip("TAP AGAIN: NEW CLIMB") : "NEW CLIMB", bx, yy, bw, bh)) {
                     if (confirmNew) { g.forgetRun(); g.save.falls = 0; g.runFresh = true; g.persist(); g.audio.play("click"); next = new PlayScreen(g, false); }
                     confirmNew = true;
                 }
@@ -92,7 +92,7 @@ public final class TitleScreen extends ScreenAdapter {
             if (ui.button("CREDITS", bx, yy, bw, bh)) { g.audio.play("click"); next = new CreditsScreen(g, this); }
         }
         float cx = Math.min(W - bw - 40f, W / 2 + 240f);
-        if (!prompt) ui.textC("HERO: TAP TO CHANGE", cx + bw / 2, y0 + bh + 14, 3.2f, Ui.TEXT);
+        if (!prompt) ui.textC(g.platform.tip("HERO: TAP TO CHANGE"), cx + bw / 2, y0 + bh + 14, 3.2f, Ui.TEXT);
         if (!prompt && ui.button(com.hotatticgames.climbup.render.Characters.name(g.settings.character), cx, y0, bw, bh)) {
             g.settings.character = com.hotatticgames.climbup.render.Characters.next(g.settings.character);
             world.setCharacter(g.settings.character); g.persist(); g.audio.play("click");

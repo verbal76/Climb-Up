@@ -37,7 +37,7 @@ final class BindingsScreen extends ScreenAdapter {
 
     private String name(Act a, int slot) {
         if (pad) { List<Ctl> l = pb.get(a); return slot < l.size() ? dp.input.family().label(l.get(slot)) : null; }
-        List<Integer> l = kb.get(a); return slot < l.size() ? Keys.name(l.get(slot)) : null;
+        List<Integer> l = kb.get(a); return slot < l.size() ? KeyCodes.name(l.get(slot)) : null;
     }
     private int count(Act a) { return pad ? pb.get(a).size() : kb.get(a).size(); }
 
@@ -56,7 +56,7 @@ final class BindingsScreen extends ScreenAdapter {
             if (usable) {
                 column(ui, W / 2 - 620, H - 190, "GAMEPLAY", true);
                 column(ui, W / 2 + 20, H - 190, "MENUS", false);
-                if (ui.button(confirmRestore ? "TAP AGAIN TO RESTORE" : "RESTORE DEFAULTS", W / 2 - 230, 70, 460, 64)) {
+                if (ui.button(confirmRestore ? "CONFIRM RESTORE" : "RESTORE DEFAULTS", W / 2 - 230, 70, 460, 64)) {
                     g.audio.play("click");
                     if (!confirmRestore) confirmRestore = true;
                     else {
@@ -101,8 +101,8 @@ final class BindingsScreen extends ScreenAdapter {
         if (!pad) {
             if (rk.state != Remapper.State.WAITING) return;
             int k = dp.sources.anyJustPressed();
-            if (k < 0 || k == Keys.mouse(com.badlogic.gdx.Input.Buttons.LEFT)) return;      // left click is reserved for pointing at buttons
-            if (rk.capture(k, Keys.reserved(k))) g.audio.play("click");
+            if (k < 0 || k == KeyCodes.mouse(com.badlogic.gdx.Input.Buttons.LEFT)) return;      // left click is reserved for pointing at buttons
+            if (rk.capture(k, KeyCodes.reserved(k))) g.audio.play("click");
             return;
         }
         if (rp.state != Remapper.State.WAITING) return;
@@ -132,7 +132,7 @@ final class BindingsScreen extends ScreenAdapter {
             if (ui.button("CANCEL", W / 2 - (canRemove ? bw + 20 : bw / 2), by, bw, 74, true)) cancel();
             if (canRemove && ui.button("REMOVE THIS ONE", W / 2 + 20, by, bw, 74)) remove(a);
         } else {
-            String shown = pad ? dp.input.family().label(rp.proposed) : Keys.name(rk.proposed);
+            String shown = pad ? dp.input.family().label(rp.proposed) : KeyCodes.name(rk.proposed);
             ui.textC("NEW BINDING: " + shown, W / 2, y + ph - 150, 4.2f, Ui.ACCENT);
             boolean conflict = pad ? rp.hasConflict() : rk.hasConflict();
             if (conflict) ui.textC("ALREADY USED FOR " + (pad ? rp.conflicts : rk.conflicts).get(0).label + ". CONFIRM MOVES IT HERE.", W / 2, y + ph - 200, 2.8f, new Color(1f, 0.82f, 0.3f, 1f));

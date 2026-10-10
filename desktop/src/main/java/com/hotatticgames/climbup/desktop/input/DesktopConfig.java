@@ -57,7 +57,7 @@ public final class DesktopConfig {
         return sb.toString();
     }
 
-    private static String joinKeys(List<Integer> l) { StringBuilder sb = new StringBuilder(); for (int k : l) { String t = Keys.token(k); if (t == null) continue; if (sb.length() > 0) sb.append(','); sb.append(t); } return sb.toString(); }
+    private static String joinKeys(List<Integer> l) { StringBuilder sb = new StringBuilder(); for (int k : l) { String t = KeyCodes.token(k); if (t == null) continue; if (sb.length() > 0) sb.append(','); sb.append(t); } return sb.toString(); }
     private static String joinCtl(List<Ctl> l) { StringBuilder sb = new StringBuilder(); for (Ctl c : l) { if (sb.length() > 0) sb.append(','); sb.append(c.name()); } return sb.toString(); }
 
     /** Parses leniently: unknown keys and bad tokens are skipped, an action that ends with no valid binding keeps its default. Returns null only if the text is not a config at all. */
@@ -76,7 +76,7 @@ public final class DesktopConfig {
                 else if (k.equals("deadzone")) c.setDeadzone(Float.parseFloat(v));
                 else if (k.equals("display")) c.display = DisplayMode.valueOf(v);
                 else if (k.equals("resolution")) { String[] wh = v.split("x"); int w = Integer.parseInt(wh[0]), h = Integer.parseInt(wh[1]); if (w >= 640 && h >= 360 && w <= 16384 && h <= 16384) { c.width = w; c.height = h; } }
-                else if (k.startsWith("kb.")) { Act a = Act.valueOf(k.substring(3)); List<Integer> l = new ArrayList<>(); for (String t : v.split(",")) { int code = Keys.parse(t.trim()); if (code > 0 && !Keys.reserved(code) && !l.contains(code)) l.add(code); } if (!l.isEmpty()) c.keyboard.set(a, l); }
+                else if (k.startsWith("kb.")) { Act a = Act.valueOf(k.substring(3)); List<Integer> l = new ArrayList<>(); for (String t : v.split(",")) { int code = KeyCodes.parse(t.trim()); if (code > 0 && !KeyCodes.reserved(code) && !l.contains(code)) l.add(code); } if (!l.isEmpty()) c.keyboard.set(a, l); }
                 else if (k.startsWith("pad.default.")) { Act a = Act.valueOf(k.substring(12)); List<Ctl> l = ctls(v); if (!l.isEmpty()) c.padDefault.set(a, l); }
                 else if (k.startsWith("pad.id.")) { String rest = k.substring(7); int dot = rest.lastIndexOf('.'); Act a = Act.valueOf(rest.substring(dot + 1)); List<Ctl> l = ctls(v); if (!l.isEmpty()) profiles.computeIfAbsent(rest.substring(0, dot), x -> new LinkedHashMap<>()).put(a, l); }
             } catch (RuntimeException ignored) { /* a bad line never spoils the rest */ }

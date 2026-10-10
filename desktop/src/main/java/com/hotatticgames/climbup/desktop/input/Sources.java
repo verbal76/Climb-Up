@@ -2,7 +2,7 @@ package com.hotatticgames.climbup.desktop.input;
 
 import java.util.List;
 
-/** Keyboard and mouse as polled once per frame. Codes are {@link Keys} codes (mouse buttons from Keys.MOUSE). */
+/** Keyboard and mouse as polled once per frame. Codes are {@link Keys} codes (mouse buttons from KeyCodes.MOUSE). */
 public interface Sources {
     boolean down(int code);
     boolean justPressed(int code);

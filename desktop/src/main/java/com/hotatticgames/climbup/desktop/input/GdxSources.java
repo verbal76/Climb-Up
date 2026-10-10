@@ -39,13 +39,13 @@ public final class GdxSources implements Sources {
 
     @Override public List<? extends Pad> pads() { refresh(); return order; }
 
-    @Override public boolean down(int code) { return Keys.isMouse(code) ? Gdx.input.isButtonPressed(code - Keys.MOUSE) : Gdx.input.isKeyPressed(code); }
-    @Override public boolean justPressed(int code) { return Keys.isMouse(code) ? Gdx.input.isButtonJustPressed(code - Keys.MOUSE) : Gdx.input.isKeyJustPressed(code); }
+    @Override public boolean down(int code) { return KeyCodes.isMouse(code) ? Gdx.input.isButtonPressed(code - KeyCodes.MOUSE) : Gdx.input.isKeyPressed(code); }
+    @Override public boolean justPressed(int code) { return KeyCodes.isMouse(code) ? Gdx.input.isButtonJustPressed(code - KeyCodes.MOUSE) : Gdx.input.isKeyJustPressed(code); }
 
     @Override public int anyJustPressed() {
         for (int k = 1; k < 256; k++) if (Gdx.input.isKeyJustPressed(k)) return k;
-        for (int b = 1; b <= 4; b++) if (Gdx.input.isButtonJustPressed(b)) return Keys.mouse(b);
-        if (Gdx.input.isButtonJustPressed(Input.Buttons.LEFT)) return Keys.mouse(Input.Buttons.LEFT);
+        for (int b = 1; b <= 4; b++) if (Gdx.input.isButtonJustPressed(b)) return KeyCodes.mouse(b);
+        if (Gdx.input.isButtonJustPressed(Input.Buttons.LEFT)) return KeyCodes.mouse(Input.Buttons.LEFT);
         return -1;
     }
 

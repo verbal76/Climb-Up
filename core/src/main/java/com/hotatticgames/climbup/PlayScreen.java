@@ -704,7 +704,7 @@ public final class PlayScreen extends ScreenAdapter {
         }
         float bw = 440, bh = 84, bx = W / 2 - bw / 2;
         if (ui.button("RESUME", bx, y + ph - 200, bw, bh, true)) resumePlay();
-        if (ui.button(confirmRestart ? "TAP AGAIN TO CONFIRM" : "RETRY CHECKPOINT", bx, y + ph - 304, bw, bh)) {
+        if (ui.button(confirmRestart ? g.platform.tip("TAP AGAIN TO CONFIRM") : "RETRY CHECKPOINT", bx, y + ph - 304, bw, bh)) {
             if (confirmRestart) { sim.respawn(); sim.consumeEvents(); world.snapCamera(sim); confirmRestart = false; resumePlay(); } else confirmRestart = true;
         }
         if (ui.button("SETTINGS", bx, y + ph - 408, bw, bh)) { g.audio.play("click"); g.persist(); next = new SettingsScreen(g, this); disposeOnLeave = false; }

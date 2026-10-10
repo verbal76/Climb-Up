@@ -54,7 +54,7 @@ final class DesktopTabs {
             s.row("CONTROLLER BINDINGS", p == null ? "CONNECT ONE" : "EDIT", null, null, () -> { if (dp.input.activePad() != null) g.setScreen(new BindingsScreen(g, dp, s, true)); });
             s.row("CONTROLLER DEAD ZONE", Math.round(c.deadzone * 100) + "%", () -> { c.setDeadzone(c.deadzone - 0.05f); dp.save(); }, () -> { c.setDeadzone(c.deadzone + 0.05f); dp.save(); }, null);
             boolean pad = in.promptDevice() == InputManager.Device.CONTROLLER && p != null;
-            s.row("RESTORE DEFAULTS", confirmRestore ? "TAP AGAIN" : pad ? "CONTROLLER" : "KEYBOARD", null, null, () -> {
+            s.row("RESTORE DEFAULTS", confirmRestore ? "CONFIRM" : pad ? "CONTROLLER" : "KEYBOARD", null, null, () -> {
                 if (!confirmRestore) { confirmRestore = true; return; }
                 confirmRestore = false;
                 if (pad) c.restorePad(p.id()); else c.restoreKeyboard();

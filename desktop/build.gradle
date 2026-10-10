@@ -9,7 +9,8 @@ dependencies {
     implementation "com.badlogicgames.gdx-controllers:gdx-controllers-desktop:$controllersVersion"
     testImplementation 'junit:junit:4.13.2'
 }
-tasks.named('run') {
+tasks.named("test") { testLogging { events "passed", "failed", "skipped"; exceptionFormat "full" } }
+tasks.named("run") {
     workingDir = file('../assets')
     systemProperties System.properties.findAll { it.key.toString().startsWith('climb.') }
 }

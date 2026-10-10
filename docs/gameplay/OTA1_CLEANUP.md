@@ -28,3 +28,15 @@ Run locally (JVM): baseline `:core:test` 130 tests, 0 failures; final `:core:tes
 
 ## Unresolved
 Defect 6; Defect 5 and 7 need a look on device. Known pre-existing limit kept: a body rising into a platform from below that does not clear its top falls back through (one-way semantics).
+
+## Backlog status (after the cleanup batch)
+| Item | Status |
+|---|---|
+| 1 cannonballs fly off-screen | done (render only) |
+| 2 barrel/ball agree | done; "face the player's side" NOT done (changes the proved lane, generator+sim work) |
+| A spike slab top safe, elevator, slam bounce | done (sim only) |
+| B more dead ends | done (generator: rate, 2 tries, long spurs, no trap at the end) |
+| C mortar rows | done (new Type.MORTAR, Kind.MORTAR, renderer) |
+| D rain cloud + slippery platform (Frost, medium) | done (Element.WET via `color`, Tuning.wetGrip, Kind.WET, render, hero flail) |
+| E parallel stacked routes | NOT delivered. Tried a post-hoc pass (pad + perch + level hops + one trap, rejoining a later route platform, links proven with pairOk/planPair + timing window). On seeds 170-172 (8 slices each) 0 of 6 attempts reached the proofs: the route climbs ~2 m per module so a flat balcony needs a perch 8-10 m up (a held pad reaches ~8 m), and the tight spiral leaves no room beside a route platform for a pad (every attempt overlapped the next route element). It needs to be designed INTO route generation (a fork module that lays out both branches together, with the pad space reserved), not added afterwards. Reverted; nothing shipped. |
+| F aimed late-game cannon | not started |

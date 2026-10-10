@@ -85,8 +85,8 @@ jobs:
           "save folder used: $env:APPDATA\HotAtticGames\Upwardly  exists=" + (Test-Path $log)
           Get-Content $log
           if ($p.ExitCode -ne 0) { throw "smoke failed" }
-      - name: Launch the EXE with a software OpenGL driver (best effort; hosted runners have no GPU)
-        continue-on-error: true
+      - name: Launch the EXE with a software OpenGL driver, run 30 s, require a clean exit (hosted runners have no GPU; the driver is a CI-only helper)
+        continue-on-error: true       # third-party driver download: a failure here is reported, but does not stop the package from being uploaded
         shell: powershell
         run: |
           $ErrorActionPreference = 'Stop'
@@ -99,13 +99,13 @@ jobs:
           Get-ChildItem "$env:RUNNER_TEMP\mesa\x64\*.dll" | Where-Object { $_.Name -match 'opengl32|libgallium_wgl|libglapi|libEGL|libGLESv2' } | Copy-Item -Destination "$env:RUNNER_TEMP\glapp"
           $env:GALLIUM_DRIVER = 'llvmpipe'; $env:MESA_GL_VERSION_OVERRIDE = '4.5'
           $env:APPDATA = "$env:RUNNER_TEMP\appdata2"; New-Item -ItemType Directory -Force $env:APPDATA | Out-Null
-          $p = Start-Process -FilePath "$env:RUNNER_TEMP\glapp\UPWARDLY.exe" -PassThru
-          Start-Sleep -Seconds 40
-          "process alive after 40 s: " + (-not $p.HasExited)
+          $p = Start-Process -FilePath "$env:RUNNER_TEMP\glapp\UPWARDLY.exe" -ArgumentList '--exit-after=30' -PassThru
+          $done = $p.WaitForExit(150000)
+          "exited by itself within 150 s: $done"
+          if ($done) { "exit code: " + $p.ExitCode } else { $p.Kill() }
           $log = "$env:APPDATA\HotAtticGames\Upwardly\desktop.log"
           if (Test-Path $log) { Get-Content $log } else { "no desktop.log was written" }
-          Get-ChildItem "$env:RUNNER_TEMP\glapp" -Filter *.dll | Select-Object -First 8 Name
-          if (-not $p.HasExited) { $null = $p.CloseMainWindow(); Start-Sleep -Seconds 5; "exited after close request: " + $p.HasExited; if (-not $p.HasExited) { $p.Kill() } }
+          if (-not $done -or $p.ExitCode -ne 0) { throw "the packaged game did not start, run and exit cleanly" }
       - uses: actions/upload-artifact@v4
         with:
           name: EXPERIMENTAL-UPWARDLY-win64-build-${{ github.run_number }}

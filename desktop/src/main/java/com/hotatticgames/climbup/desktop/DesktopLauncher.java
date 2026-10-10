@@ -11,9 +11,14 @@ import java.io.File;
 /** UPWARDLY for Windows (and a development launcher for other desktops): the shared game inside an LWJGL3 window. */
 public final class DesktopLauncher {
     private static File assetRoot;
+    /** --exit-after=SECONDS: the game closes itself (used by CI to prove a clean shutdown of the packaged EXE); 0 = never. */
+    static float exitAfter;
 
     public static void main(String[] args) {
-        for (String a : args) if (a.equals("--smoke")) { System.exit(Smoke.run()); return; }
+        for (String a : args) {
+            if (a.equals("--smoke")) { System.exit(Smoke.run()); return; }
+            if (a.startsWith("--exit-after=")) { try { exitAfter = Float.parseFloat(a.substring(13)); } catch (NumberFormatException ignored) { } }
+        }
         Lwjgl3ApplicationConfiguration c = new Lwjgl3ApplicationConfiguration();
         c.setTitle(DesktopPlatform.TITLE);
         if (System.getProperty("climb.iconShot") != null) { c.setWindowedMode(256, 256); new Lwjgl3Application(new IconShot(), c); return; }     // dev tool: render a character to a transparent PNG

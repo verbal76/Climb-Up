@@ -71,6 +71,7 @@ public final class DesktopPlatform implements Platform {
 
     @Override public void frame(float dt) {
         trace(System.nanoTime());
+        if (DesktopLauncher.exitAfter > 0f && (System.nanoTime() - startNs) / 1e9f > DesktopLauncher.exitAfter) { DesktopLauncher.exitAfter = 0f; DesktopLog.append("exit requested by --exit-after"); Gdx.app.exit(); }
         input.update(Math.min(dt, 0.1f));
         if (sources.justPressed(Input.Keys.F11) || (sources.justPressed(Input.Keys.ENTER) && (sources.down(Input.Keys.ALT_LEFT) || sources.down(Input.Keys.ALT_RIGHT)))) { display.toggle(cfg); save(); }
         if (cfg.display == DesktopConfig.DisplayMode.WINDOWED && !Gdx.graphics.isFullscreen()) {

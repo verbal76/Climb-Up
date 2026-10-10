@@ -21,5 +21,7 @@ otalab/libs/
 *.pem
 climbhost/src/main/assets/baseline/
 climbhost/src/main/assets/lab_public_key.b64
+climbhost/src/main/assets/updates/
+climbhost/src/main/assets/reference-digests.txt
 climbhost/libs/
 climbref/libs/

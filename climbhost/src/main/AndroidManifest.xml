@@ -26,5 +26,18 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <!-- lab console: its own task and its own process, so it can stop and restart the game's process without ending itself -->
+        <activity
+            android:name="com.hotatticgames.climbup.otalab.LabConsole"
+            android:exported="true"
+            android:label="Climb Up OTA lab"
+            android:process=":console"
+            android:taskAffinity="com.hotatticgames.climbup.otaexp.console"
+            android:theme="@android:style/Theme.DeviceDefault.Light">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
     </application>
 </manifest>

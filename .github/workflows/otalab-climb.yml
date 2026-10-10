@@ -64,6 +64,12 @@ jobs:
           tools/otalab/jvm_digests.sh climbmodule/build/libs/climb-module-$VER.jar "$(find ~/.gradle -name 'gdx-1.14.2.jar' | head -1)" assets/data/tuning.json "$RUNNER_TEMP/jvm-digests.txt" 3
       - uses: actions/upload-artifact@v4
         with: { name: jvm-digests, path: "${{ runner.temp }}/jvm-digests.txt" }
+      - name: Embed the signed test releases and the reference digests in the host APK (the lab console runs the scenarios from inside the phone)
+        run: |
+          mkdir -p climbhost/src/main/assets/updates
+          for p in c2_same_world c3_new_generator c4_tampered c5_no_entry c7_code_change c8_after_interrupt; do cp -r "$RUNNER_TEMP/serve/$p" climbhost/src/main/assets/updates/; done
+          cp "$RUNNER_TEMP/jvm-digests.txt" climbhost/src/main/assets/reference-digests.txt
+          du -sh climbhost/src/main/assets/updates; ls climbhost/src/main/assets/updates/c7_code_change
       - name: Assemble the three apps (module host, packaged reference, unmodified packaged game)
         run: ./gradlew :climbhost:assembleDebug :climbref:assembleDebug :android:assembleDebug --no-daemon -PwithAndroid
       - name: Inventory (sizes, native libs, dex counts, permissions)

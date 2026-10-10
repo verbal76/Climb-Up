@@ -154,7 +154,7 @@ public final class HeroRig implements Disposable {
         for (com.badlogic.gdx.graphics.g3d.Material m : model.materials) m.set(ColorAttribute.createEmissive(0.10f, 0.10f, 0.12f, 1f));
         if (ham) for (com.badlogic.gdx.graphics.g3d.Material m : model.materials) {
             com.badlogic.gdx.graphics.g3d.attributes.TextureAttribute ta = (com.badlogic.gdx.graphics.g3d.attributes.TextureAttribute) m.get(com.badlogic.gdx.graphics.g3d.attributes.TextureAttribute.Diffuse);
-            if (ta != null) ta.textureDescription.texture.setFilter(com.badlogic.gdx.graphics.Texture.TextureFilter.Linear, com.badlogic.gdx.graphics.Texture.TextureFilter.Linear);
+            if (ta != null) GfxHooks.sharpen(ta.textureDescription.texture);
         }
         inst = new ModelInstance(model);
         if (Characters.astronaut(character)) { Node gun = inst.getNode("n22_Pistol", true, true); if (gun != null) gun.parts.clear(); }

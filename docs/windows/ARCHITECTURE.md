@@ -42,3 +42,14 @@ Keyboard, mouse and one active controller are always live together. The "device"
 
 ## What is deliberately absent
 No OTA/network code runs (`Platform.networkAllowed()` is false: no check, no staged-content read), no Steamworks API, no achievements/cloud/leaderboards.
+
+## Graphics (Windows only)
+
+Settings > DISPLAY and GRAPHICS. Everything is stored in `upwardly-desktop.cfg` (`gfx.*` keys, `display`, `resolution`) and only changes how the picture is made, never the simulation.
+
+* First run: the graphics chip name, video memory (NVIDIA/AMD extensions when the driver offers them), screen size and refresh pick the defaults (`GraphicsProfile`, pure and tested) and the choice is written to `desktop.log`. A 1920x1080-or-larger screen starts full screen, a smaller one in a window. Weak or integrated chips get a smaller picture size, no sky effects and lower anti-aliasing; the first window already opened with 4x anti-aliasing, so a lower level applies from the second start.
+* Display modes: windowed, full screen (monitor mode, highest refresh for the picked size) and borderless full screen. F11 / Alt+Enter toggles windowed and the last full-screen kind. A size the monitor no longer offers falls back to NATIVE (AUTO); a failed switch falls back to a window and is logged.
+* Picture size (50/75/100%): the 3D scene is drawn into a smaller buffer and stretched (`core/render/GfxHooks`, default 100% = original path). Menus and text are always drawn at the window's real size.
+* Anti-aliasing 0/2/4/8 (window creation, so restart to change; if the window cannot be made with it the launcher retries without). Texture sharpness (anisotropy) applies to real picture textures; the Kenney colour palette stays on nearest filtering because mipmaps would blend neighbouring colour swatches.
+* Pixel font: `Ui.crisp` (set only by the Windows platform) rounds text size and position to whole device pixels. Android leaves it off.
+* "Use the faster GPU": writes `GpuPreference=2;` under `HKCU\Software\Microsoft\DirectX\UserGpuPreferences` (value name = full path of Upwardly.exe) with `reg add`, removes it with `reg delete` when switched off. Current user only, Windows only, failures are logged and ignored, and Windows only reads it when the game starts.

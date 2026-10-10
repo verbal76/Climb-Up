@@ -28,11 +28,14 @@ public final class DesktopPlatform implements Platform {
     private final InputAdapter noScroll = new InputAdapter();
     public InputManager input;
     public final DisplayManager display = new DisplayManager();
+    public final GraphicsManager graphics;
     private MenuNav nav;
     private ClimbGame g;
     private float hintT, saveClock;
     private InputManager.Device lastHintDevice = InputManager.Device.KEYBOARD;
     private boolean dirty;
+    /** True once the game's create() reached attach(): the window and GL context exist and startup got past the point where a different graphics setup could still be tried. */
+    public volatile boolean attached;
     private int frames; private long startNs = System.nanoTime(), lastNs; private double sumMs, maxMs;
     private final StringBuilder startupLog = new StringBuilder();
 
@@ -43,6 +46,8 @@ public final class DesktopPlatform implements Platform {
         this.sourceFactory = sourceFactory;
         configFile = new File(dataDir, "upwardly-desktop.cfg");
         cfg = DesktopConfig.load(configFile);
+        graphics = new GraphicsManager(cfg);
+        graphics.display = display; display.after = graphics::apply;
     }
 
     @Override public boolean desktop() { return true; }
@@ -52,11 +57,12 @@ public final class DesktopPlatform implements Platform {
     @Override public GameInput gameInput() { return input; }
 
     @Override public void attach(ClimbGame game) {
+        attached = true;
         DesktopLog.append("window and GL context created; attaching input");
         g = game; sources = sourceFactory.get(); input = new InputManager(cfg, sources); nav = new MenuNav(input);
         game.ui.nav = nav;
-        if (cfg.display == DesktopConfig.DisplayMode.FULLSCREEN) { /* the launcher already opened the window fullscreen */ }
-    }
+        try { graphics.start(game); save(); } catch (RuntimeException e) { DesktopLog.error("graphics setup failed; using the defaults", e); }
+            }
 
     /** desktop.log in the data folder: startup time and frame pacing of this run (the evidence the packaged build can give without a console). */
     private void trace(long nowNs) {
@@ -133,7 +139,7 @@ public final class DesktopPlatform implements Platform {
         return true;
     }
 
-    @Override public List<SettingsTab> settingsTabs() { return Arrays.<SettingsTab>asList(new DesktopTabs.WindowTab(this), new DesktopTabs.ControlsTab(this)); }
+    @Override public List<SettingsTab> settingsTabs() { return Arrays.<SettingsTab>asList(new DesktopTabs.DisplayTab(this), new DesktopTabs.GraphicsTab(this), new DesktopTabs.ControlsTab(this)); }
 
     @Override public void dispose() { save(); }
 }

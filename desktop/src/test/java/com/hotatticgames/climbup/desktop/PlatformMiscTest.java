@@ -20,30 +20,6 @@ public class PlatformMiscTest {
         assertTrue(DataDirs.resolve("Linux", null, "/xdg", "/home/x").getPath().startsWith("/xdg"));
     }
 
-    @Test public void resolutionListIsSortedUniqueAndFitsTheMonitor() {
-        List<int[]> modes = new ArrayList<>(Arrays.asList(new int[]{1920, 1080}, new int[]{1920, 1080}, new int[]{800, 600}, new int[]{3440, 1440}, new int[]{5120, 2880}));
-        List<int[]> r = DisplayManager.resolutions(modes, 3440, 1440);
-        for (int i = 0; i < r.size(); i++) {
-            assertTrue(r.get(i)[0] >= 1280 && r.get(i)[1] >= 720 && r.get(i)[0] <= 3440 && r.get(i)[1] <= 1440);
-            if (i > 0) assertTrue(r.get(i - 1)[0] < r.get(i)[0] || (r.get(i - 1)[0] == r.get(i)[0] && r.get(i - 1)[1] < r.get(i)[1]));
-        }
-        int n1080 = 0; for (int[] x : r) if (x[0] == 1920 && x[1] == 1080) n1080++;
-        assertEquals(1, n1080);
-        boolean ultrawide = false; for (int[] x : r) if (x[0] == 3440) ultrawide = true;
-        assertTrue(ultrawide);
-    }
-
-    @Test public void aTinyMonitorStillGetsAUsableList() {
-        List<int[]> r = DisplayManager.resolutions(new ArrayList<>(), 1024, 600);
-        assertEquals(1, r.size()); assertEquals(1280, r.get(0)[0]);
-    }
-
-    @Test public void nearestPicksTheClosestListedResolution() {
-        List<int[]> r = DisplayManager.resolutions(new ArrayList<>(), 3840, 2160);
-        assertArrayEquals(new int[]{1920, 1080}, r.get(DisplayManager.nearest(r, 1900, 1000)));
-        assertArrayEquals(new int[]{1280, 720}, r.get(DisplayManager.nearest(r, 640, 360)));
-    }
-
     @Test public void padFamiliesAreRecognisedByName() {
         assertEquals(PadFamily.XBOX, PadFamily.of("Xbox 360 Controller"));
         assertEquals(PadFamily.XBOX, PadFamily.of("Xbox Wireless Controller"));

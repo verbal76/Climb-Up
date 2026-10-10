@@ -430,12 +430,13 @@ public final class WorldRenderer implements Disposable {
         cam.up.set(0, 1, 0);
         cam.update();
 
-        Gdx.gl.glViewport(0, 0, Gdx.graphics.getBackBufferWidth(), Gdx.graphics.getBackBufferHeight());
+        boolean scaled = beginScaledScene();
+        if (!scaled) Gdx.gl.glViewport(0, 0, Gdx.graphics.getBackBufferWidth(), Gdx.graphics.getBackBufferHeight());
         Gdx.gl.glClearColor(skyBot.r, skyBot.g, skyBot.b, 1f);
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT | GL20.GL_DEPTH_BUFFER_BIT);
         bg.render(sb, shapes, skyTop, skyBot, ps, bgY, zoneF, T.circumference(), reducedMotion, time);
         Gdx.gl.glClear(GL20.GL_DEPTH_BUFFER_BIT);
-        if (quality > 0) bg.renderGlow(sb, zoneF);
+        if (quality > 0 && GfxHooks.skyEffects) bg.renderGlow(sb, zoneF);
         if (quality > 0) {                 // planets and sky ships far behind the tower (wide-range camera, drawn first)
             if (space == null) { farCam = new com.badlogic.gdx.graphics.PerspectiveCamera(40f, cam.viewportWidth, cam.viewportHeight); farCam.near = 1f; farCam.far = 2500f; space = new SpaceScene(models, farCam, T.radius); }
             space.cloudGlow.set(skyTop).lerp(skyBot, 0.5f).lerp(Color.WHITE, 0.4f);
@@ -443,11 +444,11 @@ public final class WorldRenderer implements Disposable {
             if (space.whoosh) whooshPending = true;
             farCam.viewportWidth = cam.viewportWidth; farCam.viewportHeight = cam.viewportHeight; farCam.fieldOfView = cam.fieldOfView;
             farCam.position.set(cam.position); farCam.direction.set(cam.direction); farCam.up.set(cam.up); farCam.update();
-            batch.begin(farCam); space.renderFar(batch, ps, bgY, zoneF); batch.end();
+            if (GfxHooks.skyEffects) { batch.begin(farCam); space.renderFar(batch, ps, bgY, zoneF); batch.end(); }
             Gdx.gl.glClear(GL20.GL_DEPTH_BUFFER_BIT);
         }
 
-        if (quality > 0) bg.renderShafts(sb, zoneF, reducedMotion, time);
+        if (quality > 0 && GfxHooks.skyEffects) bg.renderShafts(sb, zoneF, reducedMotion, time);
         batch.begin(cam);
         syncVis();
         int lo = Math.max(0, sim.winLo), hi = Math.min(vis.size() - 1, sim.winHi);
@@ -481,7 +482,41 @@ public final class WorldRenderer implements Disposable {
         if (showPlayer) drawPlayer(sim, dt, time, ps, py, alpha);
         particles.render(batch, env, ps, T, course);
         batch.end();
+        if (scaled) endScaledScene();
         drawVignette(Palette.blendF(Palette.VIGNETTE, zoneF));
+    }
+
+    // ---- optional reduced-resolution scene (GfxHooks.renderScale < 1): the 3D scene is drawn into a smaller buffer and stretched to the window; at 1 nothing here runs
+    private com.badlogic.gdx.graphics.glutils.FrameBuffer sceneFbo;
+
+    private boolean beginScaledScene() {
+        float k = GfxHooks.renderScale;
+        if (!(k < 0.99f)) { if (sceneFbo != null) { sceneFbo.dispose(); sceneFbo = null; } return false; }
+        int bw = Math.max(1, Gdx.graphics.getBackBufferWidth()), bh = Math.max(1, Gdx.graphics.getBackBufferHeight());
+        int w = Math.max(64, Math.round(bw * Math.max(0.25f, k))), h = Math.max(36, Math.round(bh * Math.max(0.25f, k)));
+        try {
+            if (sceneFbo == null || sceneFbo.getWidth() != w || sceneFbo.getHeight() != h) {
+                if (sceneFbo != null) sceneFbo.dispose();
+                sceneFbo = new com.badlogic.gdx.graphics.glutils.FrameBuffer(com.badlogic.gdx.graphics.Pixmap.Format.RGBA8888, w, h, true);
+                sceneFbo.getColorBufferTexture().setFilter(com.badlogic.gdx.graphics.Texture.TextureFilter.Linear, com.badlogic.gdx.graphics.Texture.TextureFilter.Linear);
+            }
+            sceneFbo.begin();
+            return true;
+        } catch (RuntimeException e) {          // this graphics driver cannot do it: draw at full size from now on
+            if (sceneFbo != null) { try { sceneFbo.dispose(); } catch (RuntimeException ignored) { } sceneFbo = null; }
+            GfxHooks.renderScale = 1f;
+            return false;
+        }
+    }
+
+    private void endScaledScene() {
+        sceneFbo.end();
+        int bw = Math.max(1, Gdx.graphics.getBackBufferWidth()), bh = Math.max(1, Gdx.graphics.getBackBufferHeight());
+        Gdx.gl.glDisable(GL20.GL_DEPTH_TEST);
+        sb.getProjectionMatrix().setToOrtho2D(0, 0, bw, bh); sb.setTransformMatrix(new com.badlogic.gdx.math.Matrix4());
+        sb.begin(); sb.disableBlending(); sb.setColor(Color.WHITE);
+        sb.draw(sceneFbo.getColorBufferTexture(), 0, 0, bw, bh, 0, 0, 1, 1);         // v runs bottom-to-top in a framebuffer texture, so (0,0)-(1,1) is upright here
+        sb.end(); sb.enableBlending();
     }
 
     /** A soft dark vignette that pulls the eye to the middle of the screen (stronger at night and in space). */
@@ -977,6 +1012,6 @@ public final class WorldRenderer implements Disposable {
     public float getCamY() { return camY; }
 
     @Override public void dispose() {
-        batch.dispose(); shapes.dispose(); sb.dispose(); hero.dispose(); bg.dispose(); if (vignette != null) vignette.dispose();
+        batch.dispose(); shapes.dispose(); sb.dispose(); hero.dispose(); bg.dispose(); if (sceneFbo != null) sceneFbo.dispose(); if (vignette != null) vignette.dispose();
     }
 }

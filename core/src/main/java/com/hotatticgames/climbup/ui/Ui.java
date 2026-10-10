@@ -21,6 +21,8 @@ public final class Ui extends InputAdapter implements Disposable {
     private final Settings settings;
     private final Vector2 v = new Vector2();
     private boolean down, tapped; private float downX, downY, tapX, tapY, curX, curY;
+    /** Desktop only: snap text size and position to whole device pixels so the pixel font stays sharp at any window size (off = the original behaviour). */
+    public boolean crisp;
     public boolean captured;     // set by screens that handle raw touch themselves
 
     /** Keyboard/controller/mouse-hover menu navigation (desktop only; null on mobile, where every code path below is skipped). */
@@ -74,7 +76,15 @@ public final class Ui extends InputAdapter implements Disposable {
         rect(x - 6, y - 6, w + 12, h + 12, SHADOW); rect(x - 4, y - 4, w + 8, h + 8, EDGE); rect(x, y, w, h, PANEL);
     }
 
+    /** Device pixels per virtual unit right now. */
+    public float deviceScale() { float ww = viewport.getWorldWidth(); return ww > 0 ? viewport.getScreenWidth() / ww : 1f; }
+    /** Font-pixel size rounded to a whole number of device pixels (at least 1); pure. */
+    public static float snapSize(float px, float scale) { return scale <= 0 ? px : Math.max(1, Math.round(px * scale)) / scale; }
+    /** A position rounded to a whole device pixel; pure. */
+    public static float snapPos(float v, float scale) { return scale <= 0 ? v : Math.round(v * scale) / scale; }
+
     public void text(String s, float x, float y, float px, Color c) {
+        if (crisp) { float k = deviceScale(); px = snapSize(px, k); x = snapPos(x, k); y = snapPos(y, k); }
         font.drawShadow(batch, s, x, y, px, c, SHADOW);
     }
     /** Comic speech bubble centred above (cx, y). */
@@ -87,7 +97,7 @@ public final class Ui extends InputAdapter implements Disposable {
         font.draw2(batch, s, x + 18, y + 14, px, new Color(0.08f, 0.08f, 0.14f, alpha));
     }
 
-    public void textC(String s, float cx, float y, float px, Color c) { text(s, cx - font.width(s, px) / 2f, y, px, c); }
+    public void textC(String s, float cx, float y, float px, Color c) { if (crisp) px = snapSize(px, deviceScale()); text(s, cx - font.width(s, px) / 2f, y, px, c); }
     public void textBody(String s, float cx, float y, float px, Color c) { textC(s, cx, y, px * tm(), c); }
 
     /** A big tappable button; returns true on the frame the tap is released inside it. */

@@ -27,17 +27,17 @@ public final class DesktopLauncher {
         DesktopLog.start(dir);
         DesktopPlatform platform = new DesktopPlatform(dir);
         DesktopConfig cfg = platform.cfg;
-        int w = Integer.getInteger("climb.w", cfg.width), h = Integer.getInteger("climb.h", cfg.height);
-        if (cfg.display == DesktopConfig.DisplayMode.FULLSCREEN && System.getProperty("climb.w") == null) {
-            com.badlogic.gdx.Graphics.DisplayMode best = Lwjgl3ApplicationConfiguration.getDisplayMode();
-            for (com.badlogic.gdx.Graphics.DisplayMode m : Lwjgl3ApplicationConfiguration.getDisplayModes())
-                if (m.width == cfg.width && m.height == cfg.height && m.refreshRate >= best.refreshRate) best = m;
-            c.setFullscreenMode(best);
-        } else c.setWindowedMode(w, h);
+        if (!cfg.graphicsDecided) {          // first run: a large display (a TV) starts full screen, a small one in a window; the rest of the defaults follow once the graphics chip is known
+            com.badlogic.gdx.Graphics.DisplayMode nat = Lwjgl3ApplicationConfiguration.getDisplayMode();
+            cfg.display = GraphicsProfile.defaultDisplay(nat.width, nat.height);
+            DesktopLog.append("first run: display " + nat.width + "x" + nat.height + " @" + nat.refreshRate + " -> " + cfg.display);
+        }
+        DisplayManager.configureStartup(c, cfg, System.getProperty("climb.w") != null ? Integer.getInteger("climb.w", cfg.width) : 0, Integer.getInteger("climb.h", cfg.height));
+        c.setBackBufferConfig(8, 8, 8, 8, 24, 0, cfg.aa);
         c.setWindowSizeLimits(640, 360, -1, -1);
         c.setWindowIcon(Files.FileType.Classpath, "icons/upwardly_256.png", "icons/upwardly_128.png", "icons/upwardly_64.png", "icons/upwardly_48.png", "icons/upwardly_32.png", "icons/upwardly_16.png");
-        c.useVsync(true);
-        c.setForegroundFPS(Math.max(60, Lwjgl3ApplicationConfiguration.getDisplayMode().refreshRate));       // vsync paces the frames; the simulation runs on its own fixed step either way
+        c.useVsync(cfg.vsync);
+        c.setForegroundFPS(GraphicsProfile.effectiveFrameLimit(cfg.vsync, cfg.frameLimit, Lwjgl3ApplicationConfiguration.getDisplayMode().refreshRate));       // with vsync the monitor paces the frames; the simulation runs on its own fixed step either way
         c.setIdleFPS(30);
         final ClimbGame game = new ClimbGame(dir, platform);
         c.setWindowListener(new Lwjgl3WindowAdapter() {
@@ -45,11 +45,22 @@ public final class DesktopLauncher {
             @Override public void focusGained() { try { game.resume(); } catch (RuntimeException ignored) { } }
         });
         try {
-            new Lwjgl3Application(game, c) {
-                @Override protected Files createFiles() { return new AssetFiles(assetRoot); }
-            };
+            run(game, c);
             DesktopLog.append("clean exit");
-        } catch (Throwable t) { DesktopLog.error("the game stopped with an error", t); t.printStackTrace(); System.exit(1); }       // never leave a half-started process behind
+        } catch (Throwable t) {
+            if (cfg.aa > 0 && !platform.attached) {          // the window could not be made with anti-aliasing: try once more without it
+                DesktopLog.error("the window could not be created with " + cfg.aa + "x anti-aliasing; trying again without it", t);
+                cfg.aa = 0; c.setBackBufferConfig(8, 8, 8, 8, 24, 0, 0);
+                try { run(game, c); DesktopLog.append("clean exit"); return; } catch (Throwable t2) { t = t2; }
+            }
+            DesktopLog.error("the game stopped with an error", t); t.printStackTrace(); System.exit(1);       // never leave a half-started process behind
+        }
+    }
+
+    private static void run(ClimbGame game, Lwjgl3ApplicationConfiguration c) {
+        new Lwjgl3Application(game, c) {
+            @Override protected Files createFiles() { return new AssetFiles(assetRoot); }
+        };
     }
 
     /** -Dclimb.assets, else an "assets" folder next to the jar (the packaged game), else the working directory (development: gradle run uses ../assets). */

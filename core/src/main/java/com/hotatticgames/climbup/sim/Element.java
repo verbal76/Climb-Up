@@ -52,6 +52,12 @@ public final class Element {
     /** Position in the repeating cycle, 0..1. */
     public float cyc(float t) { float c = t / period + phase / (2f * (float) Math.PI); return c - (float) Math.floor(c); }
 
+    /**
+     * Where the ball of the launch {@code back} cycles ago is at time t, if it simply kept flying at the speed it was fired with. For back = 0 during the flight this is exactly {@link #sAt}
+     * (the lethal ball); beyond the flight, and for earlier launches, it is the continued straight path, which the renderer draws until the ball is off screen. Never used for hits.
+     */
+    public float cannonBallS(float t, int back) { return s + dir * len / (CANNON_FLIGHT * period) * (cyc(t) + back) * period; }
+
     /** Radius of the lethal disc for round hazards (0 = not a disc). */
     public float discR() {
         switch (type) { case SAW_H: case SAW_V: return SAW_R; case PENDULUM: return BALL_R; case CANNON: return SHOT_R; default: return 0f; }

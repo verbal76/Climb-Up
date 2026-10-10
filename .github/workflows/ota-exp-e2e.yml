@@ -1,0 +1,93 @@
+name: OTA experimental channel - live end-to-end test (publishes to the experimental channel)
+# Proves the LIVE update path on a real Android emulator: installs the OTA test APK (baseline v1, channel address inside), then publishes NEW signed releases to the experimental GitHub channel
+# (branch ota-exp-channel) from this workflow while the app is installed, and checks that the app fetches them over the network, verifies, stages and activates them at the next cold start
+# (changed executable code + changed game file), rolls back a release that cannot start, refuses a release signed by an untrusted key, and replaces everything again with a clean release.
+# Manual only. Experimental branch and channel only; the production branch, the production "ota" release, tags and GitHub Releases are never touched. Signs with the OTA key already configured
+# in this repository, by the owner's decision.
+on:
+  workflow_dispatch: {}
+permissions:
+  contents: write
+concurrency: ota-exp-channel
+
+jobs:
+  live:
+    if: github.ref == 'refs/heads/exp/ota-full'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '17' }
+      - name: Accept Android SDK licenses (runner image ships the SDK)
+        run: |
+          mkdir -p "$ANDROID_HOME/licenses"
+          printf '\n24333f8a63b6825ea9c5514f83c2829b004d1fee\n8933bad161af4178b1185d1a37fbf41ea5269c55\nd56f5187479451eabf01fb78af6dfcb131a6481e\n' > "$ANDROID_HOME/licenses/android-sdk-license"
+      - uses: gradle/actions/setup-gradle@v4
+      - run: pip install pillow
+      - name: Open the configured OTA key (PASS/FAIL only, never printed)
+        env:
+          OTA_SIGNING_PRIVATE_KEY: ${{ secrets.OTA_SIGNING_PRIVATE_KEY }}
+          OTA_SIGNING_KEY_PASSPHRASE: ${{ secrets.OTA_SIGNING_KEY_PASSPHRASE }}
+        run: |
+          set -e
+          if [ -z "$OTA_SIGNING_PRIVATE_KEY" ] || [ -z "$OTA_SIGNING_KEY_PASSPHRASE" ]; then echo "::error::the OTA signing secrets are not set"; exit 1; fi
+          umask 077
+          python3 -c 'import os,sys; open(sys.argv[1],"w").write(os.environ["OTA_SIGNING_PRIVATE_KEY"].strip()+"\n")' "$RUNNER_TEMP/exp.pem"
+          openssl pkey -in "$RUNNER_TEMP/exp.pem" -passin env:OTA_SIGNING_KEY_PASSPHRASE -pubout -outform DER | base64 -w0 > "$RUNNER_TEMP/exp_pub.b64"
+          [ -s "$RUNNER_TEMP/exp_pub.b64" ] || { echo "::error::the OTA key cannot be opened with its passphrase"; exit 1; }
+          [ "$(cat "$RUNNER_TEMP/exp_pub.b64")" = "$(tr -d '\n ' < assets/ota/ota_public_key.b64)" ] || { echo "::error::the OTA key is not the pair of the public key pinned in the app"; exit 1; }
+          echo "OTA key opens and matches the pinned public key (fingerprint $(sha256sum "$RUNNER_TEMP/exp_pub.b64" | cut -c1-16))"
+      - name: Versions for this test (four consecutive numbers above everything already published)
+        id: v
+        run: |
+          set -e
+          REPO=${{ github.repository }}; BASE=https://raw.githubusercontent.com/$REPO/ota-exp-channel/
+          CUR=$(curl -fsS -m 30 "${BASE}manifest.json?nocache=$(date +%s)" 2>/dev/null | python3 -c 'import json,sys; print(json.load(sys.stdin).get("moduleVersion",0))' 2>/dev/null || echo 0)
+          F=$(tr -d ' \n\r' < tools/otalab/module_version.txt); [ "$CUR" -ge "$F" ] && S=$((CUR+1)) || S=$F
+          echo "published so far: v$CUR; this test uses v$S..v$((S+3))"
+          echo "v1=$S" >> "$GITHUB_OUTPUT"; echo "v2=$((S+1))" >> "$GITHUB_OUTPUT"; echo "v3=$((S+2))" >> "$GITHUB_OUTPUT"; echo "v4=$((S+3))" >> "$GITHUB_OUTPUT"; echo "base=$BASE" >> "$GITHUB_OUTPUT"
+      - name: Build the module, the baseline and the four test releases
+        env:
+          OTA_SIGNING_KEY_PASSPHRASE: ${{ secrets.OTA_SIGNING_KEY_PASSPHRASE }}
+        run: |
+          set -e
+          ./gradlew :climbmodule:moduleJar :climbmodule:markedModuleJar :hostkit:jar --no-daemon
+          BT=$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -1); LIB=$(ls -d $ANDROID_HOME/platforms/android-* | grep -E 'android-[0-9]+$' | sort -V | tail -1)/android.jar
+          VER=$(grep -oP "appVersionName = '\K[^']+" build.gradle)
+          mkdir -p climbhost/src/main/assets
+          tools/otalab/build_live_fixtures.sh climbmodule/build/libs/climb-module-$VER.jar climbmodule/build/libs/climb-module-marked-$VER.jar "$RUNNER_TEMP/exp.pem" OTA_SIGNING_KEY_PASSPHRASE "$BT/d8" "$LIB" "$RUNNER_TEMP/rel" climbhost/src/main/assets/baseline ${{ steps.v.outputs.v1 }} ${{ steps.v.outputs.v2 }} ${{ steps.v.outputs.v3 }} ${{ steps.v.outputs.v4 }}
+          cp "$RUNNER_TEMP/exp_pub.b64" climbhost/src/main/assets/lab_public_key.b64
+          printf '%s' "${{ steps.v.outputs.base }}" > climbhost/src/main/assets/update_base.txt
+          CP="hostkit/build/libs/hostkit-$VER.jar:modspi/build/libs/modspi-$VER.jar:$(find ~/.gradle -name 'gdx-1.14.2.jar' | head -1)"
+          for d in climbhost/src/main/assets/baseline "$RUNNER_TEMP/rel/r1" "$RUNNER_TEMP/rel/r2" "$RUNNER_TEMP/rel/r4"; do java -cp "$CP" com.hotatticgames.climbup.host.VerifyBundleCli "$d" "$RUNNER_TEMP/exp_pub.b64" com.hotatticgames.climbup.otaexp internal; done
+          if java -cp "$CP" com.hotatticgames.climbup.host.VerifyBundleCli "$RUNNER_TEMP/rel/r3" "$RUNNER_TEMP/exp_pub.b64" com.hotatticgames.climbup.otaexp internal; then echo "::error::the host verifier ACCEPTED the release signed by an untrusted key"; exit 1; fi
+      - name: Assemble the OTA test APK
+        run: |
+          ./gradlew :climbhost:assembleDebug --no-daemon -PwithAndroid
+          cp "$(ls climbhost/build/outputs/apk/debug/*.apk | head -1)" "$RUNNER_TEMP/ota-live.apk"; sha256sum "$RUNNER_TEMP/ota-live.apk"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ota-live-apk
+          path: ${{ runner.temp }}/ota-live.apk
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules; sudo udevadm trigger --name-match=kvm
+      - name: Live update test on the emulator (Android 14 / API 34)
+        uses: reactivecircus/android-emulator-runner@v2
+        env:
+          GH_TOKEN: ${{ github.token }}
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          profile: pixel_2
+          ram-size: 4096M
+          disable-animations: true
+          script: env APK="${{ runner.temp }}/ota-live.apk" REL="${{ runner.temp }}/rel" CHANNEL="${{ steps.v.outputs.base }}" OUT="${{ runner.temp }}/live-out" tools/otalab/live_ota_e2e.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: live-ota-evidence
+          path: ${{ runner.temp }}/live-out

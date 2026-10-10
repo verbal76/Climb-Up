@@ -54,6 +54,7 @@
     {"pattern": ".github/workflows/otalab-reliability*.yml", "owner": "E2"},
     {"pattern": ".github/workflows/otalab-climb.yml", "owner": "E1"},
     {"pattern": ".github/workflows/ota-exp-publish.yml", "owner": "E1"},
+    {"pattern": ".github/workflows/ota-exp-e2e.yml", "owner": "E1"},
 
     {"pattern": "docs/ota-full/reliability/**", "owner": "E2"},
     {"pattern": "docs/ota-full/**", "owner": "E1"},

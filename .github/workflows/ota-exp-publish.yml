@@ -1,7 +1,7 @@
 name: OTA experimental channel - build the OTA test APK and publish a signed game module
 # EXPERIMENTAL channel only. It builds the isolated OTA test app (com.hotatticgames.climbup.otaexp, which can never replace the installed game) with the experimental public key pinned
 # inside it, and publishes the signed module as plain static files on the branch "ota-exp-channel" of this repository (https://raw.githubusercontent.com/<repo>/ota-exp-channel/).
-# It never touches the production release branch or the production "ota" release. By the owner's request it also keeps ONE rolling pre-release, tag "ota-lab-latest", holding the newest verified OTA test APK (stable direct link). It signs with the OTA key already configured in this repository, by the owner's decision
+# It never touches the production release branch or the production "ota" release. By the owner's request it also keeps ONE rolling release, tag "ota-lab-latest", holding the newest verified OTA test APK (stable direct link). It signs with the OTA key already configured in this repository, by the owner's decision
 # (the key whose public half the shipped game pins in assets/ota/ota_public_key.b64); the signed objects differ (module manifests bound to the test app id), so a data-OTA signature is never a module signature.
 # Publish a new game version: change the game, raise the number in tools/otalab/module_version.txt, push to exp/ota-full (or run this workflow by hand).
 on:
@@ -117,13 +117,13 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -e
-          cp "$RUNNER_TEMP/ota-test.apk" "$RUNNER_TEMP/UPWARDLY.apk"; SUM=$(sha256sum "$RUNNER_TEMP/UPWARDLY.apk" | cut -d' ' -f1)
+          cp "$RUNNER_TEMP/ota-test.apk" "$RUNNER_TEMP/Upwardly.apk"; SUM=$(sha256sum "$RUNNER_TEMP/Upwardly.apk" | cut -d' ' -f1)
           NOTES="UPWARDLY for Android, build ${{ github.run_number }} (application id com.hotatticgames.climbup.otaexp, separate from the production app; updates itself from the GitHub channel). Source ${GITHUB_SHA}. Channel ${{ steps.v.outputs.base }} serves module v${{ steps.v.outputs.version }}. APK sha256 ${SUM}. Not the production release."
           if gh release view ota-lab-latest >/dev/null 2>&1; then
-            gh release upload ota-lab-latest "$RUNNER_TEMP/UPWARDLY.apk" --clobber
-            gh release delete-asset ota-lab-latest climbup-ota-lab.apk -y || true
-            gh release edit ota-lab-latest --prerelease --title "UPWARDLY Android - build ${{ github.run_number }}" --notes "$NOTES"
+            gh release upload ota-lab-latest "$RUNNER_TEMP/Upwardly.apk" --clobber
+            gh release delete-asset ota-lab-latest UPWARDLY.apk -y || true; gh release delete-asset ota-lab-latest climbup-ota-lab.apk -y || true
+            gh release edit ota-lab-latest --prerelease=false --title "UPWARDLY Android - build ${{ github.run_number }}" --notes "$NOTES"
           else
-            gh release create ota-lab-latest "$RUNNER_TEMP/UPWARDLY.apk" --prerelease --target "$GITHUB_SHA" --title "UPWARDLY Android - build ${{ github.run_number }}" --notes "$NOTES"
+            gh release create ota-lab-latest "$RUNNER_TEMP/Upwardly.apk" --target "$GITHUB_SHA" --title "UPWARDLY Android - build ${{ github.run_number }}" --notes "$NOTES"
           fi
-          echo "https://github.com/${{ github.repository }}/releases/download/ota-lab-latest/UPWARDLY.apk"
+          echo "https://github.com/${{ github.repository }}/releases/download/ota-lab-latest/Upwardly.apk"

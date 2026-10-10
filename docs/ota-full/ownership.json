@@ -56,6 +56,7 @@
     {"pattern": ".github/workflows/ota-exp-publish.yml", "owner": "E1"},
     {"pattern": ".github/workflows/ota-exp-e2e.yml", "owner": "E1"},
     {"pattern": ".github/workflows/ota-exp-ship.yml", "owner": "E1"},
+    {"pattern": ".github/workflows/ota-exp-release-flag.yml", "owner": "E1"},
 
     {"pattern": "docs/ota-full/reliability/**", "owner": "E2"},
     {"pattern": "docs/ota-full/**", "owner": "E1"},

@@ -1,4 +1,4 @@
-name: Windows (UPWARDLY) experimental build
+name: Windows (Upwardly) experimental build
 # Isolated Windows workflow. It can only run for pushes to exp/upwardly-windows or by hand, never publishes anything (no Releases, no tags, no Steam, no OTA),
 # uses no repository secrets and read-only permissions. Its artifacts are test builds, named EXPERIMENTAL.
 on:
@@ -62,7 +62,7 @@ jobs:
       - name: Print what was built
         shell: powershell
         run: |
-          $app = "build\windows\dist\UPWARDLY"
+          $app = "build\windows\dist\Upwardly"
           Get-ChildItem $app | Format-Table Name, Length
           Get-Content "$app\BUILD_INFO.txt"
           Get-ChildItem build\windows\*.zip | ForEach-Object { "{0} {1:N1} MB" -f $_.Name, ($_.Length/1MB) }
@@ -79,7 +79,7 @@ jobs:
           $env:Path = ($env:Path -split ';' | Where-Object { $_ -notmatch '(?i)java|jdk|temurin|hostedtoolcache' }) -join ';'
           "java on PATH: " + [bool](Get-Command java -ErrorAction SilentlyContinue)
           $env:APPDATA = "$env:RUNNER_TEMP\appdata"; New-Item -ItemType Directory -Force $env:APPDATA | Out-Null
-          $p = Start-Process -FilePath "build\windows\dist\UPWARDLY\UPWARDLY.exe" -ArgumentList '--smoke' -Wait -PassThru
+          $p = Start-Process -FilePath "build\windows\dist\Upwardly\Upwardly.exe" -ArgumentList '--smoke' -Wait -PassThru
           "exit code: " + $p.ExitCode
           $log = "$env:APPDATA\HotAtticGames\Upwardly\smoke.log"
           "save folder used: $env:APPDATA\HotAtticGames\Upwardly  exists=" + (Test-Path $log)
@@ -90,7 +90,7 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference = 'Stop'
-          Copy-Item -Recurse build\windows\dist\UPWARDLY "$env:RUNNER_TEMP\glapp"
+          Copy-Item -Recurse build\windows\dist\Upwardly "$env:RUNNER_TEMP\glapp"
           $rel = Invoke-RestMethod https://api.github.com/repos/pal1000/mesa-dist-win/releases/latest
           $asset = $rel.assets | Where-Object { $_.name -match 'release-msvc\.7z$' } | Select-Object -First 1
           "software GL driver: " + $asset.name + " (third-party test helper, used only on this CI runner, never shipped)"
@@ -99,7 +99,7 @@ jobs:
           Get-ChildItem "$env:RUNNER_TEMP\mesa\x64\*.dll" | Where-Object { $_.Name -match 'opengl32|libgallium_wgl|libglapi|libEGL|libGLESv2' } | Copy-Item -Destination "$env:RUNNER_TEMP\glapp"
           $env:GALLIUM_DRIVER = 'llvmpipe'; $env:MESA_GL_VERSION_OVERRIDE = '4.5'
           $env:APPDATA = "$env:RUNNER_TEMP\appdata2"; New-Item -ItemType Directory -Force $env:APPDATA | Out-Null
-          $p = Start-Process -FilePath "$env:RUNNER_TEMP\glapp\UPWARDLY.exe" -ArgumentList '--exit-after=30' -PassThru
+          $p = Start-Process -FilePath "$env:RUNNER_TEMP\glapp\Upwardly.exe" -ArgumentList '--exit-after=30' -PassThru
           $done = $p.WaitForExit(150000)
           "exited by itself within 150 s: $done"
           if ($done) { "exit code: " + $p.ExitCode } else { $p.Kill() }
@@ -108,7 +108,7 @@ jobs:
           if (-not $done -or $p.ExitCode -ne 0) { throw "the packaged game did not start, run and exit cleanly" }
       - uses: actions/upload-artifact@v4
         with:
-          name: EXPERIMENTAL-UPWARDLY-win64-build-${{ github.run_number }}
+          name: Upwardly-Windows-build-${{ github.run_number }}
           path: |
             build/windows/*.zip
             build/windows/SHA256SUMS.txt

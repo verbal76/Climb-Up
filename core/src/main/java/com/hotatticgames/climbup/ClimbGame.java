@@ -102,7 +102,7 @@ public class ClimbGame extends Game {
     }
 
     /** A climb in progress: the growing tower plus the world element the player stands on. */
-    public static final class Run { public Tower tower; public int startIdx; public boolean resumed; }
+    public static final class Run { public Tower tower; public int startIdx; public boolean resumed; public RunSnapshot snapshot; }
 
     public HistoryStore history;
     /** True if there is a climb in progress whose history is on disk and complete up to its checkpoint. */
@@ -118,11 +118,18 @@ public class ClimbGame extends Game {
         if (!fresh && save.seed != 0) {
             try {
                 java.util.List<byte[]> hist = history.read(save.seed);
+                RunSnapshot snap = store.loadRun();          // SAVE & EXIT: the exact moment of the climb (fits only the climb it was taken in)
+                if (snap != null && (snap.seed != save.seed || hist == null || hist.size() <= snap.maxSlice)) { store.deleteRun(); snap = null; }
+                if (snap != null) { save.cpSlice = snap.cpSlice; save.cpLocal = snap.cpLocal; }
                 if (hist != null && hist.size() > save.cpSlice) {
                     r.tower = new Tower(save.seed, tuning, hist, save.cpSlice);
                     Tower.Ref ref = new Tower.Ref(save.cpSlice, save.cpLocal);
                     int idx = r.tower.worldIndex(ref);
-                    if (idx >= 0) { r.tower.setCheckpointRef(ref); r.startIdx = idx; r.resumed = true; return r; }
+                    if (idx >= 0) {
+                        r.tower.setCheckpointRef(ref); r.startIdx = idx; r.resumed = true;
+                        if (snap != null) { r.tower.windowAroundAbs(snap.centreAbs()); r.snapshot = snap; }
+                        return r;
+                    }
                 }
             } catch (Exception e) { /* unreadable: fall through to a new climb */ }
             save.seed = 0;
@@ -150,7 +157,23 @@ public class ClimbGame extends Game {
         save.cpSlice = ref.slice; save.cpLocal = ref.local;
     }
 
-    public void forgetRun() { RunRecord.forgetClimb(save); if (history != null) history.delete(); }      // records (bestSplit, bestTotals, bestFinish, lastFinish) are kept
+    /** Hosting hook: a host that can relaunch the app (the OTA module host) overrides both. The packaged / desktop game has no behaviour here. */
+    public boolean canRestartApp() { return false; }
+    public void restartApp() { }
+
+    public void forgetRun() { RunRecord.forgetClimb(save); if (history != null) history.delete(); if (store != null) store.deleteRun(); }
+
+    /** Writes the exact state of the climb in progress (SAVE &amp; EXIT, pause, autosave). Nothing is written when the state cannot be saved faithfully; the previous snapshot then stays, or is dropped if it would now be wrong. */
+    public void saveRun(Tower tower, com.hotatticgames.climbup.sim.Sim sim) {
+        if (tower == null || save.seed == 0 || save.seed != tower.seed || store == null) return;
+        syncHistory(tower);
+        RunSnapshot r = RunSnapshot.capture(sim, tower, save.seed);
+        if (r == null) { store.deleteRun(); return; }
+        store.saveRun(r);
+        ResumeState.capture(save, sim);
+        save.cpSlice = r.cpSlice; save.cpLocal = r.cpLocal;
+        store.saveGame(save);
+    }      // records (bestSplit, bestTotals, bestFinish, lastFinish) are kept
 
     public void persist() { store.saveGame(save); store.saveSettings(settings); }
 

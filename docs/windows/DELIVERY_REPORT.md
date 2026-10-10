@@ -1,4 +1,4 @@
-# UPWARDLY (Windows) - delivery report
+# Upwardly (Windows) - delivery report
 
 Status: **engineering complete and automatically validated as far as this environment allows; NOT released, NOT published, nothing uploaded to Steam.** Physical-device checks are listed in section "Not verified" and still need the owner (or hardware).
 
@@ -8,7 +8,7 @@ Evidence is CI run 9 of `.github/workflows/windows.yml` (https://github.com/verb
 Delegated by the Android OTA engineer session (`session_01F57bWRDdZWBkp9cYKbBN1Q`) to an independent session with its own container, branch and task context. No production-release authority was granted or used.
 
 ## 2. Agent identity and assignment
-UPWARDLY WINDOWS ENGINEER. Assignment: Windows desktop port and Steam preparation of the existing libGDX game, per the owner's directive (all 27 report items below).
+Upwardly WINDOWS ENGINEER. Assignment: Windows desktop port and Steam preparation of the existing libGDX game, per the owner's directive (all 27 report items below).
 
 ## 3. Source baseline
 Build 44, source SHA `9a9b9bea3f38d3211ad7be34cb9529adf676dd9f` (version 1.1.5), verified by `git log` of the detached checkout before branching. Two workflows existed (`android.yml`, `ota-publish.yml`), both publishing, both triggered only by pushes to `ccr-cb458cd1-w4dh5c` or manual dispatch.
@@ -53,18 +53,18 @@ No touch overlay, no stick, no jump/swing buttons on desktop; the corner pause i
 Windowed, fullscreen (F11, Alt+Enter, Settings), resolution list from the monitor's modes plus common sizes, resizable window (min 640x360) with the game's own ExtendViewport/fixed vertical field of view (wider windows show more width, as on a wide phone; framing and camera code untouched), high-DPI via libGDX logical mode. Scenario in a real window: resized to 1600x900, 1920x1080, 2560x1080 (21:9), 1024x768, 1280x720; fullscreen entered and left; screenshots inspected. Vertical sync on, frame pacing independent of the fixed simulation step.
 
 ## 17. Windows EXE packaging details
-`tools/windows/package.ps1`: `:desktop:windowsJar` (shared game + LWJGL3 + Windows natives only) -> `jpackage --type app-image` -> `UPWARDLY.exe` (icon from the existing game icon, version `1.1.5.<build>`, vendor Hot Attic Games) -> `app/assets` -> checksums -> Steam layout -> zip. Build is reproducible from the repository (CI does it on a clean Windows runner). Window title/display name UPWARDLY.
+`tools/windows/package.ps1`: `:desktop:windowsJar` (shared game + LWJGL3 + Windows natives only) -> `jpackage --type app-image` -> `Upwardly.exe` (icon from the existing game icon, version `1.1.5.<build>`, vendor Hot Attic Games) -> `app/assets` -> checksums -> Steam layout -> zip. Build is reproducible from the repository (CI does it on a clean Windows runner). Window title/display name Upwardly.
 
 ## 18. Bundled runtime details
-jlink'd Temurin 17 runtime inside the app folder (`java.base, java.desktop, java.logging, java.management, java.naming, java.xml, jdk.unsupported, jdk.crypto.ec`). CI proof: with `JAVA_HOME` cleared and every Java directory removed from PATH (`java on PATH: False`), `UPWARDLY.exe --smoke` exits 0 with `java.home=...\UPWARDLY\runtime`, assets from `app\assets`, saves in `%APPDATA%\HotAtticGames\Upwardly`, GLFW 3.4.0 initialised, SDL controller library loaded, 1200 simulation steps run. CI found and fixed a real missing-module startup crash (`EC KeyFactory not available`).
+jlink'd Temurin 17 runtime inside the app folder (`java.base, java.desktop, java.logging, java.management, java.naming, java.xml, jdk.unsupported, jdk.crypto.ec`). CI proof: with `JAVA_HOME` cleared and every Java directory removed from PATH (`java on PATH: False`), `Upwardly.exe --smoke` exits 0 with `java.home=...\Upwardly\runtime`, assets from `app\assets`, saves in `%APPDATA%\HotAtticGames\Upwardly`, GLFW 3.4.0 initialised, SDL controller library loaded, 1200 simulation steps run. CI found and fixed a real missing-module startup crash (`EC KeyFactory not available`).
 
 ## 19. Steam distribution folder location
-`build/windows/steam/content/` (identical to `build/windows/dist/UPWARDLY/`), built by CI; VDF templates with placeholder IDs in `build/windows/steam/scripts/` (source: `tools/windows/steam/`). See `STEAM_PACKAGING.md`. Launch executable: `UPWARDLY.exe`. Checksums: `SHA256SUMS.txt` (every file + the zip). Test artifact: workflow artifact `EXPERIMENTAL-UPWARDLY-win64-build-9` (48.6 MB, workflow artifact only, not a Release).
+`build/windows/steam/content/` (identical to `build/windows/dist/Upwardly/`), built by CI; VDF templates with placeholder IDs in `build/windows/steam/scripts/` (source: `tools/windows/steam/`). See `STEAM_PACKAGING.md`. Launch executable: `Upwardly.exe`. Checksums: `SHA256SUMS.txt` (every file + the zip). Test artifact: workflow artifact `EXPERIMENTAL-Upwardly-win64-build-9` (48.6 MB, workflow artifact only, not a Release).
 
 ## 20. Automated test results
 * Gameplay regression suite (`:core:test`, unmodified tests) passed on CI in runs 2-9 on this branch (Linux job step "Gameplay regression suite"); locally 130/130 before the one added test file; plus `PlatformSeamTest` (2 tests). No existing test or physics code was modified.
 * Desktop unit tests: 84 tests, 0 failures (input mapping, mouse/menu navigation, controller mapping, discovery/disconnect, device switching, persistence, conflicts, restore defaults, menu recovery, asset resolution, display list, save folders, prompts).
-* End-to-end scenario in a real window with software OpenGL (Xvfb on Linux, CI): 31 checks, all pass - startup, UPWARDLY title, keyboard-only navigation, mouse, rebinding, persistence, play, controller plug/unplug, pause, window resizes, fullscreen, save files, clean exit of the menu flow. Timing there: avg 17 ms/frame (software GL).
+* End-to-end scenario in a real window with software OpenGL (Xvfb on Linux, CI): 31 checks, all pass - startup, Upwardly title, keyboard-only navigation, mouse, rebinding, persistence, play, controller plug/unplug, pause, window resizes, fullscreen, save files, clean exit of the menu flow. Timing there: avg 17 ms/frame (software GL).
 * Linux packaged-jar smoke and Windows EXE smoke: pass.
 * Not run: lint/static analysis (none configured in the repository).
 
@@ -81,7 +81,7 @@ Inherited gameplay defects listed in directive section 18 were not touched (shar
 * The EXE is unsigned (SmartScreen/antivirus prompts possible outside Steam).
 * Pause-menu subtitle line sits under the focus ring at 720p (cosmetic).
 * Core suite duration on CI varies widely (4.5-35 min).
-* UPWARDLY is used for the window title, executable metadata, title screen, credits heading and About line. I did not audit every other shared string for the old name; any remaining ones are display-only.
+* Upwardly is used for the window title, executable metadata, title screen, credits heading and About line. I did not audit every other shared string for the old name; any remaining ones are display-only.
 
 ## 24. Files modified
 61 files vs baseline: `.github/workflows/{android,ota-publish}.yml` (job-level branch guards only), `.github/workflows/windows.yml` (new), `build.gradle` (controllers version), `core/` (8 main files + `platform/` package + 1 test), `desktop/` (launcher, 20 classes, 8 test classes, icons, `build.gradle`), `tools/windows/`, `docs/windows/`. Full list: `git diff --stat 9a9b9bea..exp/upwardly-windows`.

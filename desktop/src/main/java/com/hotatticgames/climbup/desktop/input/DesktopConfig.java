@@ -47,7 +47,7 @@ public final class DesktopConfig {
     // ------------------------------------------------------------------ text format (key=value lines)
 
     public String serialize() {
-        StringBuilder sb = new StringBuilder("# UPWARDLY desktop settings\nversion=").append(VERSION).append('\n');
+        StringBuilder sb = new StringBuilder("# Upwardly desktop settings\nversion=").append(VERSION).append('\n');
         sb.append("inputMode=").append(inputMode).append("\ndeadzone=").append(String.format(Locale.ROOT, "%.2f", deadzone)).append('\n');
         sb.append("display=").append(display).append("\nresolution=").append(width).append('x').append(height).append('\n');
         for (Act a : Act.values()) sb.append("kb.").append(a).append('=').append(joinKeys(keyboard.get(a))).append('\n');

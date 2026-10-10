@@ -2,7 +2,7 @@
 {
 	// TEMPLATE ONLY. The owner creates the Steamworks app and fills in the real IDs. Nothing in this repository uploads to Steam.
 	"AppID" "REPLACE_WITH_APP_ID"
-	"Desc" "UPWARDLY Windows build (REPLACE_WITH_VERSION)"
+	"Desc" "Upwardly Windows build (REPLACE_WITH_VERSION)"
 	"ContentRoot" "..\content\"
 	"BuildOutput" "..\output\"
 	"SetLive" ""     // empty: never auto-publish to a branch; set a branch by hand after review

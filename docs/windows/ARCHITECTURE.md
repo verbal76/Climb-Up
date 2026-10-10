@@ -1,4 +1,4 @@
-# UPWARDLY (Windows) - architecture
+# Upwardly (Windows) - architecture
 
 One game, several launchers. `core/` is the only place gameplay lives; the Windows build adds a launcher and input layer around it and does not copy or fork any simulation, physics or generation code.
 
@@ -18,7 +18,7 @@ desktop/  DesktopLauncher (LWJGL3) + DesktopPlatform + input/*         the Windo
 ## Desktop module
 | piece | role |
 |---|---|
-| `DesktopLauncher` | window config (title UPWARDLY, vsync, icon, size limits), asset root (`app/assets` beside the jar), focus-loss auto pause, `--smoke` mode |
+| `DesktopLauncher` | window config (title Upwardly, vsync, icon, size limits), asset root (`app/assets` beside the jar), focus-loss auto pause, `--smoke` mode |
 | `DesktopPlatform` | wires `InputManager`, `MenuNav`, display, hints, tabs; writes `desktop.log` (startup + frame pacing) |
 | `input/Act, Ctl, Bindings, Defaults` | the action model: 13 actions, logical gamepad controls (never raw button numbers), up to 3 bindings per action, conflict rules per context (game vs menu) |
 | `input/DesktopConfig` | settings file `upwardly-desktop.cfg` (bindings, per-controller profiles, dead zone, input mode, display); atomic write, `.bak` fallback, corrupt file kept as `.corrupt` |

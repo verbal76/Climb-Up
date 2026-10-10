@@ -224,6 +224,7 @@ public final class HeroRig implements Disposable {
         if (CYCLE && (anim == Anim.CLIMB || anim == Anim.SHIMMY)) climbPhase += dt * 6f;
         else if (anim == Anim.CLIMB) climbPhase += Math.abs(sim.y - sim.py0) * 5.5f;
         else if (anim == Anim.SHIMMY) climbPhase += Math.abs(sim.course.dsWrap(sim.s, sim.ps0)) * 4.5f;
+        lineMove += (((anim == Anim.CLIMB || anim == Anim.SHIMMY) ? 1f : 0f) - lineMove) * Math.min(1f, 14f * dt);      // eases the hand-over-hand in and out (the pose never snaps between hanging and moving)
 
         boolean still = sim.mode == Sim.Mode.GROUND && speed < 0.4f && landT <= 0 && hitT <= 0 && !sim.won;
         if (still) {
@@ -274,7 +275,8 @@ public final class HeroRig implements Disposable {
             if (ham) stretchArms(grip);
             boolean line = anim == Anim.CLIMB || anim == Anim.SHIMMY || (anim == Anim.HANG && (sim.mode == Sim.Mode.ROPE || sim.mode == Sim.Mode.CABLE));
             if (line) {                // rope or cable: both hands on the line, alternating hand over hand while moving; knees draw up alternately
-                boolean moving = anim != Anim.HANG, cable = anim == Anim.SHIMMY || sim.mode == Sim.Mode.CABLE;
+                boolean cable = anim == Anim.SHIMMY || sim.mode == Sim.Mode.CABLE;
+                float moving = MathUtils.clamp(lineMove, 0f, 1f);
                 gripLine(climbPhase, moving, cable); climbLegs(climbPhase, moving);
             }
             else raiseArms(grip, (sim.mode == Sim.Mode.LEDGE || sim.mode == Sim.Mode.PULLUP || (CYCLE && anim == Anim.HANG)) ? 1.0f : 0.12f);
@@ -305,14 +307,15 @@ public final class HeroRig implements Disposable {
     private static final float INCH = 0.15f;
 
     /** Both hands go to the rope (or along the cable): each arm is aimed from its shoulder at a point on the line, one hand reaching high while the other pulls down, swapping with the climb. */
-    private void gripLine(float phase, boolean moving, boolean cable) {
+    private float lineMove;         // 0 = hanging still, 1 = hand over hand
+    private void gripLine(float phase, float moving, boolean cable) {
         if (upL == null) findNodes();
         if (upL == null || upR == null || fiL == null || fiR == null) return;
         for (int side = 0; side < 2; side++) {
             Node up = side == 0 ? upL : upR, lo = side == 0 ? loL : loR, fi = side == 0 ? fiL : fiR;
             up.globalTransform.getTranslation(pB); lo.globalTransform.getTranslation(pC); fi.globalTransform.getTranslation(pF);
             float len = pB.dst(pC) + pC.dst(pF);
-            float reach = moving ? 0.5f + 0.5f * MathUtils.sin(phase + side * MathUtils.PI) : (side == 0 ? 0.95f : 0.62f);
+            float reach = MathUtils.lerp(side == 0 ? 0.95f : 0.62f, 0.5f + 0.5f * MathUtils.sin(phase + side * MathUtils.PI), moving);
             float sgn = Math.signum(pB.x == 0f ? (side == 0 ? 1f : -1f) : pB.x);
             // rope: arms cross in front of the chest, one hand stepping up the rope while the other pulls down; cable: hands reach up and out along the line
             float ty = cable ? pB.y + len * (0.42f + 0.50f * reach) : pB.y + len * (-0.10f + 0.42f * reach);
@@ -324,11 +327,11 @@ public final class HeroRig implements Disposable {
     }
 
     /** Climbing legs: knees draw up alternately (as if stepping up the rope); on a plain hang they dangle with a slow sway. */
-    private void climbLegs(float phase, boolean moving) {
+    private void climbLegs(float phase, float moving) {
         if (ulL == null || ulR == null) return;
         for (int side = 0; side < 2; side++) {
             Node ul = side == 0 ? ulL : ulR, ll = side == 0 ? llL : llR;
-            float lift = moving ? Math.max(0f, MathUtils.sin(phase + side * MathUtils.PI)) : 0.12f + 0.1f * MathUtils.sin(hangSway + side * 2.2f);
+            float lift = MathUtils.lerp(0.12f + 0.1f * MathUtils.sin(hangSway + side * 2.2f), Math.max(0f, MathUtils.sin(phase + side * MathUtils.PI)), moving);
             rotateBone(ul, 1f, 0f, 0f, 0.25f + 0.65f * lift);
             if (ll != null) rotateBone(ll, 1f, 0f, 0f, 0.35f + 0.85f * lift);
         }

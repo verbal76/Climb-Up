@@ -42,7 +42,7 @@ public final class Scenario implements ApplicationListener {
         File data = new File(args.length > 0 ? args[0] : "build/scenario/data"), shots = new File(args.length > 1 ? args[1] : "build/scenario/shots");
         deleteTree(data); data.mkdirs(); shots.mkdirs();      // every run starts from a first-time install
         Lwjgl3ApplicationConfiguration c = new Lwjgl3ApplicationConfiguration();
-        c.setTitle("UPWARDLY scenario"); c.setWindowedMode(1280, 720); c.useVsync(false); c.setForegroundFPS(60); c.disableAudio(Boolean.getBoolean("scenario.noaudio"));
+        c.setTitle("Upwardly scenario"); c.setWindowedMode(1280, 720); c.useVsync(false); c.setForegroundFPS(60); c.disableAudio(Boolean.getBoolean("scenario.noaudio"));
         Scenario s = new Scenario(data, shots);
         new Lwjgl3Application(s, c);
         System.out.println(s.failures == 0 ? "SCENARIO_RESULT PASS checks=" + s.checks : "SCENARIO_RESULT FAIL failures=" + s.failures + " checks=" + s.checks);
@@ -119,7 +119,7 @@ public final class Scenario implements ApplicationListener {
         steps.add(wait(40)); steps.add(act(() -> check("splash shown first", screen() instanceof SplashScreen, screenName())));
         steps.add(shot("01_splash")); steps.add(tap(Input.Keys.ENTER));
         steps.add(until(() -> screen() instanceof TitleScreen, 200, "title")); steps.add(wait(60));
-        steps.add(act(() -> check("title uses the UPWARDLY name", dp.title().equals("UPWARDLY") && Gdx.graphics != null, dp.title())));
+        steps.add(act(() -> check("title uses the Upwardly name", dp.title().equals("Upwardly") && Gdx.graphics != null, dp.title())));
         steps.add(shot("02_title"));
         steps.add(tap(Input.Keys.S)); steps.add(wait(3));
         steps.add(act(() -> check("down arrow moves focus to SETTINGS", nav().fm.focused() != null && nav().fm.focused().label.equals("SETTINGS"), String.valueOf(nav().fm.focused() == null ? null : nav().fm.focused().label))));

@@ -1,4 +1,4 @@
-# UPWARDLY (Windows) - controls
+# Upwardly (Windows) - controls
 
 Keyboard, mouse and controller are all active at the same time; nothing has to be selected. Button prompts follow whichever you used last.
 

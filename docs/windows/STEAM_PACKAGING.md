@@ -1,4 +1,4 @@
-# UPWARDLY (Windows) - Steam packaging
+# Upwardly (Windows) - Steam packaging
 
 **Nothing here has been uploaded to Steam. No Steamworks app was created, no credit assigned, no store page, no review submission. Those are the owner's actions.**
 
@@ -9,10 +9,10 @@ Steps: `:desktop:windowsJar` (shared game + LWJGL3 + **Windows natives only**) -
 
 ## Layout
 ```
-build/windows/dist/UPWARDLY/            == steam/content/  (the depot)
-  UPWARDLY.exe                          launch executable (icon, version info 1.1.5.<build>, vendor Hot Attic Games)
+build/windows/dist/Upwardly/            == steam/content/  (the depot)
+  Upwardly.exe                          launch executable (icon, version info 1.1.5.<build>, vendor Hot Attic Games)
   runtime/                              bundled Java runtime (no Java installation needed)
-  app/upwardly.jar  app/UPWARDLY.cfg    game + launcher configuration
+  app/upwardly.jar  app/Upwardly.cfg    game + launcher configuration
   app/assets/                           all game assets (read through app/assets, whatever the working directory)
   app/licenses/ASSETS.md                asset provenance
   BUILD_INFO.txt                        version, source SHA, channel, runtime
@@ -22,7 +22,7 @@ build/windows/steam/scripts/*.vdf       app/depot build TEMPLATES (placeholders 
 
 ## What the owner does later (not done here)
 1. Create the Steamworks app with the Direct credit; note AppID and DepotID.
-2. Steamworks: set the Windows launch option to `UPWARDLY.exe`, working directory empty, OS Windows 64-bit. Add the "Steam Input" controller configuration of choice (the game already reads standard gamepads; Steam Input virtual pads appear as Xbox-style controllers).
+2. Steamworks: set the Windows launch option to `Upwardly.exe`, working directory empty, OS Windows 64-bit. Add the "Steam Input" controller configuration of choice (the game already reads standard gamepads; Steam Input virtual pads appear as Xbox-style controllers).
 3. Copy the VDF templates, fill in IDs, run `steamcmd +run_app_build ...` from a machine with the Steamworks SDK (never from CI, never with secrets in this repository).
 4. Set branches/review by hand.
 

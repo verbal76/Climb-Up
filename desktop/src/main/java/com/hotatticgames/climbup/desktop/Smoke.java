@@ -10,7 +10,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 
 /**
- * No-window self-check of the packaged build, run as {@code UPWARDLY.exe --smoke}: bundled runtime, assets next to the jar, native libraries, save location,
+ * No-window self-check of the packaged build, run as {@code Upwardly.exe --smoke}: bundled runtime, assets next to the jar, native libraries, save location,
  * settings round trip, and a short deterministic climb through the real simulation. Prints one KEY=VALUE line per check and exits non-zero on any failure.
  */
 final class Smoke {

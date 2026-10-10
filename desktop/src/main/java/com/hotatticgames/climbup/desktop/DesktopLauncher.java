@@ -8,7 +8,7 @@ import com.hotatticgames.climbup.ClimbGame;
 import com.hotatticgames.climbup.desktop.input.DesktopConfig;
 import java.io.File;
 
-/** UPWARDLY for Windows (and a development launcher for other desktops): the shared game inside an LWJGL3 window. */
+/** Upwardly for Windows (and a development launcher for other desktops): the shared game inside an LWJGL3 window. */
 public final class DesktopLauncher {
     private static File assetRoot;
     /** --exit-after=SECONDS: the game closes itself (used by CI to prove a clean shutdown of the packaged EXE); 0 = never. */

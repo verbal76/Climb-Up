@@ -17,9 +17,9 @@ import java.util.Arrays;
 import java.util.function.Supplier;
 import java.util.List;
 
-/** The Windows launcher's services: keyboard, mouse and controller input, no touch overlay, no network, the UPWARDLY name, and the extra Settings tabs. */
+/** The Windows launcher's services: keyboard, mouse and controller input, no touch overlay, no network, the Upwardly name, and the extra Settings tabs. */
 public final class DesktopPlatform implements Platform {
-    public static final String TITLE = "UPWARDLY";
+    public static final String TITLE = "Upwardly";
 
     public final File configFile;
     public final DesktopConfig cfg;

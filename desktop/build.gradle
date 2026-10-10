@@ -35,7 +35,7 @@ tasks.register('windowsJar', Jar) {
     dependsOn configurations.runtimeClasspath, ':core:jar'     // the filtered file collection below carries no task dependencies of its own
     destinationDirectory = layout.buildDirectory.dir('windows/input')
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
-    manifest { attributes 'Main-Class': 'com.hotatticgames.climbup.desktop.DesktopLauncher', 'Implementation-Title': 'UPWARDLY', 'Implementation-Version': appVersionName + (project.findProperty('buildNumber') ? '+' + project.findProperty('buildNumber') : '') }
+    manifest { attributes 'Main-Class': 'com.hotatticgames.climbup.desktop.DesktopLauncher', 'Implementation-Title': 'Upwardly', 'Implementation-Version': appVersionName + (project.findProperty('buildNumber') ? '+' + project.findProperty('buildNumber') : '') }
     from(sourceSets.main.output)
     from({
         configurations.runtimeClasspath.filter { f ->

@@ -449,7 +449,7 @@ public final class PlayScreen extends ScreenAdapter {
         if ((ev & Sim.EV_HIT) != 0) {
             world.particles.burst(sim.hitS, sim.hitY + 0.7f, 22, red, 4f, 4f, 0.13f, 8f, 0.7f);
             g.audio.play("hit", 1f, com.hotatticgames.climbup.render.Characters.voice(g.settings.character)); world.shake(0.9f); freeze(0.09f); vibrate(60, 1); say("[OUCH]");
-            toast = "OUCH! BACK TO CHECKPOINT"; toastT = 1.8f;
+            toast = "OUCH! BE CAREFUL!"; toastT = 1.8f;
         }
     }
 

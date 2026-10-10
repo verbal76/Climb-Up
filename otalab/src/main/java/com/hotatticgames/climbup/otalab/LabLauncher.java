@@ -31,7 +31,7 @@ public class LabLauncher extends AndroidApplication {
         HostInfo host = new HostInfo(getPackageName(), HostInfo.HOST_LEVEL, "internal");
         TrustedKeys keys = new TrustedKeys();
         try { keys.add(readAsset("lab_public_key.b64")); } catch (Exception e) { Log.e(TAG, "pinned key unreadable: " + e); }
-        store = new ModuleStore(root, keys, host);
+        store = new ModuleStore(root, keys, host).withSaveGuard(new com.hotatticgames.climbup.host.DirSnapshots(getFilesDir(), new File(root, "snap"), java.util.Collections.singleton("host")));
         HostBoot.ClassLoading dex = (file, parent) -> {
             // Android 14+ refuses to load writable dex files; the store already marks installed files read-only, this makes it explicit for any other path.
             if (!file.setReadOnly() && file.canWrite()) throw new SecurityException("cannot make " + file.getName() + " read-only");

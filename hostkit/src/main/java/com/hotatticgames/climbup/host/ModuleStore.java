@@ -25,7 +25,8 @@ public final class ModuleStore {
     public static final int MAX_UNCONFIRMED_LAUNCHES = 2;
 
     public static final class State {
-        public int active, lastGood, pending, tries, highest, revokeFloor, staged;
+        public int active, lastGood, pending, tries, highest, revokeFloor, staged, snapshotFor;
+        public String restoring = "";
         public boolean climbInProgress;
         public String lastResult = "", rollback = "";
         public List<Integer> bad = new ArrayList<>();
@@ -42,7 +43,7 @@ public final class ModuleStore {
     }
 
     private final File root, modDir, stagedDir, tmpDir, stateFile;
-    private final TrustedKeys keys; private final HostInfo host; private final AssetStore assets;
+    private final TrustedKeys keys; private final HostInfo host; private final AssetStore assets; private SaveGuard guard;
     public State st = new State();
 
     public ModuleStore(File root, TrustedKeys keys, HostInfo host) {
@@ -51,6 +52,9 @@ public final class ModuleStore {
     }
 
     public AssetStore assets() { return assets; }
+
+    /** Optional: protects saves across a module that raises the save-schema version (see {@link SaveGuard}). */
+    public ModuleStore withSaveGuard(SaveGuard g) { this.guard = g; return this; }
 
     /** Verifies a module directory AND that every game file it serves is in the content store (so a module is never run, or activated, with its assets missing). */
     private ModuleVerifier.Result verifyWithAssets(File dir) {
@@ -72,6 +76,7 @@ public final class ModuleStore {
         try { loadState(); } catch (Exception e) { st = new State(); st.lastResult = "state unreadable: reset"; }
         Hashing.deleteTree(tmpDir);                                   // an interrupted download is discarded
         String note = "";
+        if (!st.restoring.isEmpty() && guard != null) { if (guard.restore(st.restoring)) { guard.discard(st.restoring); st.restoring = ""; } }      // the process died half-way through putting saves back: do it again
         try { note = activateStaged(); } catch (Exception e) { note = "staged module ignored: " + e.getMessage(); Hashing.deleteTree(stagedDir); }
         if (st.pending != 0) {
             st.tries++;
@@ -102,9 +107,18 @@ public final class ModuleStore {
                 if (block != null) { st.lastResult = "v" + m.moduleVersion + " waiting: " + block; return st.lastResult; }   // stays staged; the current module keeps running
             }
         }
+        int bumpFrom = 0;
+        if (st.active != 0 && guard != null) {
+            ModuleVerifier.Result cur = ModuleVerifier.verify(dirOf(st.active), keys, host);
+            if (cur.ok() && m.saveSchema > cur.manifest.saveSchema) {
+                if (!guard.snapshot("v" + m.moduleVersion)) { st.lastResult = "v" + m.moduleVersion + " waiting: could not snapshot the saves before a save-schema change"; return st.lastResult; }
+                bumpFrom = m.moduleVersion;
+            }
+        }
         File target = dirOf(m.moduleVersion);
         Hashing.deleteTree(target);
         if (!stagedDir.renameTo(target)) throw new IOException("cannot install staged module");
+        st.snapshotFor = bumpFrom;
         for (java.io.File f : target.listFiles()) f.setReadOnly();
         if (st.pending == 0 && st.active != 0) st.lastGood = st.active;      // an unproven module never becomes the safety net
         st.active = m.moduleVersion; st.pending = m.moduleVersion; st.tries = 0; st.staged = 0;
@@ -137,8 +151,14 @@ public final class ModuleStore {
             ModuleVerifier.Result r = verifyWithAssets(dirOf(back));
             if (!r.ok() || r.manifest.moduleVersion < st.revokeFloor) back = 0;
         }
+        boolean restoreSaves = dropped != 0 && st.snapshotFor == dropped && st.pending == dropped && guard != null;
         st.active = back; st.pending = 0; st.tries = 0; if (back == 0) st.lastGood = 0;
         st.rollback = "rolled back v" + dropped + (back != 0 ? " to v" + back : " to recovery") + ": " + why;
+        if (restoreSaves) {
+            st.restoring = "v" + dropped; st.snapshotFor = 0; saveState();                  // recorded first so a crash mid-restore is finished at the next start
+            if (guard.restore(st.restoring)) { guard.discard(st.restoring); st.restoring = ""; st.rollback += "; saves restored to how they were before v" + dropped; }
+            else st.rollback += "; WARNING: saves could not be restored";
+        }
         st.lastResult = st.rollback;
         if (dropped != 0 && dropped != back) Hashing.deleteTree(dirOf(dropped));       // the broken one only; the safety net is never touched
     }
@@ -151,6 +171,8 @@ public final class ModuleStore {
     /** The game reached live play with the active module: it is now the safety net. */
     public synchronized void confirm() {
         if (st.pending == 0) return;
+        if (st.snapshotFor == st.active && guard != null) { guard.discard("v" + st.active); }
+        st.snapshotFor = 0;
         st.lastGood = st.active; st.pending = 0; st.tries = 0; st.lastResult = "confirmed v" + st.active; st.rollback = "";
         pruneOld(); collectAssets(); saveState();
     }

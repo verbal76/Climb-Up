@@ -42,7 +42,11 @@ public class ClimbModuleTest {
         for (String dir : System.getProperty("climb.coreClasses").split(File.pathSeparator)) {
             java.nio.file.Path root = Paths.get(dir);
             try (java.util.stream.Stream<java.nio.file.Path> w = Files.walk(root)) {
-                for (java.nio.file.Path p : (Iterable<java.nio.file.Path>) w.filter(x -> x.toString().endsWith(".class"))::iterator) { coreClasses++; assertTrue("missing from module: " + p, inJar.contains(root.relativize(p).toString().replace(File.separatorChar, '/'))); }
+                for (java.nio.file.Path p : (Iterable<java.nio.file.Path>) w.filter(x -> x.toString().endsWith(".class"))::iterator) {
+                    coreClasses++; String entry = root.relativize(p).toString().replace(File.separatorChar, '/');
+                    assertTrue("missing from module: " + p, inJar.contains(entry));
+                    try (ZipFile z = new ZipFile(jar())) { assertArrayEquals("byte-identical to core's compiled class: " + entry, Files.readAllBytes(p), z.getInputStream(z.getEntry(entry)).readAllBytes()); }
+                }
             }
         }
         assertTrue("core has classes (" + coreClasses + ")", coreClasses > 50);

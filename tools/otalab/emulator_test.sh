@@ -35,8 +35,11 @@ sleep 2; shot s1; C1=$(color s1); echo "   screen colour: $C1"; echo "$C1" | gre
 
 echo "== S2 input and lifecycle reach the module"
 adb shell input tap 400 300; expect "S2 touch delivered to module" "module 1 touch"
-go_home; expect "S2 host paused" "host onPause"; expect "S2 module paused" "module 1 pause"
-adb shell am start -n "$ACT" >/dev/null; expect "S2 module resumed" "module 1 resume"
+go_home; expect "S2 host paused" "host onPause"
+# libGDX hands pause() to the game on the next GL frame; a backgrounded software-GL emulator may not draw one until the app returns, so the pair is checked after the return
+adb shell am start -n "$ACT" >/dev/null
+expect "S2 module received pause" "module 1 pause" 30; expect "S2 module received resume after it" "module 1 resume" 30
+P=$(logs | grep -n "module 1 pause" | head -1 | cut -d: -f1); R=$(logs | grep -n "module 1 resume" | tail -1 | cut -d: -f1); [ -n "$P" ] && [ -n "$R" ] && [ "$P" -lt "$R" ] && pass "S2 pause came before resume" || fail "S2 lifecycle order (pause line $P, resume line $R)"
 
 echo "== S3 download v2 while v1 plays: staged, NOT activated"
 serve v2; launch http://10.0.2.2:8099/

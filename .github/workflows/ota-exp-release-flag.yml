@@ -2,13 +2,13 @@ name: UPWARDLY release - make the UPWARDLY APK a normal release named Upwardly.a
 # Only edits the existing release tagged ota-lab-latest: re-uploads its APK as Upwardly.apk (no rebuild), removes the old asset name and clears the pre-release flag. No other release, tag or branch is touched.
 on:
   push:
-    branches: [exp/ota-full]
+    branches: [exp/ota-release-flag]
     paths: ['tools/otalab/release_flag.txt']
 permissions:
   contents: write
 jobs:
   flag:
-    if: github.ref == 'refs/heads/exp/ota-full'
+    if: github.ref == 'refs/heads/exp/ota-release-flag'
     runs-on: ubuntu-latest
     steps:
       - env:
@@ -23,5 +23,5 @@ jobs:
             gh release delete-asset ota-lab-latest UPWARDLY.apk --repo "$REPO" -y      # asset names are case-insensitive: the old one has to go first
             gh release upload ota-lab-latest "$RUNNER_TEMP/rel/Upwardly.apk" --repo "$REPO"
           fi
-          gh release edit ota-lab-latest --repo "$REPO" --prerelease=false
+          gh release edit ota-lab-latest --repo "$REPO" --prerelease=false --latest
           gh release view ota-lab-latest --repo "$REPO" --json name,isPrerelease,assets -q '{name:.name,prerelease:.isPrerelease,assets:[.assets[].name]}'

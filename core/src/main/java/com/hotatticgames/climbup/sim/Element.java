@@ -33,6 +33,10 @@ public final class Element {
     public static final int KEY_COUNT = 4;   // red, blue, green, gold
     public int anchor = -1;       // decoys only: route element this dead end / lure hangs off (-1 = part of the route)
 
+    /** A wet platform (rain cloud over it): a plain STATIC platform whose {@code color} holds this mark (color is otherwise only used by keys and gates, and is stored by the slice codec already). */
+    public static final int WET = 7;
+    public boolean wet() { return type == Type.STATIC && color == WET; }
+
     public Element(Type type, float s, float y, float w) { this.type = type; this.s = s; this.y = y; this.w = w; }
 
     public boolean isHazard() {

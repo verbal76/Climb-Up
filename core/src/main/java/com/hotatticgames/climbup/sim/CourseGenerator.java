@@ -15,7 +15,7 @@ import java.util.Random;
  */
 public final class CourseGenerator {
     static final float RAMP_SLOPE = 0.576f;
-    enum Kind { HOP, STAIRS, CRUMBLE, MOVER_H, MOVER_V, PAD, ROPE, CABLE, SWING, GRAB, HAZ, TRAP, SPRING, SEESAW, BRIDGE, RAMP, MOVER_Z, ELEV_FALL, SLIDE_FALL, MORTAR }
+    enum Kind { HOP, STAIRS, CRUMBLE, MOVER_H, MOVER_V, PAD, ROPE, CABLE, SWING, GRAB, HAZ, TRAP, SPRING, SEESAW, BRIDGE, RAMP, MOVER_Z, ELEV_FALL, SLIDE_FALL, MORTAR, WET }
 
     private final Tuning T;
     private final Random rnd;
@@ -247,6 +247,7 @@ public final class CourseGenerator {
                 addRest(th); sinceRest = 0; lastRestY = c.get(c.size() - 1).y; nextGap = T.gemSpacing * r(0.85f, 1.15f); maybeCastle(th); continue;
             }
             Kind k = pick(zone, last);
+            if (th == 1 && last.type == Element.Type.STATIC && rnd.nextFloat() < 0.2f) k = Kind.WET;          // the Frost world: some platforms are under a rain cloud (slippery)
             if (!tryModuleBelow(k, d, th)) {
                 rejected++;
                 boolean ok = false;
@@ -353,7 +354,7 @@ public final class CourseGenerator {
         int best = -1; float dev = 1e9f;
         for (int i = Math.max(1, ctx); i < c.size(); i++) {          // this slice's own platforms: the context platforms belong to the previous slice, a gem marked on one would be lost
             Element e = c.get(i);
-            if (e.type != Element.Type.STATIC || e.skin != 0 || e.w < 3.5f || e.anchor >= 0 || Autopilot.hasMidHazard(c, i)) continue;
+            if (e.type != Element.Type.STATIC || e.skin != 0 || e.wet() || e.w < 3.5f || e.anchor >= 0 || Autopilot.hasMidHazard(c, i)) continue;
             float d = Math.abs(e.y - castleTarget);
             if (d < dev) { dev = d; best = i; }
         }
@@ -366,7 +367,7 @@ public final class CourseGenerator {
         List<Integer> cand = new ArrayList<>();
         for (int a = Math.max(1, ctx - 1); a < rs - 4; a++) {
             Element e = c.get(a);
-            if (e.type != Element.Type.STATIC || e.skin != 0 || e.w < 2.5f || e.anchor >= 0 || Autopilot.hasMidHazard(c, a)) continue;
+            if (e.type != Element.Type.STATIC || e.skin != 0 || e.wet() || e.w < 2.5f || e.anchor >= 0 || Autopilot.hasMidHazard(c, a)) continue;
             cand.add(a);
         }
         if (cand.isEmpty()) throw new IllegalStateException("no platform for the key");
@@ -861,6 +862,8 @@ public final class CourseGenerator {
         return Kind.HOP;
     }
 
+    public static volatile int wetTried, wetOk;          // diagnostics: wet-platform modules attempted / proven
+
     private boolean tryModule(Kind k, float d, int zone) {
         Element last = c.get(c.size() - 1);
         for (int attempt = 0; attempt < 8; attempt++) {
@@ -869,11 +872,14 @@ public final class CourseGenerator {
             List<Element> es;
             if (k == Kind.HAZ) es = buildHaz(last, Math.max(dd, 0.35f), zone, attempt, hz);
             else if (k == Kind.TRAP) es = buildMid(last, Math.max(dd, 0.35f), zone, attempt, hz);
+            else if (k == Kind.WET) es = buildWet(last, dd, zone, attempt);
             else if (k == Kind.MORTAR) es = buildMortar(last, Math.max(dd, 0.35f), zone, attempt, hz);
             else es = build(k, last, dd, zone, attempt);
             if (es == null) continue;
             float margin = k == Kind.GRAB ? Math.min(0.05f, T.minLinkMargin) : T.minLinkMargin;
-            if (commit(es, hz, margin)) return true;
+            boolean ok = commit(es, hz, margin);
+            if (k == Kind.WET) { wetTried++; if (ok) wetOk++; }
+            if (ok) return true;
         }
         return false;
     }
@@ -885,6 +891,15 @@ public final class CourseGenerator {
 
     private Element hz(Element.Type t, float s, float y, float w, int zone) {
         Element h = new Element(t, s, y, w); h.zone = zone; return h;
+    }
+
+    /** A wide platform under a rain cloud (the hero slides on it): a hop to a platform 4.5-5.5 m wide, marked wet. Proven like any other module; the link OUT of it is proven by the next module with the slippery physics. */
+    private List<Element> buildWet(Element last, float d, int z, int attempt) {
+        float eR = last.s + last.w / 2f, dy = r(0f, 0.6f);
+        float gap = reach(dy) * lerp(0.45f, 0.8f, d) * r(0.9f, 1.05f) * (1f - 0.03f * attempt), w = r(4.5f, 5.5f);
+        Element p = plat(Element.Type.STATIC, eR + gap + w / 2f, last.y + dy, w, z);
+        p.color = Element.WET;
+        List<Element> l = new ArrayList<>(); l.add(p); return l;
     }
 
     /** Depth of a mortar's muzzle below the path, and how high above the path its ball climbs (about twice the player's height). */

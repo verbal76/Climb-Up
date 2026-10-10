@@ -319,6 +319,42 @@ public final class WorldRenderer implements Disposable {
         }
     }
 
+    private ModelInstance rainLow, rainHigh;
+    private final Color rainCol = new Color(0.62f, 0.78f, 1f, 1f);
+    private ModelInstance rainCloud(boolean low) {
+        ModelInstance m = low ? rainLow : rainHigh;
+        if (m == null) {
+            m = new ModelInstance(models.pack(low ? "cloud_2" : "cloud_3"));
+            m.materials.get(0).set(new BlendingAttribute(0.9f), ColorAttribute.createDiffuse(low ? new Color(0.42f, 0.38f, 0.74f, 1f) : new Color(0.94f, 0.95f, 1f, 1f)),
+                    ColorAttribute.createEmissive(low ? 0.10f : 0.26f, low ? 0.08f : 0.26f, low ? 0.22f : 0.30f, 1f));
+            if (low) rainLow = m; else rainHigh = m;
+        }
+        return m;
+    }
+
+    /**
+     * A wet platform: a foreground rain cloud (purplish-blue underside, white above) over it, rain falling from the cloud onto the platform, and a wet shimmer on its top face. With reduced motion the
+     * rain is a few still streaks and the shimmer does not move.
+     */
+    private void drawRain(Element e, float es, float ey, float camS, float time) {
+        float w = e.w, cy = ey + 4.3f, sc = Math.max(0.9f, w * 0.23f);
+        ModelInstance lo = rainCloud(true), hi = rainCloud(false);
+        place(lo, es, cy, -2.2f, camS, sc, sc * 0.8f, sc, 0f); batch.render(lo, env);
+        place(hi, es + 0.2f, cy + 0.55f * sc, -1.9f, camS, sc * 1.05f, sc * 0.9f, sc * 1.05f, 18f); batch.render(hi, env);
+        // wet shimmer on the top face (clear of the platform top by 2 cm): a pale film and a highlight that slides along it
+        drawBox(es, ey + SHIMMER_LIFT, 0f, camS, w * 0.97f, 0.02f, 1.5f, 0.55f, 0.72f, 0.92f);
+        float hl = reducedMotion ? 0f : MathUtils.sin(time * 1.3f) * w * 0.35f;
+        drawBox(es + hl, ey + SHIMMER_LIFT + 0.01f, 0f, camS, w * 0.16f, 0.02f, 1.3f, 0.86f, 0.94f, 1f);
+        if (reducedMotion) {
+            for (int k = -2; k <= 2; k++) drawBox(es + k * w * 0.17f, ey + 0.4f, 0.1f, camS, 0.04f, cy - ey - 0.8f, 0.04f, rainCol.r, rainCol.g, rainCol.b);
+        } else if (quality > 0) {
+            float rate = (quality > 1 ? 70f : 40f) * frameDt;
+            for (int n = (int) rate + (MathUtils.random() < rate - (int) rate ? 1 : 0); n > 0; n--)
+                particles.spawn(es + MathUtils.random(-0.5f, 0.5f) * w * 0.8f, cy - 0.4f, 0f, -10f - MathUtils.random(3f), rainCol, 0.05f, 0f, (cy - ey - 0.4f) / 11.5f);
+        }
+    }
+    static final float SHIMMER_LIFT = 0.02f;
+
     /** Block heights of the two mover models (block-moving-blue.obj is 0.5 m tall, block-moving.obj 0.3 m). */
     public static final float BLUE_MOVER_BLOCK_H = 0.5f, MOVER_BLOCK_H = 0.3f;
     /** Vertical offset that puts a mover block's top face exactly on the simulation surface (the blue block used to be placed as if it were 0.3 m tall, so it stood 0.2 m proud and the hero sank into it). */
@@ -545,6 +581,7 @@ public final class WorldRenderer implements Disposable {
             place(p.inst, es + du + shakeX, y + dy + fallY, p.dz + (e.type == Element.Type.MOVE_Z ? e.zAt(sim.time) : 0f), camS, p.sx, sy, p.sz, extraYaw, roll);
             batch.render(p.inst, env);
         }
+        if (e.wet()) drawRain(e, es, ey, camS, time);
         if (e.type == Element.Type.MOVE_Z) drawDepthRail(e, es, ey, camS, sim.time);
         if (course.isCheckpoint(e) && i > 0 && e.type == Element.Type.STATIC) drawGem(sim, i, es, ey, camS, time);
         if (e.type == Element.Type.SWING) drawSwingRopes(e, es, ey, camS);

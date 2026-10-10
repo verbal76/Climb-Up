@@ -485,6 +485,7 @@ public final class Sim {
         if (saw) { float up = tilt[e] * Math.signum(target) / T.seesawMaxTilt; if (up > 0) target *= Math.max(0.2f, 1f - T.seesawUphill * up); }
         float a = (Math.abs(target) > 0.01f && Math.signum(target) == Math.signum(vx) || Math.abs(vx) < 0.01f) ? T.groundAccel : T.groundDecel;
         if (Math.abs(target) < 0.01f) a = T.groundDecel;
+        if (course.get(e).wet()) a *= T.wetGrip;            // a wet platform: low friction (jump, edges and everything else are unchanged)
         vx = approach(vx, target, a * dt);
         if (Math.abs(in.moveX) > 0.15f) facing = in.moveX > 0 ? 1 : -1;
         s += vx * dt;

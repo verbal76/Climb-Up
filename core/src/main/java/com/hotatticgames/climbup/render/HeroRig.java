@@ -122,6 +122,20 @@ public final class HeroRig implements Disposable {
         if (llR != null) rotateBone(llR, 1f, 0f, 0f, 0.30f + 0.18f * MathUtils.sin(t * w + 4.3f));
     }
 
+    private float slip;
+    /** Sliding on a wet platform: arms thrown up and flailing, legs kicking (reduced motion: the same startled pose, held still). */
+    private void slipFlail(float t, float k, boolean reduced) {
+        if (upL == null) findNodes();
+        if (upL == null || upR == null) return;
+        raiseArms(k * 0.7f, 0.25f);
+        if (!reduced) {
+            float w = 13f;
+            rotateBone(upL, 0f, 0f, 1f, MathUtils.sin(t * w) * 0.7f * k); rotateBone(upR, 0f, 0f, 1f, MathUtils.sin(t * w + 2.4f) * 0.7f * k);
+            rotateBone(upL, 1f, 0f, 0f, MathUtils.sin(t * w * 0.8f + 1f) * 0.5f * k); rotateBone(upR, 1f, 0f, 0f, MathUtils.sin(t * w * 0.8f + 3.6f) * 0.5f * k);
+            if (ulL != null && ulR != null) { rotateBone(ulL, 1f, 0f, 0f, MathUtils.sin(t * 11f) * 0.45f * k); rotateBone(ulR, 1f, 0f, 0f, MathUtils.sin(t * 11f + 3.1f) * 0.45f * k); }
+        }
+    }
+
     private void raiseArms(float weight, float forward) {
         if (upL == null) findNodes();
         if (upL == null || upR == null) return;
@@ -233,6 +247,9 @@ public final class HeroRig implements Disposable {
             else if (idleT >= nextBeatAt) startBeat();
             if (beat != null && beat.toCamera) targetYaw = 0f;       // breaks the fourth wall: faces the player
         } else { idleT = 0; beat = null; bubbleT = 0; nextBeatAt = 3.5f; }
+        boolean slipping = sim.mode == Sim.Mode.GROUND && sim.onElem >= 0 && sim.course.get(sim.onElem).wet() && speed > 0.8f;
+        slip = smooth(slip, slipping ? 1f : 0f, 10f, dt);
+        if (slipping) targetYaw = 0f;            // he looks straight at the screen: "uh-oh"
         yaw = smooth(yaw, targetYaw, 18f, dt);
         switch (anim) {
             case HIT: play("HitReact", 1, 1.15f, 0.04f); break;
@@ -245,6 +262,7 @@ public final class HeroRig implements Disposable {
             case HANG: case CLIMB: case SHIMMY: play("Jump_Idle", -1, 1f, 0.12f); break;
             default: play("Jump", 1, 1.2f, 0.05f);
         }
+        if (slipping && anim == Anim.RUN) play("Jump_Idle", -1, 1.7f, 0.08f);          // arms and legs windmilling, trying to stop
         if (sim.won) play("Wave", -1, 1f, 0.2f);
 
         if (sim.mode == Sim.Mode.BEAM && sim.mounting()) {      // hauling over the beam: starts behind it (like on the rope), ends standing on top of it
@@ -265,6 +283,7 @@ public final class HeroRig implements Disposable {
                 .rotate(0, 1, 0, phi * MathUtils.radiansToDegrees + yaw).translate(0, 0.5f, 0).rotate(1, 0, 0, lean).translate(0, -0.5f, 0).scale(sxz, sy, sxz);
         if (ham && upL != null) for (Node n : new Node[]{upL, upR, loL, loR}) if (n != null) n.scale.set(1f, 1f, 1f);     // the stretch below is re-applied every frame, never accumulated
         ac.update(reduced ? Math.min(dt, 1f / 30f) : dt);
+        if (slip > 0.05f) slipFlail(time, slip, reduced);
         // gripping poses: both arms up on the ledge / rope / cable, hands snapped to the sim's grip point
         hangT = sim.mode == Sim.Mode.LEDGE ? hangT + dt : 0f;
         hangSway += dt * 2.4f;

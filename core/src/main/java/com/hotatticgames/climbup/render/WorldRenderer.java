@@ -865,14 +865,16 @@ public final class WorldRenderer implements Disposable {
         float phi = 0f; // player is the anchor: always at centre, tangent = camera-facing
         // shadow blob on the nearest platform below
         if (quality > 0) {
-            float gy = groundBelow(sim, ps, py);
+            float gy = groundBelow(sim, ps, py, alpha);
             if (gy > -1e8f && py - gy < 9f) {
                 float k = MathUtils.clamp(1f - (py - gy) / 9f, 0.2f, 1f);
-                shadow.transform.idt().translate(0, gy + SHADOW_LIFT, 0.2f).scale(0.55f * k + 0.15f, 1f, 0.4f * k + 0.15f);
+                shadow.transform.idt().translate(0, gy + SHADOW_LIFT + 0.4f * Math.abs(groundSlope) * (0.55f * k + 0.15f), 0.2f).rotate(0, 0, 1, MathUtils.atan(groundSlope) * MathUtils.radiansToDegrees).scale(0.55f * k + 0.15f, 1f, 0.4f * k + 0.15f);
                 batch.render(shadow, env);
             }
         }
-        float wy = py; heroY = py;
+        float onRampLift = 0f;
+        if (quality > 0 && sim.mode == Sim.Mode.GROUND && sim.onElem >= 0 && course.get(sim.onElem).type == Element.Type.RAMP) onRampLift = 0.07f;      // the ramp's edge never cuts across his legs
+        float wy = py + onRampLift; heroY = py;
         float heroZ = 0f;
         if ((sim.mode == Sim.Mode.GROUND) && sim.onElem >= 0 && course.get(sim.onElem).type == Element.Type.MOVE_Z) heroZ = -course.get(sim.onElem).zAt(sim.time);      // carried toward / away from the camera with the platform
         hero.update(sim, dt, time, 0f, wy, heroZ, phi, reducedMotion);
@@ -887,15 +889,18 @@ public final class WorldRenderer implements Disposable {
         }
     }
 
-    private float groundBelow(Sim sim, float ps, float py) {
-        float best = -1e9f;
+    private float groundSlope; private boolean groundOnRamp;       // of the surface groundBelow found: the shadow lies along it
+    private float groundBelow(Sim sim, float ps, float py, float alpha) {
+        float best = -1e9f; groundSlope = 0f; groundOnRamp = false;
         for (int i = Math.max(0, sim.winLo); i <= Math.min(vis.size() - 1, sim.winHi); i++) {
             Element e = vis.get(i).e;
             if (!e.isPlatform() || sim.gone[i]) continue;
-            float top = sim.ey1[i];
+            // the surface exactly as it is drawn (interpolated for movers, minus the landing dip of a platform), so the shadow never clips in and out of it
+            float top = e.isMoving() ? sim.ey0[i] + (sim.ey1[i] - sim.ey0[i]) * alpha : sim.ey1[i];
+            if (e.isPlatform() && e.type != Element.Type.RAMP && e.type != Element.Type.SEESAW) top -= Math.max(-0.1f, Math.min(0.22f, dip[i]));
             if (top > py + 0.05f || py - top > 9f) continue;
             if (Math.abs(course.dsWrap(sim.es1[i], ps)) > e.halfW() + 0.1f) continue;
-            if (top > best) best = top;
+            if (top > best) { best = top; groundSlope = e.type == Element.Type.RAMP ? e.amp : (e.type == Element.Type.SEESAW ? sim.tilt[i] : 0f); groundOnRamp = e.type == Element.Type.RAMP; }
         }
         return best;
     }

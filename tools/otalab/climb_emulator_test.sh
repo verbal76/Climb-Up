@@ -98,5 +98,8 @@ ascii k6_splash
 SP=$(diff k6_splash k1_REF_splash | sed 's/mean=\([0-9.]*\).*/\1/'); awk -v s="$SP" 'BEGIN{exit !(s>20)}' && pass "K6 the delivered file is what the game shows (splash differs by $SP/255)" || fail "K6 splash unchanged ($SP/255)"
 TT=$(diff k6_title k1_REF_title | sed 's/mean=\([0-9.]*\).*/\1/'); awk -v s="$TT" 'BEGIN{exit !(s<3.0)}' && pass "K6 every other file still comes from the APK unchanged (title diff $TT/255)" || fail "K6 title changed ($TT/255)"
 
+echo "== P1 delivery-layer measurements (informational on an emulator: software GL, NOT representative of a phone; never fails the run)"
+bash "$HERE/perf_capture.sh" "$OUT/perf" 3 20 2>&1 | tee "$OUT/perf.txt" | sed 's/^/   /' || true
+
 echo "== summary"; logs | grep -o "bootMs=[0-9]*" | tr '\n' ' '; echo
 [ "$FAILS" -eq 0 ] && { echo "ALL CHECKS PASSED"; exit 0; } || { echo "$FAILS CHECK(S) FAILED"; exit 1; }

@@ -23,6 +23,7 @@ public class LabLauncher extends AndroidApplication {
     static final String TAG = LabCommon.TAG;
     private ModuleStore store;
 
+    private com.hotatticgames.climbup.host.OverlayFiles overlay;
     @Override protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         LabCommon.applyTestProps(this);
@@ -49,7 +50,8 @@ public class LabLauncher extends AndroidApplication {
                 + " tries=" + store.st.tries + " staged=" + store.st.staged + " note=[" + s.note + "] rollback=[" + store.st.rollback + "] bootMs=" + (System.nanoTime() - t0) / 1_000_000);
         initialize(listener, LabCommon.gameConfig());
         if (!s.overrides.isEmpty()) {                       // the module carries game files that replace the APK's: serve them through the overlay (nothing is installed otherwise)
-            com.badlogic.gdx.Gdx.files = new com.hotatticgames.climbup.host.OverlayFiles(com.badlogic.gdx.Gdx.files, s.overrides, store.assets(), msg -> Log.i(TAG, msg));
+            overlay = new com.hotatticgames.climbup.host.OverlayFiles(com.badlogic.gdx.Gdx.files, s.overrides, store.assets(), msg -> Log.i(TAG, msg));
+            com.badlogic.gdx.Gdx.files = overlay;
             Log.i(TAG, "asset overrides active: " + s.overrides.size() + " file(s)");
         }
         LabCommon.startSelfTest(this, s.module);
@@ -101,5 +103,9 @@ public class LabLauncher extends AndroidApplication {
     private static void deleteTree(File f) { File[] k = f.listFiles(); if (k != null) for (File c : k) deleteTree(c); f.delete(); }
 
     @Override protected void onPause() { Log.i(TAG, "host onPause"); super.onPause(); }
-    @Override protected void onResume() { Log.i(TAG, "host onResume"); super.onResume(); }
+    /** libGDX re-publishes its own {@code Gdx.files} on every resume, which would silently drop the overlay before the game's {@code create()} runs; put it back. */
+    @Override protected void onResume() {
+        Log.i(TAG, "host onResume"); super.onResume();
+        if (overlay != null && com.badlogic.gdx.Gdx.files != overlay) { com.badlogic.gdx.Gdx.files = overlay; Log.i(TAG, "asset overlay re-installed after resume"); }
+    }
 }

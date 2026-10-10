@@ -48,14 +48,15 @@ if [ -n "${AUTO_DIR:-}" ] && [ "$KIND" = plain ]; then
   echo "== S4 automatic apply: while v$VERSION is running on the title screen, v$NEXT is published; the app must fetch it, show the panel and relaunch itself with no input"
   bash "$HERE/publish_channel.sh" "$AUTO_DIR" "$NEXT" && pass "S4 published v$NEXT" || fail "S4 publish v$NEXT"
   for i in $(seq 90); do v=$(curl -fsS -m 15 "${CHANNEL}manifest.json?nocache=$(date +%s)$i" 2>/dev/null | python3 -c 'import json,sys; print(json.load(sys.stdin).get("moduleVersion",0))' 2>/dev/null); [ "${v:-0}" = "$NEXT" ] && break; sleep 10; done
-  ok=0
-  for i in $(seq 10); do
+  started=0
+  for i in $(seq 8); do
     start "$HOST_ACT" >/dev/null
-    if wait_for "running module v$NEXT" 45; then ok=1; break; fi
+    if wait_for "auto-apply: restarting" 60; then started=1; break; fi
     go_home; sleep 20
   done
-  [ "$ok" = 1 ] && pass "S4 v$NEXT is running after the app relaunched itself" || fail "S4 no automatic relaunch into v$NEXT"
-  logs | grep -q "auto-apply: restarting" && pass "S4 the automatic apply logged its decision" || fail "S4 no auto-apply log line"
+  [ "$started" = 1 ] && pass "S4 the app fetched v$NEXT, showed its panel and decided to relaunch" || fail "S4 the app never decided to apply v$NEXT"
+  # no manual start from here on: the game itself must come back, running the new version
+  wait_for "running module v$NEXT" 45 && pass "S4 v$NEXT is running after the app relaunched itself (no manual start)" || fail "S4 the app did not come back by itself"
 fi
 echo "   final: $(logs | grep -E 'update status' | tail -1 | sed 's/.*OTALAB *([0-9]*): //' | cut -c1-200)"
 [ "$FAILS" -eq 0 ] && { echo "ALL CHECKS PASSED"; exit 0; } || { echo "$FAILS CHECK(S) FAILED"; exit 1; }

@@ -12,7 +12,12 @@ final class AssetFiles implements Files {
     private final Lwjgl3Files base = new Lwjgl3Files();
     AssetFiles(File root) { this.root = root; }
 
-    @Override public FileHandle internal(String path) { return root == null ? base.internal(path) : new Lwjgl3FileHandle(new File(root, path), FileType.Internal); }
+    /** Paths the game gives are relative to the assets folder; handles libGDX derives from an already-resolved handle (model textures, siblings) arrive absolute and must stay as they are. */
+    @Override public FileHandle internal(String path) {
+        if (root == null) return base.internal(path);
+        File f = new File(path);
+        return new Lwjgl3FileHandle(f.isAbsolute() ? f : new File(root, path), FileType.Internal);
+    }
     @Override public FileHandle getFileHandle(String path, FileType type) { return type == FileType.Internal ? internal(path) : base.getFileHandle(path, type); }
     @Override public FileHandle classpath(String path) { return base.classpath(path); }
     @Override public FileHandle external(String path) { return base.external(path); }

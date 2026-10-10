@@ -35,7 +35,20 @@ sleep 2; shot s1; C1=$(color s1); echo "   screen colour: $C1"; echo "$C1" | gre
 
 echo "== S2 input and lifecycle reach the module"
 adb shell input tap 400 300; expect "S2 touch delivered to module" "module 1 touch"
-go_home; expect "S2 host paused" "host onPause"
+# Covering the game is the STIMULUS for onPause; on the headless emulator it occasionally does not take (HOME + Settings leaves the game the top activity, which the later "intent has been
+# delivered to currently running top-most instance" warning shows), and then no pause is due. Retry with a different cover and show which activity was really resumed on a miss; the assertion
+# itself is unchanged: the host must have logged onPause.
+cover_game() {
+  local n
+  for n in 1 2 3; do
+    adb shell input keyevent KEYCODE_HOME; sleep 1
+    case $n in 1) adb shell am start -a android.settings.SETTINGS >/dev/null ;; 2) adb shell am start -n com.android.settings/.Settings >/dev/null ;; *) adb shell am start -a android.intent.action.MAIN -c android.intent.category.HOME >/dev/null ;; esac
+    wait_for "host onPause" 15 && return 0
+    echo "   cover attempt $n did not pause the game; resumed activity: $(adb shell dumpsys activity activities 2>/dev/null | grep -m1 -E 'mResumedActivity|ResumedActivity' | tr -d '\r')"
+  done
+  return 1
+}
+if cover_game; then pass "S2 host paused"; else fail "S2 host paused (waited for /host onPause/ after 3 covering attempts)"; logs | tail -25; fi
 # libGDX hands pause() to the game on the next GL frame; a backgrounded software-GL emulator may not draw one until the app returns, so the pair is checked after the return
 adb shell am start -n "$ACT" >/dev/null
 expect "S2 module received pause" "module 1 pause" 30; expect "S2 module received resume after it" "module 1 resume" 30

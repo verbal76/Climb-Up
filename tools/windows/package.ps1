@@ -31,12 +31,13 @@ if ($LASTEXITCODE -ne 0) { throw 'icon failed' }
 $dist = Join-Path $out 'dist'
 if (Test-Path $dist) { Remove-Item -Recurse -Force $dist }
 New-Item -ItemType Directory -Force $dist | Out-Null
+# runtime modules: jdk.crypto.ec is needed because the shared startup code parses the pinned EC key (even though this build never goes online)
 $jp = Join-Path $env:JAVA_HOME 'bin\jpackage.exe'
 if (-not (Test-Path $jp)) { $jp = 'jpackage' }
 & $jp --type app-image --name UPWARDLY --app-version $exeVersion --vendor 'Hot Attic Games' `
   --description 'UPWARDLY - a tower that does not exist, a climb that does.' --copyright 'Hot Attic Games' `
   --icon "$out\upwardly.ico" --input $jarDir --main-jar upwardly.jar --main-class com.hotatticgames.climbup.desktop.DesktopLauncher `
-  --add-modules 'java.base,java.desktop,java.logging,java.management,java.naming,java.xml,jdk.unsupported,jdk.crypto.ec'      # jdk.crypto.ec: the shared startup code builds the pinned EC key (needed even though the Windows build never goes online) `
+  --add-modules 'java.base,java.desktop,java.logging,java.management,java.naming,java.xml,jdk.unsupported,jdk.crypto.ec' `
   --java-options '-Dfile.encoding=UTF-8' --java-options '-Xms256m' --java-options '-Xmx1024m' --java-options '-XX:+UseG1GC' `
   --dest $dist
 if ($LASTEXITCODE -ne 0) { throw 'jpackage failed' }

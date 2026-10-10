@@ -16,10 +16,12 @@ import java.nio.file.Files;
 final class Smoke {
     private static int failures;
 
-    private static void check(String name, boolean ok, String detail) { System.out.println((ok ? "SMOKE_OK " : "SMOKE_FAIL ") + name + " " + detail); if (!ok) failures++; }
+    private static final StringBuilder LOG = new StringBuilder();
+    private static void say(String line) { System.out.println(line); LOG.append(line).append('\n'); }
+    private static void check(String name, boolean ok, String detail) { say((ok ? "SMOKE_OK " : "SMOKE_FAIL ") + name + " " + detail); if (!ok) failures++; }
 
     static int run() {
-        System.out.println("SMOKE_INFO java.version=" + System.getProperty("java.version") + " java.home=" + System.getProperty("java.home") + " os=" + System.getProperty("os.name") + " " + System.getProperty("os.arch"));
+        say("SMOKE_INFO java.version=" + System.getProperty("java.version") + " java.home=" + System.getProperty("java.home") + " os=" + System.getProperty("os.name") + " " + System.getProperty("os.arch"));
         File assets = DesktopLauncher.assetRoot();
         File root = assets != null ? assets : new File("assets");
         File tuningFile = new File(root, "data/tuning.json");
@@ -45,7 +47,7 @@ final class Smoke {
             boolean ok = org.lwjgl.glfw.GLFW.glfwInit();
             String v = ok ? org.lwjgl.glfw.GLFW.glfwGetVersionString() : "init failed";
             if (ok) org.lwjgl.glfw.GLFW.glfwTerminate();
-            check("glfw", ok, v);
+            if (ok || System.getProperty("os.name", "").toLowerCase().contains("win")) check("glfw", ok, v); else say("SMOKE_SKIP glfw " + v + " (no display on this machine; required on Windows)");
         } catch (Throwable t) { check("glfw", false, t.toString()); }
         try {
             com.studiohartman.jamepad.ControllerManager m = new com.studiohartman.jamepad.ControllerManager();
@@ -64,7 +66,8 @@ final class Smoke {
             for (int i = 0; i < 1200; i++) { in.moveX = (i / 90) % 2 == 0 ? 1f : -1f; in.jumpHeld = i % 60 < 20; in.jumpPressed = i % 60 == 0; sim.step(in); in.jumpPressed = false; }
             check("simulation", Double.isFinite(sim.y) && Double.isFinite(sim.s), "steps=1200 y0=" + h0 + " y=" + sim.y);
         } catch (Throwable t) { check("simulation", false, t.toString()); }
-        System.out.println(failures == 0 ? "SMOKE_RESULT PASS" : "SMOKE_RESULT FAIL " + failures);
+        say(failures == 0 ? "SMOKE_RESULT PASS" : "SMOKE_RESULT FAIL " + failures);
+        try { Files.write(new File(data, "smoke.log").toPath(), LOG.toString().getBytes(StandardCharsets.UTF_8)); } catch (Exception ignored) { }      // the packaged launcher has no console: the log file is the evidence
         return failures == 0 ? 0 : 1;
     }
 }

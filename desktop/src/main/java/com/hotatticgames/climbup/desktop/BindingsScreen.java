@@ -30,7 +30,7 @@ final class BindingsScreen extends ScreenAdapter {
         rk = new Remapper<>(kb); rp = pb != null ? new Remapper<>(pb) : null;
     }
 
-    @Override public void show() { Gdx.input.setInputProcessor(new InputMultiplexer(dp.sources.scrollTap, g.ui)); dp.screenChanged(); }
+    @Override public void show() { Gdx.input.setInputProcessor(new InputMultiplexer(dp.scrollTap(), g.ui)); dp.screenChanged(); }
     @Override public void resize(int w, int h) { g.ui.resize(w, h); }
 
     private boolean dialog() { return pad ? rp != null && rp.state != Remapper.State.IDLE : rk.state != Remapper.State.IDLE; }
@@ -48,15 +48,15 @@ final class BindingsScreen extends ScreenAdapter {
         else if (dialog()) capture();
         Ui ui = g.ui; ui.begin();
         float W = ui.w(), H = ui.h();
-        ui.textC(pad ? "CONTROLLER BINDINGS" : "KEYBOARD + MOUSE BINDINGS", W / 2, H - 78, 6f, Ui.TEXT);
-        if (pad && target != null) ui.textC(DesktopTabs.clip(target.name(), 40), W / 2, H - 118, 2.8f, Ui.DIM);
+        ui.textC(pad ? "CONTROLLER BINDINGS" : "KEYBOARD + MOUSE BINDINGS", W / 2, H - 70, 4.6f, Ui.TEXT);
+        if (pad && target != null) ui.textC(DesktopTabs.clip(target.name(), 40), W / 2, H - 106, 2.8f, Ui.DIM);
         boolean usable = !pad || (target != null && target.connected() && pb != null);
         if (!dialog()) {
             if (ui.button("BACK", 40, H - 100, 200, 64, true)) { g.audio.play("click"); dp.save(); g.setScreen(back); ui.end(); return; }
             if (usable) {
-                column(ui, W / 2 - 620, H - 190, "GAMEPLAY", true);
-                column(ui, W / 2 + 20, H - 190, "MENUS", false);
-                if (ui.button(confirmRestore ? "CONFIRM RESTORE" : "RESTORE DEFAULTS", W / 2 - 230, 70, 460, 64)) {
+                column(ui, W / 2 - 620, H - 160, "GAMEPLAY", true);
+                column(ui, W / 2 + 20, H - 160, "MENUS", false);
+                if (ui.button(confirmRestore ? "CONFIRM RESTORE" : "RESTORE DEFAULTS", W / 2 - 230, 36, 460, 60)) {
                     g.audio.play("click");
                     if (!confirmRestore) confirmRestore = true;
                     else {
@@ -66,25 +66,25 @@ final class BindingsScreen extends ScreenAdapter {
                     }
                 }
             } else ui.textC("CONNECT A CONTROLLER TO EDIT ITS BINDINGS.", W / 2, H / 2, 4f, Ui.TEXT);
-            if (!status.isEmpty()) ui.textC(status, W / 2, 34, 2.8f, Ui.ACCENT);
+            if (!status.isEmpty()) ui.textC(status, W / 2, 112, 2.8f, Ui.ACCENT);
         } else drawDialog(ui, W, H);
         ui.end();
     }
 
     private void column(Ui ui, float x, float top, String head, boolean game) {
         ui.text(head, x, top, 3.6f, Ui.ACCENT);
-        float y = top - 70;
+        float y = top - 62;
         for (Act a : Act.values()) {
             if (a.game != game) continue;
-            ui.text(a.label, x, y + 20, 2.8f, Ui.TEXT);
+            ui.text(a.label, x, y + 16, 2.8f, Ui.TEXT);
             for (int slot = 0; slot < Bindings.MAX_SLOTS; slot++) {
                 String label = name(a, slot);
                 int n = count(a);
                 if (label == null && slot != n) continue;            // only the next free slot offers "add"
                 float bx = x + 210 + slot * 128;
-                if (ui.button(label == null ? "+ ADD" : label, bx, y, 120, 54, label != null && slot == 0)) begin(a, slot);
+                if (ui.button(label == null ? "+ ADD" : label, bx, y, 120, 50, label != null && slot == 0)) begin(a, slot);
             }
-            y -= 64;
+            y -= 58;
         }
     }
 
@@ -124,7 +124,7 @@ final class BindingsScreen extends ScreenAdapter {
         ui.textC("REBIND: " + a.label, W / 2, y + ph - 70, 5f, Ui.TEXT);
         String msg = pad ? rp.message : rk.message;
         if (st == Remapper.State.WAITING) {
-            ui.textC(pad ? "PRESS A BUTTON OR PUSH A STICK ON YOUR CONTROLLER" : "PRESS A KEY OR A MOUSE BUTTON", W / 2, y + ph - 150, 3.2f, Ui.ACCENT);
+            String ws = pad ? "PRESS A BUTTON OR PUSH A STICK ON YOUR CONTROLLER" : "PRESS A KEY OR A MOUSE BUTTON"; ui.textC(ws, W / 2, y + ph - 150, Math.min(3.2f, (pw - 40) / (ws.length() * 6f)), Ui.ACCENT);
             ui.textC("WAITING FOR INPUT...", W / 2, y + ph - 195, 3.2f, Ui.DIM);
             if (!msg.isEmpty()) ui.textC(msg, W / 2, y + ph - 235, 3f, new Color(1f, 0.4f, 0.35f, 1f));
             float bw = 300, by = y + 40;
@@ -135,7 +135,7 @@ final class BindingsScreen extends ScreenAdapter {
             String shown = pad ? dp.input.family().label(rp.proposed) : KeyCodes.name(rk.proposed);
             ui.textC("NEW BINDING: " + shown, W / 2, y + ph - 150, 4.2f, Ui.ACCENT);
             boolean conflict = pad ? rp.hasConflict() : rk.hasConflict();
-            if (conflict) ui.textC("ALREADY USED FOR " + (pad ? rp.conflicts : rk.conflicts).get(0).label + ". CONFIRM MOVES IT HERE.", W / 2, y + ph - 200, 2.8f, new Color(1f, 0.82f, 0.3f, 1f));
+            if (conflict) { String cm = "ALREADY USED FOR " + (pad ? rp.conflicts : rk.conflicts).get(0).label + ". CONFIRM MOVES IT HERE."; ui.textC(cm, W / 2, y + ph - 200, Math.min(2.8f, (pw - 40) / (cm.length() * 6f)), new Color(1f, 0.82f, 0.3f, 1f)); }
             else ui.textC("NO CONFLICTS.", W / 2, y + ph - 200, 2.8f, Ui.GOOD);
             if (!msg.isEmpty()) ui.textC(msg, W / 2, y + ph - 240, 3f, new Color(1f, 0.4f, 0.35f, 1f));
             float bw = 230, by = y + 40, gap = 20, x0 = W / 2 - (3 * bw + 2 * gap) / 2;

@@ -1,0 +1,114 @@
+name: Windows (UPWARDLY) experimental build
+# Isolated Windows workflow. It can only run for pushes to exp/upwardly-windows or by hand, never publishes anything (no Releases, no tags, no Steam, no OTA),
+# uses no repository secrets and read-only permissions. Its artifacts are test builds, named EXPERIMENTAL.
+on:
+  workflow_dispatch: {}
+  push:
+    branches: [exp/upwardly-windows]
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    # belt and braces: whatever starts this workflow, it only runs for the Windows experiment branch
+    if: github.ref == 'refs/heads/exp/upwardly-windows'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '17' }
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Gameplay regression suite (unmodified core tests)
+        run: ./gradlew :core:test --no-daemon
+      - name: Desktop unit tests (input mapping, bindings, persistence, navigation, display, assets)
+        run: ./gradlew :desktop:test --no-daemon
+      - name: Print test totals
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import glob, xml.etree.ElementTree as ET
+          for mod in ('core','desktop'):
+              t=f=s=0
+              for p in glob.glob(f'{mod}/build/test-results/test/*.xml'):
+                  r=ET.parse(p).getroot(); t+=int(r.get('tests')); f+=int(r.get('failures'))+int(r.get('errors')); s+=int(r.get('skipped'))
+              print(f'TEST_TOTALS {mod}: tests={t} failures={f} skipped={s}')
+          PY
+      - name: Install a virtual display and software OpenGL
+        run: sudo apt-get update && sudo apt-get install -y xvfb libgl1-mesa-dri libglx-mesa0 libopenal1
+      - name: End-to-end desktop scenario (real window, keyboard-only navigation, rebinding, play, controller plug/unplug, resize, fullscreen)
+        run: xvfb-run -a -s "-screen 0 3840x2160x24" ./gradlew :desktop:scenario --no-daemon -Dscenario.noaudio=true -Dscenario.ascii=true | tee scenario.log | grep -v "^Picked up"
+      - name: Packaged-jar smoke (assets, natives, save folder) on Linux
+        run: ./gradlew :desktop:run --no-daemon --args=--smoke -Dclimb.assets="$PWD/assets" -Dclimb.data="$RUNNER_TEMP/smoke" | grep SMOKE
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: EXPERIMENTAL-scenario-screenshots-${{ github.run_number }}
+          path: desktop/build/scenario/shots
+          retention-days: 7
+
+  windows:
+    if: github.ref == 'refs/heads/exp/upwardly-windows'
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '17' }
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - run: pip install pillow
+      - name: Package (jar, jlink runtime, EXE, assets, checksums, Steam layout)
+        shell: powershell
+        run: powershell -File tools/windows/package.ps1 -BuildNumber ${{ github.run_number }} -Channel experimental
+      - name: Print what was built
+        shell: powershell
+        run: |
+          $app = "build\windows\dist\UPWARDLY"
+          Get-ChildItem $app | Format-Table Name, Length
+          Get-Content "$app\BUILD_INFO.txt"
+          Get-ChildItem build\windows\*.zip | ForEach-Object { "{0} {1:N1} MB" -f $_.Name, ($_.Length/1MB) }
+          "bundled runtime java.exe present: " + (Test-Path "$app\runtime\bin\java.exe")
+          "app\assets file count: " + (Get-ChildItem -Recurse -File "$app\app\assets" | Measure-Object).Count
+          "du runtime MB: " + [math]::Round(((Get-ChildItem -Recurse -File "$app\runtime" | Measure-Object Length -Sum).Sum/1MB),1)
+          Get-Content build\windows\SHA256SUMS.txt | Select-Object -First 8
+          Get-ChildItem -Recurse build\windows\steam | Select-Object -First 12 FullName
+      - name: Run the packaged EXE without any Java on PATH (--smoke)
+        shell: powershell
+        run: |
+          # remove every Java from this step's environment: the app must use only its bundled runtime
+          $env:JAVA_HOME = ''
+          $env:Path = ($env:Path -split ';' | Where-Object { $_ -notmatch '(?i)java|jdk|temurin|hostedtoolcache' }) -join ';'
+          "java on PATH: " + [bool](Get-Command java -ErrorAction SilentlyContinue)
+          $env:APPDATA = "$env:RUNNER_TEMP\appdata"; New-Item -ItemType Directory -Force $env:APPDATA | Out-Null
+          $p = Start-Process -FilePath "build\windows\dist\UPWARDLY\UPWARDLY.exe" -ArgumentList '--smoke' -Wait -PassThru
+          "exit code: " + $p.ExitCode
+          $log = "$env:APPDATA\HotAtticGames\Upwardly\smoke.log"
+          "save folder used: $env:APPDATA\HotAtticGames\Upwardly  exists=" + (Test-Path $log)
+          Get-Content $log
+          if ($p.ExitCode -ne 0) { throw "smoke failed" }
+      - name: Launch the EXE with a software OpenGL driver (best effort; hosted runners have no GPU)
+        continue-on-error: true
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Copy-Item -Recurse build\windows\dist\UPWARDLY "$env:RUNNER_TEMP\glapp"
+          $rel = Invoke-RestMethod https://api.github.com/repos/pal1000/mesa-dist-win/releases/latest
+          $asset = $rel.assets | Where-Object { $_.name -match 'release-msvc\.7z$' } | Select-Object -First 1
+          "software GL driver: " + $asset.name + " (third-party test helper, used only on this CI runner, never shipped)"
+          Invoke-WebRequest $asset.browser_download_url -OutFile "$env:RUNNER_TEMP\mesa.7z"
+          7z x "$env:RUNNER_TEMP\mesa.7z" "-o$env:RUNNER_TEMP\mesa" -y | Out-Null
+          Get-ChildItem "$env:RUNNER_TEMP\mesa\x64\*.dll" | Where-Object { $_.Name -match 'opengl32|libgallium_wgl|libglapi|libEGL|libGLESv2' } | Copy-Item -Destination "$env:RUNNER_TEMP\glapp"
+          $env:GALLIUM_DRIVER = 'llvmpipe'; $env:MESA_GL_VERSION_OVERRIDE = '4.5'
+          $env:APPDATA = "$env:RUNNER_TEMP\appdata2"; New-Item -ItemType Directory -Force $env:APPDATA | Out-Null
+          $p = Start-Process -FilePath "$env:RUNNER_TEMP\glapp\UPWARDLY.exe" -PassThru
+          Start-Sleep -Seconds 40
+          "still running after 40 s (window open, game rendering): " + (-not $p.HasExited)
+          $log = "$env:APPDATA\HotAtticGames\Upwardly\desktop.log"
+          if (Test-Path $log) { Get-Content $log } else { "no desktop.log: the game never rendered a frame" }
+          if (-not $p.HasExited) { $null = $p.CloseMainWindow(); Start-Sleep -Seconds 5; "exited after close request: " + $p.HasExited; if (-not $p.HasExited) { $p.Kill() } }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: EXPERIMENTAL-UPWARDLY-win64-build-${{ github.run_number }}
+          path: |
+            build/windows/*.zip
+            build/windows/SHA256SUMS.txt
+          retention-days: 14

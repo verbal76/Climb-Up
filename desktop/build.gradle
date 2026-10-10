@@ -14,3 +14,33 @@ tasks.named("run") {
     workingDir = file('../assets')
     systemProperties System.properties.findAll { it.key.toString().startsWith('climb.') }
 }
+
+// End-to-end run of the real desktop build in a real window (CI runs it under Xvfb with software OpenGL; locally: xvfb-run -a ./gradlew :desktop:scenario).
+tasks.register('scenario', JavaExec) {
+    group = 'verification'
+    description = 'Drives the desktop game through menus, rebinding, play, controller plug/unplug, resize and fullscreen, saving screenshots.'
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.hotatticgames.climbup.desktop.Scenario'
+    workingDir = file('../assets')
+    args = [project.findProperty('scenarioData') ?: "${buildDir}/scenario/data".toString(), project.findProperty('scenarioShots') ?: "${buildDir}/scenario/shots".toString()]
+    systemProperties System.properties.findAll { it.key.toString().startsWith('scenario.') || it.key.toString().startsWith('climb.') }
+}
+
+// ---- Windows distribution -------------------------------------------------------------------------------------------------------------------------------------------
+// One self-contained jar for jpackage: the shared game, the LWJGL3 backend and ONLY the Windows natives (Linux/macOS natives are left out of the shipped build).
+tasks.register('windowsJar', Jar) {
+    group = 'distribution'
+    description = 'upwardly.jar for the Windows app-image (see tools/windows/package.ps1).'
+    archiveFileName = 'upwardly.jar'
+    destinationDirectory = layout.buildDirectory.dir('windows/input')
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    manifest { attributes 'Main-Class': 'com.hotatticgames.climbup.desktop.DesktopLauncher', 'Implementation-Title': 'UPWARDLY', 'Implementation-Version': appVersionName + (project.findProperty('buildNumber') ? '+' + project.findProperty('buildNumber') : '') }
+    from(sourceSets.main.output)
+    from({
+        configurations.runtimeClasspath.filter { f ->
+            def n = f.name
+            !(n.contains('natives-linux') || n.contains('natives-macos') || n.contains('natives-freebsd'))
+        }.collect { it.isDirectory() ? it : zipTree(it) }
+    }) { exclude 'META-INF/*.SF', 'META-INF/*.RSA', 'META-INF/*.DSA', 'module-info.class', 'META-INF/versions/**/module-info.class'
+         exclude '**/libgdx*.so', '**/libgdx*.dylib', '**/libjamepad*.so', '**/libjamepad*.dylib', '**/*.dylib', '**/linux/**', '**/macos/**', 'libglfw*', 'liblwjgl*' }
+}

@@ -35,15 +35,19 @@ public final class FocusModel {
         if (focus < 0 || focus >= last.size()) { focus = 0; return true; }
         Item f = last.get(focus);
         int best = -1; float bestScore = Float.MAX_VALUE;
-        for (int i = 0; i < last.size(); i++) {
-            if (i == focus) continue;
-            Item c = last.get(i);
-            float dx = c.cx() - f.cx(), dy = c.cy() - f.cy();
-            float along = dir == 0 ? dy : dir == 1 ? -dy : dir == 2 ? -dx : dx;
-            float across = dir <= 1 ? Math.abs(dx) : Math.abs(dy);
-            if (along <= 4f) continue;
-            float score = along + 2.5f * across;
-            if (score < bestScore) { bestScore = score; best = i; }
+        for (int pass = 0; pass < 2 && best < 0; pass++) {            // pass 0: only buttons that share a row/column with the focused one (nearest first); pass 1: any button in that direction
+            for (int i = 0; i < last.size(); i++) {
+                if (i == focus) continue;
+                Item c = last.get(i);
+                float dx = c.cx() - f.cx(), dy = c.cy() - f.cy();
+                float along = dir == 0 ? dy : dir == 1 ? -dy : dir == 2 ? -dx : dx;
+                float across = dir <= 1 ? Math.abs(dx) : Math.abs(dy);
+                if (along <= 4f) continue;
+                boolean overlaps = dir <= 1 ? Math.min(f.x + f.w, c.x + c.w) - Math.max(f.x, c.x) > 2f : Math.min(f.y + f.h, c.y + c.h) - Math.max(f.y, c.y) > 2f;
+                if (pass == 0 && !overlaps) continue;
+                float score = pass == 0 ? along + 0.01f * across : along + 2.5f * across;
+                if (score < bestScore) { bestScore = score; best = i; }
+            }
         }
         if (best < 0) return false;
         focus = best; return true;

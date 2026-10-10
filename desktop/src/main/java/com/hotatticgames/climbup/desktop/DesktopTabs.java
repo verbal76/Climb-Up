@@ -12,6 +12,12 @@ import java.util.Locale;
 final class DesktopTabs {
     private DesktopTabs() { }
 
+    /** A dim help line under the rows, shrunk to fit the screen width. */
+    static void note(Ui ui, SettingsScreen s, String text) {
+        float px = Math.min(2.6f, (ui.w() - 60) / Math.max(1, text.length() * 6f));
+        ui.textC(text, ui.w() / 2, s.rowTop() + 30, px, Ui.DIM); s.skip(46);
+    }
+
     static String clip(String s, int n) { s = s.toUpperCase(Locale.ROOT); return s.length() > n ? s.substring(0, n - 1) + "." : s; }
 
     /** DISPLAY MODE and RESOLUTION. */
@@ -30,9 +36,8 @@ final class DesktopTabs {
                     () -> { int[] r = list.get(Math.min(list.size() - 1, i + (exact ? 1 : 0))); dp.display.setResolution(c, r[0], r[1]); dp.save(); }, null);
             s.skip(8);
             Ui ui = g.ui;
-            ui.textC("F11 OR ALT+ENTER SWITCHES BETWEEN WINDOWED AND FULLSCREEN.", ui.w() / 2, s.rowTop() + 30, 2.6f, Ui.DIM);
-            s.skip(46);
-            ui.textC("THE WINDOW CAN ALSO BE RESIZED BY DRAGGING ITS EDGES. THE GAME KEEPS ITS FRAMING.", ui.w() / 2, s.rowTop() + 30, 2.6f, Ui.DIM);
+            note(ui, s, "F11 OR ALT+ENTER SWITCHES BETWEEN WINDOWED AND FULLSCREEN.");
+            note(ui, s, "THE WINDOW CAN ALSO BE RESIZED BY DRAGGING ITS EDGES. THE GAME KEEPS ITS FRAMING.");
         }
     }
 
@@ -62,7 +67,7 @@ final class DesktopTabs {
             });
             s.skip(8);
             Ui ui = g.ui;
-            ui.textC("KEYBOARD, MOUSE AND CONTROLLER ALL WORK AT ONCE. PROMPTS FOLLOW WHAT YOU USED LAST.", ui.w() / 2, s.rowTop() + 30, 2.6f, Ui.DIM);
+            note(ui, s, "KEYBOARD, MOUSE AND CONTROLLER ALL WORK AT ONCE. PROMPTS FOLLOW WHAT YOU USED LAST.");
         }
     }
 }

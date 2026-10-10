@@ -12,7 +12,9 @@ import com.hotatticgames.climbup.platform.GameInput;
 import com.hotatticgames.climbup.platform.Platform;
 import com.hotatticgames.climbup.ui.Ui;
 import java.io.File;
+import com.badlogic.gdx.InputAdapter;
 import java.util.Arrays;
+import java.util.function.Supplier;
 import java.util.List;
 
 /** The Windows launcher's services: keyboard, mouse and controller input, no touch overlay, no network, the UPWARDLY name, and the extra Settings tabs. */
@@ -21,7 +23,9 @@ public final class DesktopPlatform implements Platform {
 
     public final File configFile;
     public final DesktopConfig cfg;
-    public GdxSources sources;                    // created in attach(): the controller library needs the running application
+    public Sources sources;                       // created in attach(): the controller library needs the running application
+    private final Supplier<Sources> sourceFactory;
+    private final InputAdapter noScroll = new InputAdapter();
     public InputManager input;
     public final DisplayManager display = new DisplayManager();
     private MenuNav nav;
@@ -29,8 +33,14 @@ public final class DesktopPlatform implements Platform {
     private float hintT, saveClock;
     private InputManager.Device lastHintDevice = InputManager.Device.KEYBOARD;
     private boolean dirty;
+    private int frames; private long startNs = System.nanoTime(), lastNs; private double sumMs, maxMs;
+    private final StringBuilder startupLog = new StringBuilder();
 
-    public DesktopPlatform(File dataDir) {
+    public DesktopPlatform(File dataDir) { this(dataDir, GdxSources::new); }
+
+    /** @param sourceFactory the keyboard/mouse/controller source (tests supply scripted ones). Called from attach(), on the render thread, once the application exists. */
+    public DesktopPlatform(File dataDir, Supplier<Sources> sourceFactory) {
+        this.sourceFactory = sourceFactory;
         configFile = new File(dataDir, "upwardly-desktop.cfg");
         cfg = DesktopConfig.load(configFile);
     }
@@ -42,12 +52,24 @@ public final class DesktopPlatform implements Platform {
     @Override public GameInput gameInput() { return input; }
 
     @Override public void attach(ClimbGame game) {
-        g = game; sources = new GdxSources(); input = new InputManager(cfg, sources); nav = new MenuNav(input);
+        g = game; sources = sourceFactory.get(); input = new InputManager(cfg, sources); nav = new MenuNav(input);
         game.ui.nav = nav;
         if (cfg.display == DesktopConfig.DisplayMode.FULLSCREEN) { /* the launcher already opened the window fullscreen */ }
     }
 
+    /** desktop.log in the data folder: startup time and frame pacing of this run (the evidence the packaged build can give without a console). */
+    private void trace(long nowNs) {
+        frames++;
+        if (frames == 1) startupLog.append("first frame ").append((nowNs - startNs) / 1_000_000L).append(" ms after the launcher started\n");
+        else if (lastNs != 0) { double ms = (nowNs - lastNs) / 1e6; if (frames > 10) { sumMs += ms; maxMs = Math.max(maxMs, ms); } }
+        lastNs = nowNs;
+        if (frames == 600) { startupLog.append(String.format(java.util.Locale.ROOT, "frames 11..600: avg %.2f ms, max %.2f ms\n", sumMs / 590.0, maxMs)); flushLog(); }
+        if (frames == 1) flushLog();
+    }
+    private void flushLog() { try { java.nio.file.Files.write(new File(configFile.getParentFile(), "desktop.log").toPath(), startupLog.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8)); } catch (Exception ignored) { } }
+
     @Override public void frame(float dt) {
+        trace(System.nanoTime());
         input.update(Math.min(dt, 0.1f));
         if (sources.justPressed(Input.Keys.F11) || (sources.justPressed(Input.Keys.ENTER) && (sources.down(Input.Keys.ALT_LEFT) || sources.down(Input.Keys.ALT_RIGHT)))) { display.toggle(cfg); save(); }
         if (cfg.display == DesktopConfig.DisplayMode.WINDOWED && !Gdx.graphics.isFullscreen()) {
@@ -60,13 +82,16 @@ public final class DesktopPlatform implements Platform {
         if (d != lastHintDevice) { lastHintDevice = d; hintT = Math.max(hintT, 6f); }
     }
 
+    /** The mouse-wheel tap to put in front of a screen's own input processor. */
+    public InputProcessor scrollTap() { return sources instanceof GdxSources ? ((GdxSources) sources).scrollTap : noScroll; }
+
     /** Persists the desktop settings now (atomic; a failed write leaves the previous file). */
     public void save() { dirty = false; cfg.save(configFile); }
 
     @Override public void screenChanged() {
         nav.reset();
         InputProcessor cur = Gdx.input.getInputProcessor();
-        Gdx.input.setInputProcessor(new InputMultiplexer(sources.scrollTap, cur));
+        Gdx.input.setInputProcessor(new InputMultiplexer(scrollTap(), cur));
         if (g != null && g.getScreen() instanceof PlayScreen) hintT = 14f;
     }
 

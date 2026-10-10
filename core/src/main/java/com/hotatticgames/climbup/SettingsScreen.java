@@ -59,7 +59,7 @@ public final class SettingsScreen extends ScreenAdapter {
             if (ui.button("ABOUT", x0 + 734, H - 168, 206, 60, page == 2)) page = 2;
         } else {                                                    // desktop: the three shared tabs plus the launcher's own (window, controls) on one row
             String[] names = new String[3 + extra.size()];
-            names[0] = "AUDIO + GAME"; names[1] = "ACCESS"; names[2] = "ABOUT";
+            names[0] = "GENERAL"; names[1] = "ACCESS"; names[2] = "ABOUT";
             for (int i = 0; i < extra.size(); i++) names[3 + i] = extra.get(i).name();
             float total = Math.min(W - 80, 1180), gap = 10, bw = (total - gap * (names.length - 1)) / names.length, x0 = W / 2 - total / 2;
             for (int i = 0; i < names.length; i++) if (ui.button(names[i], x0 + i * (bw + gap), H - 168, bw, 60, page == i)) page = i;

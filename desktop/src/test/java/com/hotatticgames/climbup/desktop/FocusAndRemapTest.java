@@ -33,6 +33,17 @@ public class FocusAndRemapTest {
         assertTrue(m.move(2)); assertEquals(0, m.focus);
     }
 
+    @Test public void aRightAlignedTabReachesTheWideRowBelowItNotARemoteSmallButton() {
+        FocusModel m = new FocusModel();                                  // the Settings layout: a tab row, then wide row buttons with a small "+" further down
+        m.beginFrame(); m.add("BACK", 40, 620, 200, 64, true); m.add("WINDOW", 762, 552, 238, 60, false); m.add("CONTROLS", 1002, 552, 238, 60, false);
+        m.add("AUTO DETECT", 699, 480, 431, 64, false); m.add("EDIT", 699, 332, 431, 64, false); m.add("-", 699, 258, 86, 64, false); m.add("+", 1044, 258, 86, 64, false); m.endFrame();
+        m.focus = 2;
+        m.move(1); assertEquals("AUTO DETECT", m.focused().label);
+        m.move(1); assertEquals("EDIT", m.focused().label);
+        m.move(1); assertEquals("the pair below: the minus is under the wide button's left half, the plus under its right", "-", m.focused().label);
+        m.move(3); m.move(0); assertEquals("EDIT", m.focused().label);
+    }
+
     @Test public void focusIsClampedWhenButtonsDisappear() {
         FocusModel m = column(); m.move(1); m.move(1);
         m.beginFrame(); m.add("ONLY", 40, 400, 400, 76, false); m.endFrame();

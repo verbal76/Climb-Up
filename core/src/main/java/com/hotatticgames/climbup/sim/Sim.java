@@ -28,7 +28,7 @@ public final class Sim {
     public int ledgeSide = 1;
     private int sideIn = -1, sideDir = 1;      // a platform whose side the body has slipped into while rising fast (see trackSideEntry), and which side it came from
     public float ropeTopT;           // seconds the climber has pushed up against the top of a rope (a short hold mounts the beam)
-    public static final float BEAM_MOUNT_TIME = 0.62f, BEAM_TOP = 0.24f, BEAM_HALF = 1.1f, ROPE_TOP_HOLD = 0.22f;
+    public static final float BEAM_MOUNT_TIME = 0.62f, BEAM_TOP = 0.24f, BEAM_HALF = 1.1f, ROPE_TOP_HOLD = 0.06f;
     public boolean jumpedUp;         // current ascent came from a jump (variable height cut applies)
     public boolean prevJumpHeld;
     public float lastGroundY;
@@ -756,8 +756,8 @@ public final class Sim {
             return;
         }
         if (in.moveY < -0.7f && y <= yMin + 0.01f) { mode = Mode.AIR; onElem = -1; lockout = T.grabLockout; vy = 0; }
-        // pushing on at the very top: haul up from behind the beam and stand on it (a cliff-style mantle)
-        if (y >= yMax - 0.01f && in.moveY > 0.6f) ropeTopT += dt; else ropeTopT = 0f;
+        // reaching the top of the rope with up held: the beam is a ledge, so he grabs it at once and hauls himself up onto it (the same mantle as a cliff edge)
+        if (y >= yMax - 0.01f && in.moveY > 0.3f) ropeTopT += dt; else ropeTopT = 0f;
         if (ropeTopT >= ROPE_TOP_HOLD) { ropeTopT = 0f; mode = Mode.BEAM; pullT = 0; pullFromY = y; vx = vy = 0; events |= EV_PULL; }
     }
 

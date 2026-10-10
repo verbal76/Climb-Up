@@ -31,11 +31,24 @@ public final class ModuleManifest {
         catch (Exception e) { return null; }
     }
 
+    /** Strict JSON objects: a repeated key is refused (parsers disagree about which value wins, and a signed document must mean one thing). */
+    static void noDuplicateKeys(JsonValue o) {
+        java.util.HashSet<String> seen = new java.util.HashSet<>();
+        for (JsonValue c = o.child; c != null; c = c.next) if (o.isObject() && !seen.add(c.name)) throw new IllegalArgumentException("duplicate key " + c.name);
+    }
+
     public static ModuleManifest parse(byte[] json) throws IllegalArgumentException {
+        try { return parse0(json); }
+        catch (IllegalArgumentException e) { throw e; }
+        catch (RuntimeException e) { throw new IllegalArgumentException("manifest malformed"); }          // the JSON accessors throw other types for mismatched value kinds
+    }
+
+    private static ModuleManifest parse0(byte[] json) {
         if (json == null || json.length == 0 || json.length > MAX_BYTES) throw new IllegalArgumentException("manifest size");
         JsonValue r;
         try { r = new JsonReader().parse(new String(json, StandardCharsets.UTF_8)); } catch (Exception e) { throw new IllegalArgumentException("manifest not JSON"); }
         if (r == null || !r.isObject()) throw new IllegalArgumentException("manifest not an object");
+        noDuplicateKeys(r);
         ModuleManifest m = new ModuleManifest();
         m.schema = i(r, "schema", 1, 1000); if (m.schema != SCHEMA) throw new IllegalArgumentException("unsupported schema " + m.schema);
         m.app = s(r, "app", ID); m.channel = s(r, "channel", ID); m.keyId = s(r, "keyId", ID); m.moduleName = s(r, "moduleName", ID);
@@ -50,6 +63,7 @@ public final class ModuleManifest {
         Set<String> seen = new HashSet<>();
         for (JsonValue f = fs.child; f != null; f = f.next) {
             FileEntry e = new FileEntry();
+            if (!f.isObject()) throw new IllegalArgumentException("file entry"); noDuplicateKeys(f);
             e.name = s(f, "name", NAME); e.sha256 = s(f, "sha256", HEX);
             JsonValue sz = f.get("size"); if (sz == null || !sz.isNumber()) throw new IllegalArgumentException("size");
             e.size = sz.asLong(); if (e.size < 1 || e.size > MAX_FILE_BYTES) throw new IllegalArgumentException("size range");

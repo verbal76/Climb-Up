@@ -39,7 +39,9 @@ public final class TrustedKeys {
     public boolean verify(String keyId, byte[] data, byte[] sigText) {
         if (!trusts(keyId)) return false;
         try {
-            byte[] sig = Base64.getMimeDecoder().decode(new String(sigText, StandardCharsets.US_ASCII).trim());
+            // Strict base64: surrounding whitespace and line breaks (openssl wraps at 64) are tolerated, anything else outside the alphabet is not. The MIME decoder silently DISCARDED junk, so a
+            // signature had many textual spellings; the verified bytes were still right, but "valid signature hidden among garbage" is not something to accept.
+            byte[] sig = Base64.getDecoder().decode(new String(sigText, StandardCharsets.US_ASCII).trim().replace("\r", "").replace("\n", ""));
             if (sig.length < 8 || sig.length > 140) return false;
             Signature s = Signature.getInstance("SHA256withECDSA"); s.initVerify(keys.get(keyId)); s.update(data);
             return s.verify(sig);

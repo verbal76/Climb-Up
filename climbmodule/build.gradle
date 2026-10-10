@@ -16,6 +16,9 @@ dependencies {
 // Test release whose entry class differs from the shipped module's (it runs extra code and reports it). Everything else in it is identical, :core included.
 sourceSets { marked { java.srcDir 'src/marked/java'; compileClasspath += sourceSets.main.output + configurations.compileClasspath } }
 configurations { markedCompileOnly.extendsFrom compileOnly }
+// The title-banner release (live-update delivery test): same game, entry class draws one ribbon over the title screen.
+sourceSets { banner { java.srcDir 'src/banner/java'; compileClasspath += sourceSets.main.output + configurations.compileClasspath } }
+configurations { bannerCompileOnly.extendsFrom compileOnly }
 
 tasks.register('moduleJar', Jar) {
     archiveBaseName = 'climb-module'
@@ -32,6 +35,15 @@ tasks.register('markedModuleJar', Jar) {
     from sourceSets.main.output
     from project(':core').sourceSets.main.output
     from sourceSets.marked.output
+    preserveFileTimestamps = false; reproducibleFileOrder = true
+}
+
+tasks.register('bannerModuleJar', Jar) {
+    archiveBaseName = 'climb-module-banner'
+    dependsOn ':core:classes', 'classes', 'bannerClasses'
+    from sourceSets.main.output
+    from project(':core').sourceSets.main.output
+    from sourceSets.banner.output
     preserveFileTimestamps = false; reproducibleFileOrder = true
 }
 

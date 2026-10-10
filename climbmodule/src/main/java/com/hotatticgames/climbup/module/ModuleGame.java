@@ -9,7 +9,7 @@ import com.hotatticgames.climbup.spi.HostEnv;
  *  - the module is declared healthy after 15 s of live play, the same moment the game itself confirms its data-OTA content;
  *  - the host is told when a climb exists (it holds back module switches that would change a climb in progress).
  */
-final class ModuleGame extends ClimbGame {
+class ModuleGame extends ClimbGame {
     private static final float HEALTHY_SECONDS = 15f;
     private final HostEnv env;
     private float playSeconds; private boolean healthy;

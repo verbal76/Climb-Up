@@ -1,0 +1,121 @@
+name: OTA experimental channel - ship a signed game update (no APK is built or released)
+# Publishes ONE new signed game-module release to the experimental channel (branch ota-exp-channel) for the already installed OTA test app, and checks on an emulator, with the published
+# APK exactly as the owner downloads it, that the release reaches an installed app over the internet. Push a change to tools/otalab/ship/release.txt ("<version> <kind>": kind banner = the
+# title-screen ribbon release, kind plain = the unchanged game again, which removes the ribbon). The version must be higher than the one the channel serves. Experimental only: the production
+# branch, the production "ota" release, tags, the rolling APK pre-release and every other branch are never touched. Signs with the OTA key already configured in this repository.
+on:
+  push:
+    branches: [exp/ota-full]
+    paths: ['tools/otalab/ship/release.txt']
+permissions:
+  contents: write
+concurrency: ota-exp-channel
+
+jobs:
+  ship:
+    if: github.ref == 'refs/heads/exp/ota-full'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '17' }
+      - name: Accept Android SDK licenses (runner image ships the SDK)
+        run: |
+          mkdir -p "$ANDROID_HOME/licenses"
+          printf '\n24333f8a63b6825ea9c5514f83c2829b004d1fee\n8933bad161af4178b1185d1a37fbf41ea5269c55\nd56f5187479451eabf01fb78af6dfcb131a6481e\n' > "$ANDROID_HOME/licenses/android-sdk-license"
+      - uses: gradle/actions/setup-gradle@v4
+      - run: pip install pillow
+      - name: Open the configured OTA key (PASS/FAIL only, never printed)
+        env:
+          OTA_SIGNING_PRIVATE_KEY: ${{ secrets.OTA_SIGNING_PRIVATE_KEY }}
+          OTA_SIGNING_KEY_PASSPHRASE: ${{ secrets.OTA_SIGNING_KEY_PASSPHRASE }}
+        run: |
+          set -e
+          if [ -z "$OTA_SIGNING_PRIVATE_KEY" ] || [ -z "$OTA_SIGNING_KEY_PASSPHRASE" ]; then echo "::error::the OTA signing secrets are not set"; exit 1; fi
+          umask 077
+          python3 -c 'import os,sys; open(sys.argv[1],"w").write(os.environ["OTA_SIGNING_PRIVATE_KEY"].strip()+"\n")' "$RUNNER_TEMP/exp_enc.pem"
+          openssl pkey -in "$RUNNER_TEMP/exp_enc.pem" -passin env:OTA_SIGNING_KEY_PASSPHRASE -out "$RUNNER_TEMP/exp.pem"
+          rm -f "$RUNNER_TEMP/exp_enc.pem"
+          openssl pkey -in "$RUNNER_TEMP/exp.pem" -pubout -outform DER | base64 -w0 > "$RUNNER_TEMP/exp_pub.b64"
+          [ -s "$RUNNER_TEMP/exp_pub.b64" ] || { echo "::error::the OTA key cannot be opened with its passphrase"; exit 1; }
+          [ "$(cat "$RUNNER_TEMP/exp_pub.b64")" = "$(tr -d '\n ' < assets/ota/ota_public_key.b64)" ] || { echo "::error::the OTA key is not the pair of the public key pinned in the app"; exit 1; }
+          echo "OTA key opens and matches the pinned public key"
+      - name: Read the release request and check it against the channel and the published APK
+        id: r
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -e
+          read -r N KIND < tools/otalab/ship/release.txt
+          case "$N" in ''|*[!0-9]*) echo "::error::release.txt must start with a whole version number"; exit 1;; esac
+          case "$KIND" in banner|plain) ;; *) echo "::error::kind must be banner or plain"; exit 1;; esac
+          BASE=https://raw.githubusercontent.com/${{ github.repository }}/ota-exp-channel/
+          CUR=$(curl -fsS -m 30 "${BASE}manifest.json?nocache=$(date +%s)" | python3 -c 'import json,sys; print(json.load(sys.stdin)["moduleVersion"])')
+          [ "$N" -gt "$CUR" ] || { echo "::error::version $N is not higher than the channel's v$CUR"; exit 1; }
+          echo "channel serves v$CUR; publishing v$N ($KIND)"
+          # the published APK: its embedded channel address, trusted key and package, and that the new release is compatible with its baseline
+          URL=https://github.com/${{ github.repository }}/releases/download/ota-lab-latest/climbup-ota-lab.apk
+          curl -fsSL -m 300 -o "$RUNNER_TEMP/published.apk" "$URL"
+          WANT=$(gh release view ota-lab-latest --json body -q .body | grep -o 'APK sha256 [0-9a-f]*' | cut -d' ' -f3)
+          GOT=$(sha256sum "$RUNNER_TEMP/published.apk" | cut -d' ' -f1)
+          [ -n "$WANT" ] && [ "$WANT" = "$GOT" ] || { echo "::error::the downloaded release APK does not match the sha256 in its release notes"; exit 1; }
+          BT=$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -1)
+          "$BT/aapt2" dump badging "$RUNNER_TEMP/published.apk" | grep -E "^package: name='com.hotatticgames.climbup.otaexp'" >/dev/null || { echo "::error::wrong package"; exit 1; }
+          "$BT/apksigner" verify "$RUNNER_TEMP/published.apk" && echo "published APK signature verifies"
+          mkdir -p "$RUNNER_TEMP/pub"; unzip -q -o "$RUNNER_TEMP/published.apk" 'assets/update_base.txt' 'assets/lab_public_key.b64' 'assets/baseline/*' -d "$RUNNER_TEMP/pub"
+          [ "$(cat "$RUNNER_TEMP/pub/assets/update_base.txt")" = "$BASE" ] || { echo "::error::the APK's channel address is not this channel"; exit 1; }
+          [ "$(tr -d '\n ' < "$RUNNER_TEMP/pub/assets/lab_public_key.b64")" = "$(cat "$RUNNER_TEMP/exp_pub.b64")" ] || { echo "::error::the APK does not trust the key that signs this channel"; exit 1; }
+          python3 - "$RUNNER_TEMP/pub/assets/baseline/manifest.json" <<'PY'
+          import json, sys
+          m = json.load(open(sys.argv[1]))
+          want = {"app": "com.hotatticgames.climbup.otaexp", "channel": "internal", "interfaceVersion": 1, "saveSchema": 6, "saveMin": 6, "generatorRuleset": 1}
+          bad = {k: (m.get(k), v) for k, v in want.items() if m.get(k) != v}
+          assert not bad, bad
+          print("baseline inside the APK: v%s, same app id, interface, save schema and generator ruleset as the new release" % m["moduleVersion"])
+          PY
+          echo "version=$N" >> "$GITHUB_OUTPUT"; echo "kind=$KIND" >> "$GITHUB_OUTPUT"; echo "base=$BASE" >> "$GITHUB_OUTPUT"
+      - name: Build the module and sign the release
+        run: |
+          set -e
+          if [ "${{ steps.r.outputs.kind }}" = banner ]; then TASK=bannerModuleJar; PFX=climb-module-banner; ENTRY=com.hotatticgames.climbup.module.ClimbModuleBanner; else TASK=moduleJar; PFX=climb-module; ENTRY=com.hotatticgames.climbup.module.ClimbModule; fi
+          ./gradlew :climbmodule:$TASK :hostkit:jar --no-daemon
+          BT=$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -1); LIB=$(ls -d $ANDROID_HOME/platforms/android-* | grep -E 'android-[0-9]+$' | sort -V | tail -1)/android.jar
+          VER=$(grep -oP "appVersionName = '\K[^']+" build.gradle)
+          python3 tools/otalab/make_module.py --jar climbmodule/build/libs/$PFX-$VER.jar --key "$RUNNER_TEMP/exp.pem" --d8 "$BT/d8" --lib "$LIB" --no-props --app com.hotatticgames.climbup.otaexp --entry $ENTRY --save-schema 6 --save-min 6 --ruleset 1 --out "$RUNNER_TEMP/chan" --version ${{ steps.r.outputs.version }}
+          "$BT/dexdump" -f "$RUNNER_TEMP/chan/module.dex" | grep "Class descriptor" > "$RUNNER_TEMP/classes.txt"
+          if grep -E "Lcom/badlogic/|Lcom/hotatticgames/climbup/spi/" "$RUNNER_TEMP/classes.txt"; then echo "::error::module dex carries host-owned classes"; exit 1; fi
+          if [ "${{ steps.r.outputs.kind }}" = banner ]; then grep -q "ClimbModuleBanner" "$RUNNER_TEMP/classes.txt" || { echo "::error::banner entry class missing from the release"; exit 1; }; else ! grep -q "Banner" "$RUNNER_TEMP/classes.txt" || { echo "::error::plain release carries banner code"; exit 1; }; fi
+          CP="hostkit/build/libs/hostkit-$VER.jar:modspi/build/libs/modspi-$VER.jar:$(find ~/.gradle -name 'gdx-1.14.2.jar' | head -1)"
+          java -cp "$CP" com.hotatticgames.climbup.host.VerifyBundleCli "$RUNNER_TEMP/chan" "$RUNNER_TEMP/exp_pub.b64" com.hotatticgames.climbup.otaexp internal
+          ls -l "$RUNNER_TEMP/chan"
+      - name: Publish to the experimental channel
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: tools/otalab/publish_channel.sh "$RUNNER_TEMP/chan" ${{ steps.r.outputs.version }}
+      - name: The channel serves the new release
+        run: |
+          for i in $(seq 60); do
+            V=$(curl -fsS -m 15 "${{ steps.r.outputs.base }}manifest.json?nocache=$(date +%s)$i" 2>/dev/null | python3 -c 'import json,sys; print(json.load(sys.stdin).get("moduleVersion",0))' 2>/dev/null || echo 0)
+            [ "$V" = "${{ steps.r.outputs.version }}" ] && { echo "channel serves v$V"; exit 0; }; sleep 10
+          done
+          echo "::error::the channel does not serve v${{ steps.r.outputs.version }}"; exit 1
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules; sudo udevadm trigger --name-match=kvm
+      - name: The published APK receives it on an emulator (Android 14)
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          profile: pixel_2
+          ram-size: 4096M
+          disable-animations: true
+          script: env APK="${{ runner.temp }}/published.apk" CHANNEL="${{ steps.r.outputs.base }}" VERSION="${{ steps.r.outputs.version }}" KIND="${{ steps.r.outputs.kind }}" OUT="${{ runner.temp }}/ship-out" tools/otalab/ship_check.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ship-evidence
+          path: ${{ runner.temp }}/ship-out

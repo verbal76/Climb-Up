@@ -21,6 +21,13 @@ public final class SettingsScreen extends ScreenAdapter {
     @Override public void resize(int w, int h) { g.ui.resize(w, h); }
 
     private float rowY;
+
+    /** A centred, dimmed info line that wraps inside the screen (72 px kept clear at each side for rounded corners); returns the row position below it. */
+    private float aboutLines(String text, float px, float W, float y, float step) {
+        java.util.List<String> lines = com.hotatticgames.climbup.ui.TextWrap.wrap(text, str -> g.ui.font.width(str, px), W - 144f);
+        for (int i = 0; i < lines.size(); i++) g.ui.textC(lines.get(i), W / 2, y + 30 - i * (g.ui.font.height(px) + 10), px, Ui.DIM);
+        return y - step - Math.max(0, lines.size() - 1) * (g.ui.font.height(px) + 10);
+    }
     private static final String[] Q = {"LOW", "MEDIUM", "HIGH"}, TXT = {"100%", "130%", "160%"}, HAP = {"OFF", "LOW", "HIGH"};
 
     private void row(String label, String value, Runnable minus, Runnable plus, Runnable tap) {
@@ -61,8 +68,8 @@ public final class SettingsScreen extends ScreenAdapter {
             toggle("CAPTIONS FOR SOUNDS", s.captions, () -> s.captions = !s.captions);
         } else if (page == 2) {
             rowY -= 24; ui.textC("UPWARDLY  " + Legacy.versionLine(ClimbGame.VERSION, ClimbGame.appBuild), W / 2, rowY + 30, 4.5f, Ui.TEXT); rowY -= 72;
-            ui.textC("CONTENT: " + g.ota.describe(), W / 2, rowY + 30, 3.0f, Ui.DIM); rowY -= 54;
-            ui.textC("UPDATES ARE SIGNED AND VERIFIED. " + (g.otaClient.status.isEmpty() ? "" : g.otaClient.status.toUpperCase()), W / 2, rowY + 30, 2.4f, Ui.DIM); rowY -= 54;
+            rowY = aboutLines("CONTENT: " + g.ota.describe(), 3.0f, W, rowY, 54);
+            rowY = aboutLines("UPDATES ARE SIGNED AND VERIFIED. " + (g.otaClient.status.isEmpty() ? "" : g.otaClient.status.toUpperCase()), 2.4f, W, rowY, 54);
             toggle("CHECK FOR GAME UPDATES", s.otaEnabled, () -> s.otaEnabled = !s.otaEnabled);
             row("UPDATE NOW", "CHECK", null, null, () -> g.startOtaCheck(true));
             ui.textC(g.audio.diag(), W / 2, rowY + 30, 2.8f, Ui.DIM); rowY -= 64;

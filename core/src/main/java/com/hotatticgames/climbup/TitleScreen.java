@@ -94,9 +94,9 @@ public final class TitleScreen extends ScreenAdapter {
         // old climbs live on the right, under the hero picker: the left column keeps its four full-size buttons and never runs into the status bar at the bottom
         if (!prompt && !g.save.legacy.isEmpty() && ui.button("LEGACY RUNS (" + g.save.legacy.size() + ")", cx, y0 - 88, bw, bh)) { g.audio.play("click"); next = new LegacyScreen(g, this); }
         String stat = "BEST " + (int) g.save.bestHeight + " M" + (g.save.bestFinish > 0f ? "   BEST FINISH " + PlayScreen.fmtTime(g.save.bestFinish) : "");
-        ui.rect(0, 0, W, 54, new Color(0.05f, 0.07f, 0.14f, 0.7f)); ui.text(stat, 24, 18, 3f, Ui.TEXT);
+        ui.rect(0, 0, W, 34, new Color(0.05f, 0.07f, 0.14f, 0.7f)); ui.text(stat, 72, 9, 2.8f, Ui.TEXT);          // thin bar; text kept 72 px from the edges (rounded phone corners clip anything closer)
         String ver = Legacy.versionLine(ClimbGame.VERSION, ClimbGame.appBuild);          // always visible: which build is this?
-        ui.text(ver, W - 24 - ui.font.width(ver, 3.6f), 17, 3.6f, Ui.ACCENT);
+        ui.text(ver, W - 72 - ui.font.width(ver, 2.8f), 9, 2.8f, Ui.ACCENT);
         if (notice) legacyPrompt(ui, W, H); else if (confirmNew) newRunPrompt(ui, W, H);
         ui.end();
         g.autoShot("title", dt);

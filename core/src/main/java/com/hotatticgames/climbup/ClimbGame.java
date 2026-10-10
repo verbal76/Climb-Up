@@ -148,6 +148,10 @@ public class ClimbGame extends Game {
         save.cpSlice = ref.slice; save.cpLocal = ref.local;
     }
 
+    /** Hosting hook: a host that can relaunch the app (the OTA module host) overrides both. The packaged / desktop game has no behaviour here. */
+    public boolean canRestartApp() { return false; }
+    public void restartApp() { }
+
     public void forgetRun() { RunRecord.forgetClimb(save); if (history != null) history.delete(); if (store != null) store.deleteRun(); }
 
     /** Writes the exact state of the climb in progress (SAVE &amp; EXIT, pause, autosave). Nothing is written when the state cannot be saved faithfully; the previous snapshot then stays, or is dropped if it would now be wrong. */

@@ -807,7 +807,6 @@ public final class WorldRenderer implements Disposable {
                 drawBox(h.s + h.w * 0.5f + 0.1f, h.y, 0.2f, camS, 0.1f, h.amp + Element.DROP_H + 0.6f, 0.14f, 0.3f, 0.32f, 0.4f);
                 drawBox(h.s, top + 0.5f, 0.2f, camS, h.w + 0.5f, 0.14f, 0.3f, 0.3f, 0.32f, 0.4f);
                 drawBox(h.s, b + 0.5f, 0f, camS, h.w, 0.5f, 1.3f, 0.42f, 0.38f, 0.5f);
-                drawBox(h.s, b + 0.5f, 0.1f, camS, 0.08f, top + 0.5f - (b + 1.0f), 0.1f, 0.5f, 0.45f, 0.35f);
                 for (int k = -1; k <= 1; k += 2) drawPack("spikes", h.s + k * h.w * 0.25f, b + 0.5f, 0f, camS, h.w * 0.22f, 0.5f / 3.4f, 0.3f, 0f, 180f);
                 break;
             }

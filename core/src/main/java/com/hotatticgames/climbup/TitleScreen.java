@@ -81,10 +81,6 @@ public final class TitleScreen extends ScreenAdapter {
                 if (ui.button("NEW RUN", bx, yy, bw, bh)) { g.audio.play("click"); confirmNew = true; }       // replaces the saved climb: asks first
                 yy -= 88;
             }
-            if (!g.save.legacy.isEmpty()) {
-                if (ui.button("LEGACY RUNS (" + g.save.legacy.size() + ")", bx, yy, bw, bh)) { g.audio.play("click"); next = new LegacyScreen(g, this); }
-                yy -= 88;
-            }
             if (ui.button("SETTINGS", bx, yy, bw, bh)) { g.audio.play("click"); next = new SettingsScreen(g, this); }
             yy -= 88;
             if (ui.button("CREDITS", bx, yy, bw, bh)) { g.audio.play("click"); next = new CreditsScreen(g, this); }
@@ -95,6 +91,8 @@ public final class TitleScreen extends ScreenAdapter {
             g.settings.character = com.hotatticgames.climbup.render.Characters.next(g.settings.character);
             world.setCharacter(g.settings.character); g.persist(); g.audio.play("click");
         }
+        // old climbs live on the right, under the hero picker: the left column keeps its four full-size buttons and never runs into the status bar at the bottom
+        if (!prompt && !g.save.legacy.isEmpty() && ui.button("LEGACY RUNS (" + g.save.legacy.size() + ")", cx, y0 - 88, bw, bh)) { g.audio.play("click"); next = new LegacyScreen(g, this); }
         String stat = "BEST " + (int) g.save.bestHeight + " M" + (g.save.bestFinish > 0f ? "   BEST FINISH " + PlayScreen.fmtTime(g.save.bestFinish) : "");
         ui.rect(0, 0, W, 54, new Color(0.05f, 0.07f, 0.14f, 0.7f)); ui.text(stat, 24, 18, 3f, Ui.TEXT);
         String ver = Legacy.versionLine(ClimbGame.VERSION, ClimbGame.appBuild);          // always visible: which build is this?

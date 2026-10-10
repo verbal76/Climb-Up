@@ -26,23 +26,40 @@ P
 }
 diff() { python3 "$HERE/imgdiff.py" "$OUT/$1.png" "$OUT/$2.png"; }
 
+
+# gameshots NAME PKG ACT [am extras...]: runs the game with its OWN framebuffer screenshots (climb.shots: files are named by the screen that drew them, e.g. splash_00.png, title_02.png),
+# waits for ten of them and pulls them to $OUT/NAME/. Independent of device compositor timing, so the same screen can be compared across builds.
+gameshots() { local name=$1 pkg=$2 act=$3; shift 3; local d=$OUT/$name i n; rm -rf "$d"; mkdir -p "$d"; adb shell "run-as $pkg rm -rf files/shots" >/dev/null 2>&1; adb logcat -c
+  adb shell am start -S -W -n "$act" --es prop.climb.shots "/data/data/$pkg/files/shots" --es prop.climb.shotEvery 1.0 --es prop.climb.shotCount 10 "$@" >/dev/null
+  for i in $(seq 150); do n=$(adb shell "run-as $pkg ls files/shots 2>/dev/null | wc -l" | tr -d '\r'); [ "${n:-0}" -ge 10 ] && break; sleep 1; done
+  for f in $(adb shell "run-as $pkg ls files/shots" | tr -d '\r'); do adb exec-out "run-as $pkg cat files/shots/$f" > "$d/$f"; done
+  echo "   $name frames: $(ls "$d" | tr '\n' ' ')"; }
+firstof() { ls "$OUT/$1" | grep "^$2_" | head -1; }
+diffp() { python3 "$HERE/imgdiff.py" "$1" "$2"; }
+asciip() { echo "   --- $1 ---"; python3 "$HERE/ascii.py" "$1" 64 | sed 's/^/   | /'; }
+meanof() { sed 's/.*mean=\([0-9.]*\).*/\1/'; }
+corrof() { sed 's/.*corr=\(-\?[0-9.]*\).*/\1/'; }
+
 echo "== install (three separate applications; none replaces anything the owner has)"
 for a in "$BASE_APK" "$REF_APK" "$HOST_APK"; do adb install -r "$a" >/dev/null && pass "installs: $(basename "$a")" || { fail "install $a"; exit 1; }; done
 for p in $BASE $REF $HOST; do adb shell pm clear $p >/dev/null; done
 SIZE=$(adb shell wm size | tail -1 | tr -d '\r'); echo "   device: $SIZE API $(adb shell getprop ro.build.version.sdk | tr -d '\r')"
 
-echo "== K1 cold start of the real game three ways: studio splash then title"
-for who in BASE REF HOST; do
-  eval act=\$${who}_ACT; echo "   $who: $(start "$act")"
-  sleep 1.6; shot k1_${who}_splash; sleep 7; shot k1_${who}_title
-done
+echo "== K1 cold start of the real game: the module-delivered game draws exactly what the same game packaged draws"
+echo "   BASE (unmodified packaged game) cold start: $(start "$BASE_ACT")"; sleep 8; shot k1_BASE_screen
+gameshots k1_REF $REF "$REF_ACT"
+gameshots k1_HOST $HOST "$HOST_ACT"
 logs | grep -q "running module v1" && pass "K1 HOST ran the module delivered from DexClassLoader" || fail "K1 HOST did not report running module v1"
-for who in BASE REF HOST; do read m s <<<"$(lum k1_${who}_title)"; echo "   $who title: mean luminance $m, contrast $s"; awk -v s="$s" 'BEGIN{exit !(s>20)}' && pass "K1 $who title screen has content (not blank)" || fail "K1 $who title looks blank"; done
-echo "   splash  HOST vs REF: $(diff k1_HOST_splash k1_REF_splash)   (HOST vs BASE: $(diff k1_HOST_splash k1_BASE_splash), informational: the unmodified app starts on a different clock)"
-echo "   title   HOST vs REF: $(diff k1_HOST_title k1_REF_title)   (HOST vs BASE: $(diff k1_HOST_title k1_BASE_title))"
-ascii k1_HOST_splash; ascii k1_HOST_title; ascii k1_BASE_title
-S=$(diff k1_HOST_splash k1_REF_splash | sed 's/mean=\([0-9.]*\).*/\1/'); awk -v s="$S" 'BEGIN{exit !(s<1.0)}' && pass "K1 splash through the module is identical to the same game packaged (mean diff $S/255)" || fail "K1 splash differs between module and packaged (mean diff $S/255)"
-T=$(diff k1_HOST_title k1_REF_title | sed 's/mean=\([0-9.]*\).*/\1/'); awk -v s="$T" 'BEGIN{exit !(s<3.0)}' && pass "K1 title through the module matches the packaged game within animation noise (mean diff $T/255)" || fail "K1 title differs between module and packaged (mean diff $T/255)"
+SPL_R=$(firstof k1_REF splash); SPL_H=$(firstof k1_HOST splash); TIT_R=$(firstof k1_REF title); TIT_H=$(firstof k1_HOST title)
+[ -n "$SPL_R" ] && [ -n "$SPL_H" ] && [ -n "$TIT_R" ] && [ -n "$TIT_H" ] && pass "K1 both builds drew the studio splash and then the title screen ($SPL_H, $TIT_H)" || fail "K1 missing frames (splash $SPL_R/$SPL_H, title $TIT_R/$TIT_H)"
+if [ -n "$SPL_H" ] && [ -n "$SPL_R" ]; then
+  R=$(diffp "$OUT/k1_HOST/$SPL_H" "$OUT/k1_REF/$SPL_R"); echo "   studio splash  HOST vs REF: $R"; asciip "$OUT/k1_HOST/$SPL_H"
+  awk -v s="$(echo "$R" | meanof)" 'BEGIN{exit !(s<1.0)}' && pass "K1 studio splash from the module is identical to the packaged game's" || fail "K1 splash differs between module and packaged ($R)"
+fi
+if [ -n "$TIT_H" ] && [ -n "$TIT_R" ]; then
+  R=$(diffp "$OUT/k1_HOST/$TIT_H" "$OUT/k1_REF/$TIT_R"); echo "   title screen   HOST vs REF: $R"; asciip "$OUT/k1_HOST/$TIT_H"
+  awk -v s="$(echo "$R" | meanof)" -v c="$(echo "$R" | corrof)" 'BEGIN{exit !(s<3.0 && c>0.97)}' && pass "K1 title screen from the module matches the packaged game's ($R)" || fail "K1 title differs between module and packaged ($R)"
+fi
 
 echo "== K2 deterministic climb: the module-loaded game vs the same code packaged (exact)"
 R=""; for who in REF HOST; do eval act=\$${who}_ACT; start "$act" --es selftest "digest:12:7200" >/dev/null; wait_for "SELFTEST digest" 240 || fail "K2 $who selftest produced no result"; line=$(logs | grep "SELFTEST digest" | tail -1); echo "   $who: $line"; eval "L_$who=\"\$line\""; done
@@ -90,16 +107,19 @@ echo "== K6 a signed release delivers a changed GAME FILE (lab fixture: inverted
 serve c6_assets; start "$HOST_ACT" --es updateBase http://10.0.2.2:8099/ >/dev/null
 expect "K6 v6 and its game file downloaded into the content store and staged" "update check: staged v6" 60
 N=$(adb shell "run-as $HOST sh -c 'ls files/host/cas | wc -l'" | tr -d '\r'); [ "$N" -ge 1 ] && pass "K6 content store holds $N verified file(s)" || fail "K6 content store empty"
-start "$HOST_ACT" --es prop.climb.start splash >/dev/null
-expect "K6 v6 activated at the next cold start with its override" "asset overrides active: 1 file" 40
-sleep 1.6; shot k6_splash; sleep 7; shot k6_title
-echo "   game process alive: $(adb shell pidof $HOST | tr -d '\r')"; logs | grep -E "FATAL|Exception" | head -5
-echo "   splash  override vs unchanged-HOST: $(diff k6_splash k1_HOST_splash)   title  override vs unchanged-HOST: $(diff k6_title k1_HOST_title)"
-ascii k1_HOST_splash; ascii k6_splash; ascii k1_HOST_title; ascii k6_title
-SP=$(diff k6_splash k1_HOST_splash | sed 's/mean=\([0-9.]*\).*/\1/'); SC=$(diff k6_splash k1_HOST_splash | sed 's/.*corr=\(-\?[0-9.]*\).*/\1/')
-awk -v s="$SP" -v c="$SC" 'BEGIN{exit !(s>8 && c<0.5)}' && pass "K6 the delivered file is what the game shows (splash differs by $SP/255, correlation $SC)" || fail "K6 splash not changed as delivered ($SP/255, corr $SC)"
-TT=$(diff k6_title k1_HOST_title | sed 's/mean=\([0-9.]*\).*/\1/'); awk -v s="$TT" 'BEGIN{exit !(s<3.0)}' && pass "K6 every other file still comes from the APK unchanged (title diff $TT/255)" || fail "K6 title changed ($TT/255)"
-expect "K6 sounds still load (no handle-type errors in the log)" "asset overrides active" 5; logs | grep -q "ClassCast" && fail "K6 ClassCastException" || pass "K6 no ClassCastException"
+gameshots k6_HOST $HOST "$HOST_ACT"
+expect "K6 v6 activated at the next cold start with its override" "asset overrides active: 1 file" 5
+SPL_6=$(firstof k6_HOST splash); TIT_6=$(firstof k6_HOST title)
+if [ -n "$SPL_6" ] && [ -n "$SPL_H" ]; then
+  R=$(diffp "$OUT/k6_HOST/$SPL_6" "$OUT/k1_HOST/$SPL_H"); echo "   splash with the delivered file vs the APK's: $R"; asciip "$OUT/k6_HOST/$SPL_6"
+  awk -v s="$(echo "$R" | meanof)" -v c="$(echo "$R" | corrof)" 'BEGIN{exit !(s>20 && c<0.2)}' && pass "K6 the game now draws the delivered file ($R)" || fail "K6 splash not changed as delivered ($R)"
+else fail "K6 no splash frame (override $SPL_6 / baseline $SPL_H)"; fi
+if [ -n "$TIT_6" ] && [ -n "$TIT_H" ]; then
+  R=$(diffp "$OUT/k6_HOST/$TIT_6" "$OUT/k1_HOST/$TIT_H"); echo "   title with an override active vs without: $R"
+  awk -v s="$(echo "$R" | meanof)" -v c="$(echo "$R" | corrof)" 'BEGIN{exit !(s<3.0 && c>0.97)}' && pass "K6 every other file still comes from the APK unchanged ($R)" || fail "K6 title changed ($R)"
+else fail "K6 no title frame"; fi
+logs | grep -q "ClassCast" && fail "K6 ClassCastException" || pass "K6 no ClassCastException (sounds load)"
+echo "   game process alive: $(adb shell pidof $HOST | tr -d '\r')"
 
 echo "== P1 delivery-layer measurements (informational on an emulator: software GL, NOT representative of a phone; never fails the run)"
 bash "$HERE/perf_capture.sh" "$OUT/perf" 3 20 2>&1 | tee "$OUT/perf.txt" | sed 's/^/   /' || true

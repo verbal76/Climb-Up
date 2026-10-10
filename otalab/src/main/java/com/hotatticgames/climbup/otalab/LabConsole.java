@@ -53,6 +53,7 @@ public class LabConsole extends Activity {
         header(col, "Game");
         button(col, "Play the game (cold start)", () -> { mark("play"); killGame(); launch(null); });
         header(col, "Update releases carried in this app (real verify, stage; they activate at the next cold start)");
+        button(col, "Check for updates now (GitHub channel)", () -> checkChannel());
         button(col, "Stage v2: same-world update", () -> stage("c2_same_world"));
         button(col, "Stage v7: code update (new executable code, same game)", () -> stage("c7_code_change"));
         button(col, "Stage v3: changes level generation (waits while a climb is in progress)", () -> stage("c3_new_generator"));
@@ -113,6 +114,28 @@ public class LabConsole extends Activity {
             } catch (Throwable t) { note = "stage failed: " + t; Log.i(TAG, note); }
             refresh();
         } }, "console-stage").start();
+    }
+
+    /** The real thing: ask the experimental GitHub channel whether a newer signed release exists, verify and stage it (it activates at the next cold start, like any update). */
+    private void checkChannel() {
+        mark("check github channel");
+        new Thread(new Runnable() { @Override public void run() {
+            killGame();
+            File root = new File(getFilesDir(), "host");
+            if (!new File(root, "state.json").isFile()) { note = "Start the game once first (Play): the host installs its baseline module on its first run."; refresh(); return; }
+            try {
+                String base = readAsset("update_base.txt");
+                HostInfo host = new HostInfo(getPackageName(), HostInfo.HOST_LEVEL, "internal");
+                TrustedKeys keys = new TrustedKeys(); keys.add(readAsset("lab_public_key.b64"));
+                ModuleStore store = new ModuleStore(root, keys, host).withSaveGuard(new DirSnapshots(getFilesDir(), new File(root, "snap"), Collections.singleton("host")));
+                ModuleDownloader dl = new ModuleDownloader(store, new ModuleDownloader.Http(false), base);
+                String r = dl.check();
+                Log.i(TAG, "update check: " + r);
+                note = "channel " + base + "\nresult: " + r + (r.startsWith("staged") ? "\nNow press 'Play the game (cold start)': the new release activates on that start." : "");
+                Log.i(TAG, "update status: " + com.hotatticgames.climbup.host.UpdateStatus.capture(store, host, "Climb up", dl).headline(System.currentTimeMillis()));
+            } catch (Throwable t) { note = "channel check failed (is this the OTA test build, and is there a network?): " + t; Log.i(TAG, note); }
+            refresh();
+        } }, "console-check").start();
     }
 
     private String readAsset(String name) throws Exception { return new String(readAll(getAssets().open(name)), "UTF-8").trim(); }

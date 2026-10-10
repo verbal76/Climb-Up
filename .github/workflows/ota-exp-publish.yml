@@ -1,0 +1,105 @@
+name: OTA experimental channel - build the OTA test APK and publish a signed game module
+# EXPERIMENTAL channel only. It builds the isolated OTA test app (com.hotatticgames.climbup.otaexp, which can never replace the installed game) with the experimental public key pinned
+# inside it, and publishes the signed module as plain static files on the branch "ota-exp-channel" of this repository (https://raw.githubusercontent.com/<repo>/ota-exp-channel/).
+# It never touches the production release branch, the production "ota" release, tags or GitHub Releases. Needs ONE repository secret: OTA_EXP_MODULE_KEY_PEM (a P-256 private key, PEM).
+# Publish a new game version: change the game, raise the number in tools/otalab/module_version.txt, push to exp/ota-full (or run this workflow by hand).
+on:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "Publish the module to the experimental channel (false = only build the APK)"
+        type: boolean
+        default: true
+  push:
+    branches: [exp/ota-full]
+    paths: ['tools/otalab/module_version.txt']
+permissions:
+  contents: write
+concurrency: ota-exp-channel
+
+jobs:
+  build:
+    # Isolation guard: only from the experimental branch, even when started by hand against another ref.
+    if: github.ref == 'refs/heads/exp/ota-full'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '17' }
+      - name: Accept Android SDK licenses (runner image ships the SDK)
+        run: |
+          mkdir -p "$ANDROID_HOME/licenses"
+          printf '\n24333f8a63b6825ea9c5514f83c2829b004d1fee\n8933bad161af4178b1185d1a37fbf41ea5269c55\nd56f5187479451eabf01fb78af6dfcb131a6481e\n' > "$ANDROID_HOME/licenses/android-sdk-license"
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Check the experimental module key (PASS/FAIL only, never printed)
+        env:
+          OTA_EXP_MODULE_KEY_PEM: ${{ secrets.OTA_EXP_MODULE_KEY_PEM }}
+        run: |
+          set -e
+          if [ -z "$OTA_EXP_MODULE_KEY_PEM" ]; then echo "::error::the repository secret OTA_EXP_MODULE_KEY_PEM is not set (see docs/ota-full/OTA_CHANNEL.md)"; exit 1; fi
+          umask 077
+          python3 -c 'import os,sys; open(sys.argv[1],"w").write(os.environ["OTA_EXP_MODULE_KEY_PEM"].strip()+"\n")' "$RUNNER_TEMP/exp.pem"
+          openssl pkey -in "$RUNNER_TEMP/exp.pem" -noout -text | grep -qi "prime256v1\|P-256" || { echo "::error::OTA_EXP_MODULE_KEY_PEM is not a P-256 key"; exit 1; }
+          openssl pkey -in "$RUNNER_TEMP/exp.pem" -pubout -outform DER | base64 -w0 > "$RUNNER_TEMP/exp_pub.b64"
+          echo "key OK (P-256); public key fingerprint $(sha256sum "$RUNNER_TEMP/exp_pub.b64" | cut -c1-16)"
+      - name: Decide the version and the channel address
+        id: v
+        run: |
+          set -e
+          N=$(tr -d ' \n\r' < tools/otalab/module_version.txt)
+          case "$N" in ''|*[!0-9]*) echo "::error::tools/otalab/module_version.txt must hold a whole number"; exit 1;; esac
+          [ "$N" -ge 2 ] || { echo "::error::the first channel release is v2 (v1 is the baseline inside the APK)"; exit 1; }
+          echo "version=$N" >> "$GITHUB_OUTPUT"
+          echo "base=https://raw.githubusercontent.com/${{ github.repository }}/ota-exp-channel/" >> "$GITHUB_OUTPUT"
+      - name: Build the game module and sign the baseline (v1, inside the APK) and the channel release
+        run: |
+          set -e
+          ./gradlew :climbmodule:moduleJar :hostkit:jar --no-daemon
+          BT=$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -1); LIB=$(ls -d $ANDROID_HOME/platforms/android-* | grep -E 'android-[0-9]+$' | sort -V | tail -1)/android.jar
+          VER=$(grep -oP "appVersionName = '\K[^']+" build.gradle); JAR=climbmodule/build/libs/climb-module-$VER.jar
+          mk() { python3 tools/otalab/make_module.py --jar "$JAR" --key "$RUNNER_TEMP/exp.pem" --d8 "$BT/d8" --lib "$LIB" --no-props --app com.hotatticgames.climbup.otaexp --entry com.hotatticgames.climbup.module.ClimbModule --save-schema 6 --save-min 6 --ruleset 1 "$@"; }
+          mkdir -p climbhost/src/main/assets
+          mk --out climbhost/src/main/assets/baseline --version 1
+          mk --out "$RUNNER_TEMP/chan" --version ${{ steps.v.outputs.version }}
+          cp "$RUNNER_TEMP/exp_pub.b64" climbhost/src/main/assets/lab_public_key.b64
+          printf '%s' "${{ steps.v.outputs.base }}" > climbhost/src/main/assets/update_base.txt
+          "$BT/dexdump" -f "$RUNNER_TEMP/chan/module.dex" | grep "Class descriptor" > "$RUNNER_TEMP/classes.txt"
+          if grep -E "Lcom/badlogic/|Lcom/hotatticgames/climbup/spi/" "$RUNNER_TEMP/classes.txt"; then echo "::error::module dex carries host-owned classes"; exit 1; fi
+          CP="hostkit/build/libs/hostkit-$VER.jar:modspi/build/libs/modspi-$VER.jar:$(find ~/.gradle -name 'gdx-1.14.2.jar' | head -1)"
+          for d in climbhost/src/main/assets/baseline "$RUNNER_TEMP/chan"; do java -cp "$CP" com.hotatticgames.climbup.host.VerifyBundleCli "$d" "$RUNNER_TEMP/exp_pub.b64" com.hotatticgames.climbup.otaexp internal; done
+          ls -l "$RUNNER_TEMP/chan"
+      - name: Assemble the OTA test APK
+        run: ./gradlew :climbhost:assembleDebug --no-daemon -PwithAndroid
+      - name: What is in the APK
+        run: |
+          APK=$(ls climbhost/build/outputs/apk/debug/*.apk | head -1); cp "$APK" "$RUNNER_TEMP/ota-test.apk"
+          sha256sum "$RUNNER_TEMP/ota-test.apk"; ls -l "$RUNNER_TEMP/ota-test.apk"
+          BT=$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -1); "$BT/aapt2" dump badging "$RUNNER_TEMP/ota-test.apk" | grep -E "^package|uses-permission"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ota-test-apk
+          path: ${{ runner.temp }}/ota-test.apk
+      - name: Publish the signed module to the experimental channel branch
+        if: github.event_name == 'push' || inputs.publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -e
+          N=${{ steps.v.outputs.version }}; REPO=${{ github.repository }}
+          git config --global user.name "github-actions[bot]"; git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          rm -rf "$RUNNER_TEMP/chanrepo"
+          if git ls-remote --exit-code --heads "https://x-access-token:${GH_TOKEN}@github.com/$REPO.git" ota-exp-channel >/dev/null 2>&1; then
+            git clone --quiet --depth 1 --branch ota-exp-channel "https://x-access-token:${GH_TOKEN}@github.com/$REPO.git" "$RUNNER_TEMP/chanrepo"
+          else
+            mkdir "$RUNNER_TEMP/chanrepo"; git -C "$RUNNER_TEMP/chanrepo" init --quiet -b ota-exp-channel; git -C "$RUNNER_TEMP/chanrepo" remote add origin "https://x-access-token:${GH_TOKEN}@github.com/$REPO.git"
+          fi
+          CUR=0; if [ -f "$RUNNER_TEMP/chanrepo/manifest.json" ]; then CUR=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1])).get('moduleVersion',0))" "$RUNNER_TEMP/chanrepo/manifest.json"); fi
+          if [ "$N" -le "$CUR" ]; then echo "::error::version $N is not higher than the published v$CUR (raise tools/otalab/module_version.txt)"; exit 1; fi
+          find "$RUNNER_TEMP/chanrepo" -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+          cp -r "$RUNNER_TEMP/chan/." "$RUNNER_TEMP/chanrepo/"
+          printf 'Experimental signed game-module channel for the OTA test app. Not the production OTA channel.\n' > "$RUNNER_TEMP/chanrepo/README.txt"
+          git -C "$RUNNER_TEMP/chanrepo" add -A
+          git -C "$RUNNER_TEMP/chanrepo" commit --quiet -m "Experimental module channel: v$N from ${GITHUB_SHA::7}"
+          git -C "$RUNNER_TEMP/chanrepo" push --quiet origin ota-exp-channel
+          echo "published module v$N to ${{ steps.v.outputs.base }}"

@@ -62,6 +62,7 @@ public class LabLauncher extends AndroidApplication {
         LabCommon.startSelfTest(this, s.module);
 
         String base = getIntent() == null ? null : getIntent().getStringExtra("updateBase");      // lab only: where CI serves test bundles
+        if (base == null) base = channelBase();                                                    // the OTA test app: the experimental GitHub channel written into the APK by the publish workflow
         if (base != null) {
             final String b = base;
             final HostInfo hostInfo = host;
@@ -72,6 +73,11 @@ public class LabLauncher extends AndroidApplication {
             }, "lab-update");
             t.setDaemon(true); t.start();
         }
+    }
+
+    /** The experimental channel address baked into the OTA test APK (assets/update_base.txt), or null in the CI test builds, which only update when a test run says where. */
+    private String channelBase() {
+        try { String b = readAsset("update_base.txt").trim(); return b.startsWith("https://") ? b : null; } catch (Exception e) { return null; }
     }
 
     private HostEnv env(File moduleDir) {

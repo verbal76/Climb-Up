@@ -42,13 +42,22 @@ public final class ModuleStore {
         public boolean recovery() { return dir == null; }
     }
 
-    private final File root, modDir, stagedDir, tmpDir, stateFile;
+    /**
+     * Test seam for crash-point fault injection: {@link #at} is called between the durable steps of boot / activation / drop / confirm / staging / state writes. Production never sets one;
+     * a test throws an {@link Error} from it to model the process dying exactly there (nothing the store catches is an Error), then "restarts" with a new store on the same directory.
+     */
+    public interface Fault { void at(String point); }
+    private Fault fault = new Fault() { @Override public void at(String point) { } };
+    public ModuleStore withFault(Fault f) { this.fault = f; return this; }
+    private void at(String point) { fault.at(point); }
+
+    private final File root, modDir, stagedDir, tmpDir, stateFile, stateBak;
     private final TrustedKeys keys; private final HostInfo host; private final AssetStore assets; private SaveGuard guard;
     public State st = new State();
 
     public ModuleStore(File root, TrustedKeys keys, HostInfo host) {
         this.root = root; this.keys = keys; this.host = host; modDir = new File(root, "mod"); stagedDir = new File(root, "staged");
-        tmpDir = new File(root, "staging.tmp"); stateFile = new File(root, "state.json"); assets = new AssetStore(root);
+        tmpDir = new File(root, "staging.tmp"); stateFile = new File(root, "state.json"); stateBak = new File(root, "state.json.bak"); assets = new AssetStore(root);
     }
 
     public AssetStore assets() { return assets; }
@@ -72,12 +81,17 @@ public final class ModuleStore {
     // ------------------------------------------------------------ cold start
 
     public synchronized Boot boot() {
+        forgave = false;
         root.mkdirs(); modDir.mkdirs();
-        try { loadState(); } catch (Exception e) { st = new State(); st.lastResult = "state unreadable: reset"; }
+        try { loadState(); } catch (Exception e) { st = derive(); }
+        reconcileStaged();
+        at("boot.afterLoad");
         Hashing.deleteTree(tmpDir);                                   // an interrupted download is discarded
         String note = "";
         if (!st.restoring.isEmpty() && guard != null) { if (guard.restore(st.restoring)) { guard.discard(st.restoring); st.restoring = ""; } }      // the process died half-way through putting saves back: do it again
+        at("boot.afterRestore");
         try { note = activateStaged(); } catch (Exception e) { note = "staged module ignored: " + e.getMessage(); Hashing.deleteTree(stagedDir); }
+        at("boot.afterActivate");
         if (st.pending != 0) {
             st.tries++;
             if (st.tries > MAX_UNCONFIRMED_LAUNCHES) dropActive("not confirmed after " + (st.tries - 1) + " launches", true);
@@ -85,6 +99,7 @@ public final class ModuleStore {
         for (int guard = 0; guard < 3 && st.active != 0; guard++) {
             ModuleVerifier.Result r = verifyWithAssets(dirOf(st.active));
             if (r.ok() && r.manifest.moduleVersion >= st.revokeFloor) {
+                if (this.guard != null && st.pending == 0 && st.snapshotFor == 0 && st.restoring.isEmpty()) this.guard.discard("v" + st.active);      // a confirmed module's pre-update snapshot is obsolete (the process may have died before discarding it)
                 saveState();
                 return new Boot(dirOf(st.active), r.manifest, note, overridesOf(dirOf(st.active)));
             }
@@ -92,6 +107,27 @@ public final class ModuleStore {
         }
         saveState();
         return new Boot(null, null, note.isEmpty() ? st.rollback : note);
+    }
+
+    /**
+     * The state says a release is staged but staged/ is gone: the process died after activation published it as mod/vN and before the state recording that was written. Put it back so it goes
+     * through the normal activation checks again; otherwise "staged" would forever claim a version that exists nowhere and the update could never be delivered again.
+     */
+    private void reconcileStaged() {
+        if (stagedDir.exists()) return;
+        int cand = st.staged;
+        if (cand == 0) {                                         // the state never recorded it either: any module directory newer than everything ever accepted can only be an interrupted activation
+            File[] kids = modDir.listFiles();
+            if (kids != null) for (File k : kids) {
+                String n = k.getName();
+                if (!n.matches("v[0-9]{1,9}")) continue;
+                int v = Integer.parseInt(n.substring(1));
+                if (v > st.highest && v != st.active && v != st.lastGood && !st.bad.contains(v) && v > cand) cand = v;
+            }
+        }
+        File orphan = dirOf(cand);
+        if (cand != 0 && cand != st.active && cand != st.lastGood && orphan.isDirectory() && orphan.renameTo(stagedDir)) { at("reconcile.afterRename"); return; }
+        st.staged = 0;
     }
 
     private String activateStaged() throws IOException {
@@ -115,15 +151,18 @@ public final class ModuleStore {
                 bumpFrom = m.moduleVersion;
             }
         }
+        at("activate.beforeRename");
         File target = dirOf(m.moduleVersion);
         Hashing.deleteTree(target);
         if (!stagedDir.renameTo(target)) throw new IOException("cannot install staged module");
+        at("activate.afterRename");
         st.snapshotFor = bumpFrom;
         for (java.io.File f : target.listFiles()) f.setReadOnly();
         if (st.pending == 0 && st.active != 0) st.lastGood = st.active;      // an unproven module never becomes the safety net
         st.active = m.moduleVersion; st.pending = m.moduleVersion; st.tries = 0; st.staged = 0;
         st.highest = Math.max(st.highest, m.moduleVersion); st.revokeFloor = Math.max(st.revokeFloor, m.revokeFloor);
         st.lastResult = "activated v" + m.moduleVersion;
+        saveState(); at("activate.afterSave");                       // record the new truth BEFORE anything is deleted: pruning first could remove a module the old state still names
         pruneOld();
         return st.lastResult;
     }
@@ -154,13 +193,18 @@ public final class ModuleStore {
         boolean restoreSaves = dropped != 0 && st.snapshotFor == dropped && st.pending == dropped && guard != null;
         st.active = back; st.pending = 0; st.tries = 0; if (back == 0) st.lastGood = 0;
         st.rollback = "rolled back v" + dropped + (back != 0 ? " to v" + back : " to recovery") + ": " + why;
+        at("drop.afterMutate");
         if (restoreSaves) {
             st.restoring = "v" + dropped; st.snapshotFor = 0; saveState();                  // recorded first so a crash mid-restore is finished at the next start
+            at("drop.restoreRecorded");
             if (guard.restore(st.restoring)) { guard.discard(st.restoring); st.restoring = ""; st.rollback += "; saves restored to how they were before v" + dropped; }
             else st.rollback += "; WARNING: saves could not be restored";
+            at("drop.afterRestore");
         }
         st.lastResult = st.rollback;
+        saveState(); at("drop.afterSave");                                             // the verdict (and the cleared restore marker) is durable before anything is deleted
         if (dropped != 0 && dropped != back) Hashing.deleteTree(dirOf(dropped));       // the broken one only; the safety net is never touched
+        at("drop.afterDelete");
     }
 
     private void pruneOld() {
@@ -171,11 +215,27 @@ public final class ModuleStore {
     /** The game reached live play with the active module: it is now the safety net. */
     public synchronized void confirm() {
         if (st.pending == 0) return;
-        if (st.snapshotFor == st.active && guard != null) { guard.discard("v" + st.active); }
+        boolean dropSnapshot = st.snapshotFor == st.active && guard != null; String snapshot = "v" + st.active;
         st.snapshotFor = 0;
         st.lastGood = st.active; st.pending = 0; st.tries = 0; st.lastResult = "confirmed v" + st.active; st.rollback = "";
-        pruneOld(); collectAssets(); saveState();
+        boolean saved = saveState(); at("confirm.afterSave");
+        if (saved && dropSnapshot) guard.discard(snapshot);          // only after the confirmation is durable: a snapshot is the only way back until then
+        at("confirm.afterDiscard");
+        pruneOld(); at("confirm.afterPrune"); collectAssets(); at("confirm.afterGc");
     }
+
+    /**
+     * A clean back-out of an unconfirmed module that had visibly been running (the launcher calls this from onPause after the first rendered frame): this launch is not counted against
+     * MAX_UNCONFIRMED_LAUNCHES, so a player who leaves during the first seconds cannot get a healthy release rolled back and blacklisted. A hang or crash never reaches onPause, so it still
+     * counts. Idempotent per launch (this store instance is one launch): a second call does nothing. Durable before it returns. Returns true if it forgave a launch.
+     */
+    public synchronized boolean forgiveCleanPause() {
+        if (forgave || st.pending == 0 || st.tries <= 0) return false;
+        forgave = true; st.tries--;
+        boolean saved = saveState(); at("forgive.afterSave");
+        return saved;
+    }
+    private boolean forgave;
 
     /** Keeps only the store files the active module, the safety net and a waiting staged release name (an update re-downloads nothing it already has). */
     private void collectAssets() {
@@ -208,6 +268,7 @@ public final class ModuleStore {
             if (st.bad.contains(m.moduleVersion) || m.moduleVersion < st.revokeFloor) return "baseline v" + m.moduleVersion + " is blacklisted or revoked";
             File target = dirOf(m.moduleVersion); Hashing.deleteTree(target); target.mkdirs();
             for (String n : bundleDir.list()) { File dst = new File(target, n); Files.copy(new File(bundleDir, n).toPath(), dst.toPath()); dst.setReadOnly(); }
+            at("baseline.afterCopy");
             st.active = m.moduleVersion; st.lastGood = m.moduleVersion; st.pending = 0; st.tries = 0; st.highest = Math.max(st.highest, m.moduleVersion);
             st.revokeFloor = Math.max(st.revokeFloor, m.revokeFloor); st.lastResult = "installed baseline v" + m.moduleVersion;
             pruneOld(); saveState();
@@ -232,8 +293,10 @@ public final class ModuleStore {
             if (!r.ok()) { Hashing.deleteTree(tmpDir); return r.reason; }
             ModuleManifest m = r.manifest;
             if (m.moduleVersion <= Math.max(st.highest, st.staged) || st.bad.contains(m.moduleVersion) || m.moduleVersion < st.revokeFloor) { Hashing.deleteTree(tmpDir); return "v" + m.moduleVersion + " is not newer than v" + Math.max(st.highest, st.staged); }
+            at("commit.afterVerify");
             Hashing.deleteTree(stagedDir);
             if (!tmpDir.renameTo(stagedDir)) return "cannot publish staged module";
+            at("commit.afterRename");
             st.staged = m.moduleVersion; saveState();
             return null;
         } catch (Exception e) { return "commit failed: " + e.getMessage(); }
@@ -263,20 +326,79 @@ public final class ModuleStore {
 
     public File dirOf(int version) { return new File(modDir, "v" + version); }
 
-    private void loadState() throws IOException {
-        if (!stateFile.isFile()) { st = new State(); return; }
-        st = new Json().fromJson(State.class, new String(Files.readAllBytes(stateFile.toPath()), StandardCharsets.UTF_8));
-        if (st == null) st = new State();
-        if (st.bad == null) st.bad = new ArrayList<>();
-        if (st.lastResult == null) st.lastResult = "";
-        if (st.rollback == null) st.rollback = "";
+    // The state file is "S1:<sha256 of the JSON>\n<JSON>" (a legacy bare-JSON file is still read). Two copies are kept: state.json and state.json.bak (the previous good one).
+    private static final String MAGIC = "S1:";
+
+    private static String envelope(String json) { return MAGIC + Hashing.sha256(json.getBytes(StandardCharsets.UTF_8)) + "\n" + json; }
+
+    /** The state in {@code f}, or null if it is missing, damaged (checksum, JSON, impossible numbers). */
+    private static State tryRead(File f) {
+        try {
+            if (!f.isFile()) return null;
+            String s = new String(Files.readAllBytes(f.toPath()), StandardCharsets.UTF_8), json = s;
+            if (s.startsWith(MAGIC)) {
+                int nl = s.indexOf('\n');
+                if (nl != MAGIC.length() + 64) return null;
+                json = s.substring(nl + 1);
+                if (!Hashing.sha256(json.getBytes(StandardCharsets.UTF_8)).equals(s.substring(MAGIC.length(), nl))) return null;
+            }
+            State x = new Json().fromJson(State.class, json);
+            if (x == null || x.active < 0 || x.lastGood < 0 || x.pending < 0 || x.tries < 0 || x.highest < 0 || x.revokeFloor < 0 || x.staged < 0 || x.snapshotFor < 0) return null;
+            if (x.bad == null) x.bad = new ArrayList<>();
+            if (x.lastResult == null) x.lastResult = "";
+            if (x.rollback == null) x.rollback = "";
+            if (x.restoring == null) x.restoring = "";
+            return x;
+        } catch (Exception e) { return null; }
     }
 
-    private void saveState() {
+    private void loadState() {
+        State s = tryRead(stateFile);
+        if (s != null) { st = s; return; }
+        s = tryRead(stateBak);
+        if (s != null) { st = s; st.lastResult = "state restored from its backup copy"; return; }
+        st = derive();
+    }
+
+    /**
+     * Neither state copy is usable (or none exists). Nothing about WHICH module should run is trusted, but the anti-rollback counter must not reset to zero while signed modules are
+     * installed: it is rebuilt from the highest version (and revoke floor) of every installed module that still verifies, so an old release cannot be fed to a wiped state.
+     * A fresh install (no modules) correctly starts from zero.
+     */
+    private State derive() {
+        State d = new State();
+        File[] kids = modDir.listFiles();
+        if (kids != null) for (File k : kids) {
+            ModuleVerifier.Result r = ModuleVerifier.verify(k, keys, host);
+            if (r.ok()) { d.highest = Math.max(d.highest, r.manifest.moduleVersion); d.revokeFloor = Math.max(d.revokeFloor, r.manifest.revokeFloor); }
+        }
+        if (stateFile.exists() || stateBak.exists() || d.highest != 0) d.lastResult = "state unreadable: reset (anti-rollback floor kept at v" + d.highest + ")";
+        return d;
+    }
+
+    private static void writeDurably(File f, byte[] data) throws IOException {
+        try (java.io.FileOutputStream o = new java.io.FileOutputStream(f)) { o.write(data); o.getFD().sync(); }
+    }
+
+    private static void syncDir(File d) {
+        try (java.nio.channels.FileChannel c = java.nio.channels.FileChannel.open(d.toPath(), java.nio.file.StandardOpenOption.READ)) { c.force(true); } catch (Exception ignored) { /* not supported everywhere */ }
+    }
+
+    /** Write-ahead, atomic, durable: new copy fsynced beside the old, the old (if valid) kept as the backup, then one rename. Returns false if it could not be written. */
+    private boolean saveState() {
         try {
-            root.mkdirs(); File tmp = new File(root, "state.json.tmp");
-            Files.write(tmp.toPath(), new Json().toJson(st).getBytes(StandardCharsets.UTF_8));
+            root.mkdirs(); File tmp = new File(root, "state.json.tmp"), bakTmp = new File(root, "state.json.bak.tmp");
+            writeDurably(tmp, envelope(new Json().toJson(st)).getBytes(StandardCharsets.UTF_8));
+            at("state.afterTmp");
+            if (tryRead(stateFile) != null) {                         // only a copy that itself verifies may replace the backup
+                writeDurably(bakTmp, Files.readAllBytes(stateFile.toPath()));
+                Files.move(bakTmp.toPath(), stateBak.toPath(), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+            }
+            at("state.afterBackup");
             Files.move(tmp.toPath(), stateFile.toPath(), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
-        } catch (Exception ignored) { /* advisory; the next start re-derives a safe state from the verified directories */ }
+            at("state.afterMove");
+            syncDir(root);
+            return true;
+        } catch (Exception e) { return false; }      // e.g. storage full: the in-memory state stays authoritative for this run and the next save retries
     }
 }

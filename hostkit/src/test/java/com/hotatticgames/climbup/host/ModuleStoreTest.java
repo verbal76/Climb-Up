@@ -211,8 +211,9 @@ public class ModuleStoreTest {
     @Test public void aCorruptStateFileDoesNotCrashTheHostAndCostsOnlyTheInstalledChoice() throws Exception {
         File baseDir = tmp.newFolder("apkBaseline"); Bundles.write(baseDir, new Bundles.Spec(), key);
         assertNull(store.installBaseline(baseDir)); bootNew();
-        Files.write(new File(root, "state.json").toPath(), "{{{ not json".getBytes());
+        Files.write(new File(root, "state.json").toPath(), "{{{ not json".getBytes()); Files.write(new File(root, "state.json.bak").toPath(), "{{{ also not json".getBytes());      // every copy damaged
         assertTrue("no state => nothing is trusted to run", bootNew().recovery());
+        assertEquals("but the anti-rollback counter is rebuilt from the installed, verified module", 1, store.st.highest);
         assertNull(store.installBaseline(baseDir)); assertEquals(1, bootNew().manifest.moduleVersion);
     }
 

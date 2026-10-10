@@ -147,6 +147,26 @@ else
 echo "== K8/K9/K10 (damaged state, interrupted install, pause forgiveness) are run on the integration branch once the reliability work is merged: skipped here"
 fi
 
+echo "== K11 ONE signed release changes both the executing code and a game file; the saved climb is untouched"
+go_home; sleep 2; H0=$(adb shell "run-as $HOST sh -c 'cd files; sha256sum history.bin'" | tr -d '\r' | cut -d' ' -f1)
+serve c10_code_and_assets; start "$HOST_ACT" --es updateBase http://10.0.2.2:8099/ >/dev/null
+expect "K11 v10 (code + game file) downloaded, verified and staged" "update check: staged v10" 60
+N=$(adb shell "run-as $HOST sh -c 'ls files/host/cas | wc -l'" | tr -d '\r'); [ "${N:-0}" -ge 1 ] && pass "K11 the content store holds $N verified file(s)" || fail "K11 content store empty"
+go_home; sleep 1
+gameshots k11_HOST $HOST "$HOST_ACT"
+expect "K11 v10 runs after the cold start" "running module v10" 5
+expect "K11 its new code executed (marker $MARK)" "code-marker $MARK" 5
+expect "K11 its game-file override is active" "asset overrides active: 1 file" 5
+logs | grep -q "ClassCastException" && fail "K11 a sound failed to load through the overlay" || pass "K11 no ClassCastException (sounds load)"
+SPL_C=$(firstof k11_HOST splash); TIT_C=$(firstof k11_HOST title)
+if [ -n "$SPL_C" ] && [ -n "$SPL_R" ]; then R=$(diffp "$OUT/k11_HOST/$SPL_C" "$OUT/k1_REF/$SPL_R"); echo "   splash with the delivered file vs the APK's: $R"; awk -v s="$(echo "$R" | meanof)" 'BEGIN{exit !(s>20)}' && pass "K11 the delivered game file is on screen (the splash is inverted)" || fail "K11 the splash did not change ($R)"; else fail "K11 splash frames missing"; fi
+if [ -n "$TIT_C" ] && [ -n "$TIT_R" ]; then R=$(diffp "$OUT/k11_HOST/$TIT_C" "$OUT/k1_REF/$TIT_R"); echo "   title with the override active vs the packaged game: $R"; awk -v s="$(echo "$R" | meanof)" -v c="$(echo "$R" | corrof)" 'BEGIN{exit !(s<3 && c>0.97)}' && pass "K11 every other file still comes from the APK unchanged" || fail "K11 the title differs from the packaged game ($R)"; else fail "K11 title frames missing"; fi
+H1=$(adb shell "run-as $HOST sh -c 'cd files; sha256sum history.bin'" | tr -d '\r' | cut -d' ' -f1); [ -n "$H0" ] && [ "$H0" = "$H1" ] && pass "K11 history.bin byte-identical across the combined update" || fail "K11 history changed ($H0 -> $H1)"
+adb shell "run-as $HOST sh -c 'cd files; grep -o seed[^,}]* save.json'" | tr -d '\r' | grep -q 777 && pass "K11 save still holds the climb (seed 777)" || fail "K11 save lost the climb"
+stop_server
+start "$HOST_ACT" --es prop.climb.demo true >/dev/null
+expect "K11 the combined release proves itself in live play" "confirmed healthy" 60
+
 echo "== P1 delivery-layer measurements: cold start, frame pacing and memory, packaged vs module (informational on an emulator: software GL, NOT representative of a phone; never fails the run)"
 bash "$HERE/perf_capture.sh" "$OUT/perf" 3 30 2 2>&1 | tee "$OUT/perf.txt" | sed 's/^/   /' || true
 

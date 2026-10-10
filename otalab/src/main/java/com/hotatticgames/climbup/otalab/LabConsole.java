@@ -59,6 +59,7 @@ public class LabConsole extends Activity {
         button(col, "Stage v4: tampered file (must be refused)", () -> stage("c4_tampered"));
         button(col, "Stage v5: signed but broken (fails to load, rolls back)", () -> stage("c5_no_entry"));
         button(col, "Stage v8: next release", () -> stage("c8_after_interrupt"));
+        button(col, "Stage v10: code update AND a changed game file together (the studio splash comes up inverted)", () -> stage("c10_code_and_assets"));
         header(col, "Checks");
         button(col, "Equivalence check on this phone (a few minutes)", () -> { mark("equivalence"); killGame(); Bundle x = new Bundle(); x.putString("selftest", EQUIV); launch(x); });
         button(col, "Performance run (about 80 seconds)", () -> { mark("performance"); killGame(); Bundle x = new Bundle(); x.putString("prop.climb.demo", "true"); x.putString("prop.climb.perf", "60"); x.putString("prop.climb.perfWarm", "12"); launch(x); });

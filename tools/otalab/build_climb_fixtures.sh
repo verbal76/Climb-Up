@@ -15,4 +15,13 @@ mk --out "$SERVE/c8_after_interrupt" --version 8 --ruleset 1               # ins
 mk --out "$SERVE/c9_resume_crash" --version 9 --ruleset 1                  # an unproven release used to show that pause forgiveness is recounted on resume (scenario K10)
 if [ -n "$MARKED" ]; then                                                    # a release whose executing code differs (extra entry class, same game): the real "code update"
   mkj "$MARKED" --out "$SERVE/c7_code_change" --version 7 --ruleset 1 --entry com.hotatticgames.climbup.module.ClimbModuleMarked
+  # ONE release that changes both the executing code and a game file (LAB-ONLY fixture: the owner's studio splash with its colours inverted; the real logo is never altered or shipped)
+  OV=$(mktemp -d); mkdir -p "$OV/branding"
+  python3 - "$OV/branding/studio_splash.png" "$(dirname "$0")/../../assets/branding/studio_splash.png" <<'PYEOF'
+import sys
+from PIL import Image, ImageOps
+im = Image.open(sys.argv[2]).convert("RGBA"); r, g, b, al = im.split()
+Image.merge("RGBA", (*ImageOps.invert(Image.merge("RGB", (r, g, b))).split(), al)).save(sys.argv[1])
+PYEOF
+  mkj "$MARKED" --out "$SERVE/c10_code_and_assets" --version 10 --ruleset 1 --entry com.hotatticgames.climbup.module.ClimbModuleMarked --assets-dir "$OV"
 fi

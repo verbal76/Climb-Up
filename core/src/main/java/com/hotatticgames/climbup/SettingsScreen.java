@@ -73,7 +73,8 @@ public final class SettingsScreen extends ScreenAdapter {
             toggle("CHECK FOR GAME UPDATES", s.otaEnabled, () -> s.otaEnabled = !s.otaEnabled);
             row("UPDATE NOW", "CHECK", null, null, () -> g.startOtaCheck(true));
             ui.textC(g.audio.diag(), W / 2, rowY + 30, 2.8f, Ui.DIM); rowY -= 64;
-            row("RESTART AUDIO", "RESTART", null, null, () -> g.audio.restart());
+            if (g.canRestartApp()) row("APPLY UPDATE / RESTART GAME", "RESTART", null, null, () -> { g.persist(); g.restartApp(); });
+            else row("RESTART AUDIO", "RESTART", null, null, () -> g.audio.restart());
         } else {
             row("HAPTICS", HAP[s.haptics], null, null, () -> s.haptics = (s.haptics + 1) % 3);
             toggle("LEFT-HANDED LAYOUT", s.leftHanded, () -> s.leftHanded = !s.leftHanded);

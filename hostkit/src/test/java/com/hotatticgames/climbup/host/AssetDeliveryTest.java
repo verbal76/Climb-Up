@@ -39,6 +39,7 @@ public class AssetDeliveryTest {
             int from = 0; boolean partial = false;
             if (range != null && !ignoreRange) { from = Integer.parseInt(range.replaceAll("[^0-9-]", "").split("-")[0]); partial = true; }
             int len = b.length - from;
+            if (partial) ex.getResponseHeaders().add("Content-Range", "bytes " + from + "-" + (b.length - 1) + "/" + b.length);      // RFC 9110: a 206 for one range always carries it
             ex.sendResponseHeaders(partial ? 206 : 200, len);
             try (OutputStream o = ex.getResponseBody()) {
                 if (cutAfterBytesFor != null && path.endsWith(cutAfterBytesFor)) { o.write(b, from, Math.min(cutAt, len)); o.flush(); ex.close(); return; }

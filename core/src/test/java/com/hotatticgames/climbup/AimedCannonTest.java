@@ -65,6 +65,14 @@ public class AimedCannonTest {
         assertEquals(0, s.hits);
     }
 
+    @Test public void itDoesNotShootAHeroOnAnotherTurnOfTheSpiral() throws Exception {
+        Sim s = world(12f, 12f, 0f);              // 12 m above the turret, nearly straight over it: within 15 m, but on the next layer
+        s.mode = Sim.Mode.AIR; s.onElem = -1; s.vy = 0f;
+        InputState in = new InputState();
+        for (int i = 0; i < 60 * 14; i++) { in.clear(); s.y = 12f; s.vy = 0f; s.step(in); s.consumeEvents(); }
+        assertEquals("not shot", 0, s.hits); assertTrue("never fired", s.aimFireT[0] < -1e8f);
+    }
+
     @Test public void lateGameSlicesContainAimedCannonsAndTheyArePlacedOnPlatformsWithClearance() throws Exception {
         Tuning t = TestUtil.tuning(); t.zoneHeight = 50f;                 // compress the worlds so the late game (night world on) is reached within a few slices
         int aimed = 0;

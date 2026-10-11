@@ -480,7 +480,7 @@ public final class Sim {
             if (h.type != Element.Type.AIMED || hi >= aimAng.length) continue;
             float c = h.cyc(time), pc = h.cyc(time - DT);
             float dx = course.dsWrap(s, h.s), dy = y + 0.7f - h.y;
-            boolean awake = dx * dx + dy * dy <= Element.AIM_RANGE * Element.AIM_RANGE;
+            boolean awake = dx * dx + dy * dy <= Element.AIM_RANGE * Element.AIM_RANGE && dy >= -4f && dy <= 5f;          // its own layer only: the tower spirals, and a hero on the turn above or below (same arc, 10+ m up or down) must not be shot through the floor
             if (c < Element.AIM_LOCK) {
                 float target = awake ? (float) Math.atan2(dy, dx) : (float) Math.PI * 0.5f;
                 float d = angDiff(target, aimAng[hi]), step = Element.AIM_TURN * DT;

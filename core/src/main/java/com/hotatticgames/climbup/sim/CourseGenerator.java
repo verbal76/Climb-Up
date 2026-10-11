@@ -263,7 +263,7 @@ public final class CourseGenerator {
 
     private final List<int[]> pendingCastles = new ArrayList<>();   // {rest platform index, gate index in c.hazards}
     private int castlesThisCourse;
-    public int castleDue, castleBuilt, roomFailed, roomOk, roomFallback; public int[] roomWhy = new int[5], roomWhyD = new int[5];
+    public int castleDue, castleBuilt, roomFailed, roomOk, roomFallback; public int[] roomWhy = new int[5], roomWhyD = new int[8];
 
     private int sliceNo() { return (int) ((salt - 1) % 1000003L); }
 
@@ -644,6 +644,10 @@ public final class CourseGenerator {
             } else if (layersClash(c, d, e)) { decoyWhy = 2; return false; }
         }
         for (Element g : ghostElems) if (layersClash(c, d, g)) { decoyWhy = 3; return false; }
+        for (int j = Math.max(0, a - 4); j <= Math.min(rs - 1, a + 6); j++) {          // never in the flight corridor of a pad or spring launch (the hero would be carried onto it)
+            Element e = c.get(j);
+            if ((e.type == Element.Type.PAD || e.type == Element.Type.SPRING) && Math.abs(c.dsWrap(d.s, e.s)) < 10f + d.w / 2f && d.y > e.y - 1.5f && d.y < e.y + 9f) { decoyWhy = 5; return false; }
+        }
         for (int j = a + 2; j < rs; j++) {                 // never a stepping stone toward later route
             Element e = c.get(j);
             if (!e.isPlatform()) continue;

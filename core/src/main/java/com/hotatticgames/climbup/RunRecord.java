@@ -25,7 +25,7 @@ public final class RunRecord {
 
     /** END RUN (and every fresh climb): forget the climb itself; the completed times (lastFinish, bestFinish) and the other personal bests stay. */
     public static void forgetClimb(SaveData sd) {
-        sd.seed = 0; sd.cpSlice = 0; sd.cpLocal = 0; sd.climbVersion = ""; sd.climbBuild = 0; sd.climbDate = ""; sd.climbHeight = 0f; sd.keysHeld = 0; sd.openedUpTo = 0; sd.runTicks = 0;
+        sd.seed = 0; sd.cpSlice = 0; sd.cpLocal = 0; sd.climbVersion = ""; sd.climbBuild = 0; sd.climbDate = ""; sd.climbHeight = 0f; sd.keysHeld = 0; sd.openedUpTo = 0; sd.runTicks = 0; sd.climbFalls = 0; sd.climbHits = 0;
         sd.finished = false; sd.finishTime = 0; sd.runClock = 0; sd.towerStartClock = 0; sd.towerStartHeight = 0; sd.towers = 0; sd.splits = new float[0]; sd.towerTotals = new float[0];
     }
 }

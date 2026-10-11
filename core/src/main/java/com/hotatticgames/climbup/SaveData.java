@@ -20,6 +20,9 @@ public final class SaveData {
     public float climbHeight = 0f;       // highest point reached in the climb in progress
     public int keysHeld = 0;             // keys carried (bit per colour) - a resumed climb only has the stored slice, so this must be saved
     public int openedUpTo = 0;           // highest castle number opened in this climb (castles open in order)
+    // achievement telemetry only (never read by the simulation; does not affect physics, difficulty or progression): fall-backs and hazard hits in the CURRENT climb, so a clean/flawless summit can be detected across a resume
+    public int climbFalls = 0;
+    public int climbHits = 0;
     public List<LegacyRun> legacy = new ArrayList<>();   // runs set aside when an update changed the rules
     public float bestHeight = 0f;
     public int falls = 0;

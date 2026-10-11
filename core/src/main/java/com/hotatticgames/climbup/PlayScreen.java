@@ -57,6 +57,12 @@ public final class PlayScreen extends ScreenAdapter {
     private void pop(String t, Color c) { if (pops.size() > 3) pops.remove(0); pops.add(new Pop(t, c)); }
     private void freeze(float s) { if (!g.settings.reducedMotion) hitstop = Math.max(hitstop, s); }
     private com.badlogic.gdx.Screen next; private boolean disposeOnLeave;   // applied at the end of render(), after the batch is closed
+    // Steam achievements (Windows only; a no-op sink elsewhere). Pure telemetry fed from events the game already fires.
+    private AchievementRules achRules;
+    private final AchievementRules.Tick achTick = new AchievementRules.Tick();
+    private int achBestInfinity;        // the endless-distance record at the start of this session (fixed baseline for "new best")
+    private int achMarathonBase;        // cumulative climb metres stored before this session
+    private double achSessionStartMax;  // absolute height when this session began (marathon counts the net climb from here)
 
     // ---- touch state
     private int stickPtr = -1, jumpPtr = -1, swingPtr = -1;
@@ -121,6 +127,13 @@ public final class PlayScreen extends ScreenAdapter {
         Gdx.input.setCatchKey(Input.Keys.BACK, true);
         g.audio.playlist(Audio.GAME_TRACKS);
         runTime = 0; maxAbs = absNow(); milestone = (int) (maxAbs / 50f);
+        if (!demo) {        // seed the cross-session counters from Steam's stored stats (all 0 when there is no Steam)
+            com.hotatticgames.climbup.platform.Achievements a = g.platform.achievements();
+            achRules = new AchievementRules(a.stat(AchievementRules.STAT_TOWER_FELL_MASK));
+            achBestInfinity = a.stat(AchievementRules.STAT_BEST_INFINITY_M);
+            achMarathonBase = a.stat(AchievementRules.STAT_MARATHON_M);
+            achSessionStartMax = maxAbs;
+        }
         if (Boolean.getBoolean("climb.finishDemo")) { g.save.runClock = 3723.4f; g.save.finished = true; g.save.finishTime = 3723.4f; finishNewBest = true; state = State.FINISHED; }       // test hook: shows the finish screen
         if (Boolean.getBoolean("climb.ropeScript")) {   // test hook: start low on the first rope; readInput() then climbs it, mounts the beam and jumps (screenshots of the rope top)
             for (int e = 0; e < course.size(); e++) if (course.get(e).type == Element.Type.ROPE && course.get(e).y > 5f) {
@@ -255,7 +268,9 @@ public final class PlayScreen extends ScreenAdapter {
                 runTime += Sim.DT;
                 if (runTime > 15f && g.ota != null) g.ota.confirm();          // live play with the current (possibly OTA) content: a freshly applied update is now trusted
                 if (!demo) { if (!clockLive && (in.moveX != 0f || in.jumpPressed || in.moveY != 0f)) clockLive = true; RunRecord.tick(g.save, Sim.DT, clockLive); if (absNow() > maxAbs) maxAbs = absNow(); if (maxAbs > g.save.climbHeight) g.save.climbHeight = (float) maxAbs; ResumeState.capture(g.save, sim); }
-                handleEvents(sim.consumeEvents());
+                int ev = sim.consumeEvents();
+                handleEvents(ev);
+                if (!demo) achievements(ev);
                 acc -= Sim.DT; steps++;
                 if (state != State.PLAYING) break;
             }
@@ -420,7 +435,7 @@ public final class PlayScreen extends ScreenAdapter {
         }
         if ((ev & Sim.EV_RESPAWN) != 0) {
             world.particles.burst(sim.s, sim.y + 0.6f, 18, cyan, 3f, 3.2f, 0.1f, 2f, 0.7f);
-            g.audio.play("respawn", 0.8f, 1f); fade = 1f; g.save.falls++; vibrate(40, 1); world.shake(0.5f);
+            g.audio.play("respawn", 0.8f, 1f); fade = 1f; g.save.falls++; g.save.climbFalls++; vibrate(40, 1); world.shake(0.5f);
             if ((ev & Sim.EV_HIT) == 0) { toast = "BACK TO CHECKPOINT"; toastT = 1.6f; }
             g.persist();
         }
@@ -458,10 +473,41 @@ public final class PlayScreen extends ScreenAdapter {
             toast = "LOCKED. FIND THE " + KEY_NAMES[sim.lastGateColor] + " KEY"; toastT = 2.6f; say("[LOCKED]");
         }
         if ((ev & Sim.EV_HIT) != 0) {
+            g.save.climbHits++;
             world.particles.burst(sim.hitS, sim.hitY + 0.7f, 22, red, 4f, 4f, 0.13f, 8f, 0.7f);
             g.audio.play("hit", 1f, com.hotatticgames.climbup.render.Characters.voice(g.settings.character)); world.shake(0.9f); freeze(0.09f); vibrate(60, 1); say("[OUCH]");
             toast = "OUCH! BACK TO CHECKPOINT"; toastT = 1.8f;
         }
+    }
+
+    /** Feeds the pure {@link AchievementRules} one simulation step and forwards any earned ids to the platform's Steam sink (a no-op off Steam). Adds no gameplay state. */
+    private void achievements(int ev) {
+        if (achRules == null) return;
+        com.hotatticgames.climbup.platform.Achievements a = g.platform.achievements();
+        double abs = absNow();
+        float cs = g.tuning.castleSpacing, zh = g.tuning.zoneHeight;
+        int W = AchievementRules.WORLD_COUNT;
+        AchievementRules.Tick t = achTick;
+        t.events = ev;
+        t.mode = sim.mode;
+        t.landedType = ((ev & Sim.EV_LAND) != 0 && sim.mode == Sim.Mode.GROUND && sim.onElem >= 0 && sim.onElem < course.size()) ? course.get(sim.onElem).type : null;
+        t.towersOpened = g.save.towers;
+        t.finishTimeSec = g.save.finishTime;
+        t.runFalls = g.save.climbFalls;
+        t.runHits = g.save.climbHits;
+        t.totalFalls = g.save.falls;
+        t.zone = (int) (((abs / zh) % W + W) % W);
+        t.currentTower = (int) Math.max(0, Math.min(AchievementRules.TOWERS_TOTAL - 1, Math.floor(abs / cs)));
+        t.infinityMeters = g.save.finished ? (int) Math.max(0.0, maxAbs - g.tuning.finishCastle * cs) : -1;
+        t.bestInfinityMeters = achBestInfinity;
+        t.marathonMeters = (int) Math.min(Integer.MAX_VALUE, (long) achMarathonBase + (long) Math.max(0.0, maxAbs - achSessionStartMax));
+        t.checkpointIndex = sim.checkpoint;
+        for (String id : achRules.step(t)) a.unlock(id);
+        // mirror the persistent stats to Steam (the Steam layer caches and throttles the actual StoreStats; the no-op sink ignores them)
+        a.stat(AchievementRules.STAT_FALLS, g.save.falls);
+        a.stat(AchievementRules.STAT_TOWER_FELL_MASK, achRules.towerFellMask());
+        a.stat(AchievementRules.STAT_MARATHON_M, t.marathonMeters);
+        if (t.infinityMeters > achBestInfinity) a.stat(AchievementRules.STAT_BEST_INFINITY_M, t.infinityMeters);
     }
 
     private static final String[][] TIPS = {

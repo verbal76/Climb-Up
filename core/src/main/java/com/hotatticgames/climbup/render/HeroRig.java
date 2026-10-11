@@ -71,7 +71,7 @@ public final class HeroRig implements Disposable {
     private float hangT, lean;
     private final Vector3 pB = new Vector3(), pC = new Vector3(), dir = new Vector3(), tgt = new Vector3();
     private final Quaternion arc = new Quaternion(), part = new Quaternion(), ident = new Quaternion();
-    private final Matrix4 rot = new Matrix4(), wNew = new Matrix4(), parInv = new Matrix4();
+    private final Matrix4 rot = new Matrix4(), wNew = new Matrix4(), parInv = new Matrix4(), cand = new Matrix4();
 
     private void findNodes() {
         for (Node n : inst.nodes) collect(n);
@@ -84,19 +84,57 @@ public final class HeroRig implements Disposable {
         for (Node c : n.getChildren()) collect(c);
     }
 
+    /** True only if every element of the matrix is a finite number (no NaN, no infinity). */
+    static boolean finite(Matrix4 m) {
+        for (float v : m.val) if (Float.isNaN(v) || Float.isInfinite(v)) return false;
+        return true;
+    }
+
+    /**
+     * Inverts src into dst and returns true; returns false and leaves dst untouched when src is non-finite or
+     * (near-)singular, so Matrix4.inv() - which throws "non-invertible matrix" on a zero determinant - is never
+     * reached with a degenerate bone transform. Package-private and static so it is unit-testable without a GL context.
+     */
+    static boolean safeInvert(Matrix4 dst, Matrix4 src) {
+        if (!finite(src) || !(Math.abs(src.det()) > 1e-7f)) return false;
+        dst.set(src).inv();
+        return finite(dst);
+    }
+
+    /** Sets parInv to the inverse of the bone's parent global transform (identity if root); false leaves the bone untouched. */
+    private boolean parentInverse(Node bone) {
+        Node par = bone.getParent();
+        if (par == null) { parInv.idt(); return true; }
+        return safeInvert(parInv, par.globalTransform);
+    }
+
+    /**
+     * Commits the world matrix in wNew onto the bone through its parent. Everything is computed into a scratch
+     * matrix first and the bone is only written if the result is finite and invertible: a zero-determinant local
+     * matrix would make getRotation(normalizeAxes) divide by a zero-length axis and spray NaN through the skeleton
+     * (the hero vanishes, then the next bone's inverse crashes). A rejected frame simply keeps the animation pose.
+     */
+    private void commitBone(Node bone) {
+        if (!finite(wNew) || !parentInverse(bone)) return;
+        cand.set(parInv).mul(wNew);
+        if (!finite(cand) || !(Math.abs(cand.det()) > 1e-7f)) return;
+        bone.localTransform.set(cand);
+        bone.localTransform.getTranslation(bone.translation); bone.localTransform.getRotation(bone.rotation, true); bone.localTransform.getScale(bone.scale);
+        inst.calculateTransforms();
+    }
+
     /** Rotates bone about its own joint so that the bone->child direction points along target (blended by weight). */
     private void aim(Node bone, Node child, Vector3 target, float weight) {
+        if (target.isZero(1e-5f)) return;
         bone.globalTransform.getTranslation(pB); child.globalTransform.getTranslation(pC);
-        dir.set(pC).sub(pB).nor();
+        dir.set(pC).sub(pB);
+        if (dir.isZero(1e-5f)) return;         // shoulder and hand coincide this frame: no direction to aim along, leave the pose
+        dir.nor();
         arc.setFromCross(dir, target);
         part.set(ident).slerp(arc, weight);
         rot.setToTranslation(pB).rotate(part).translate(-pB.x, -pB.y, -pB.z);
         wNew.set(rot).mul(bone.globalTransform);
-        Node par = bone.getParent();
-        if (par != null) parInv.set(par.globalTransform).inv(); else parInv.idt();
-        bone.localTransform.set(parInv).mul(wNew);
-        bone.localTransform.getTranslation(bone.translation); bone.localTransform.getRotation(bone.rotation, true); bone.localTransform.getScale(bone.scale);
-        inst.calculateTransforms();
+        commitBone(bone);
     }
 
     /** Rotates a bone about its own joint (model-space axis). */
@@ -105,11 +143,7 @@ public final class HeroRig implements Disposable {
         part.setFromAxisRad(ax, ay, az, rad);
         rot.setToTranslation(pB).rotate(part).translate(-pB.x, -pB.y, -pB.z);
         wNew.set(rot).mul(bone.globalTransform);
-        Node par = bone.getParent();
-        if (par != null) parInv.set(par.globalTransform).inv(); else parInv.idt();
-        bone.localTransform.set(parInv).mul(wNew);
-        bone.localTransform.getTranslation(bone.translation); bone.localTransform.getRotation(bone.rotation, true); bone.localTransform.getScale(bone.scale);
-        inst.calculateTransforms();
+        commitBone(bone);
     }
 
     /** Frantic leg kicks while dangling from a ledge; intensity grows the longer he hangs. */
@@ -235,9 +269,9 @@ public final class HeroRig implements Disposable {
         if (landT > 0) landT -= dt;
         cycleClock += dt;
         anim = pick(sim, speed);
-        if (CYCLE && (anim == Anim.CLIMB || anim == Anim.SHIMMY)) climbPhase += dt * 6f;
-        else if (anim == Anim.CLIMB) climbPhase += Math.abs(sim.y - sim.py0) * 5.5f;
-        else if (anim == Anim.SHIMMY) climbPhase += Math.abs(sim.course.dsWrap(sim.s, sim.ps0)) * 4.5f;
+        if (CYCLE && (anim == Anim.CLIMB || anim == Anim.SHIMMY)) climbPhase += dt * 2.8f;
+        else if (anim == Anim.CLIMB) climbPhase += Math.abs(sim.y - sim.py0) * 2.2f;            // a slow, deliberate inchworm pull up the rope (was 5.5, which read as a fast twitch)
+        else if (anim == Anim.SHIMMY) climbPhase += Math.abs(sim.course.dsWrap(sim.s, sim.ps0)) * 1.9f;   // likewise along the cable (was 4.5)
         lineMove += (((anim == Anim.CLIMB || anim == Anim.SHIMMY) ? 1f : 0f) - lineMove) * Math.min(1f, 14f * dt);      // eases the hand-over-hand in and out (the pose never snaps between hanging and moving)
 
         boolean still = sim.mode == Sim.Mode.GROUND && speed < 0.4f && landT <= 0 && hitT <= 0 && !sim.won;
@@ -357,8 +391,9 @@ public final class HeroRig implements Disposable {
         for (int side = 0; side < 2; side++) {
             Node ul = side == 0 ? ulL : ulR, ll = side == 0 ? llL : llR;
             float lift = MathUtils.lerp(0.12f + 0.1f * MathUtils.sin(hangSway + side * 2.2f), Math.max(0f, MathUtils.sin(phase + side * MathUtils.PI)), moving);
-            rotateBone(ul, 1f, 0f, 0f, 0.25f + 0.65f * lift);
-            if (ll != null) rotateBone(ll, 1f, 0f, 0f, 0.35f + 0.85f * lift);
+            // gentle hip and knee draw-up: legs stay reading as legs (the old 0.9/1.2 rad folds buckled the shin into a skinny, un-leg-like crook)
+            rotateBone(ul, 1f, 0f, 0f, 0.15f + 0.40f * lift);
+            if (ll != null) rotateBone(ll, 1f, 0f, 0f, 0.20f + 0.50f * lift);
         }
     }
     private float hangSway;

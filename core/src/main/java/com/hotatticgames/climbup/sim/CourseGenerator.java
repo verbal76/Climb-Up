@@ -247,7 +247,8 @@ public final class CourseGenerator {
                 addRest(th); sinceRest = 0; lastRestY = c.get(c.size() - 1).y; nextGap = T.gemSpacing * r(0.85f, 1.15f); maybeCastle(th); continue;
             }
             Kind k = pick(zone, last);
-            if (th == 1 && last.type == Element.Type.STATIC && rnd.nextFloat() < 0.2f) k = Kind.WET;          // the Frost world: some platforms are under a rain cloud (slippery)
+            if (th == 1 && last.type == Element.Type.STATIC && rnd.nextFloat() < 0.2f) k = Kind.WET;
+            if (last.wet() && (k == Kind.HAZ || k == Kind.TRAP || k == Kind.MORTAR)) k = Kind.HOP;          // no hazard gap right after a slippery platform: its timing windows assume a normal run-up (SawFairnessTest)          // the Frost world: some platforms are under a rain cloud (slippery)
             if (!tryModuleBelow(k, d, th)) {
                 rejected++;
                 boolean ok = false;
@@ -569,7 +570,7 @@ public final class CourseGenerator {
             if (dr.nextFloat() > 0.44f + 0.08f * tier(p.y)) continue;          // more dead ends than before (was 0.30)
             for (int again = 0; again < 2; again++) {          // a second, different try when the first does not fit the surrounding geometry
                 pendingHaz = new ArrayList<>();
-                List<Element> es = buildDecoy(p, a, dr);
+                List<Element> es = buildDecoy(p, a, dr, again == 1);
                 if (tryDecoy(es, pendingHaz, a)) { decoys += es.size(); break; }
             }
         }
@@ -577,11 +578,11 @@ public final class CourseGenerator {
     }
 
     /** Dead-end spurs (forward and gently down, or backward and up), crumbling lures, unreachable stepping stones, and trapped ledges guarded by hazards. */
-    private List<Element> buildDecoy(Element p, int a, Random dr) {
+    private List<Element> buildDecoy(Element p, int a, Random dr, boolean preferLong) {
         List<Element> l = new ArrayList<>();
         int kind = dr.nextInt(12);
         float inten = intensity(p.y);
-        boolean longSpur = kind >= 10;           // a longer dead end: four to six steps ending on a wide, plainly safe platform
+        boolean longSpur = kind >= 10 || (preferLong && dr.nextInt(2) == 0);           // a longer dead end: four to six steps ending on a wide, plainly safe platform
         if (longSpur) kind = dr.nextInt(7);
         if (kind >= 8 && inten <= 0f) kind = dr.nextInt(8);
         if (kind >= 8) {

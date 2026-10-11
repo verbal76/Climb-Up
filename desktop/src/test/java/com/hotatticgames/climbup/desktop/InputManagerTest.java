@@ -102,12 +102,13 @@ public class InputManagerTest {
 
     private FakePad connect(String id, String name) { FakePad p = new FakePad(id, name); src.pads.add(p); return p; }
 
-    @Test public void xboxLeftStickMovesWithTheTouchStickResponseCurve() {
+    @Test public void xboxLeftStickMovesProportionally() {
         FakePad p = connect("x1", "Xbox Wireless Controller"); frame();
+        float dz = cfg.deadzone;
         p.set(Ctl.LS_RIGHT, 0.1f); im.update(DT); assertEquals("inside the dead zone", 0f, read().moveX, 0);
-        p.set(Ctl.LS_RIGHT, 0.25f + 0.45f * 0.65f - 0.35f * 0.45f / 1f); im.update(DT);
-        float v = read().moveX; assertTrue(v > 0.3f && v <= 1f);
-        p.set(Ctl.LS_RIGHT, 1f); im.update(DT); assertEquals(1f, read().moveX, 1e-6f);
+        p.set(Ctl.LS_RIGHT, 0.4f); im.update(DT); assertEquals("a small tilt is a small move (no 0.35 floor jump)", (0.4f - dz) / (1f - dz), read().moveX, 1e-5f);
+        p.set(Ctl.LS_RIGHT, 0.625f); im.update(DT); assertEquals("a firm tilt scales straight toward full", (0.625f - dz) / (1f - dz), read().moveX, 1e-5f);
+        p.set(Ctl.LS_RIGHT, 1f); im.update(DT); assertEquals("a full push is full speed", 1f, read().moveX, 1e-6f);
         p.set(Ctl.LS_RIGHT, 0f); p.set(Ctl.LS_LEFT, 1f); im.update(DT); assertEquals(-1f, read().moveX, 1e-6f);
     }
 
@@ -131,10 +132,12 @@ public class InputManagerTest {
         p.set(Ctl.B, 1f); im.update(DT); assertTrue(im.backPressed());
     }
 
-    @Test public void stickUpClimbsAndDownDrops() {
+    @Test public void stickUpClimbsProportionallyAndDownDrops() {
         FakePad p = connect("x1", "Pad"); frame();
-        p.set(Ctl.LS_UP, 0.9f); im.update(DT); assertEquals(1f, read().moveY, 0);
-        p.set(Ctl.LS_UP, 0f); p.set(Ctl.LS_DOWN, 0.9f); im.update(DT); assertEquals(-1f, read().moveY, 0);
+        float dz = cfg.deadzone;
+        p.set(Ctl.LS_UP, 0.5f); im.update(DT); assertEquals("a gentle up-tilt climbs slowly", (0.5f - dz) / (1f - dz), read().moveY, 1e-5f);
+        p.set(Ctl.LS_UP, 1f); im.update(DT); assertEquals("a full up-tilt climbs at full speed", 1f, read().moveY, 1e-6f);
+        p.set(Ctl.LS_UP, 0f); p.set(Ctl.LS_DOWN, 0.9f); im.update(DT); assertEquals("down is negative (descend/drop)", -(0.9f - dz) / (1f - dz), read().moveY, 1e-5f);
     }
 
     @Test public void theAdjustableDeadZoneIgnoresDrift() {
@@ -261,7 +264,8 @@ public class InputManagerTest {
         assertSame("a deliberate push on B makes B the active controller", b, im.activePad());
         a.set(Ctl.LS_LEFT, 0.8f);                              // A drifts hard but B stays the one in control until A does something new and deliberate
         im.update(DT);
-        assertEquals("only one controller can steer: no summing of opposite stick pushes", -1f, read().moveX, 0);
+        // Only the active pad steers: moveX is A's solo proportional value, never A summed with B's opposite push (which would land near +0.27).
+        assertEquals("only one controller can steer: no summing of opposite stick pushes", -(0.8f - cfg.deadzone) / (1f - cfg.deadzone), read().moveX, 1e-5f);
     }
 
     @Test public void ifTheActiveControllerVanishesTheNextOneTakesOver() {

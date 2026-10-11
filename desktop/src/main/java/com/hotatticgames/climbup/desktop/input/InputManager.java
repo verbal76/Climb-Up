@@ -142,24 +142,23 @@ public final class InputManager implements GameInput {
         float kx = (kbHeld(kb, Act.RIGHT) ? 1 : 0) - (kbHeld(kb, Act.LEFT) ? 1 : 0);
         float ky = (kbHeld(kb, Act.CLIMB_UP) ? 1 : 0) - (kbHeld(kb, Act.CLIMB_DOWN) ? 1 : 0);
         float px = 0, py = 0;
-        if (pb != null) { px = axisOf(pb, Act.RIGHT, dz) - axisOf(pb, Act.LEFT, dz); py = digital(pb, Act.CLIMB_UP, dz) - digital(pb, Act.CLIMB_DOWN, dz); }
+        if (pb != null) { px = axisOf(pb, Act.RIGHT, dz) - axisOf(pb, Act.LEFT, dz); py = axisOf(pb, Act.CLIMB_UP, dz) - axisOf(pb, Act.CLIMB_DOWN, dz); }   // climb is analog too: a gentle up-tilt climbs slowly (the Sim scales climb speed by |moveY|)
         moveX = kx != 0 ? kx : px;           // the keyboard wins when both are used, exactly like the touch stick yields to keys in the original
         moveY = ky != 0 ? ky : py;
     }
 
     private boolean kbHeld(Bindings<Integer> kb, Act a) { for (int k : kb.get(a)) if (src.down(k)) return true; return false; }
 
-    /** Same response curve as the touch stick: nothing inside the dead zone, then 0.35..1 up to a firm push. Digital controls give a full 1. */
+    /** Smooth, proportional stick response: nothing inside the dead zone, then a straight 0..1 ramp from the dead-zone edge out to a full push, so a light tilt gives a light, controllable move and only a full push gives full speed. A digital control (D-pad or button) still gives a full 1. */
     private float axisOf(Bindings<Ctl> pb, Act a, float dz) {
         float best = 0f;
         for (Ctl c : pb.get(a)) {
             float v = active.value(c);
-            if (c.analog()) { if (v >= dz) best = Math.max(best, Math.min(1f, (v - dz) / 0.45f + 0.35f)); }
+            if (c.analog()) { if (v > dz) { float t = (v - dz) / (1f - dz); best = Math.max(best, t > 1f ? 1f : t); } }
             else if (v >= 0.5f) best = 1f;
         }
         return best;
     }
-    private float digital(Bindings<Ctl> pb, Act a, float dz) { for (Ctl c : pb.get(a)) if (isDown(active, c, Math.max(dz, 0.35f))) return 1f; return 0f; }
 
     // ------------------------------------------------------------------ GameInput
 

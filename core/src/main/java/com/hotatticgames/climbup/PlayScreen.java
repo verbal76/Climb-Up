@@ -32,6 +32,20 @@ public final class PlayScreen extends ScreenAdapter {
     private int simSize, seenRebuilds;              // size of the world the sim window was last set for
     private double maxAbs;            // highest absolute height reached (the sim only knows heights relative to the floating origin)
     private double absNow() { return tower != null ? tower.absY(sim.y) : sim.y; }
+    /** A compact, guarded one-liner of the current game state for the crash log (diagnostic only; never touches the sim). */
+    private String crashSnapshot() {
+        try {
+            String elem = "-";
+            if (course != null && sim.onElem >= 0 && sim.onElem < course.size()) elem = String.valueOf(course.get(sim.onElem).type);
+            return "screen=play state=" + state + " mode=" + sim.mode + " absY=" + (long) absNow()
+                    + " s=" + String.format(java.util.Locale.US, "%.1f", sim.s)
+                    + " onElem=" + sim.onElem + "/" + (course != null ? course.size() : 0) + " elem=" + elem
+                    + " zone=" + lastZone + " char=" + g.settings.character + " quality=" + g.settings.quality
+                    + " simSize=" + simSize + " won=" + sim.won + " demo=" + demo;
+        } catch (RuntimeException e) {
+            return "screen=play (snapshot failed: " + e + ")";
+        }
+    }
     private Sim sim;
     private WorldRenderer world;
     private final InputState in = new InputState();
@@ -226,6 +240,7 @@ public final class PlayScreen extends ScreenAdapter {
     @Override public void render(float dt) {
         dt = Math.min(dt, 0.1f);
         time += dt;
+        CrashContext.set(crashSnapshot());          // record game state each frame so a crash log says what we were doing
         if (OVERLAY != null && time > 0.8f && state == State.PLAYING) { if (OVERLAY.equals("pause")) pauseGame(); }
         if (gi() != null) {                                              // desktop: pause / resume from the keyboard or controller (the pause button and menus work through the mouse and the focus ring)
             boolean p = gi().pausePressed(), b = gi().backPressed();

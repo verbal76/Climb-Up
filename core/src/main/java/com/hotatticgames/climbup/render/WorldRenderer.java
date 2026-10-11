@@ -321,6 +321,42 @@ public final class WorldRenderer implements Disposable {
         }
     }
 
+    private ModelInstance rainLow, rainHigh;
+    private final Color rainCol = new Color(0.62f, 0.78f, 1f, 1f);
+    private ModelInstance rainCloud(boolean low) {
+        ModelInstance m = low ? rainLow : rainHigh;
+        if (m == null) {
+            m = new ModelInstance(models.pack(low ? "cloud_2" : "cloud_3"));
+            m.materials.get(0).set(new BlendingAttribute(0.9f), ColorAttribute.createDiffuse(low ? new Color(0.42f, 0.38f, 0.74f, 1f) : new Color(0.94f, 0.95f, 1f, 1f)),
+                    ColorAttribute.createEmissive(low ? 0.10f : 0.26f, low ? 0.08f : 0.26f, low ? 0.22f : 0.30f, 1f));
+            if (low) rainLow = m; else rainHigh = m;
+        }
+        return m;
+    }
+
+    /**
+     * A wet platform: a foreground rain cloud (purplish-blue underside, white above) over it, rain falling from the cloud onto the platform, and a wet shimmer on its top face. With reduced motion the
+     * rain is a few still streaks and the shimmer does not move.
+     */
+    private void drawRain(Element e, float es, float ey, float camS, float time) {
+        float w = e.w, cy = ey + 4.3f, sc = Math.max(0.9f, w * 0.23f);
+        ModelInstance lo = rainCloud(true), hi = rainCloud(false);
+        place(lo, es, cy, -2.2f, camS, sc, sc * 0.8f, sc, 0f); batch.render(lo, env);
+        place(hi, es + 0.2f, cy + 0.55f * sc, -1.9f, camS, sc * 1.05f, sc * 0.9f, sc * 1.05f, 18f); batch.render(hi, env);
+        // wet shimmer on the top face (clear of the platform top by 2 cm): a pale film and a highlight that slides along it
+        drawBox(es, ey + SHIMMER_LIFT, 0f, camS, w * 0.97f, 0.02f, 1.5f, 0.55f, 0.72f, 0.92f);
+        float hl = reducedMotion ? 0f : MathUtils.sin(time * 1.3f) * w * 0.35f;
+        drawBox(es + hl, ey + SHIMMER_LIFT + 0.01f, 0f, camS, w * 0.16f, 0.02f, 1.3f, 0.86f, 0.94f, 1f);
+        if (reducedMotion) {
+            for (int k = -2; k <= 2; k++) drawBox(es + k * w * 0.17f, ey + 0.4f, 0.1f, camS, 0.04f, cy - ey - 0.8f, 0.04f, rainCol.r, rainCol.g, rainCol.b);
+        } else if (quality > 0) {
+            float rate = (quality > 1 ? 70f : 40f) * frameDt;
+            for (int n = (int) rate + (MathUtils.random() < rate - (int) rate ? 1 : 0); n > 0; n--)
+                particles.spawn(es + MathUtils.random(-0.5f, 0.5f) * w * 0.8f, cy - 0.4f, 0f, -10f - MathUtils.random(3f), rainCol, 0.05f, 0f, (cy - ey - 0.4f) / 11.5f);
+        }
+    }
+    static final float SHIMMER_LIFT = 0.02f;
+
     /** Block heights of the two mover models (block-moving-blue.obj is 0.5 m tall, block-moving.obj 0.3 m). */
     public static final float BLUE_MOVER_BLOCK_H = 0.5f, MOVER_BLOCK_H = 0.3f;
     /** Vertical offset that puts a mover block's top face exactly on the simulation surface (the blue block used to be placed as if it were 0.3 m tall, so it stood 0.2 m proud and the hero sank into it). */
@@ -469,7 +505,7 @@ public final class WorldRenderer implements Disposable {
             if (!v.built) build(i);
             drawElement(sim, i, v, es, ey, ps, time);
         }
-        for (int k = 0, cnt = sim.hz == null ? course.hazards.size() : sim.hz.length; k < cnt; k++) { int hi2 = sim.hz == null ? k : sim.hz[k]; drawHazard(course.hazards.get(hi2), sim.time + alpha * Sim.DT, ps, time, hi2 < sim.featDone.length && sim.featDone[hi2]); }
+        for (int k = 0, cnt = sim.hz == null ? course.hazards.size() : sim.hz.length; k < cnt; k++) { int hi2 = sim.hz == null ? k : sim.hz[k]; rsim = sim; rhz = hi2; drawHazard(course.hazards.get(hi2), sim.time + alpha * Sim.DT, ps, time, hi2 < sim.featDone.length && sim.featDone[hi2]); }
         if (space != null && quality > 0) space.renderNear(batch, env, (inst, arc, yy, dz, sx, sy, sz, yaw) -> place(inst, arc, yy, dz, ps, sx, sy, sz, yaw), ps, camY, py, 0f, reducedMotion, originY);
         // free the model parts of anything the player has left behind, above or below the simulated window (a fall or a long descent can build far more than a climb ever does); freed parts are rebuilt on demand
         for (int q = 0, n = Math.min(builtN, 48); q < n && builtN > 0; q++) {
@@ -585,6 +621,7 @@ public final class WorldRenderer implements Disposable {
             place(p.inst, es + du + shakeX, y + dy + fallY, p.dz + (e.type == Element.Type.MOVE_Z ? e.zAt(sim.time) : 0f), camS, p.sx, sy, p.sz, extraYaw, roll);
             batch.render(p.inst, env);
         }
+        if (e.wet()) drawRain(e, es, ey, camS, time);
         if (e.type == Element.Type.MOVE_Z) drawDepthRail(e, es, ey, camS, sim.time);
         if (course.isCheckpoint(e) && i > 0 && e.type == Element.Type.STATIC) drawGem(sim, i, es, ey, camS, time);
         if (e.type == Element.Type.SWING) drawSwingRopes(e, es, ey, camS);
@@ -779,9 +816,20 @@ public final class WorldRenderer implements Disposable {
     /** A cannonball that has left the screen is dropped: further than the widest view (21:9) reaches, and how many past launches are followed. */
     private static final float CANNON_OFFSCREEN = 14f; private static final int CANNON_TRAIL = 4;
 
+    private Sim rsim; private int rhz;            // the simulation and hazard index being drawn (aimed cannons draw the sim's own aim)
+
+    /** A pack model aimed in the play plane: barrel along +s at angle 0, turned counter-clockwise by {@code deg}, centred at (arc, y). */
+    private void drawPackAimed(String name, float arc, float y, float camS, float deg, float sc) {
+        ModelInstance m = pack(name);
+        float phi = wrapDiff(arc, camS) / T.radius, r = T.radius;
+        m.transform.idt().translate(r * MathUtils.sin(phi), y, -T.radius + r * MathUtils.cos(phi))
+                .rotate(0, 1, 0, phi * MathUtils.radiansToDegrees).rotate(0, 0, 1, deg).rotate(0, 1, 0, CANNON_YAW).scale(sc, sc, sc);
+        batch.render(m, env);
+    }
+
     private void drawHazard(Element h, float t, float camS, float time, boolean done) {
         float cs = h.type == Element.Type.CANNON ? h.s + h.dir * h.len * 0.5f : h.s;
-        float half = h.type == Element.Type.CANNON ? h.len * 0.5f + 1.5f + CANNON_OFFSCREEN : (h.type == Element.Type.SAW_H ? h.amp + 1.5f : 2f);
+        float half = h.type == Element.Type.AIMED ? 17f : h.type == Element.Type.CANNON ? h.len * 0.5f + 1.5f + CANNON_OFFSCREEN : (h.type == Element.Type.SAW_H ? h.amp + 1.5f : 2f);
         float cy = h.type == Element.Type.SAW_V ? h.y + h.amp * 0.5f : h.y;
         if (!visible(cs, cy, camS, half)) return;
         switch (h.type) {
@@ -806,6 +854,22 @@ public final class WorldRenderer implements Disposable {
                     if (Math.abs(course.dsWrap(bs, camS)) > CANNON_OFFSCREEN) continue;
                     drawPack("spikyball", bs, h.yAt(t), 0f, camS, 0.55f, 0.55f, 0.55f, 0f, -bs * 160f);
                 }
+                break;
+            }
+            case AIMED: {
+                // a turret on a pedestal; its barrel is turned by the SIMULATION's own aim, so the picture is where the ball goes. Locked = a red glow that pulses faster; then the ball leaves the barrel's tip.
+                float base = h.y - 2.0f, ang = rsim != null && rhz < rsim.aimAng.length ? rsim.aimAng[rhz] : (float) Math.PI * 0.5f;
+                drawBox(h.s, base, 0f, camS, 1.25f, CANNON_LIFT - 0.1f, 1.25f, 0.34f, 0.31f, 0.40f);
+                drawBox(h.s, base + CANNON_LIFT - 0.1f, 0f, camS, 1.45f, 0.16f, 1.45f, 0.3f, 0.27f, 0.36f);
+                drawPackAimed("cannon", h.s, h.y, camS, ang * MathUtils.radiansToDegrees, PK);
+                float c = h.cyc(t);
+                if (c >= Element.AIM_LOCK && c < Element.AIM_FIRE) {
+                    float k = (c - Element.AIM_LOCK) / (Element.AIM_FIRE - Element.AIM_LOCK), pulse = reducedMotion ? 1f : 0.7f + 0.3f * MathUtils.sin(time * (18f + 30f * k));
+                    float sz = (0.16f + 0.2f * k) * pulse, tip = 0.7f;
+                    drawBox(h.s + (float) Math.cos(ang) * tip - sz * 0.5f, h.y + (float) Math.sin(ang) * tip - sz * 0.5f, 0.2f, camS, sz, sz, sz, 1f, 0.2f, 0.12f);
+                }
+                float[] b = rsim != null ? rsim.aimedBall(rhz, h) : null;
+                if (b != null) drawPack("spikyball", b[0], b[1], 0f, camS, 0.5f, 0.5f, 0.5f, 0f, -b[0] * 160f);
                 break;
             }
             case MORTAR: {

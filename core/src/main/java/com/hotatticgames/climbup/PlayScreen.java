@@ -400,6 +400,7 @@ public final class PlayScreen extends ScreenAdapter {
             if (le.type == Element.Type.RAMP && le.skin == 2) { g.audio.play("bonk", 0.5f, 1.2f); }
             if (le.isPlatform() && edge > 0.06f && sim.landSpeed > 5f) { pop(CLOSE[MathUtils.random(CLOSE.length - 1)], gold); freeze(0.07f); world.shake(0.5f); vibrate(25, 1); }
         }
+        if ((ev & Sim.EV_AIM) != 0) g.audio.play("cannon", 0.55f, 0.85f);
         if ((ev & Sim.EV_JUMP) != 0) world.kick(0.8f);
         if ((ev & Sim.EV_BOUNCE) != 0) { world.kick(4f); pop("BOING!", cyan); }
         if ((ev & Sim.EV_PULL) != 0) { g.audio.play("effort", 0.9f, com.hotatticgames.climbup.render.Characters.voice(g.settings.character)); pop("HUP!", gold); vibrate(20, 2); }

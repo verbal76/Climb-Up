@@ -202,12 +202,12 @@ public class InputManagerTest {
         assertEquals("SPACE", im.prompt(Act.JUMP));
     }
 
-    @Test public void playStationControllersShowCrossAndCircleAndOptions() {
+    @Test public void playStationControllersShowCrossAndCircleAndSharePause() {
         FakePad p = connect("ps1", "PS5 Controller"); frame();
         p.set(Ctl.A, 1f); frames(2);
         assertEquals(PadFamily.PLAYSTATION, im.family());
         assertEquals("CROSS", im.prompt(Act.JUMP));
-        assertEquals("OPTIONS", im.prompt(Act.PAUSE));
+        assertEquals("SHARE", im.prompt(Act.PAUSE));   // pause is the View/Share button now (Options/Menu still works as a secondary)
         assertEquals("CIRCLE", im.prompt(Act.BACK));
     }
 

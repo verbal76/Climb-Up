@@ -41,6 +41,7 @@ public final class PlayScreen extends ScreenAdapter {
     private boolean clockLive;           // the speed-run clock starts on the first input of a session
     private String toastSub = "";
     private float acc, time, runTime, fade, toastT, zoneT, stepT, ropeT, autosaveT, tipT, shotT;
+    private float pauseCd;               // short lock-out after a pause toggle so one controller press can never flip it twice (no flashing, no 10-click close)
     private String toast = "", tip = "", caption = ""; private float captionT;
     private int lastZone = -1, shots;
     private boolean confirmRestart;
@@ -227,9 +228,13 @@ public final class PlayScreen extends ScreenAdapter {
         dt = Math.min(dt, 0.1f);
         time += dt;
         if (OVERLAY != null && time > 0.8f && state == State.PLAYING) { if (OVERLAY.equals("pause")) pauseGame(); }
+        if (pauseCd > 0f) pauseCd -= dt;
         if (gi() != null) {                                              // desktop: pause / resume from the keyboard or controller (the pause button and menus work through the mouse and the focus ring)
             boolean p = gi().pausePressed(), b = gi().backPressed();
-            if (state == State.PLAYING && p) pauseGame(); else if (state == State.PAUSED && (p || b)) resumePlay();
+            if (pauseCd <= 0f) {                                          // one press = one toggle; the lock-out swallows any double-fire from the pad
+                if (state == State.PLAYING && p) { pauseGame(); pauseCd = 0.30f; }
+                else if (state == State.PAUSED && (p || b)) { resumePlay(); pauseCd = 0.30f; }
+            }
         }
         boolean play = state == State.PLAYING;
         if (play) {

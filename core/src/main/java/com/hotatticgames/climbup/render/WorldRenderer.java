@@ -275,8 +275,8 @@ public final class WorldRenderer implements Disposable {
                 for (int k = 1; k <= knots; k++) ps.add(boxPart(0, -k + 0.5f, 0, 0.2f, 0.12f, 0.2f, new Color(0.7f, 0.52f, 0.28f, 1f)));
                 ps.add(boxPart(0, 0.12f, -0.05f, 2.4f, 0.24f, 0.26f, beam));           // a thin standing board: the climber hauls himself up from behind it
                 for (int sd = -1; sd <= 1; sd += 2) {                                   // the support posts stand behind the walking lane, clear of platforms and of the climber
-                    ps.add(boxPart(sd * 1.1f, -0.9f, -0.85f, 0.2f, 1.7f, 0.2f, beam));
-                    ps.add(boxPart(sd * 1.1f, 0.02f, -0.45f, 0.2f, 0.2f, 0.8f, beam));
+                    ps.add(boxPart(sd * 1.1f, -0.8f, -0.85f, 0.2f, 1.9f, 0.2f, beam));
+                    ps.add(boxPart(sd * 1.1f, 0.02f, -0.48f, 0.2f, 0.2f, 0.75f, beam));
                 }
                 break;
             }
@@ -598,6 +598,7 @@ public final class WorldRenderer implements Disposable {
     private ColorAttribute gemDiff, gemEmis, glowEmis;
     private BlendingAttribute gemBlend, glowBlend;
     private final java.util.HashMap<Integer, Float> gemAct = new java.util.HashMap<>();
+    private final java.util.HashSet<Integer> gemSeenWaiting = new java.util.HashSet<>();      // checkpoints this renderer has seen not yet reached
     private final Color keyCol = new Color(1f, 1f, 1f, 1f);
     private final Color gemRed = new Color(1f, 0.12f, 0.16f, 1f);
 
@@ -612,8 +613,10 @@ public final class WorldRenderer implements Disposable {
         if (gem == null) initGem();
         boolean active = sim.checkpoint >= i;
         Float t0 = gemAct.get(i);
+        if (!active) gemSeenWaiting.add(i);
         if (active && t0 == null) {
-            if (sim.checkpoint > i) t0 = -1000f; else { t0 = time; particles.burst(es, ey + 1.7f, 16, gemRed, 2.6f, 3.4f, 0.1f, -1f, 1.1f); }
+            // the pop and its red dust only happen when the player really reaches the gem; a hero who simply starts or resumes standing at a checkpoint gets no dust over his head
+            if (sim.checkpoint > i || !gemSeenWaiting.contains(i)) t0 = -1000f; else { t0 = time; particles.burst(es, ey + 1.7f, 16, gemRed, 2.6f, 3.4f, 0.1f, -1f, 1.1f); }
             gemAct.put(i, t0);
         } else if (!active && t0 != null) { gemAct.remove(i); t0 = null; }      // respawned behind a gem that was reached: the world was reset
         float ph = i * 1.7f, base = 0.46f;
@@ -658,6 +661,15 @@ public final class WorldRenderer implements Disposable {
                 for (com.badlogic.gdx.graphics.g3d.Material mat : m.materials) mat.set(ColorAttribute.createEmissive(0.30f, 0.05f, 0.03f, 1f));       // dangers glow a little warm so they read against any background
         }
         return m;
+    }
+
+    /** A pack model stood on end (its barrel axis, model z, pointing up), centred at (arc, y). */
+    private void drawPackUp(String name, float arc, float y, float camS, float sc) {
+        ModelInstance m = pack(name);
+        float phi = wrapDiff(arc, camS) / T.radius, r = T.radius;
+        m.transform.idt().translate(r * MathUtils.sin(phi), y, -T.radius + r * MathUtils.cos(phi))
+                .rotate(0, 1, 0, phi * MathUtils.radiansToDegrees).rotate(1, 0, 0, 90f).scale(sc, sc, sc);
+        batch.render(m, env);
     }
 
     private void drawPack(String name, float arc, float y, float dz, float camS, float sx, float sy, float sz, float yaw, float roll) {
@@ -794,6 +806,16 @@ public final class WorldRenderer implements Disposable {
                     if (Math.abs(course.dsWrap(bs, camS)) > CANNON_OFFSCREEN) continue;
                     drawPack("spikyball", bs, h.yAt(t), 0f, camS, 0.55f, 0.55f, 0.55f, 0f, -bs * 160f);
                 }
+                break;
+            }
+            case MORTAR: {
+                // a cannon standing in the ground below the path, pointing straight up; its tip is the muzzle (h.y) the ball leaves from and falls back into
+                drawBox(h.s, h.y - 2.6f, 0f, camS, 1.5f, 2.0f, 1.3f, 0.34f, 0.31f, 0.40f);
+                drawBox(h.s, h.y - 0.7f, 0f, camS, 1.7f, 0.18f, 1.5f, 0.30f, 0.27f, 0.36f);
+                drawPackUp("cannon", h.s, h.y - 0.61f, camS, PK);
+                float charge = h.mortarCharge(t);           // the reload pause: the muzzle glows brighter and brighter, then the ball bursts out (warning for the timing)
+                if (charge > 0f) { float pulse = reducedMotion ? 1f : 0.75f + 0.25f * MathUtils.sin(time * 28f); float k = (0.12f + 0.28f * charge) * pulse; drawBox(h.s - k * 0.5f, h.y - k * 0.5f, 0f, camS, k, k, k, 1f, 0.55f + 0.3f * charge, 0.15f); }
+                if (h.lethalAt(t)) drawPack("spikyball", h.s, h.yAt(t), 0f, camS, 0.55f, 0.55f, 0.55f, 0f, -h.yAt(t) * 160f);
                 break;
             }
             case SPIKE_TRAP: {

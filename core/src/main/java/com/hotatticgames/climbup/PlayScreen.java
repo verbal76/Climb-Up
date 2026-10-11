@@ -292,11 +292,12 @@ public final class PlayScreen extends ScreenAdapter {
             if (d > 14f) continue;
             float vol = Math.max(0f, 1f - d / 14f);
             switch (h.type) {
-                case CANNON: case SPIKE_TRAP: {
-                    int cyc = (int) Math.floor(h.type == Element.Type.CANNON ? sim.time / h.period + h.phase / 6.2832f : (sim.time / h.period + h.phase / 6.2832f - 0.55f));
+                case CANNON: case SPIKE_TRAP: case MORTAR: {
+                    int cyc = (int) Math.floor(h.type == Element.Type.CANNON || h.type == Element.Type.MORTAR ? sim.time / h.period + h.phase / 6.2832f : (sim.time / h.period + h.phase / 6.2832f - 0.55f));
                     Integer prev = cycleSeen.put(h, cyc);
                     if (prev != null && prev != cyc) {
-                        if (h.type == Element.Type.CANNON) { g.audio.play("cannon", 0.9f * vol + 0.1f, 1f); world.particles.burst(h.s + h.dir * 0.8f, h.y, 6, dust, 1.5f, 0.6f, 0.12f, 0f, 0.4f); world.shake(0.15f * vol); say("[BOOM]"); }
+                        if (h.type == Element.Type.MORTAR) { g.audio.play("cannon", 0.7f * vol + 0.05f, 1.25f); world.particles.burst(h.s, h.y + 0.5f, 6, dust, 1.2f, 1.6f, 0.12f, 0f, 0.4f); }
+                        else if (h.type == Element.Type.CANNON) { g.audio.play("cannon", 0.9f * vol + 0.1f, 1f); world.particles.burst(h.s + h.dir * 0.8f, h.y, 6, dust, 1.5f, 0.6f, 0.12f, 0f, 0.4f); world.shake(0.15f * vol); say("[BOOM]"); }
                         else g.audio.play("spikes", 0.7f * vol + 0.05f, 1f);
                     }
                     break;
@@ -460,7 +461,7 @@ public final class PlayScreen extends ScreenAdapter {
         if ((ev & Sim.EV_HIT) != 0) {
             world.particles.burst(sim.hitS, sim.hitY + 0.7f, 22, red, 4f, 4f, 0.13f, 8f, 0.7f);
             g.audio.play("hit", 1f, com.hotatticgames.climbup.render.Characters.voice(g.settings.character)); world.shake(0.9f); freeze(0.09f); vibrate(60, 1); say("[OUCH]");
-            toast = "OUCH! BACK TO CHECKPOINT"; toastT = 1.8f;
+            toast = "OUCH! BE CAREFUL!"; toastT = 1.8f;
         }
     }
 
@@ -553,9 +554,16 @@ public final class PlayScreen extends ScreenAdapter {
         if (g.save.finished) ui.text("FINISH " + fmtTime(g.save.finishTime), m, H - m - 104 * zk, 3f * zk, new Color(0.45f, 1f, 0.55f, 1f));
         else ui.text("TOTAL " + fmtTime(g.save.runClock), m, H - m - 104 * zk, 3f * zk, Ui.TEXT);
         float barW = 360 * zk, barY = H - m - 126 * zk;
-        float within = (float) (((hAbs / g.tuning.zoneHeight) % Z + Z) % Z / Z);
+        // ten towers (castle to castle): finished towers green, the one being climbed yellow, the rest black; the orange tick is where you are right now
+        int N = Math.max(1, (int) g.tuning.finishCastle); double span = g.tuning.castleSpacing;
+        int cur = Math.min(N - 1, (int) (Math.max(0.0, maxAbs) / span));
+        float within = (float) Math.max(0.0, Math.min(1.0, hAbs / (span * N)));
         ui.rect(m, barY, barW, 8, new Color(0.2f, 0.22f, 0.32f, 1f));
-        for (int z = 0; z < Z; z++) { Color c = Palette.SKY_BOT[z]; ui.rect(m + z * barW / Z + 1, barY + 1, barW / Z - 2, 6, new Color(c.r, c.g, c.b, 0.9f)); }
+        for (int z = 0; z < N; z++) {
+            boolean done = g.save.finished || z < cur, active = !g.save.finished && z == cur;
+            Color c = done ? new Color(0.25f, 0.85f, 0.35f, 1f) : (active ? new Color(1f, 0.9f, 0.2f, 1f) : new Color(0.02f, 0.02f, 0.04f, 1f));
+            ui.rect(m + z * barW / N + 1, barY + 1, barW / N - 2, 6, c);
+        }
         ui.rect(m + within * barW - 3, barY - 5, 6, 18, Ui.ACCENT);
         // keys carried
         float kx0 = m, ky0 = barY - 44 * zk;

@@ -15,7 +15,7 @@ import java.util.Random;
  */
 public final class CourseGenerator {
     static final float RAMP_SLOPE = 0.576f;
-    enum Kind { HOP, STAIRS, CRUMBLE, MOVER_H, MOVER_V, PAD, ROPE, CABLE, SWING, GRAB, HAZ, TRAP, SPRING, SEESAW, BRIDGE, RAMP, MOVER_Z, ELEV_FALL, SLIDE_FALL }
+    enum Kind { HOP, STAIRS, CRUMBLE, MOVER_H, MOVER_V, PAD, ROPE, CABLE, SWING, GRAB, HAZ, TRAP, SPRING, SEESAW, BRIDGE, RAMP, MOVER_Z, ELEV_FALL, SLIDE_FALL, MORTAR }
 
     private final Tuning T;
     private final Random rnd;
@@ -565,10 +565,12 @@ public final class CourseGenerator {
         for (int a = lo; a < Math.min(rs - 4, hi + 1); a++) {
             Element p = c.get(a);
             if (p.type != Element.Type.STATIC || p.w < 3f) continue;
-            if (dr.nextFloat() > 0.30f + 0.08f * tier(p.y)) continue;
-            pendingHaz = new ArrayList<>();
-            List<Element> es = buildDecoy(p, a, dr);
-            if (tryDecoy(es, pendingHaz, a)) decoys += es.size();
+            if (dr.nextFloat() > 0.44f + 0.08f * tier(p.y)) continue;          // more dead ends than before (was 0.30)
+            for (int again = 0; again < 2; again++) {          // a second, different try when the first does not fit the surrounding geometry
+                pendingHaz = new ArrayList<>();
+                List<Element> es = buildDecoy(p, a, dr);
+                if (tryDecoy(es, pendingHaz, a)) { decoys += es.size(); break; }
+            }
         }
         addKeyRooms();          // last, so every key-room link is proven against the final geometry
     }
@@ -576,8 +578,10 @@ public final class CourseGenerator {
     /** Dead-end spurs (forward and gently down, or backward and up), crumbling lures, unreachable stepping stones, and trapped ledges guarded by hazards. */
     private List<Element> buildDecoy(Element p, int a, Random dr) {
         List<Element> l = new ArrayList<>();
-        int kind = dr.nextInt(10);
+        int kind = dr.nextInt(12);
         float inten = intensity(p.y);
+        boolean longSpur = kind >= 10;           // a longer dead end: four to six steps ending on a wide, plainly safe platform
+        if (longSpur) kind = dr.nextInt(7);
         if (kind >= 8 && inten <= 0f) kind = dr.nextInt(8);
         if (kind >= 8) {
             // bait ledge: a wide, tempting platform forward and slightly down, guarded by a trap in the middle or a saw across the approach
@@ -599,14 +603,13 @@ public final class CourseGenerator {
         if (kind < 7) {
             boolean forward = kind < 4;
             float edge = forward ? p.s + p.w / 2f : p.s - p.w / 2f, y = p.y;
-            int n = 2 + dr.nextInt(2);
+            int n = longSpur ? 4 + dr.nextInt(3) : 2 + dr.nextInt(2);
             for (int k = 0; k < n; k++) {
-                float dy = forward ? -(0.35f + dr.nextFloat() * 0.35f) : 0.3f + dr.nextFloat() * 0.8f;
+                float dy = forward ? -(longSpur ? 0.15f + dr.nextFloat() * 0.25f : 0.35f + dr.nextFloat() * 0.35f) : (longSpur ? 0.2f + dr.nextFloat() * 0.4f : 0.3f + dr.nextFloat() * 0.8f);
                 float gap = reach(Math.max(dy, 0f)) * (0.40f + 0.2f * dr.nextFloat());
-                float w = k == n - 1 ? 1f : 1f + dr.nextInt(2);
+                float w = k == n - 1 ? (longSpur ? 3f : 1f) : 1f + dr.nextInt(2);
                 float s = forward ? edge + gap + w / 2f : edge - gap - w / 2f; y += dy;
-                boolean trap = k == n - 1 && dr.nextInt(10) < 3;
-                Element d = plat(trap ? Element.Type.CRUMBLE : Element.Type.STATIC, s, y, w, p.zone); d.anchor = a;
+                Element d = plat(Element.Type.STATIC, s, y, w, p.zone); d.anchor = a;       // a dead end costs only the walk back: no trap at the end
                 l.add(d); edge = forward ? s + w / 2f : s - w / 2f;
             }
         } else {                                         // lures: scattered blocks that look like stepping stones but lead nowhere
@@ -738,6 +741,7 @@ public final class CourseGenerator {
             case SAW_V: return Element.SAW_R;
             case PENDULUM: return h.len * (float) Math.sin(h.amp) + Element.BALL_R;
             case CANNON: return h.len * 0.5f + Element.SHOT_R;
+            case MORTAR: return Element.MORTAR_R;
             default: return h.w * 0.5f;
         }
     }
@@ -750,6 +754,7 @@ public final class CourseGenerator {
             case SAW_V: return h.y + h.amp + Element.SAW_R;
             case PENDULUM: return h.y + h.len * (1f - (float) Math.cos(h.amp)) + Element.BALL_R;
             case CANNON: return h.y + Element.SHOT_R;
+            case MORTAR: return h.y + h.amp + Element.MORTAR_R;
             case SPIKE_TRAP: return h.y + 0.7f;
             case SPIKE_DROP: return h.y + h.amp + Element.DROP_H;
             case GATE: return h.y + h.len;
@@ -835,6 +840,7 @@ public final class CourseGenerator {
         if (zone >= 1) { w[Kind.MOVER_Z.ordinal()] = 2.5f; w[Kind.ELEV_FALL.ordinal()] = 2f; w[Kind.SLIDE_FALL.ordinal()] = 2f; if (zone == 1) w[Kind.SWING.ordinal()] = 2.5f; }
         float inten = intensity(last.y);
         w[Kind.RAMP.ordinal()] = zone == 0 ? 1.5f : 3f;
+        if (zone >= 1 && inten > 0f) w[Kind.MORTAR.ordinal()] = 1f + 3f * inten;          // a mortar row: any stage after the first world
         if (zone >= 1) { w[Kind.SEESAW.ordinal()] = 4f; w[Kind.BRIDGE.ordinal()] = 4f; }
         else w[Kind.BRIDGE.ordinal()] = 2f;
         if (inten > 0f || (!endless && last.y > T.courseHeight * 0.18f)) { w[Kind.HAZ.ordinal()] = 3f + 9f * inten; if (zone >= 1) w[Kind.SPRING.ordinal()] = 2f + 2f * inten; w[Kind.TRAP.ordinal()] = 2f + 5f * inten; }
@@ -863,6 +869,7 @@ public final class CourseGenerator {
             List<Element> es;
             if (k == Kind.HAZ) es = buildHaz(last, Math.max(dd, 0.35f), zone, attempt, hz);
             else if (k == Kind.TRAP) es = buildMid(last, Math.max(dd, 0.35f), zone, attempt, hz);
+            else if (k == Kind.MORTAR) es = buildMortar(last, Math.max(dd, 0.35f), zone, attempt, hz);
             else es = build(k, last, dd, zone, attempt);
             if (es == null) continue;
             float margin = k == Kind.GRAB ? Math.min(0.05f, T.minLinkMargin) : T.minLinkMargin;
@@ -878,6 +885,34 @@ public final class CourseGenerator {
 
     private Element hz(Element.Type t, float s, float y, float w, int zone) {
         Element h = new Element(t, s, y, w); h.zone = zone; return h;
+    }
+
+    /** Depth of a mortar's muzzle below the path, and how high above the path its ball climbs (about twice the player's height). */
+    static final float MORTAR_DEPTH = 3.0f;
+
+    /**
+     * A row of five or six level islands with a mortar in the ground under every gap, pointing straight up: the ball rises through the gap to about twice the player's height above the path, falls back
+     * into the barrel and fires again. Neighbouring mortars are out of step (a travelling wave), so there is always a moment to cross each gap. Every link is proven by {@link #commit} like any hazard gap.
+     */
+    private List<Element> buildMortar(Element last, float d, int z, int attempt, List<Element> hzOut) {
+        float inten = intensity(last.y);
+        int n = 5 + rnd.nextInt(2);
+        List<Element> es = new ArrayList<>();
+        Element cur = last; int base = c.size();
+        float period = r(3.2f, 4.0f) - 0.4f * inten, stagger = r(0.9f, 1.7f), phase0 = r(0f, 6.28f);
+        for (int k = 0; k < n; k++) {
+            float uR = cur.s + cur.w / 2f;
+            float g = Math.min(3.0f, Math.max(2.2f, reach(0f) * lerp(0.55f, 0.72f, d) * r(0.95f, 1f) * (1f - 0.03f * attempt)));
+            float w = k == n - 1 ? 3.5f : r(2.4f, 3.2f);
+            Element v = plat(Element.Type.STATIC, uR + g + w / 2f, cur.y, w, z);
+            es.add(v);
+            Element m = hz(Element.Type.MORTAR, uR + g / 2f, cur.y - MORTAR_DEPTH, 0f, z);
+            m.amp = MORTAR_DEPTH + 2f * T.height; m.period = period; m.phase = phase0 + k * stagger;
+            m.anchor = k == 0 ? base - 1 : base + k - 1;
+            hzOut.add(m);
+            cur = v;
+        }
+        return es;
     }
 
     /** One or two hazard-guarded gaps: a saw blade, a spiked pendulum-free blade, a cannon lane, or a spiked block you must clear. */

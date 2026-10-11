@@ -72,7 +72,8 @@ public final class PlayScreen extends ScreenAdapter {
     @Override public void show() {
         if (world != null) { // returning from the settings screen: keep the run exactly as it was
             applySettings();
-            Gdx.input.setInputProcessor(new InputMultiplexer(g.ui, new Touch()));
+            Gdx.input.setInputProcessor(processors());
+            if (gi() != null) gi().clear();
             g.audio.playlist(Audio.GAME_TRACKS);
             return;
         }
@@ -93,9 +94,20 @@ public final class PlayScreen extends ScreenAdapter {
                     tower.extend();
                 }
             }
-            sim = Sim.startOn(course, g.tuning, run.startIdx);
-            sim.checkpoint = run.startIdx; sim.keysFree = false; sim.keys = 0;
-            if (run.resumed) { sim.deferRespawn = true; sim.setRange(0, course.size() - 1); ResumeState.restore(g.save, sim, tower); }
+            boolean fromSnapshot = false;
+            if (run.resumed && run.snapshot != null) {            // CONTINUE after SAVE & EXIT: the climb exactly as it was left
+                Sim ss = new Sim(course, g.tuning);
+                ss.keysFree = false; ss.deferRespawn = true; ss.floorOverride = tower.floorLocal(); ss.setRange(0, course.size() - 1);
+                tower.openedUpTo = g.save.openedUpTo;
+                ResumeState.restore(g.save, ss, tower);
+                if (run.snapshot.apply(ss, tower)) { sim = ss; fromSnapshot = true; }
+                else { g.store.deleteRun(); run = g.openRun(false); tower = run.tower; course = tower.world; }       // does not fit the world on disk: resume from the checkpoint
+            }
+            if (!fromSnapshot) {
+                sim = Sim.startOn(course, g.tuning, run.startIdx);
+                sim.checkpoint = run.startIdx; sim.keysFree = false; sim.keys = 0;
+                if (run.resumed) { sim.deferRespawn = true; sim.setRange(0, course.size() - 1); ResumeState.restore(g.save, sim, tower); }
+            }
             if (hStart > 0) { int i = 0; while (i < course.size() - 1 && course.get(i + 1).y < hStart) i++; while (i > 0 && course.get(i).anchor >= 0) i--; sim = Sim.startOn(course, g.tuning, i); sim.checkpoint = i; sim.keysFree = false; sim.keys = 0; }
             if (tower != null) { tower.openedUpTo = g.save.openedUpTo; sim.deferRespawn = true; sim.floorOverride = tower.floorLocal(); }
             sim.setRange(0, course.size() - 1); simSize = course.size(); if (tower != null) seenRebuilds = tower.rebuilds;
@@ -105,8 +117,7 @@ public final class PlayScreen extends ScreenAdapter {
         applySettings();
         world.snapCamera(sim);
         if (demo) driver[0] = new Autopilot.Driver(sim);
-        InputMultiplexer mux = new InputMultiplexer(g.ui, new Touch());
-        Gdx.input.setInputProcessor(mux);
+        Gdx.input.setInputProcessor(processors());
         Gdx.input.setCatchKey(Input.Keys.BACK, true);
         g.audio.playlist(Audio.GAME_TRACKS);
         runTime = 0; maxAbs = absNow(); milestone = (int) (maxAbs / 50f);
@@ -135,6 +146,10 @@ public final class PlayScreen extends ScreenAdapter {
     @Override public void resize(int w, int h) { g.ui.resize(w, h); world.resize(w, h); }
 
     // ------------------------------------------------------------------ input
+
+    /** Touch + legacy keys on mobile; on desktop only the UI (keyboard, mouse and controller reach the sim through {@link GameInput}; a mouse click never steers the hero). */
+    private InputMultiplexer processors() { return g.platform.desktop() ? new InputMultiplexer(g.ui) : new InputMultiplexer(g.ui, new Touch()); }
+    private com.hotatticgames.climbup.platform.GameInput gi() { return g.platform.gameInput(); }
 
     private final class Touch extends InputAdapter {
         private boolean stickSide(float x) { return g.settings.leftHanded ? x > g.ui.w() * 0.5f : x < g.ui.w() * 0.5f; }
@@ -179,6 +194,8 @@ public final class PlayScreen extends ScreenAdapter {
 
     private void readInput() {
         in.moveX = in.moveY = 0;
+        if (gi() != null) gi().read(in);
+        else {
         if (stickPtr >= 0) {
             float dx = stickKnob.x - stickBase.x, dy = stickKnob.y - stickBase.y;
             float len = (float) Math.hypot(dx, dy);
@@ -195,6 +212,7 @@ public final class PlayScreen extends ScreenAdapter {
         in.jumpHeld = jumpHeldTouch || kJumpHeld;
         in.jumpPressed = jumpLatch || kJump;
         in.swingPressed = swingLatch || kSwing;
+        }
         if (Boolean.getBoolean("climb.ropeScript")) {
             scriptT += Sim.DT;
             in.moveY = sim.mode == Sim.Mode.ROPE || sim.mounting() ? 1f : 0f; in.moveX = 0f;
@@ -209,6 +227,10 @@ public final class PlayScreen extends ScreenAdapter {
         dt = Math.min(dt, 0.1f);
         time += dt;
         if (OVERLAY != null && time > 0.8f && state == State.PLAYING) { if (OVERLAY.equals("pause")) pauseGame(); }
+        if (gi() != null) {                                              // desktop: pause / resume from the keyboard or controller (the pause button and menus work through the mouse and the focus ring)
+            boolean p = gi().pausePressed(), b = gi().backPressed();
+            if (state == State.PLAYING && p) pauseGame(); else if (state == State.PAUSED && (p || b)) resumePlay();
+        }
         boolean play = state == State.PLAYING;
         if (play) {
             float speed = g.settings.assistSlow ? g.tuning.assistSlowFactor : 1f;
@@ -229,6 +251,7 @@ public final class PlayScreen extends ScreenAdapter {
                 if (demo) { driver[0].drive(sim, in); } else readInput();
                 sim.step(in);
                 in.jumpPressed = false; jumpLatch = false; kJump = false; in.swingPressed = false; swingLatch = false; kSwing = false;
+                if (gi() != null) gi().stepDone();
                 runTime += Sim.DT;
                 if (runTime > 15f && g.ota != null) g.ota.confirm();          // live play with the current (possibly OTA) content: a freshly applied update is now trusted
                 if (!demo) { if (!clockLive && (in.moveX != 0f || in.jumpPressed || in.moveY != 0f)) clockLive = true; RunRecord.tick(g.save, Sim.DT, clockLive); if (absNow() > maxAbs) maxAbs = absNow(); if (maxAbs > g.save.climbHeight) g.save.climbHeight = (float) maxAbs; ResumeState.capture(g.save, sim); }
@@ -243,7 +266,7 @@ public final class PlayScreen extends ScreenAdapter {
             int ms = (int) (maxAbs / 50f);
             if (ms > milestone) { milestone = ms; toast = ms * 50 + " M!"; toastT = 1.6f; g.audio.play("checkpoint", 0.55f, 1.35f); world.particles.burst(sim.s, sim.y + 1f, 12, gold, 2.6f, 3.2f, 0.1f, -0.5f, 1f); }
             for (int pi = pops.size() - 1; pi >= 0; pi--) { Pop pp = pops.get(pi); pp.age += dt; if (pp.age > 1.1f) pops.remove(pi); }
-            autosaveT += dt; if (autosaveT > 8f) { autosaveT = 0; g.persist(); }
+            autosaveT += dt; if (autosaveT > 8f) { autosaveT = 0; g.persist(); saveRun(); }
             ambientSounds(dt);
             juice(dt);
             updateTips(dt);
@@ -269,11 +292,12 @@ public final class PlayScreen extends ScreenAdapter {
             if (d > 14f) continue;
             float vol = Math.max(0f, 1f - d / 14f);
             switch (h.type) {
-                case CANNON: case SPIKE_TRAP: {
-                    int cyc = (int) Math.floor(h.type == Element.Type.CANNON ? sim.time / h.period + h.phase / 6.2832f : (sim.time / h.period + h.phase / 6.2832f - 0.55f));
+                case CANNON: case SPIKE_TRAP: case MORTAR: {
+                    int cyc = (int) Math.floor(h.type == Element.Type.CANNON || h.type == Element.Type.MORTAR ? sim.time / h.period + h.phase / 6.2832f : (sim.time / h.period + h.phase / 6.2832f - 0.55f));
                     Integer prev = cycleSeen.put(h, cyc);
                     if (prev != null && prev != cyc) {
-                        if (h.type == Element.Type.CANNON) { g.audio.play("cannon", 0.9f * vol + 0.1f, 1f); world.particles.burst(h.s + h.dir * 0.8f, h.y, 6, dust, 1.5f, 0.6f, 0.12f, 0f, 0.4f); world.shake(0.15f * vol); say("[BOOM]"); }
+                        if (h.type == Element.Type.MORTAR) { g.audio.play("cannon", 0.7f * vol + 0.05f, 1.25f); world.particles.burst(h.s, h.y + 0.5f, 6, dust, 1.2f, 1.6f, 0.12f, 0f, 0.4f); }
+                        else if (h.type == Element.Type.CANNON) { g.audio.play("cannon", 0.9f * vol + 0.1f, 1f); world.particles.burst(h.s + h.dir * 0.8f, h.y, 6, dust, 1.5f, 0.6f, 0.12f, 0f, 0.4f); world.shake(0.15f * vol); say("[BOOM]"); }
                         else g.audio.play("spikes", 0.7f * vol + 0.05f, 1f);
                     }
                     break;
@@ -376,6 +400,7 @@ public final class PlayScreen extends ScreenAdapter {
             if (le.type == Element.Type.RAMP && le.skin == 2) { g.audio.play("bonk", 0.5f, 1.2f); }
             if (le.isPlatform() && edge > 0.06f && sim.landSpeed > 5f) { pop(CLOSE[MathUtils.random(CLOSE.length - 1)], gold); freeze(0.07f); world.shake(0.5f); vibrate(25, 1); }
         }
+        if ((ev & Sim.EV_AIM) != 0) g.audio.play("cannon", 0.55f, 0.85f);
         if ((ev & Sim.EV_JUMP) != 0) world.kick(0.8f);
         if ((ev & Sim.EV_BOUNCE) != 0) { world.kick(4f); pop("BOING!", cyan); }
         if ((ev & Sim.EV_PULL) != 0) { g.audio.play("effort", 0.9f, com.hotatticgames.climbup.render.Characters.voice(g.settings.character)); pop("HUP!", gold); vibrate(20, 2); }
@@ -403,7 +428,7 @@ public final class PlayScreen extends ScreenAdapter {
         }
         if ((ev & Sim.EV_CLUB) != 0) {
             g.audio.play("key", 0.9f, 0.8f); world.particles.burst(s, y + 1f, 14, gold, 3f, 3.2f, 0.12f, -1f, 0.9f); vibrate(25, 1);
-            toast = "SPIKED CLUB! TAP SWING TO KNOCK CRABS AND BEES OFF"; toastT = 3f; say("[CLUB]");
+            toast = g.platform.tip("SPIKED CLUB! TAP SWING TO KNOCK CRABS AND BEES OFF"); toastT = 3f; say("[CLUB]");
         }
         if ((ev & Sim.EV_SWING) != 0) { g.audio.play("swing", 0.8f, 0.95f + MathUtils.random(0.1f)); vibrate(10, 2); }
         if ((ev & Sim.EV_SHOVE) != 0) { g.audio.play("bonk", 0.9f, 0.9f + MathUtils.random(0.2f)); world.shake(0.4f); freeze(0.05f); vibrate(25, 1); pop("OOF!", Color.WHITE); say("[BONK]"); }
@@ -437,7 +462,7 @@ public final class PlayScreen extends ScreenAdapter {
         if ((ev & Sim.EV_HIT) != 0) {
             world.particles.burst(sim.hitS, sim.hitY + 0.7f, 22, red, 4f, 4f, 0.13f, 8f, 0.7f);
             g.audio.play("hit", 1f, com.hotatticgames.climbup.render.Characters.voice(g.settings.character)); world.shake(0.9f); freeze(0.09f); vibrate(60, 1); say("[OUCH]");
-            toast = "OUCH! BACK TO CHECKPOINT"; toastT = 1.8f;
+            toast = "OUCH! BE CAREFUL!"; toastT = 1.8f;
         }
     }
 
@@ -504,7 +529,7 @@ public final class PlayScreen extends ScreenAdapter {
     private boolean tipFor(String key) {
         if (g.save.shownTips.contains(key)) return false;
         g.save.shownTips.add(key);
-        for (String[] t : TIPS) if (t[0].equals(key)) { tip = t[1]; tipT = 5f; }
+        for (String[] t : TIPS) if (t[0].equals(key)) { tip = g.platform.tip(t[1]); tipT = 5f; }
         return true;
     }
 
@@ -530,9 +555,16 @@ public final class PlayScreen extends ScreenAdapter {
         if (g.save.finished) ui.text("FINISH " + fmtTime(g.save.finishTime), m, H - m - 104 * zk, 3f * zk, new Color(0.45f, 1f, 0.55f, 1f));
         else ui.text("TOTAL " + fmtTime(g.save.runClock), m, H - m - 104 * zk, 3f * zk, Ui.TEXT);
         float barW = 360 * zk, barY = H - m - 126 * zk;
-        float within = (float) (((hAbs / g.tuning.zoneHeight) % Z + Z) % Z / Z);
+        // ten towers (castle to castle): finished towers green, the one being climbed yellow, the rest black; the orange tick is where you are right now
+        int N = Math.max(1, (int) g.tuning.finishCastle); double span = g.tuning.castleSpacing;
+        int cur = Math.min(N - 1, (int) (Math.max(0.0, maxAbs) / span));
+        float within = (float) Math.max(0.0, Math.min(1.0, hAbs / (span * N)));
         ui.rect(m, barY, barW, 8, new Color(0.2f, 0.22f, 0.32f, 1f));
-        for (int z = 0; z < Z; z++) { Color c = Palette.SKY_BOT[z]; ui.rect(m + z * barW / Z + 1, barY + 1, barW / Z - 2, 6, new Color(c.r, c.g, c.b, 0.9f)); }
+        for (int z = 0; z < N; z++) {
+            boolean done = g.save.finished || z < cur, active = !g.save.finished && z == cur;
+            Color c = done ? new Color(0.25f, 0.85f, 0.35f, 1f) : (active ? new Color(1f, 0.9f, 0.2f, 1f) : new Color(0.02f, 0.02f, 0.04f, 1f));
+            ui.rect(m + z * barW / N + 1, barY + 1, barW / N - 2, 6, c);
+        }
         ui.rect(m + within * barW - 3, barY - 5, 6, 18, Ui.ACCENT);
         // keys carried
         float kx0 = m, ky0 = barY - 44 * zk;
@@ -553,8 +585,10 @@ public final class PlayScreen extends ScreenAdapter {
         }
         // pause button
         float pb = 96f; float px = g.settings.leftHanded ? m : W - m - pb, py = H - m - pb;
+        if (!g.platform.drawPauseButton(ui, px, py, pb)) {
         ui.rect(px - 3, py - 3, pb + 6, pb + 6, Ui.EDGE); ui.rect(px, py, pb, pb, Ui.PANEL);
         ui.rect(px + 28, py + 24, 14, 48, Ui.TEXT); ui.rect(px + 54, py + 24, 14, 48, Ui.TEXT);
+        }
         if (state == State.PLAYING && ui.tappedIn(px - 10, py - 10, pb + 20, pb + 20)) pauseGame();
         // zone banner
         int zoneKey = zone + 4 * lap;
@@ -576,7 +610,7 @@ public final class PlayScreen extends ScreenAdapter {
         }
         drawHeroBubble();
         drawPops();
-        if (state == State.PLAYING) drawControls();
+        if (state == State.PLAYING) { if (g.platform.touchControls()) drawControls(); else g.platform.drawPlayHints(ui, sim.clubTime > 0f, W, H); }
         if (fade > 0) ui.rect(0, 0, W, H, new Color(0, 0, 0, fade));
         if (state == State.PAUSED) pauseMenu();
         if (state == State.FINISHED) finishMenu();
@@ -690,21 +724,23 @@ public final class PlayScreen extends ScreenAdapter {
         }
         float bw = 440, bh = 84, bx = W / 2 - bw / 2;
         if (ui.button("RESUME", bx, y + ph - 200, bw, bh, true)) resumePlay();
-        if (ui.button(confirmRestart ? "TAP AGAIN TO CONFIRM" : "RETRY CHECKPOINT", bx, y + ph - 304, bw, bh)) {
+        if (ui.button(confirmRestart ? g.platform.tip("TAP AGAIN TO CONFIRM") : "RETRY CHECKPOINT", bx, y + ph - 304, bw, bh)) {
             if (confirmRestart) { sim.respawn(); sim.consumeEvents(); world.snapCamera(sim); confirmRestart = false; resumePlay(); } else confirmRestart = true;
         }
         if (ui.button("SETTINGS", bx, y + ph - 408, bw, bh)) { g.audio.play("click"); g.persist(); next = new SettingsScreen(g, this); disposeOnLeave = false; }
-        if (ui.button("MAIN MENU", bx, y + ph - 512, bw, bh)) { g.audio.play("click"); g.persist(); next = new TitleScreen(g); disposeOnLeave = true; }
+        if (ui.button(tower != null ? "SAVE & EXIT" : "MAIN MENU", bx, y + ph - 512, bw, bh)) { g.audio.play("click"); saveRun(); g.persist(); next = new TitleScreen(g); disposeOnLeave = true; }
     }
 
     // ------------------------------------------------------------------ lifecycle
 
-    private void pauseGame() { if (state == State.PLAYING) { g.audio.fallStop(); state = State.PAUSED; confirmRestart = false; stickPtr = jumpPtr = -1; jumpHeldTouch = false; g.audio.play("click"); g.persist(); } }
-    private void resumePlay() { state = State.PLAYING; acc = 0; g.audio.play("click"); }
+    private void pauseGame() { if (state == State.PLAYING) { if (gi() != null) gi().clear(); g.audio.fallStop(); state = State.PAUSED; confirmRestart = false; stickPtr = jumpPtr = -1; jumpHeldTouch = false; g.audio.play("click"); g.persist(); saveRun(); } }
+    /** Writes the exact moment of the climb (not in the scripted demo, and not once the finish screen is up: that run is over). */
+    private void saveRun() { if (tower != null && !demo && state != State.FINISHED) g.saveRun(tower, sim); }
+    private void resumePlay() { if (gi() != null) gi().clear(); state = State.PLAYING; acc = 0; g.audio.play("click"); }
     public void resumeFromSettings() { applySettings(); }
 
     @Override public void hide() { g.audio.fallStop(); g.persist(); }
-    @Override public void pause() { /* app backgrounded */ g.audio.fallStop(); if (state == State.PLAYING) { state = State.PAUSED; confirmRestart = false; stickPtr = jumpPtr = -1; jumpHeldTouch = false; } g.persist(); g.audio.pauseMusic(); }
+    @Override public void pause() { /* app backgrounded */ g.audio.fallStop(); if (state == State.PLAYING) { state = State.PAUSED; confirmRestart = false; stickPtr = jumpPtr = -1; jumpHeldTouch = false; } g.persist(); saveRun(); g.audio.pauseMusic(); }
     @Override public void resume() { g.audio.resumeMusic(); }
 
     @Override public void dispose() { g.audio.fallStop(); if (world != null) { world.dispose(); world = null; } shapes.dispose(); }

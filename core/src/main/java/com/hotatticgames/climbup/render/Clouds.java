@@ -21,6 +21,7 @@ import java.util.Iterator;
  */
 final class Clouds {
     private static final float CELL_S = 15f, CELL_Y = 10f, SPAN = 34f;
+    private static final float WIDE = 1.6f;          // clouds are wider than tall, so they read as clouds and not as blobs
     private static final String[] MODELS = {"cloud_1", "cloud_2", "cloud_3"};
 
     private static final class Cloud { float s, y, dz, scale, yaw; int model; ModelInstance inst; }
@@ -70,7 +71,7 @@ final class Clouds {
         c.s = (float) ((cx + 0.1 + 0.8 * rnd(h, 1)) * CELL_S - originS); c.y = (float) ((cy + 0.1 + 0.8 * rnd(h, 2)) * CELL_Y - originY);
         c.model = (int) (rnd(h, 3) * 2.999f); c.yaw = rnd(h, 4) * 40f - 20f;
         boolean back = rnd(h, 5) < 0.45f;
-        if (back) { c.dz = 5f + 9f * rnd(h, 6); c.scale = 0.9f + 1.1f * rnd(h, 7); }
+        if (back) return;               // the distant clouds are drawn in the far layer now (SpaceScene): on the cylinder they bunched up in the middle of the screen
         else { c.dz = 0f; c.scale = 0.38f + 0.62f * rnd(h, 7); if (!clear(c, lo, hi)) return; }
         live.put(k, c);
     }
@@ -105,7 +106,7 @@ final class Clouds {
             java.util.Map.Entry<Long, Cloud> en = it.next(); Cloud c = en.getValue();
             if (Math.abs(course.dsWrap(c.s, camS)) > SPAN + 12f || Math.abs(c.y - camY) > 30f) { it.remove(); checked.remove(en.getKey()); continue; }
             if (c.dz != 0f) continue;
-            float rx = 1.55f * c.scale, ry = 1.0f * c.scale;
+            float rx = 1.55f * c.scale * WIDE, ry = 1.0f * c.scale;
             float dx = course.dsWrap(playerS, c.s), dy = (playerY + 0.7f) - (c.y + 0.8f * c.scale);
             if (dx * dx / (rx * rx + 0.3f) + dy * dy / (ry * ry + 1.0f) < 1f) { burst(c, playerS, reduced); broken.add(en.getKey()); it.remove(); }
         }
@@ -139,7 +140,7 @@ final class Clouds {
         for (Cloud c : live.values()) {
             if (Math.abs(course.dsWrap(c.s, camS)) > SPAN || Math.abs(c.y - camY) > 22f) continue;
             if (c.inst == null) c.inst = instance(c.model, c.dz > 0f ? 0.78f : 0.96f);
-            placer.place(c.inst, c.s, c.y, c.dz, c.scale, c.scale, c.scale, c.yaw);
+            placer.place(c.inst, c.s, c.y, c.dz, c.scale * WIDE, c.scale * 0.88f, c.scale, c.yaw);
             batch.render(c.inst, env);
         }
         for (Puff p : puffs) {

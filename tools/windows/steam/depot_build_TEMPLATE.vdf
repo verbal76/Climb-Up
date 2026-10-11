@@ -1,0 +1,11 @@
+"DepotBuild"
+{
+	// TEMPLATE ONLY (see app_build_TEMPLATE.vdf).
+	"DepotID" "REPLACE_WITH_DEPOT_ID"
+	"FileMapping"
+	{
+		"LocalPath" "*"
+		"DepotPath" "."
+		"Recursive" "1"
+	}
+}

@@ -18,7 +18,11 @@ public final class Element {
         /** Sloped walkway (amp = height gained per metre toward +s, w = horizontal length, y = height at its middle). skin: 0 plain, 1 crumbles, 2 shakes and bounces you, 3 sinks away when stepped on. */
         RAMP,
         /** Platform that slides toward and away from the camera (amp = depth travel). You can only land on it while it is in your plane (|depth| <= Z_REACH); once you stand on it, it carries you. */
-        MOVE_Z }
+        MOVE_Z,
+        /** Mortar: a cannon in the ground BELOW the path that points straight up. Its ball rises from the muzzle (y) by amp, falls back into the barrel, waits to reload, and fires again every period. The ball is a lethal disc (a hit only knocks you away). */
+        MORTAR,
+        /** Aimed cannon (late game): a turret at (s, y) that tracks the player, locks and flashes a warning, then fires a ball along exactly the locked barrel direction. The aim lives in the Sim (per-hazard state); the lethal ball is evaluated there. */
+        AIMED }
 
     public Type type;
     public int zone;
@@ -31,10 +35,14 @@ public final class Element {
     public static final int KEY_COUNT = 4;   // red, blue, green, gold
     public int anchor = -1;       // decoys only: route element this dead end / lure hangs off (-1 = part of the route)
 
+    /** A wet platform (rain cloud over it): a plain STATIC platform whose {@code color} holds this mark (color is otherwise only used by keys and gates, and is stored by the slice codec already). */
+    public static final int WET = 7;
+    public boolean wet() { return type == Type.STATIC && color == WET; }
+
     public Element(Type type, float s, float y, float w) { this.type = type; this.s = s; this.y = y; this.w = w; }
 
     public boolean isHazard() {
-        switch (type) { case SAW_H: case SAW_V: case PENDULUM: case CANNON: case SPIKE_TRAP: case SPIKE_BLOCK: case SPIKE_DROP: return true; default: return false; }
+        switch (type) { case SAW_H: case SAW_V: case PENDULUM: case CANNON: case SPIKE_TRAP: case SPIKE_BLOCK: case SPIKE_DROP: case MORTAR: case AIMED: return true; default: return false; }
     }
     /** Platforms that fall apart soon after being stood on. */
     public boolean crumbles() { return type == Type.CRUMBLE || (type == Type.RAMP && skin == 1) || (skin == 1 && (type == Type.MOVE_H || type == Type.MOVE_V || type == Type.SWING)); }
@@ -43,7 +51,7 @@ public final class Element {
     public boolean isPlatform() { return type != Type.ROPE && type != Type.CABLE && !isHazard(); }
     /** True for anything that changes with time (planner sweeps its phase). */
     public boolean isMoving() {
-        switch (type) { case MOVE_H: case MOVE_V: case MOVE_Z: case SWING: case SAW_H: case SAW_V: case PENDULUM: case CANNON: case SPIKE_TRAP: case SPIKE_DROP: case CRAB: case BEE: return true; default: return false; }
+        switch (type) { case MOVE_H: case MOVE_V: case MOVE_Z: case SWING: case SAW_H: case SAW_V: case PENDULUM: case CANNON: case SPIKE_TRAP: case SPIKE_DROP: case CRAB: case BEE: case MORTAR: case AIMED: return true; default: return false; }
     }
 
     public static final float CANNON_FLIGHT = 0.7f;      // fraction of the cycle a ball is in the air
@@ -52,9 +60,28 @@ public final class Element {
     /** Position in the repeating cycle, 0..1. */
     public float cyc(float t) { float c = t / period + phase / (2f * (float) Math.PI); return c - (float) Math.floor(c); }
 
+    /**
+     * Where the ball of the launch {@code back} cycles ago is at time t, if it simply kept flying at the speed it was fired with. For back = 0 during the flight this is exactly {@link #sAt}
+     * (the lethal ball); beyond the flight, and for earlier launches, it is the continued straight path, which the renderer draws until the ball is off screen. Never used for hits.
+     */
+    public float cannonBallS(float t, int back) { return s + dir * len / (CANNON_FLIGHT * period) * (cyc(t) + back) * period; }
+
+    public static final float MORTAR_FLIGHT = 0.82f, MORTAR_R = 0.4f;
+    /** Aimed cannon timing, as fractions of its period: tracks the player until LOCK, holds (warning) until FIRE, fires; the ball flies AIM_LIFE seconds at AIM_SPEED; it only wakes when the player is within AIM_RANGE. */
+    public static final float AIM_LOCK = 0.55f, AIM_FIRE = 0.70f, AIM_SPEED = 9f, AIM_LIFE = 1.6f, AIM_R = 0.35f, AIM_RANGE = 15f, AIM_TURN = 2.4f;
+    /** Mortar ball height at time t: a parabola from the muzzle (y) to y + amp and back during the first MORTAR_FLIGHT of the cycle, then it sits in the barrel while the mortar reloads. */
+    public float mortarBallY(float t) {
+        float c = cyc(t);
+        if (c >= MORTAR_FLIGHT) return y;
+        float u = c / MORTAR_FLIGHT;
+        return y + amp * 4f * u * (1f - u);
+    }
+    /** 0..1 over the reload pause (the warning glow), 0 while the ball is in flight. */
+    public float mortarCharge(float t) { float c = cyc(t); return c < MORTAR_FLIGHT ? 0f : (c - MORTAR_FLIGHT) / (1f - MORTAR_FLIGHT); }
+
     /** Radius of the lethal disc for round hazards (0 = not a disc). */
     public float discR() {
-        switch (type) { case SAW_H: case SAW_V: return SAW_R; case PENDULUM: return BALL_R; case CANNON: return SHOT_R; default: return 0f; }
+        switch (type) { case SAW_H: case SAW_V: return SAW_R; case PENDULUM: return BALL_R; case CANNON: return SHOT_R; case MORTAR: return MORTAR_R; default: return 0f; }
     }
 
     /** Spike trap: 0 retracted, small = warning tips, 0.6 = fully extended. */
@@ -76,6 +103,10 @@ public final class Element {
         return lo + (hi - lo) * (c - 0.80f) / 0.20f;
     }
     public static final float DROP_H = 1.0f;
+    /** The slab is a 0.5 m stone block whose underside carries the spikes: only the lower SPIKE_H of the DROP_H box hurts; the top is a safe surface (see Sim.landOnSlab). */
+    public static final float DROP_SPIKE_H = 0.5f;
+    /** Height of the slab's top face at time t. */
+    public float dropTop(float t) { return dropBottom(t) + DROP_H; }
 
     // ---- bee: a visit takes BEE_VISIT of the cycle; it enters high from one side, buzzes around (s, y) with amplitude amp (arc) and len (height), dives, and leaves high on the other side
     public static final float BEE_VISIT = 0.58f, BEE_R = 0.5f;
@@ -100,6 +131,7 @@ public final class Element {
         switch (type) {
             case SPIKE_TRAP: { float c = cyc(t); return c >= 0.55f + 0.02f && c < 0.55f + amp; }
             case CANNON: return cyc(t) < CANNON_FLIGHT;
+            case MORTAR: return mortarBallY(t) > y + 0.35f;          // inside the barrel (or just leaving it) the ball hurts nobody
             case SPIKE_BLOCK: case SPIKE_DROP: case SAW_H: case SAW_V: case PENDULUM: return true;
             default: return false;
         }
@@ -129,6 +161,7 @@ public final class Element {
         switch (type) {
             case MOVE_V: case SAW_V: return y + amp * 0.5f * (1f - (float) Math.cos(ang(t)));
             case SWING: case PENDULUM: return y + len - len * (float) Math.cos(amp * Math.sin(ang(t)));
+            case MORTAR: return mortarBallY(t);
             default: return y;
         }
     }

@@ -15,7 +15,7 @@ import java.util.Random;
  */
 public final class CourseGenerator {
     static final float RAMP_SLOPE = 0.576f;
-    enum Kind { HOP, STAIRS, CRUMBLE, MOVER_H, MOVER_V, PAD, ROPE, CABLE, SWING, GRAB, HAZ, TRAP, SPRING, SEESAW, BRIDGE, RAMP, MOVER_Z, ELEV_FALL, SLIDE_FALL }
+    enum Kind { HOP, STAIRS, CRUMBLE, MOVER_H, MOVER_V, PAD, ROPE, CABLE, SWING, GRAB, HAZ, TRAP, SPRING, SEESAW, BRIDGE, RAMP, MOVER_Z, ELEV_FALL, SLIDE_FALL, MORTAR, WET }
 
     private final Tuning T;
     private final Random rnd;
@@ -247,6 +247,7 @@ public final class CourseGenerator {
                 addRest(th); sinceRest = 0; lastRestY = c.get(c.size() - 1).y; nextGap = T.gemSpacing * r(0.85f, 1.15f); maybeCastle(th); continue;
             }
             Kind k = pick(zone, last);
+            if (th == 1 && last.type == Element.Type.STATIC && rnd.nextFloat() < 0.2f) k = Kind.WET;          // the Frost world: some platforms are under a rain cloud (slippery)
             if (!tryModuleBelow(k, d, th)) {
                 rejected++;
                 boolean ok = false;
@@ -262,7 +263,7 @@ public final class CourseGenerator {
 
     private final List<int[]> pendingCastles = new ArrayList<>();   // {rest platform index, gate index in c.hazards}
     private int castlesThisCourse;
-    public int castleDue, castleBuilt, roomFailed, roomOk, roomFallback; public int[] roomWhy = new int[5], roomWhyD = new int[5];
+    public int castleDue, castleBuilt, roomFailed, roomOk, roomFallback; public int[] roomWhy = new int[5], roomWhyD = new int[8];
 
     private int sliceNo() { return (int) ((salt - 1) % 1000003L); }
 
@@ -353,7 +354,7 @@ public final class CourseGenerator {
         int best = -1; float dev = 1e9f;
         for (int i = Math.max(1, ctx); i < c.size(); i++) {          // this slice's own platforms: the context platforms belong to the previous slice, a gem marked on one would be lost
             Element e = c.get(i);
-            if (e.type != Element.Type.STATIC || e.skin != 0 || e.w < 3.5f || e.anchor >= 0 || Autopilot.hasMidHazard(c, i)) continue;
+            if (e.type != Element.Type.STATIC || e.skin != 0 || e.wet() || e.w < 3.5f || e.anchor >= 0 || Autopilot.hasMidHazard(c, i)) continue;
             float d = Math.abs(e.y - castleTarget);
             if (d < dev) { dev = d; best = i; }
         }
@@ -366,7 +367,7 @@ public final class CourseGenerator {
         List<Integer> cand = new ArrayList<>();
         for (int a = Math.max(1, ctx - 1); a < rs - 4; a++) {
             Element e = c.get(a);
-            if (e.type != Element.Type.STATIC || e.skin != 0 || e.w < 2.5f || e.anchor >= 0 || Autopilot.hasMidHazard(c, a)) continue;
+            if (e.type != Element.Type.STATIC || e.skin != 0 || e.wet() || e.w < 2.5f || e.anchor >= 0 || Autopilot.hasMidHazard(c, a)) continue;
             cand.add(a);
         }
         if (cand.isEmpty()) throw new IllegalStateException("no platform for the key");
@@ -565,10 +566,12 @@ public final class CourseGenerator {
         for (int a = lo; a < Math.min(rs - 4, hi + 1); a++) {
             Element p = c.get(a);
             if (p.type != Element.Type.STATIC || p.w < 3f) continue;
-            if (dr.nextFloat() > 0.30f + 0.08f * tier(p.y)) continue;
-            pendingHaz = new ArrayList<>();
-            List<Element> es = buildDecoy(p, a, dr);
-            if (tryDecoy(es, pendingHaz, a)) decoys += es.size();
+            if (dr.nextFloat() > 0.44f + 0.08f * tier(p.y)) continue;          // more dead ends than before (was 0.30)
+            for (int again = 0; again < 2; again++) {          // a second, different try when the first does not fit the surrounding geometry
+                pendingHaz = new ArrayList<>();
+                List<Element> es = buildDecoy(p, a, dr);
+                if (tryDecoy(es, pendingHaz, a)) { decoys += es.size(); break; }
+            }
         }
         addKeyRooms();          // last, so every key-room link is proven against the final geometry
     }
@@ -576,8 +579,10 @@ public final class CourseGenerator {
     /** Dead-end spurs (forward and gently down, or backward and up), crumbling lures, unreachable stepping stones, and trapped ledges guarded by hazards. */
     private List<Element> buildDecoy(Element p, int a, Random dr) {
         List<Element> l = new ArrayList<>();
-        int kind = dr.nextInt(10);
+        int kind = dr.nextInt(12);
         float inten = intensity(p.y);
+        boolean longSpur = kind >= 10;           // a longer dead end: four to six steps ending on a wide, plainly safe platform
+        if (longSpur) kind = dr.nextInt(7);
         if (kind >= 8 && inten <= 0f) kind = dr.nextInt(8);
         if (kind >= 8) {
             // bait ledge: a wide, tempting platform forward and slightly down, guarded by a trap in the middle or a saw across the approach
@@ -599,14 +604,13 @@ public final class CourseGenerator {
         if (kind < 7) {
             boolean forward = kind < 4;
             float edge = forward ? p.s + p.w / 2f : p.s - p.w / 2f, y = p.y;
-            int n = 2 + dr.nextInt(2);
+            int n = longSpur ? 4 + dr.nextInt(3) : 2 + dr.nextInt(2);
             for (int k = 0; k < n; k++) {
-                float dy = forward ? -(0.35f + dr.nextFloat() * 0.35f) : 0.3f + dr.nextFloat() * 0.8f;
+                float dy = forward ? -(longSpur ? 0.15f + dr.nextFloat() * 0.25f : 0.35f + dr.nextFloat() * 0.35f) : (longSpur ? 0.2f + dr.nextFloat() * 0.4f : 0.3f + dr.nextFloat() * 0.8f);
                 float gap = reach(Math.max(dy, 0f)) * (0.40f + 0.2f * dr.nextFloat());
-                float w = k == n - 1 ? 1f : 1f + dr.nextInt(2);
+                float w = k == n - 1 ? (longSpur ? 3f : 1f) : 1f + dr.nextInt(2);
                 float s = forward ? edge + gap + w / 2f : edge - gap - w / 2f; y += dy;
-                boolean trap = k == n - 1 && dr.nextInt(10) < 3;
-                Element d = plat(trap ? Element.Type.CRUMBLE : Element.Type.STATIC, s, y, w, p.zone); d.anchor = a;
+                Element d = plat(Element.Type.STATIC, s, y, w, p.zone); d.anchor = a;       // a dead end costs only the walk back: no trap at the end
                 l.add(d); edge = forward ? s + w / 2f : s - w / 2f;
             }
         } else {                                         // lures: scattered blocks that look like stepping stones but lead nowhere
@@ -649,10 +653,20 @@ public final class CourseGenerator {
         return true;
     }
 
+    /** A dead end never lies in the flight corridor of a pad or spring launch near its anchor (the launched hero would be carried onto it). Only for dead ends: key rooms are proven separately. */
+    private boolean corridorOk(Element d, int a) {
+        int rs = c.routeSize();
+        for (int j = Math.max(0, a - 4); j <= Math.min(rs - 1, a + 6); j++) {
+            Element e = c.get(j);
+            if ((e.type == Element.Type.PAD || e.type == Element.Type.SPRING) && Math.abs(c.dsWrap(d.s, e.s)) < 10f + d.w / 2f && d.y > e.y - 1.5f && d.y < e.y + 9f) { decoyWhy = 5; return false; }
+        }
+        return true;
+    }
+
     private boolean tryDecoy(List<Element> es, List<Element> hz, int a) {
         int n0 = c.size(), h0 = c.hazards.size();
         boolean ok = true; decoyTried++;
-        for (Element d : es) { c.add(d); if (!decoyOk(d, a)) { ok = false; decoyGeoFail++; break; } }
+        for (Element d : es) { c.add(d); if (!decoyOk(d, a) || !corridorOk(d, a)) { ok = false; decoyGeoFail++; break; } }
         if (ok) for (Element h : hz) { c.hazards.add(h); if (!hazardOk(h, -1)) { ok = false; decoyGeoFail++; break; } }
         if (ok) {
             c.indexDecoys();
@@ -738,11 +752,13 @@ public final class CourseGenerator {
             case SAW_V: return Element.SAW_R;
             case PENDULUM: return h.len * (float) Math.sin(h.amp) + Element.BALL_R;
             case CANNON: return h.len * 0.5f + Element.SHOT_R;
+            case MORTAR: return Element.MORTAR_R;
+            case AIMED: return 0.6f;
             default: return h.w * 0.5f;
         }
     }
     private static float hzLo(Element h) {
-        switch (h.type) { case SAW_H: case SAW_V: return h.y - Element.SAW_R; case PENDULUM: return h.y - Element.BALL_R; case CANNON: return h.y - Element.SHOT_R; case BEE: return h.y - h.len - 1.4f; default: return h.y; }
+        switch (h.type) { case SAW_H: case SAW_V: return h.y - Element.SAW_R; case PENDULUM: return h.y - Element.BALL_R; case CANNON: return h.y - Element.SHOT_R; case AIMED: return h.y - 0.4f; case BEE: return h.y - h.len - 1.4f; default: return h.y; }
     }
     private static float hzHi(Element h) {
         switch (h.type) {
@@ -750,6 +766,8 @@ public final class CourseGenerator {
             case SAW_V: return h.y + h.amp + Element.SAW_R;
             case PENDULUM: return h.y + h.len * (1f - (float) Math.cos(h.amp)) + Element.BALL_R;
             case CANNON: return h.y + Element.SHOT_R;
+            case MORTAR: return h.y + h.amp + Element.MORTAR_R;
+            case AIMED: return h.y + 0.6f;
             case SPIKE_TRAP: return h.y + 0.7f;
             case SPIKE_DROP: return h.y + h.amp + Element.DROP_H;
             case GATE: return h.y + h.len;
@@ -800,7 +818,9 @@ public final class CourseGenerator {
         for (int i = n0; i < c.size() && ok; i++) ok = clearOfOtherLayers(i);
         if (!ok) failLayer++;
         for (Element h : hz) { if (!ok) break; if (h.type == Element.Type.CLUB) continue; ok = hazardOk(h, ownerOf(h)); if (!ok) failHaz++; }
-        for (int i = n0 - 1; i < c.size() - 1 && ok; i++) {
+        int from = n0 - 1;
+        for (Element h : hz) if (h.type == Element.Type.CANNON && h.anchor == n0 - 1 && n0 >= 2) from = n0 - 2;          // a cannon fires across the platform the previous link LANDS on: that link must be proven with the cannon there too
+        for (int i = from; i < c.size() - 1 && ok; i++) {
             Sim sim = Sim.startOn(c, T, i);
             Autopilot.Result res = Autopilot.plan(sim, i, true);
             boolean touched = false;
@@ -835,6 +855,7 @@ public final class CourseGenerator {
         if (zone >= 1) { w[Kind.MOVER_Z.ordinal()] = 2.5f; w[Kind.ELEV_FALL.ordinal()] = 2f; w[Kind.SLIDE_FALL.ordinal()] = 2f; if (zone == 1) w[Kind.SWING.ordinal()] = 2.5f; }
         float inten = intensity(last.y);
         w[Kind.RAMP.ordinal()] = zone == 0 ? 1.5f : 3f;
+        if (zone >= 1 && inten > 0f) w[Kind.MORTAR.ordinal()] = 1f + 3f * inten;          // a mortar row: any stage after the first world
         if (zone >= 1) { w[Kind.SEESAW.ordinal()] = 4f; w[Kind.BRIDGE.ordinal()] = 4f; }
         else w[Kind.BRIDGE.ordinal()] = 2f;
         if (inten > 0f || (!endless && last.y > T.courseHeight * 0.18f)) { w[Kind.HAZ.ordinal()] = 3f + 9f * inten; if (zone >= 1) w[Kind.SPRING.ordinal()] = 2f + 2f * inten; w[Kind.TRAP.ordinal()] = 2f + 5f * inten; }
@@ -855,6 +876,8 @@ public final class CourseGenerator {
         return Kind.HOP;
     }
 
+    public static volatile int wetTried, wetOk;          // diagnostics: wet-platform modules attempted / proven
+
     private boolean tryModule(Kind k, float d, int zone) {
         Element last = c.get(c.size() - 1);
         for (int attempt = 0; attempt < 8; attempt++) {
@@ -863,10 +886,14 @@ public final class CourseGenerator {
             List<Element> es;
             if (k == Kind.HAZ) es = buildHaz(last, Math.max(dd, 0.35f), zone, attempt, hz);
             else if (k == Kind.TRAP) es = buildMid(last, Math.max(dd, 0.35f), zone, attempt, hz);
+            else if (k == Kind.WET) es = buildWet(last, dd, zone, attempt);
+            else if (k == Kind.MORTAR) es = buildMortar(last, Math.max(dd, 0.35f), zone, attempt, hz);
             else es = build(k, last, dd, zone, attempt);
             if (es == null) continue;
             float margin = k == Kind.GRAB ? Math.min(0.05f, T.minLinkMargin) : T.minLinkMargin;
-            if (commit(es, hz, margin)) return true;
+            boolean ok = commit(es, hz, margin);
+            if (k == Kind.WET) { wetTried++; if (ok) wetOk++; }
+            if (ok) return true;
         }
         return false;
     }
@@ -878,6 +905,43 @@ public final class CourseGenerator {
 
     private Element hz(Element.Type t, float s, float y, float w, int zone) {
         Element h = new Element(t, s, y, w); h.zone = zone; return h;
+    }
+
+    /** A wide platform under a rain cloud (the hero slides on it): a hop to a platform 4.5-5.5 m wide, marked wet. Proven like any other module; the link OUT of it is proven by the next module with the slippery physics. */
+    private List<Element> buildWet(Element last, float d, int z, int attempt) {
+        float eR = last.s + last.w / 2f, dy = r(0f, 0.6f);
+        float gap = reach(dy) * lerp(0.45f, 0.8f, d) * r(0.9f, 1.05f) * (1f - 0.03f * attempt), w = r(4.5f, 5.5f);
+        Element p = plat(Element.Type.STATIC, eR + gap + w / 2f, last.y + dy, w, z);
+        p.color = Element.WET;
+        List<Element> l = new ArrayList<>(); l.add(p); return l;
+    }
+
+    /** Depth of a mortar's muzzle below the path, and how high above the path its ball climbs (about twice the player's height). */
+    static final float MORTAR_DEPTH = 3.0f;
+
+    /**
+     * A row of five or six level islands with a mortar in the ground under every gap, pointing straight up: the ball rises through the gap to about twice the player's height above the path, falls back
+     * into the barrel and fires again. Neighbouring mortars are out of step (a travelling wave), so there is always a moment to cross each gap. Every link is proven by {@link #commit} like any hazard gap.
+     */
+    private List<Element> buildMortar(Element last, float d, int z, int attempt, List<Element> hzOut) {
+        float inten = intensity(last.y);
+        int n = 5 + rnd.nextInt(2);
+        List<Element> es = new ArrayList<>();
+        Element cur = last; int base = c.size();
+        float period = r(3.2f, 4.0f) - 0.4f * inten, stagger = r(0.9f, 1.7f), phase0 = r(0f, 6.28f);
+        for (int k = 0; k < n; k++) {
+            float uR = cur.s + cur.w / 2f;
+            float g = Math.min(3.0f, Math.max(2.2f, reach(0f) * lerp(0.55f, 0.72f, d) * r(0.95f, 1f) * (1f - 0.03f * attempt)));
+            float w = k == n - 1 ? 3.5f : r(2.4f, 3.2f);
+            Element v = plat(Element.Type.STATIC, uR + g + w / 2f, cur.y, w, z);
+            es.add(v);
+            Element m = hz(Element.Type.MORTAR, uR + g / 2f, cur.y - MORTAR_DEPTH, 0f, z);
+            m.amp = MORTAR_DEPTH + 2f * T.height; m.period = period; m.phase = phase0 + k * stagger;
+            m.anchor = k == 0 ? base - 1 : base + k - 1;
+            hzOut.add(m);
+            cur = v;
+        }
+        return es;
     }
 
     /** One or two hazard-guarded gaps: a saw blade, a spiked pendulum-free blade, a cannon lane, or a spiked block you must clear. */
@@ -917,6 +981,10 @@ public final class CourseGenerator {
                 float muzzle = cur.s - cur.w / 2f + 0.7f;
                 h = hz(Element.Type.CANNON, muzzle, cur.y + 2.35f, 0f, z);
                 h.len = (uR - muzzle) + g + 1.2f; h.dir = 1; h.period = r(3.0f, 4.0f) - 0.5f * inten;
+                if (z >= 3 && rnd.nextFloat() < 0.6f) {          // late game (the night world on): an aimed cannon instead of the side cannon: it turns to the player, locks, flashes, fires along the locked line
+                    h = hz(Element.Type.AIMED, muzzle, cur.y + 2.0f, 0f, z);
+                    h.period = r(4.2f, 5.2f) - 0.4f * inten;
+                }
             }
             h.phase = r(0f, 6.28f); h.anchor = anchor;
             hzOut.add(h);

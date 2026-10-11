@@ -3,7 +3,10 @@ package com.hotatticgames.climbup.render;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.Pixmap;
 import com.badlogic.gdx.graphics.Texture;
+import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
+import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.utils.Disposable;
@@ -14,6 +17,8 @@ public final class Background implements Disposable {
     private final Texture[] clouds = new Texture[2];
     private final Texture stars;
     private int w = 1280, h = 720;
+    private final Texture glow, shaft;
+    private final TextureRegion shaftR;
 
     public Background() {
         Random r = new Random(7);
@@ -44,6 +49,19 @@ public final class Background implements Disposable {
             int s = r.nextInt(5) == 0 ? 3 : 2;
             pm.fillRectangle(r.nextInt(512), r.nextInt(512), s, s);
         }
+        Pixmap gp = new Pixmap(128, 128, Pixmap.Format.RGBA8888);              // soft round glow of the sun
+        for (int y = 0; y < 128; y++) for (int x = 0; x < 128; x++) {
+            float d = (float) Math.hypot(x - 63.5f, y - 63.5f) / 64f, a = d >= 1f ? 0f : (1f - d) * (1f - d);
+            gp.setColor(1f, 1f, 1f, a); gp.drawPixel(x, y);
+        }
+        glow = new Texture(gp); glow.setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear); gp.dispose();
+        Pixmap sp = new Pixmap(32, 256, Pixmap.Format.RGBA8888);               // one soft light shaft: bright at the sun end, gone at the far end, soft sides
+        for (int y = 0; y < 256; y++) for (int x = 0; x < 32; x++) {
+            float along = 1f - y / 255f, side = 1f - Math.abs(x - 15.5f) / 16f;
+            sp.setColor(1f, 1f, 1f, Math.max(0f, along * along * side * side)); sp.drawPixel(x, y);
+        }
+        shaft = new Texture(sp); shaft.setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear); sp.dispose();
+        shaftR = new TextureRegion(shaft);
         stars = new Texture(pm); stars.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
         stars.setWrap(Texture.TextureWrap.Repeat, Texture.TextureWrap.Repeat);
         pm.dispose();
@@ -74,7 +92,7 @@ public final class Background implements Disposable {
         float wrap = MathUtils.clamp((zoneF - Palette.ZONES + 0.25f) / 0.25f, 0f, 1f);       // the last quarter-zone blends back to the meadows
         float cloudA = (1f - 0.8f * MathUtils.clamp((zoneF - 2.4f) / 0.8f, 0f, 1f) * (1f - wrap)) * (1f - MathUtils.clamp((zoneF - 3.6f) / 0.5f, 0f, 1f) * (1f - wrap));      // fewer clouds at night, none in deep space
         float scale = h / 720f;
-        for (int k = 0; k < 2; k++) {
+        for (int k = 0; k < FLAT_CLOUD_LAYERS; k++) {       // the flat, bar-like cloud strips are retired: the 3D cloud models (Clouds) are the clouds now
             float par = k == 0 ? 7f : 13f;                   // pixels per arc unit: far layer slower
             float off = (reduced ? 0 : camS * par * scale);
             float drift = reduced ? 0f : time * (k == 0 ? 2f : 4f);
@@ -91,5 +109,39 @@ public final class Background implements Disposable {
         sb.end();
     }
 
-    @Override public void dispose() { for (Texture t : clouds) t.dispose(); stars.dispose(); }
+    private static final int FLAT_CLOUD_LAYERS = 0;
+
+    private final Color lightCol = new Color();
+
+    /** The glow of the sun, the low sun at dusk or the moon (each world has its own place, size and colour), in the sky behind the far clouds. */
+    public void renderGlow(SpriteBatch sb, float zoneF) {
+        float a = Palette.blendF(Palette.LIGHT_GLOW, zoneF); if (a < 0.01f) return;
+        float base = Math.min(w, h), size = Palette.blendF(Palette.LIGHT_SIZE, zoneF);
+        float sx = w * Palette.blendF(Palette.LIGHT_X, zoneF), sy = h * Palette.blendF(Palette.LIGHT_Y, zoneF);
+        Palette.blend(Palette.SUN, zoneF, lightCol);
+        sb.getProjectionMatrix().setToOrtho2D(0, 0, w, h); sb.setTransformMatrix(new com.badlogic.gdx.math.Matrix4());
+        sb.begin(); sb.setBlendFunction(GL20.GL_SRC_ALPHA, GL20.GL_ONE);
+        sb.setColor(lightCol.r, lightCol.g, lightCol.b, a); sb.draw(glow, sx - base * 0.5f * size, sy - base * 0.5f * size, base * size, base * size);
+        sb.setColor(Color.WHITE); sb.setBlendFunction(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA); sb.end();
+    }
+
+    /** Soft shafts of light from that same light toward the middle of the screen, drawn over the far clouds and behind the tower. */
+    public void renderShafts(SpriteBatch sb, float zoneF, boolean reduced, float time) {
+        float day = Palette.blendF(Palette.LIGHT_SHAFT, zoneF); if (day < 0.005f) return;
+        float base = Math.min(w, h), sx = w * Palette.blendF(Palette.LIGHT_X, zoneF), sy = h * Palette.blendF(Palette.LIGHT_Y, zoneF);
+        float aim = MathUtils.atan2(-(w * 0.5f - sx), (h * 0.45f - sy)) * MathUtils.radDeg;       // the strip points up at rotation 0: turn it toward the middle of the screen
+        float sway = reduced ? 0f : MathUtils.sin(time * 0.17f) * 3f;
+        Palette.blend(Palette.SUN, zoneF, lightCol);
+        sb.getProjectionMatrix().setToOrtho2D(0, 0, w, h); sb.setTransformMatrix(new com.badlogic.gdx.math.Matrix4());
+        sb.begin(); sb.setBlendFunction(GL20.GL_SRC_ALPHA, GL20.GL_ONE);
+        final float[] spread = {-17f, -6f, 5f, 16f};
+        for (int i = 0; i < spread.length; i++) {
+            float wd = base * (0.13f + 0.04f * (i % 2)), len = base * 1.9f, a = day * (0.9f + 0.3f * (i % 3)) * (reduced ? 0.8f : 1f + 0.25f * MathUtils.sin(time * 0.3f + i));
+            sb.setColor(lightCol.r, lightCol.g, lightCol.b, a);
+            sb.draw(shaftR, sx - wd / 2f, sy, wd / 2f, 0f, wd, len, 1f, 1f, aim + spread[i] + sway * (i % 2 == 0 ? 1f : -1f));
+        }
+        sb.setColor(Color.WHITE); sb.setBlendFunction(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA); sb.end();
+    }
+
+    @Override public void dispose() { for (Texture t : clouds) t.dispose(); stars.dispose(); glow.dispose(); shaft.dispose(); }
 }

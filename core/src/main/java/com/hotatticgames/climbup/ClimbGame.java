@@ -3,6 +3,7 @@ package com.hotatticgames.climbup;
 import com.badlogic.gdx.Game;
 import com.badlogic.gdx.Gdx;
 import com.hotatticgames.climbup.audio.Audio;
+import com.hotatticgames.climbup.platform.Platform;
 import com.hotatticgames.climbup.render.Models;
 import com.hotatticgames.climbup.sim.Course;
 import com.hotatticgames.climbup.sim.Tower;
@@ -31,7 +32,11 @@ public class ClimbGame extends Game {
     public String shotDir;
     public boolean runFresh;                 // set by the title screen's NEW CLIMB: the next PlayScreen starts a new seed
 
-    public ClimbGame(File dataDir) { this.dataDir = dataDir; }
+    /** The launcher's platform services (Android: {@link Platform#MOBILE}, unchanged behaviour). */
+    public final Platform platform;
+
+    public ClimbGame(File dataDir) { this(dataDir, Platform.MOBILE); }
+    public ClimbGame(File dataDir, Platform platform) { this.dataDir = dataDir; this.platform = platform; }
 
     @Override public void create() {
         demo = "true".equals(System.getProperty("climb.demo"));
@@ -44,7 +49,7 @@ public class ClimbGame extends Game {
         // OTA (see docs/OTA.md): an applied payload (signed manifest, verified checksum, validated numbers) may replace the bundled tuning numbers; anything wrong falls back to the bundled file
         ota = new com.hotatticgames.climbup.ota.OtaStore(new File(dataDir, "ota"));
         String over = null;
-        try { over = ota.startup(); } catch (Throwable t) { over = null; }
+        try { over = platform.networkAllowed() ? ota.startup() : null; } catch (Throwable t) { over = null; }
         Tuning tn = null;
         if (over != null) { try { tn = Tuning.parse(over); } catch (Throwable t) { tn = null; } }
         tuning = tn != null ? tn : Tuning.parse(bundled);
@@ -53,6 +58,7 @@ public class ClimbGame extends Game {
         ui = new Ui(settings);
         audio = new Audio(settings);
         models = new Models();
+        platform.attach(this);
         String start = System.getProperty("climb.start", demo ? "play" : "splash");
         switch (start) {
             case "title": setScreen(new TitleScreen(this)); break;
@@ -65,6 +71,7 @@ public class ClimbGame extends Game {
 
     /** Silent background check (never blocks play, never shows anything; the result only appears in Settings > About). */
     public void startOtaCheck(boolean force) {
+        if (!platform.networkAllowed()) return;           // the Windows build makes no network call at all
         final com.hotatticgames.climbup.ota.OtaClient c = otaClient;
         Thread t = new Thread(() -> { try { c.check(System.currentTimeMillis(), force); } catch (Throwable ignored) { } }, "ota-check");
         t.setDaemon(true); t.start();
@@ -72,7 +79,9 @@ public class ClimbGame extends Game {
 
     private int shotCount;
     private float shotClock;
-    @Override public void render() { super.render(); if (audio != null) audio.update(Math.min(Gdx.graphics.getDeltaTime(), 0.25f)); }
+    @Override public void render() { platform.frame(Gdx.graphics.getDeltaTime()); super.render(); if (audio != null) audio.update(Math.min(Gdx.graphics.getDeltaTime(), 0.25f)); }
+
+    @Override public void setScreen(com.badlogic.gdx.Screen screen) { super.setScreen(screen); platform.screenChanged(); }
 
     /** Desktop test hook: -Dclimb.shots=DIR writes a numbered screenshot about every 1.5s and exits after climb.shotCount frames. */
     public void autoShot(String prefix, float dt) {
@@ -93,7 +102,7 @@ public class ClimbGame extends Game {
     }
 
     /** A climb in progress: the growing tower plus the world element the player stands on. */
-    public static final class Run { public Tower tower; public int startIdx; public boolean resumed; }
+    public static final class Run { public Tower tower; public int startIdx; public boolean resumed; public RunSnapshot snapshot; }
 
     public HistoryStore history;
     /** True if there is a climb in progress whose history is on disk and complete up to its checkpoint. */
@@ -109,11 +118,18 @@ public class ClimbGame extends Game {
         if (!fresh && save.seed != 0) {
             try {
                 java.util.List<byte[]> hist = history.read(save.seed);
+                RunSnapshot snap = store.loadRun();          // SAVE & EXIT: the exact moment of the climb (fits only the climb it was taken in)
+                if (snap != null && (snap.seed != save.seed || hist == null || hist.size() <= snap.maxSlice)) { store.deleteRun(); snap = null; }
+                if (snap != null) { save.cpSlice = snap.cpSlice; save.cpLocal = snap.cpLocal; }
                 if (hist != null && hist.size() > save.cpSlice) {
                     r.tower = new Tower(save.seed, tuning, hist, save.cpSlice);
                     Tower.Ref ref = new Tower.Ref(save.cpSlice, save.cpLocal);
                     int idx = r.tower.worldIndex(ref);
-                    if (idx >= 0) { r.tower.setCheckpointRef(ref); r.startIdx = idx; r.resumed = true; return r; }
+                    if (idx >= 0) {
+                        r.tower.setCheckpointRef(ref); r.startIdx = idx; r.resumed = true;
+                        if (snap != null) { r.tower.windowAroundAbs(snap.centreAbs()); r.snapshot = snap; }
+                        return r;
+                    }
                 }
             } catch (Exception e) { /* unreadable: fall through to a new climb */ }
             save.seed = 0;
@@ -141,13 +157,32 @@ public class ClimbGame extends Game {
         save.cpSlice = ref.slice; save.cpLocal = ref.local;
     }
 
-    public void forgetRun() { RunRecord.forgetClimb(save); if (history != null) history.delete(); }      // records (bestSplit, bestTotals, bestFinish, lastFinish) are kept
+    /** Hosting hook: a host that can relaunch the app (the OTA module host) overrides both. The packaged / desktop game has no behaviour here. */
+    /** The version text on the title screen. The packaged game shows version and build; a hosted game may add what it is running. */
+    public String versionLabel() { return Legacy.versionLine(VERSION, appBuild); }
+
+    public boolean canRestartApp() { return false; }
+    public void restartApp() { }
+
+    public void forgetRun() { RunRecord.forgetClimb(save); if (history != null) history.delete(); if (store != null) store.deleteRun(); }
+
+    /** Writes the exact state of the climb in progress (SAVE &amp; EXIT, pause, autosave). Nothing is written when the state cannot be saved faithfully; the previous snapshot then stays, or is dropped if it would now be wrong. */
+    public void saveRun(Tower tower, com.hotatticgames.climbup.sim.Sim sim) {
+        if (tower == null || save.seed == 0 || save.seed != tower.seed || store == null) return;
+        syncHistory(tower);
+        RunSnapshot r = RunSnapshot.capture(sim, tower, save.seed);
+        if (r == null) { store.deleteRun(); return; }
+        store.saveRun(r);
+        ResumeState.capture(save, sim);
+        save.cpSlice = r.cpSlice; save.cpLocal = r.cpLocal;
+        store.saveGame(save);
+    }      // records (bestSplit, bestTotals, bestFinish, lastFinish) are kept
 
     public void persist() { store.saveGame(save); store.saveSettings(settings); }
 
     @Override public void dispose() {
         persist();
         if (getScreen() != null) getScreen().dispose();
-        audio.dispose(); models.dispose(); ui.dispose();
+        audio.dispose(); models.dispose(); ui.dispose(); platform.dispose();
     }
 }

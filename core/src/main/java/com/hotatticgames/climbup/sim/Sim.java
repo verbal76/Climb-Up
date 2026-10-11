@@ -10,7 +10,7 @@ public final class Sim {
     public static final float DT = 1f / 60f, SWING_TIME = 0.34f;
     // event bits
     public static final int EV_JUMP = 1, EV_LAND = 2, EV_BOUNCE = 4, EV_GRAB = 8, EV_PULL = 16, EV_CRUMBLE = 32,
-            EV_CHECKPOINT = 64, EV_RESPAWN = 128, EV_WIN = 256, EV_ROPE = 512, EV_CABLE = 1024, EV_FALL_NEAR = 2048, EV_HIT = 4096, EV_KEY = 8192, EV_DOOR = 16384, EV_BLOCKED = 32768, EV_CLUB = 65536, EV_SWING = 131072, EV_SHOVE = 262144, EV_CRAB_OFF = 524288, EV_FINISH = 1048576;
+            EV_CHECKPOINT = 64, EV_RESPAWN = 128, EV_WIN = 256, EV_ROPE = 512, EV_CABLE = 1024, EV_FALL_NEAR = 2048, EV_HIT = 4096, EV_KEY = 8192, EV_DOOR = 16384, EV_BLOCKED = 32768, EV_CLUB = 65536, EV_SWING = 131072, EV_SHOVE = 262144, EV_CRAB_OFF = 524288, EV_FINISH = 1048576, EV_AIM = 2097152;
 
     public final Course course;
     public final Tuning T;
@@ -22,11 +22,13 @@ public final class Sim {
     public Mode mode = Mode.AIR;
     public int onElem = -1;          // standing / hanging / roping element index
     public int lastPad = -1;
+    public int onSlab = -1;          // hazard index of the spike slab whose (safe) top the hero stands on; mode GROUND with onElem < 0
+    public static final float SLAB_BOUNCE_SPEED = 6f, SLAB_SLAM_SPEED = 6f;
     public float coyote, jumpBuf, lockout, pullT, pullFromS, pullFromY, pullToS, pullToY;
     public int ledgeSide = 1;
     private int sideIn = -1, sideDir = 1;      // a platform whose side the body has slipped into while rising fast (see trackSideEntry), and which side it came from
     public float ropeTopT;           // seconds the climber has pushed up against the top of a rope (a short hold mounts the beam)
-    public static final float BEAM_MOUNT_TIME = 0.62f, BEAM_TOP = 0.24f, BEAM_HALF = 1.1f, ROPE_TOP_HOLD = 0.22f;
+    public static final float BEAM_MOUNT_TIME = 0.62f, BEAM_TOP = 0.24f, BEAM_HALF = 1.1f, ROPE_TOP_HOLD = 0.06f;
     public boolean jumpedUp;         // current ascent came from a jump (variable height cut applies)
     public boolean prevJumpHeld;
     public float lastGroundY;
@@ -58,6 +60,8 @@ public final class Sim {
     public int keys;                              // bit per colour of the keys carried
     public boolean keysFree;                      // planners/demos: every gate simply opens on touch
     public boolean[] featDone = new boolean[0];   // per feature (Course.hazards index): key taken / gate opened
+    public float[] aimAng = new float[0], aimFireT = new float[0];   // aimed cannons (Course.hazards index): barrel angle (0 = along +s, counter-clockwise), time the last ball was fired
+    private boolean[] aimArmed = new boolean[0];                      // this cycle's shot was locked while the player was in range
     public int lastKeyColor, lastGateColor, lastGateNo;
     public boolean finishedRun;         // the finishCastle's door has been walked through (the timed run is over)
     public float clubTime, swingT, shoveCd;       // spiked club carried (seconds left), swing animation clock, grace between shoves
@@ -123,9 +127,17 @@ public final class Sim {
         hz = course.hazardsFor(lo - 6, hi + 6);
     }
 
+    private void growAim(int n) {
+        if (aimAng.length >= n) return;
+        int o = aimAng.length;
+        aimAng = java.util.Arrays.copyOf(aimAng, n); aimFireT = java.util.Arrays.copyOf(aimFireT, n); aimArmed = java.util.Arrays.copyOf(aimArmed, n);
+        java.util.Arrays.fill(aimFireT, o, n, -1e9f);
+    }
+
     /** The course grew (endless mode): extend the per-element state arrays. */
     public void ensureCapacity() {
         if (featDone.length < course.hazards.size()) featDone = java.util.Arrays.copyOf(featDone, Math.max(course.hazards.size(), featDone.length * 3 / 2 + 8));
+        growAim(featDone.length);
         int n = course.size();
         if (n <= es0.length) return;
         int m = Math.max(n, es0.length * 3 / 2 + 16), o = es0.length;
@@ -142,6 +154,7 @@ public final class Sim {
         crumbleT = new float[n]; gone = new boolean[n]; goneT = new float[n]; padSquash = new float[n]; tilt = new float[n]; onT = new float[n];
         java.util.Arrays.fill(crumbleT, -1f);
         featDone = new boolean[c.hazards.size() + 8];
+        growAim(featDone.length);
         refreshElements();
         spawnAtCheckpoint(0);
     }
@@ -149,14 +162,14 @@ public final class Sim {
     private Sim(Sim o) {
         course = o.course; T = o.T;
         time = o.time; s = o.s; y = o.y; vx = o.vx; vy = o.vy; facing = o.facing; mode = o.mode; onElem = o.onElem;
-        lastPad = o.lastPad; coyote = o.coyote; jumpBuf = o.jumpBuf; lockout = o.lockout; pullT = o.pullT;
+        lastPad = o.lastPad; onSlab = o.onSlab; coyote = o.coyote; jumpBuf = o.jumpBuf; lockout = o.lockout; pullT = o.pullT;
         ropeTopT = o.ropeTopT; pullFromS = o.pullFromS; pullFromY = o.pullFromY; pullToS = o.pullToS; pullToY = o.pullToY;
         ledgeSide = o.ledgeSide; sideIn = o.sideIn; sideDir = o.sideDir; jumpedUp = o.jumpedUp; prevJumpHeld = o.prevJumpHeld; lastGroundY = o.lastGroundY; floorY = o.floorY;
         checkpoint = o.checkpoint; bestElem = o.bestElem; maxHeight = o.maxHeight; won = o.won; falls = o.falls;
         landSpeed = o.landSpeed; events = o.events; assistForgive = o.assistForgive; ps0 = o.ps0; py0 = o.py0; teleported = o.teleported;
         es0 = o.es0.clone(); ey0 = o.ey0.clone(); es1 = o.es1.clone(); ey1 = o.ey1.clone();
         crumbleT = o.crumbleT.clone(); gone = o.gone.clone(); goneT = o.goneT.clone(); padSquash = o.padSquash.clone(); tilt = o.tilt.clone(); onT = o.onT.clone();
-        clubTime = o.clubTime; swingT = o.swingT; shoveCd = o.shoveCd; crabS = o.crabS; crabY = o.crabY; keys = o.keys; keysFree = o.keysFree; featDone = o.featDone.clone(); finishedRun = o.finishedRun; lastGateNo = o.lastGateNo; lastKeyColor = o.lastKeyColor; lastGateColor = o.lastGateColor;
+        clubTime = o.clubTime; swingT = o.swingT; shoveCd = o.shoveCd; crabS = o.crabS; crabY = o.crabY; keys = o.keys; keysFree = o.keysFree; featDone = o.featDone.clone(); aimAng = o.aimAng.clone(); aimFireT = o.aimFireT.clone(); aimArmed = o.aimArmed.clone(); finishedRun = o.finishedRun; lastGateNo = o.lastGateNo; lastKeyColor = o.lastKeyColor; lastGateColor = o.lastGateColor;
         act = o.act; hz = o.hz; winLo = o.winLo; winHi = o.winHi; invuln = o.invuln; hits = o.hits; hitS = o.hitS; hitY = o.hitY;
     }
 
@@ -171,6 +184,25 @@ public final class Sim {
         }
     }
 
+    /**
+     * After a saved state was written into this sim (time, position, tilt of seesaws and ramps): puts every element where it is at {@link #time}, so the first step sees no phantom platform motion.
+     * Slopes and tipping planks report their surface at the player's own position, exactly as {@link #step} does.
+     */
+    public void syncElements() {
+        refreshElements();
+        for (int i = 0; i < course.size(); i++) {
+            Element e = course.get(i);
+            if (e.type == Element.Type.SEESAW) {
+                float hw = e.halfW(), x = Math.max(-hw, Math.min(hw, course.dsWrap(s, es1[i])));
+                ey0[i] = ey1[i] = e.y + tilt[i] * x;
+            } else if (e.type == Element.Type.RAMP) {
+                float hw = e.halfW(), x = Math.max(-hw, Math.min(hw, course.dsWrap(s, es1[i])));
+                ey0[i] = ey1[i] = e.y + e.amp * x - (e.skin == 3 ? tilt[i] : 0f);
+            }
+        }
+        sideIn = -1;
+    }
+
     public int consumeEvents() { int e = events; events = 0; return e; }
 
     // ---------------------------------------------------------------- spawning
@@ -180,7 +212,7 @@ public final class Sim {
         Element e = course.get(idx);
         s = course.wrap(es1[idx]); y = ey1[idx]; vx = vy = 0;
         mode = Mode.GROUND; onElem = idx; lastGroundY = y; coyote = 0; jumpBuf = 0; lockout = 0.1f;
-        jumpedUp = false; facing = 1;
+        jumpedUp = false; facing = 1; onSlab = -1;
         progress(idx);
     }
 
@@ -265,8 +297,12 @@ public final class Sim {
         boolean[] nf = new boolean[Math.max(m.newH, 1) + 8];
         for (int i = 0; i < m.haz.length && i < featDone.length; i++) { int j = m.haz[i]; if (j >= 0) nf[j] = featDone[i]; }
         featDone = nf;
+        float[] na = new float[nf.length], nft = new float[nf.length]; boolean[] nar = new boolean[nf.length]; java.util.Arrays.fill(nft, -1e9f);
+        for (int i = 0; i < m.haz.length && i < aimAng.length; i++) { int j = m.haz[i]; if (j >= 0 && j < na.length) { na[j] = aimAng[i]; nft[j] = aimFireT[i]; nar[j] = aimArmed[i]; } }
+        aimAng = na; aimFireT = nft; aimArmed = nar;
         onElem = onElem >= 0 && onElem < m.elem.length ? m.elem[onElem] : onElem;
         lastPad = lastPad >= 0 && lastPad < m.elem.length ? m.elem[lastPad] : lastPad;
+        onSlab = onSlab >= 0 && onSlab < m.haz.length ? m.haz[onSlab] : -1;
         checkpoint = checkpoint >= 0 && checkpoint < m.elem.length ? m.elem[checkpoint] : checkpoint;
         bestElem = bestElem >= 0 && bestElem < m.elem.length ? Math.max(0, m.elem[bestElem]) : bestElem;
         float dy = m.dy;
@@ -333,7 +369,7 @@ public final class Sim {
         if (lockout > 0) lockout = Math.max(0, lockout - dt);
 
         switch (mode) {
-            case GROUND: stepGround(in, dt); break;
+            case GROUND: if (onElem < 0 && onSlab >= 0) stepSlab(in, dt); else stepGround(in, dt); break;
             case AIR: stepAir(in, dt); break;
             case ROPE: stepRope(in, dt); break;
             case CABLE: stepCable(in, dt); break;
@@ -350,6 +386,7 @@ public final class Sim {
         if (swingT > 0) swingT = Math.max(0f, swingT - dt);
         else if (in.swingPressed && clubTime > 0f && (mode == Mode.GROUND || mode == Mode.AIR)) { swingT = SWING_TIME; events |= EV_SWING; }
         stepFeatures();
+        stepAimed();
         if (invuln > 0) invuln = Math.max(0f, invuln - dt);
         else if (hazardHit()) { hits++; events |= EV_HIT; hitS = s; hitY = y; knockOff(); }
 
@@ -422,12 +459,53 @@ public final class Sim {
         }
     }
 
+    // ---------------------------------------------------------------- aimed cannons
+
+    private static float angDiff(float a, float b) { float d = (a - b) % (2f * (float) Math.PI); if (d > Math.PI) d -= 2f * (float) Math.PI; else if (d < -Math.PI) d += 2f * (float) Math.PI; return d; }
+
+    /** Where the ball of aimed cannon h is right now (arc, height) if it is in flight, else null. */
+    public float[] aimedBall(int hi, Element h) {
+        if (hi >= aimFireT.length) return null;
+        float age = time - aimFireT[hi];
+        if (age < 0f || age > Element.AIM_LIFE) return null;
+        float d = Element.AIM_SPEED * age;
+        return new float[]{h.s + (float) Math.cos(aimAng[hi]) * d, h.y + (float) Math.sin(aimAng[hi]) * d};
+    }
+
+    /** Aimed cannons: track the player (turning at a limited rate) while awake, lock at AIM_LOCK of the cycle, fire at AIM_FIRE along exactly the locked direction. Asleep (barrel idles up) when the player is out of range. */
+    private void stepAimed() {
+        for (int k = 0, cnt = hz == null ? course.hazards.size() : hz.length; k < cnt; k++) {
+            int hi = hz == null ? k : hz[k];
+            Element h = course.hazards.get(hi);
+            if (h.type != Element.Type.AIMED || hi >= aimAng.length) continue;
+            float c = h.cyc(time), pc = h.cyc(time - DT);
+            float dx = course.dsWrap(s, h.s), dy = y + 0.7f - h.y;
+            boolean awake = dx * dx + dy * dy <= Element.AIM_RANGE * Element.AIM_RANGE && dy >= -4f && dy <= 5f;          // its own layer only: the tower spirals, and a hero on the turn above or below (same arc, 10+ m up or down) must not be shot through the floor
+            if (c < Element.AIM_LOCK) {
+                float target = awake ? (float) Math.atan2(dy, dx) : (float) Math.PI * 0.5f;
+                float d = angDiff(target, aimAng[hi]), step = Element.AIM_TURN * DT;
+                aimAng[hi] += Math.max(-step, Math.min(step, d));
+            }
+            if (pc < Element.AIM_LOCK && c >= Element.AIM_LOCK) aimArmed[hi] = awake;
+            if (pc < Element.AIM_FIRE && c >= Element.AIM_FIRE && aimArmed[hi]) { aimFireT[hi] = time; aimArmed[hi] = false; events |= EV_AIM; }
+        }
+    }
+
+    private boolean aimedBallHits(int hi, Element h, float hw, float lo, float hiY) {
+        float[] b = aimedBall(hi, h);
+        if (b == null) return false;
+        float dx = Math.abs(course.dsWrap(b[0], s)), ddx = Math.max(0f, dx - hw);
+        float ddy = b[1] < lo ? lo - b[1] : (b[1] > hiY ? b[1] - hiY : 0f);
+        return ddx * ddx + ddy * ddy < Element.AIM_R * Element.AIM_R;
+    }
+
     /** True if the player's body overlaps any lethal hazard right now. */
     private boolean hazardHit() {
         final float hw = T.halfWidth - 0.03f, lo = y + 0.12f, hi = y + T.height - 0.1f;
         for (int k = 0, cnt = hz == null ? course.hazards.size() : hz.length; k < cnt; k++) {
             Element e = course.hazards.get(hz == null ? k : hz[k]);
             hitBy = e;
+            if (e.type == Element.Type.AIMED) { if (aimedBallHits(hz == null ? k : hz[k], e, hw, lo, hi)) return true; continue; }
             if (!e.lethalAt(time)) continue;
             float dx = Math.abs(course.dsWrap(e.sAt(time), s));
             float r = e.discR();
@@ -439,7 +517,7 @@ public final class Sim {
                 if (dx < e.w * 0.5f + hw && y > e.y - 0.5f && y < e.y + e.spikeHeight(time) - 0.08f) return true;
             } else if (e.type == Element.Type.SPIKE_DROP) {
                 float b = e.dropBottom(time);
-                if (dx < e.w * 0.5f + hw && hi > b && lo < b + Element.DROP_H) return true;
+                if (dx < e.w * 0.5f + hw && hi > b && lo < b + Element.DROP_SPIKE_H) return true;          // only the spiked underside hurts; the top of the slab is a surface
             } else {   // spike block: a solid lethal box [y, y+len]
                 if (dx < e.w * 0.5f + hw && hi > e.y && lo < e.y + e.len) return true;
             }
@@ -463,6 +541,7 @@ public final class Sim {
         if (saw) { float up = tilt[e] * Math.signum(target) / T.seesawMaxTilt; if (up > 0) target *= Math.max(0.2f, 1f - T.seesawUphill * up); }
         float a = (Math.abs(target) > 0.01f && Math.signum(target) == Math.signum(vx) || Math.abs(vx) < 0.01f) ? T.groundAccel : T.groundDecel;
         if (Math.abs(target) < 0.01f) a = T.groundDecel;
+        if (course.get(e).wet()) a *= T.wetGrip;            // a wet platform: low friction (jump, edges and everything else are unchanged)
         vx = approach(vx, target, a * dt);
         if (Math.abs(in.moveX) > 0.15f) facing = in.moveX > 0 ? 1 : -1;
         s += vx * dt;
@@ -539,8 +618,72 @@ public final class Sim {
             }
         }
         if (best >= 0) { land(best, in); return; }
+        if (landOnSlope(in, py)) return;
+        if (landOnSlab(in, py)) return;
         if (sideIn >= 0 && catchInside(in)) return;
         if (lockout <= 0) { if (tryGrab(in)) return; }
+    }
+
+    /** The top of a spike slab is a surface: a body falling onto it from above stands on it, and the slab carries it up and down like an elevator (see {@link #stepSlab}). */
+    private boolean landOnSlab(InputState in, float py) {
+        int best = -1; float bestTop = -1e9f;
+        for (int k = 0, cnt = hz == null ? course.hazards.size() : hz.length; k < cnt; k++) {
+            int hi = hz == null ? k : hz[k];
+            Element h = course.hazards.get(hi);
+            if (h.type != Element.Type.SPIKE_DROP) continue;
+            float top = h.dropTop(time), prev = h.dropTop(time - DT);
+            if (Math.abs(course.dsWrap(h.sAt(time), s)) > h.w * 0.5f + T.edgeOverhang) continue;
+            if (vy - (top - prev) / DT > 0f) continue;
+            if (py >= prev - 0.08f && y <= top + 0.0001f && top > bestTop) { bestTop = top; best = hi; }
+        }
+        if (best < 0) return false;
+        y = bestTop; landSpeed = Math.max(0f, -vy); vy = 0; mode = Mode.GROUND; onElem = -1; onSlab = best; jumpedUp = false; coyote = T.coyote + assistForgive;
+        events |= EV_LAND;
+        if (jumpBuf > 0) { doJump(Math.max(0f, (bestTop - course.hazards.get(best).dropTop(time - DT)) / DT) * 0.6f); onSlab = -1; }
+        return true;
+    }
+
+    /** Standing on a slab's top: carried with it; a fast slam throws the hero gently off (no ride down, no hurt); jump and walking off work as on any platform. */
+    private void stepSlab(InputState in, float dt) {
+        Element h = course.hazards.get(onSlab);
+        float top = h.dropTop(time), pv = (top - h.dropTop(time - dt)) / dt;
+        if (pv < -SLAB_SLAM_SPEED) {
+            mode = Mode.AIR; onSlab = -1; vy = SLAB_BOUNCE_SPEED; jumpedUp = false; coyote = 0; events |= EV_BOUNCE; y = top + 0.0f;
+            return;
+        }
+        y = top;
+        float target = in.moveX * T.runSpeed;
+        float a = (Math.abs(target) > 0.01f && Math.signum(target) == Math.signum(vx) || Math.abs(vx) < 0.01f) ? T.groundAccel : T.groundDecel;
+        if (Math.abs(target) < 0.01f) a = T.groundDecel;
+        vx = approach(vx, target, a * dt);
+        if (Math.abs(in.moveX) > 0.15f) facing = in.moveX > 0 ? 1 : -1;
+        s += vx * dt;
+        coyote = T.coyote + assistForgive;
+        if (jumpBuf > 0) { int was = onSlab; doJump(Math.max(0f, pv) * 0.6f); onSlab = -1; return; }
+        if (Math.abs(course.dsWrap(s, h.sAt(time))) > h.w * 0.5f + T.edgeOverhang) { mode = Mode.AIR; onSlab = -1; vy = Math.min(0f, pv); jumpedUp = false; }
+    }
+
+    /**
+     * A ramp's surface height depends on where along it the body is, and the landing test above measures it where the body WAS at the start of the step. A body running up a ramp while it
+     * jumps is carried into the slope: the surface climbs past its feet faster than the jump rises, and since a rising body is never landed, at the top of the arc it is already inside the ramp and
+     * falls straight through it. So when nothing else caught the body, a ramp whose surface at the body's NEW position has reached its feet (they were above that ramp before the move) is landed on there.
+     * Only bodies that would have sunk into the slope are affected; every landing the test above makes is unchanged.
+     */
+    private boolean landOnSlope(InputState in, float py) {
+        int best = -1; float bestSurf = -1e9f;
+        for (int k = 0, cnt = act == null ? course.size() : act.length; k < cnt; k++) {
+            int i = act == null ? k : act[k];
+            Element el = course.get(i);
+            if (el.type != Element.Type.RAMP || gone[i]) continue;
+            float hw = el.halfW(), x = course.dsWrap(s, es1[i]);
+            if (Math.abs(x) > hw + T.edgeOverhang) continue;
+            float surf = el.y + el.amp * Math.max(-hw, Math.min(hw, x)) - (el.skin == 3 ? tilt[i] : 0f);
+            if (py >= ey0[i] - 0.08f && y <= surf + 0.0001f && surf > bestSurf) { bestSurf = surf; best = i; }
+        }
+        if (best < 0) return false;
+        vy = Math.min(vy, 0f);          // a rising body is stopped by the slope; a falling one lands as it always did
+        land(best, in, bestSurf);
+        return true;
     }
 
     /**
@@ -576,9 +719,11 @@ public final class Sim {
         return true;
     }
 
-    private void land(int i, InputState in) {
+    private void land(int i, InputState in) { land(i, in, ey1[i]); }
+
+    private void land(int i, InputState in, float surface) {
         Element el = course.get(i);
-        y = ey1[i];
+        y = surface;
         landSpeed = -vy;
         if (el.type == Element.Type.PAD || el.type == Element.Type.SPRING) {
             float v = in.jumpHeld ? T.padBounceHeld : T.padBounce;
@@ -668,8 +813,8 @@ public final class Sim {
             return;
         }
         if (in.moveY < -0.7f && y <= yMin + 0.01f) { mode = Mode.AIR; onElem = -1; lockout = T.grabLockout; vy = 0; }
-        // pushing on at the very top: haul up from behind the beam and stand on it (a cliff-style mantle)
-        if (y >= yMax - 0.01f && in.moveY > 0.6f) ropeTopT += dt; else ropeTopT = 0f;
+        // reaching the top of the rope with up held: the beam is a ledge, so he grabs it at once and hauls himself up onto it (the same mantle as a cliff edge)
+        if (y >= yMax - 0.01f && in.moveY > 0.3f) ropeTopT += dt; else ropeTopT = 0f;
         if (ropeTopT >= ROPE_TOP_HOLD) { ropeTopT = 0f; mode = Mode.BEAM; pullT = 0; pullFromY = y; vx = vy = 0; events |= EV_PULL; }
     }
 

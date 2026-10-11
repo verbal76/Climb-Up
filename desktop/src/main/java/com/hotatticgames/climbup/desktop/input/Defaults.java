@@ -33,7 +33,7 @@ public final class Defaults {
         b.set(Act.CLIMB_DOWN, Arrays.asList(Ctl.LS_DOWN, Ctl.DPAD_DOWN));
         b.set(Act.JUMP, Arrays.asList(Ctl.A));
         b.set(Act.SWING, Arrays.asList(Ctl.X));
-        b.set(Act.PAUSE, Arrays.asList(Ctl.START));
+        b.set(Act.PAUSE, Arrays.asList(Ctl.BACK, Ctl.START));   // View (double-square) is the default pause/unpause; Menu (three lines) also works
         b.set(Act.MENU_UP, Arrays.asList(Ctl.DPAD_UP, Ctl.LS_UP));
         b.set(Act.MENU_DOWN, Arrays.asList(Ctl.DPAD_DOWN, Ctl.LS_DOWN));
         b.set(Act.MENU_LEFT, Arrays.asList(Ctl.DPAD_LEFT, Ctl.LS_LEFT));

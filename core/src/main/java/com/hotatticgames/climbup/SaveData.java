@@ -3,10 +3,15 @@ package com.hotatticgames.climbup;
 import java.util.ArrayList;
 import java.util.List;
 
-/** Run progress and stats. Versioned; see {@link SaveStore#migrate}. No power progression of any kind is stored. */
+/**
+ * One player's run progress and stats (each player has their own SaveData in their own folder, see {@link Profiles}); settings are shared and live elsewhere.
+ * Versioned; see {@link SaveStore#migrate}. No power progression of any kind is stored.
+ * v7: added {@link #name}; the single save became the first player's.
+ */
 public final class SaveData {
-    public static final int CURRENT_VERSION = 6;
+    public static final int CURRENT_VERSION = 7;
     public int version = CURRENT_VERSION;
+    public String name = "";             // this player's name (v7); empty only for a save read before players existed - Profiles fills it in
     public int courseIndex = 0;          // legacy (v2 finite towers); unused by the endless climb
     public int checkpoint = 0;           // legacy (v2)
     // endless climb (v6): the climb is its seed plus every slice generated so far (history.bin, see HistoryStore); here only where it stands

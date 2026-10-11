@@ -17,7 +17,9 @@ public class ClimbGame extends Game {
     public static int appBuild;
 
     public final File dataDir;
-    public SaveStore store;
+    public SaveStore store;              // the current player's files (save.json, run.json)
+    public SaveStore settingsStore;      // the shared data folder: settings are not per player
+    public Profiles profiles;
     public Settings settings;
     public SaveData save;
     public Tuning tuning;
@@ -36,9 +38,7 @@ public class ClimbGame extends Game {
     @Override public void create() {
         demo = "true".equals(System.getProperty("climb.demo"));
         shotDir = System.getProperty("climb.shots");
-        store = new SaveStore(dataDir); history = new HistoryStore(dataDir);
-        settings = store.loadSettings();
-        save = store.loadGame();
+        initStores();
         if (System.getProperty("climb.character") != null) settings.character = Integer.getInteger("climb.character");
         String bundled = Gdx.files.internal("data/tuning.json").readString("UTF-8");
         // OTA (see docs/OTA.md): an applied payload (signed manifest, verified checksum, validated numbers) may replace the bundled tuning numbers; anything wrong falls back to the bundled file
@@ -58,6 +58,8 @@ public class ClimbGame extends Game {
             case "title": setScreen(new TitleScreen(this)); break;
             case "settings": setScreen(new SettingsScreen(this, new TitleScreen(this))); break;
             case "credits": setScreen(new CreditsScreen(this, new TitleScreen(this))); break;
+            case "players": setScreen(new PlayersScreen(this, new TitleScreen(this))); break;      // test hooks for screenshots
+            case "name": { TitleScreen t = new TitleScreen(this); setScreen(new NameScreen(this, new PlayersScreen(this, t), t)); break; }
             case "play": setScreen(new PlayScreen(this, demo)); break;
             default: setScreen(new SplashScreen(this));
         }
@@ -101,6 +103,26 @@ public class ClimbGame extends Game {
         if (save.seed == 0 || history == null) return false;
         java.util.List<byte[]> h = history.read(save.seed);
         return h != null && h.size() > save.cpSlice;
+    }
+
+    /**
+     * True if ANY player has a climb in progress whose history is on disk (not only the one playing now). The OTA host holds back module switches that would change a climb,
+     * so it must be told about every player's climb: another player's unseen slices would otherwise be produced by a different generator.
+     */
+    public boolean anyClimbInProgress() {
+        if (climbValid()) return true;
+        if (profiles == null) return false;
+        for (Profiles.Entry e : profiles.players()) {
+            if (e.id == currentPlayerId()) continue;
+            File dir = profiles.dirOf(e.id);
+            try {
+                SaveData d = new SaveStore(dir).loadGame();
+                if (d.seed == 0) continue;
+                java.util.List<byte[]> h = new HistoryStore(dir).read(d.seed);
+                if (h != null && h.size() > d.cpSlice) return true;
+            } catch (RuntimeException ignored) { }
+        }
+        return false;
     }
 
     /** Opens the saved climb, or starts a new one (fresh seed) when there is none or {@code fresh} is set. */
@@ -169,7 +191,59 @@ public class ClimbGame extends Game {
         store.saveGame(save);
     }      // records (bestSplit, bestTotals, bestFinish, lastFinish) are kept
 
-    public void persist() { store.saveGame(save); store.saveSettings(settings); }
+    public void persist() { if (store != null) store.saveGame(save); if (settingsStore != null) settingsStore.saveSettings(settings); }
+
+    /** Loads the shared settings and the player list, and opens the player who played last (also what the tests start from). */
+    void initStores() {
+        settingsStore = new SaveStore(dataDir);
+        settings = settingsStore.loadSettings();
+        profiles = Profiles.load(dataDir);
+        openPlayer(profiles.last().id);
+    }
+
+    /** Opens a player's files: their save, their stored climb (history.bin) and their run snapshot. */
+    private void openPlayer(int id) {
+        File dir = profiles.dirOf(id);
+        store = new SaveStore(dir); history = new HistoryStore(dir);
+        save = store.loadGame();
+        Profiles.Entry e = profiles.get(id);
+        if (e != null && !e.name.equals(save.name)) save.name = e.name;
+        runFresh = false;
+    }
+
+    /** Saves the current player and opens another (their last checkpoint and records; nothing of the previous player carries over). That player is remembered for the next start. */
+    public void switchPlayer(int id) {
+        if (profiles.get(id) == null) return;
+        if (id == currentPlayerId()) return;
+        persist();
+        profiles.select(id);
+        openPlayer(id);
+    }
+
+    public int currentPlayerId() { return profiles.lastId(); }
+
+    /** Makes a new player and switches to them. Returns false if the name is empty, taken, or the list is full. */
+    public boolean addPlayer(String name) {
+        Profiles.Entry e = profiles.create(name);
+        if (e == null) return false;
+        persist(); profiles.select(e.id); openPlayer(e.id);
+        return true;
+    }
+
+    /** Deletes a player and everything they saved. If it was the current one, the first remaining player is opened. */
+    public void deletePlayer(int id) {
+        boolean current = id == currentPlayerId();
+        if (!current) persist();
+        profiles.delete(id);
+        if (current || profiles.get(currentPlayerId()) == null) openPlayer(profiles.last().id);
+    }
+
+    /** SETTINGS > ERASE ALL PLAYERS: every player and the settings. */
+    public void eraseEverything() {
+        settingsStore.eraseAll(); profiles.deleteAll();
+        settings = new Settings();
+        openPlayer(profiles.last().id);
+    }
 
     @Override public void dispose() {
         persist();

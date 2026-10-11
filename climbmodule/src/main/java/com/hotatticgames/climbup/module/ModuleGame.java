@@ -18,7 +18,7 @@ class ModuleGame extends ClimbGame {
 
     @Override public void create() {
         super.create();
-        env.climbInProgress(climbValid());
+        env.climbInProgress(anyClimbInProgress());          // every player's climb counts, not only the one playing now
     }
 
     /** Settings > About > CHECK: the game's own check as before, plus the host's channel check for signed game updates (a host without it ignores the call). */
@@ -66,5 +66,5 @@ class ModuleGame extends ClimbGame {
 
     @Override public Run openRun(boolean fresh) { Run r = super.openRun(fresh); env.climbInProgress(true); return r; }
 
-    @Override public void forgetRun() { super.forgetRun(); env.climbInProgress(false); }
+    @Override public void forgetRun() { super.forgetRun(); env.climbInProgress(anyClimbInProgress()); }     // another player may still have a climb
 }

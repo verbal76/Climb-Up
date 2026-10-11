@@ -499,6 +499,29 @@ public final class Sim {
         return ddx * ddx + ddy * ddy < Element.AIM_R * Element.AIM_R;
     }
 
+    // ---------------------------------------------------------------- hazards that ride a moving platform (bug #14)
+
+    /**
+     * A hazard that sits on a platform rides it when the platform moves: these return the live offset of the hazard's anchor platform from that platform's home position at time {@code t}.
+     * They are exactly zero for a hazard in a gap, beside the path, or on static ground, so every static-anchored hazard keeps behaving precisely as before. Pure functions of {@code t}
+     * and the (immutable) anchor element, so clones and the generator's look-ahead stay deterministic.
+     */
+    private float carryS(Element h, float t) {
+        int a = h.anchor;
+        if (a < 0 || a >= course.size() || !h.ridesAnchor()) return 0f;
+        Element o = course.get(a);
+        return o.isMoving() ? course.dsWrap(o.sAt(t), o.s) : 0f;
+    }
+    private float carryY(Element h, float t) {
+        int a = h.anchor;
+        if (a < 0 || a >= course.size() || !h.ridesAnchor()) return 0f;
+        Element o = course.get(a);
+        return o.isMoving() ? o.yAt(t) - o.y : 0f;
+    }
+    /** The horizontal / vertical offset a hazard currently inherits from the moving platform it rides (0 unless it sits on a mover). The renderer adds these to the drawn hazard position so a spike pad stays on its platform. */
+    public float hazCarryS(Element h) { return carryS(h, time); }
+    public float hazCarryY(Element h) { return carryY(h, time); }
+
     /** True if the player's body overlaps any lethal hazard right now. */
     private boolean hazardHit() {
         final float hw = T.halfWidth - 0.03f, lo = y + 0.12f, hi = y + T.height - 0.1f;
@@ -507,19 +530,20 @@ public final class Sim {
             hitBy = e;
             if (e.type == Element.Type.AIMED) { if (aimedBallHits(hz == null ? k : hz[k], e, hw, lo, hi)) return true; continue; }
             if (!e.lethalAt(time)) continue;
-            float dx = Math.abs(course.dsWrap(e.sAt(time), s));
+            float cs = carryS(e, time), cyOff = carryY(e, time);      // ride the platform this hazard sits on (both are 0 unless the platform is a mover)
+            float dx = Math.abs(course.dsWrap(e.sAt(time) + cs, s));
             float r = e.discR();
             if (r > 0f) {
-                float ddx = Math.max(0f, dx - hw), cy = e.yAt(time);
+                float ddx = Math.max(0f, dx - hw), cy = e.yAt(time) + cyOff;
                 float ddy = cy < lo ? lo - cy : (cy > hi ? cy - hi : 0f);
                 if (ddx * ddx + ddy * ddy < r * r) return true;
             } else if (e.type == Element.Type.SPIKE_TRAP) {
-                if (dx < e.w * 0.5f + hw && y > e.y - 0.5f && y < e.y + e.spikeHeight(time) - 0.08f) return true;
+                if (dx < e.w * 0.5f + hw && y > e.y + cyOff - 0.5f && y < e.y + cyOff + e.spikeHeight(time) - 0.08f) return true;
             } else if (e.type == Element.Type.SPIKE_DROP) {
-                float b = e.dropBottom(time);
+                float b = e.dropBottom(time) + cyOff;
                 if (dx < e.w * 0.5f + hw && hi > b && lo < b + Element.DROP_SPIKE_H) return true;          // only the spiked underside hurts; the top of the slab is a surface
             } else {   // spike block: a solid lethal box [y, y+len]
-                if (dx < e.w * 0.5f + hw && hi > e.y && lo < e.y + e.len) return true;
+                if (dx < e.w * 0.5f + hw && hi > e.y + cyOff && lo < e.y + cyOff + e.len) return true;
             }
         }
         return false;
@@ -631,27 +655,28 @@ public final class Sim {
             int hi = hz == null ? k : hz[k];
             Element h = course.hazards.get(hi);
             if (h.type != Element.Type.SPIKE_DROP) continue;
-            float top = h.dropTop(time), prev = h.dropTop(time - DT);
-            if (Math.abs(course.dsWrap(h.sAt(time), s)) > h.w * 0.5f + T.edgeOverhang) continue;
+            float top = h.dropTop(time) + carryY(h, time), prev = h.dropTop(time - DT) + carryY(h, time - DT);   // the slab's safe top, riding its platform if that platform moves
+            if (Math.abs(course.dsWrap(h.sAt(time) + carryS(h, time), s)) > h.w * 0.5f + T.edgeOverhang) continue;
             if (vy - (top - prev) / DT > 0f) continue;
             if (py >= prev - 0.08f && y <= top + 0.0001f && top > bestTop) { bestTop = top; best = hi; }
         }
         if (best < 0) return false;
         y = bestTop; landSpeed = Math.max(0f, -vy); vy = 0; mode = Mode.GROUND; onElem = -1; onSlab = best; jumpedUp = false; coyote = T.coyote + assistForgive;
         events |= EV_LAND;
-        if (jumpBuf > 0) { doJump(Math.max(0f, (bestTop - course.hazards.get(best).dropTop(time - DT)) / DT) * 0.6f); onSlab = -1; }
+        if (jumpBuf > 0) { Element hb = course.hazards.get(best); doJump(Math.max(0f, (bestTop - (hb.dropTop(time - DT) + carryY(hb, time - DT))) / DT) * 0.6f); onSlab = -1; }
         return true;
     }
 
     /** Standing on a slab's top: carried with it; a fast slam throws the hero gently off (no ride down, no hurt); jump and walking off work as on any platform. */
     private void stepSlab(InputState in, float dt) {
         Element h = course.hazards.get(onSlab);
-        float top = h.dropTop(time), pv = (top - h.dropTop(time - dt)) / dt;
+        float top = h.dropTop(time) + carryY(h, time), pv = (top - (h.dropTop(time - dt) + carryY(h, time - dt))) / dt;
         if (pv < -SLAB_SLAM_SPEED) {
             mode = Mode.AIR; onSlab = -1; vy = SLAB_BOUNCE_SPEED; jumpedUp = false; coyote = 0; events |= EV_BOUNCE; y = top + 0.0f;
             return;
         }
         y = top;
+        s += carryS(h, time) - carryS(h, time - dt);        // a slab on a mover carries the hero along with it, like any platform (0 on static ground)
         float target = in.moveX * T.runSpeed;
         float a = (Math.abs(target) > 0.01f && Math.signum(target) == Math.signum(vx) || Math.abs(vx) < 0.01f) ? T.groundAccel : T.groundDecel;
         if (Math.abs(target) < 0.01f) a = T.groundDecel;
@@ -659,8 +684,8 @@ public final class Sim {
         if (Math.abs(in.moveX) > 0.15f) facing = in.moveX > 0 ? 1 : -1;
         s += vx * dt;
         coyote = T.coyote + assistForgive;
-        if (jumpBuf > 0) { int was = onSlab; doJump(Math.max(0f, pv) * 0.6f); onSlab = -1; return; }
-        if (Math.abs(course.dsWrap(s, h.sAt(time))) > h.w * 0.5f + T.edgeOverhang) { mode = Mode.AIR; onSlab = -1; vy = Math.min(0f, pv); jumpedUp = false; }
+        if (jumpBuf > 0) { doJump(Math.max(0f, pv) * 0.6f); onSlab = -1; return; }
+        if (Math.abs(course.dsWrap(s, h.sAt(time) + carryS(h, time))) > h.w * 0.5f + T.edgeOverhang) { mode = Mode.AIR; onSlab = -1; vy = Math.min(0f, pv); jumpedUp = false; }
     }
 
     /**

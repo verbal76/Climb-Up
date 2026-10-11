@@ -81,6 +81,8 @@ public final class SaveStore {
     public void deleteRun() { new File(dir, "run.json").delete(); new File(dir, "run.json.tmp").delete(); }
 
     public void eraseAll() { new File(dir, "save.json").delete(); new File(dir, "settings.json").delete(); deleteRun(); }
+    /** Removes only this folder's player files (save, run snapshot), never the shared settings. */
+    public void erasePlayer() { new File(dir, "save.json").delete(); new File(dir, "save.json.corrupt").delete(); deleteRun(); }
 
     private static SaveData sanitize(SaveData d) {
         d.courseIndex = Math.max(0, d.courseIndex); d.checkpoint = Math.max(0, d.checkpoint);
@@ -93,6 +95,7 @@ public final class SaveStore {
         if (d.finishTime == 0) d.finished = false;
         if (!(d.towerStartClock >= 0)) d.towerStartClock = 0;
         if (!(d.towerStartHeight >= 0)) d.towerStartHeight = 0;
+        if (d.name == null) d.name = "";
         if (d.splits == null) d.splits = new float[0];
         if (d.towerTotals == null) d.towerTotals = new float[0];
         if (d.bestTotals == null) d.bestTotals = new float[0];
@@ -112,6 +115,7 @@ public final class SaveStore {
             if (!v.has("completions")) v.addChild("completions", new JsonValue(0L));
         }
         // v2 -> v3: finite towers became the endless climb; there is no seed yet, so the next Play starts a fresh climb (best height and stats are kept)
+        // v6 -> v7: the save belongs to a named player (SaveData.name, default empty); nothing else changes. Moving the single save into the first player's folder is done by Profiles.
         // v5 -> v6: the climb in progress is stored as slice history (history.bin); an older climb is archived by loadGame (see there).
         if (v.has("version")) v.remove("version");
         v.addChild("version", new JsonValue((long) SaveData.CURRENT_VERSION));

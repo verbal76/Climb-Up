@@ -896,11 +896,12 @@ public final class WorldRenderer implements Disposable {
                 break;
             }
             case SPIKE_TRAP: {
+                float hcs = rsim != null ? rsim.hazCarryS(h) : 0f, hcy = rsim != null ? rsim.hazCarryY(h) : 0f;   // ride the platform (0 unless it is a mover) so the pad stays with its block
                 float sp = h.spikeHeight(t);
-                drawBox(h.s, h.y + SPIKE_MAT_BOTTOM, 0f, camS, h.w + 0.3f, SPIKE_MAT_TOP - SPIKE_MAT_BOTTOM, 1.5f, 0.55f, 0.2f, 0.18f);
+                drawBox(h.s + hcs, h.y + hcy + SPIKE_MAT_BOTTOM, 0f, camS, h.w + 0.3f, SPIKE_MAT_TOP - SPIKE_MAT_BOTTOM, 1.5f, 0.55f, 0.2f, 0.18f);
                 if (sp > 0.02f) {
                     float hk = sp / (3.4f * 0.37f);
-                    for (int k = -1; k <= 1; k++) drawPack("spikes", h.s + k * h.w * 0.32f, h.y, 0f, camS, 0.3f, 0.37f * hk * 1.3f, 0.3f, 0f, 0f);
+                    for (int k = -1; k <= 1; k++) drawPack("spikes", h.s + hcs + k * h.w * 0.32f, h.y + hcy, 0f, camS, 0.3f, 0.37f * hk * 1.3f, 0.3f, 0f, 0f);
                 }
                 break;
             }
@@ -951,18 +952,20 @@ public final class WorldRenderer implements Disposable {
                 break;
             }
             case SPIKE_DROP: {
+                float hcs = rsim != null ? rsim.hazCarryS(h) : 0f, hcy = rsim != null ? rsim.hazCarryY(h) : 0f;   // the drop frame rides its platform when it is a mover (bug #14)
                 float b = h.dropBottom(t), top = h.y + h.amp + Element.DROP_H;
-                drawBox(h.s - h.w * 0.5f - 0.1f, h.y, 0.2f, camS, 0.1f, h.amp + Element.DROP_H + 0.6f, 0.14f, 0.3f, 0.32f, 0.4f);
-                drawBox(h.s + h.w * 0.5f + 0.1f, h.y, 0.2f, camS, 0.1f, h.amp + Element.DROP_H + 0.6f, 0.14f, 0.3f, 0.32f, 0.4f);
-                drawBox(h.s, top + 0.5f, 0.2f, camS, h.w + 0.5f, 0.14f, 0.3f, 0.3f, 0.32f, 0.4f);
-                drawBox(h.s, b + 0.5f, 0f, camS, h.w, 0.5f, 1.3f, 0.42f, 0.38f, 0.5f);
-                for (int k = -1; k <= 1; k += 2) drawPack("spikes", h.s + k * h.w * 0.25f, b + 0.5f, 0f, camS, h.w * 0.22f, 0.5f / 3.4f, 0.3f, 0f, 180f);
+                drawBox(h.s + hcs - h.w * 0.5f - 0.1f, h.y + hcy, 0.2f, camS, 0.1f, h.amp + Element.DROP_H + 0.6f, 0.14f, 0.3f, 0.32f, 0.4f);
+                drawBox(h.s + hcs + h.w * 0.5f + 0.1f, h.y + hcy, 0.2f, camS, 0.1f, h.amp + Element.DROP_H + 0.6f, 0.14f, 0.3f, 0.32f, 0.4f);
+                drawBox(h.s + hcs, top + 0.5f + hcy, 0.2f, camS, h.w + 0.5f, 0.14f, 0.3f, 0.3f, 0.32f, 0.4f);
+                drawBox(h.s + hcs, b + 0.5f + hcy, 0f, camS, h.w, 0.5f, 1.3f, 0.42f, 0.38f, 0.5f);
+                for (int k = -1; k <= 1; k += 2) drawPack("spikes", h.s + hcs + k * h.w * 0.25f, b + 0.5f + hcy, 0f, camS, h.w * 0.22f, 0.5f / 3.4f, 0.3f, 0f, 180f);
                 break;
             }
             case SPIKE_BLOCK: {
+                float hcs = rsim != null ? rsim.hazCarryS(h) : 0f, hcy = rsim != null ? rsim.hazCarryY(h) : 0f;   // the red spike block rides its platform when it is a mover (bug #14)
                 float base = Math.min(0.5f, h.len * 0.5f), sh = Math.max(0.3f, h.len - base);
-                drawBox(h.s, h.y, 0f, camS, h.w, base, 1.3f, 0.42f, 0.38f, 0.5f);
-                drawPack("spikes", h.s, h.y + base, 0f, camS, h.w * 0.46f, sh / 3.4f, h.w * 0.46f, 0f, 0f);
+                drawBox(h.s + hcs, h.y + hcy, 0f, camS, h.w, base, 1.3f, 0.42f, 0.38f, 0.5f);
+                drawPack("spikes", h.s + hcs, h.y + hcy + base, 0f, camS, h.w * 0.46f, sh / 3.4f, h.w * 0.46f, 0f, 0f);
                 break;
             }
             default: break;

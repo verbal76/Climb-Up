@@ -38,11 +38,11 @@ jobs:
           unzip -l Upwardly-Windows.zip | grep -i 'Upwardly.exe' || { echo "::error::no Upwardly.exe inside the zip"; exit 1; }
           SHA=$(git ls-remote "https://github.com/$REPO" refs/heads/exp/upwardly-windows | cut -f1)
           SUM=$(sha256sum Upwardly-Windows.zip | cut -d' ' -f1)
-          NOTES="Upwardly for Windows (experimental build for testing). Same gameplay as the Android game with the cleanup fixes. Source $SHA, CI run ${{ steps.b.outputs.run }}. zip sha256 $SUM. Not verified: game controllers, real GPU and fullscreen, Windows audio, Steam Deck."
+          NOTES="Upwardly for Windows (EXE, experimental build for testing). Same gameplay as the Android game. This build: smoother Xbox-controller movement and climb, faster spike-drop first strike, and the limb-shrink fix. Source $SHA, CI run ${{ steps.b.outputs.run }}. zip sha256 $SUM. Not verified on real hardware: game controllers, real GPU and fullscreen, Windows audio, Steam Deck."
           if gh release view upwardly-windows-latest --repo "$REPO" >/dev/null 2>&1; then
             gh release upload upwardly-windows-latest Upwardly-Windows.zip --repo "$REPO" --clobber
-            gh release edit upwardly-windows-latest --repo "$REPO" --prerelease=false --notes "$NOTES"
+            gh release edit upwardly-windows-latest --repo "$REPO" --prerelease=false --title "Upwardly for Windows — Windows EXE (Climb up)" --notes "$NOTES"
           else
-            gh release create upwardly-windows-latest Upwardly-Windows.zip --repo "$REPO" --target "$SHA" --title "Upwardly for Windows" --notes "$NOTES"
+            gh release create upwardly-windows-latest Upwardly-Windows.zip --repo "$REPO" --target "$SHA" --title "Upwardly for Windows — Windows EXE (Climb up)" --notes "$NOTES"
           fi
           echo "https://github.com/$REPO/releases/download/upwardly-windows-latest/Upwardly-Windows.zip"

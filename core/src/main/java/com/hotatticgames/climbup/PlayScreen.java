@@ -43,7 +43,7 @@ public final class PlayScreen extends ScreenAdapter {
     private float acc, time, runTime, fade, toastT, zoneT, stepT, ropeT, autosaveT, tipT, shotT;
     private String toast = "", tip = "", caption = ""; private float captionT;
     private int lastZone = -1, shots;
-    private boolean confirmRestart;
+    private boolean confirmRestart, confirmEnd;
     private static final class Pop { final String t; final Color c; float age; Pop(String t, Color c) { this.t = t; this.c = c; } }
     private final java.util.ArrayList<Pop> pops = new java.util.ArrayList<>();
     private float hitstop, confettiT, gruntT; private int milestone, gruntN;
@@ -121,7 +121,8 @@ public final class PlayScreen extends ScreenAdapter {
         Gdx.input.setCatchKey(Input.Keys.BACK, true);
         g.audio.playlist(Audio.GAME_TRACKS);
         runTime = 0; maxAbs = absNow(); milestone = (int) (maxAbs / 50f);
-        if (Boolean.getBoolean("climb.finishDemo")) { g.save.runClock = 3723.4f; g.save.finished = true; g.save.finishTime = 3723.4f; finishNewBest = true; state = State.FINISHED; }       // test hook: shows the finish screen
+        if (!demo && tower != null) g.save.records().catchUp(g.save.seed, g.save.splits, g.save.towers, g.save.finished, g.save.finishTime);          // times table: a climb begun before the records existed
+        if (Boolean.getBoolean("climb.finishDemo")) { g.save.runClock = 3723.4f; g.save.finished = true; g.save.finishTime = 3723.4f; finishNewBest = true; state = State.FINISHED; if (tower != null) g.save.records().finish(g.save.seed, 3723.4f); }       // test hook: shows the finish screen
         if (Boolean.getBoolean("climb.ropeScript")) {   // test hook: start low on the first rope; readInput() then climbs it, mounts the beam and jumps (screenshots of the rope top)
             for (int e = 0; e < course.size(); e++) if (course.get(e).type == Element.Type.ROPE && course.get(e).y > 5f) {
                 Element el = course.get(e); sim.mode = Sim.Mode.ROPE; sim.onElem = e; sim.s = sim.es1[e]; sim.y = el.y - el.len + 0.6f; sim.vx = sim.vy = 0; world.snapCamera(sim); break;
@@ -251,6 +252,7 @@ public final class PlayScreen extends ScreenAdapter {
             if (world.takeWhoosh()) g.audio.play("whoosh", 0.6f, 1f);
             g.save.playSeconds += dt;
             if (maxAbs > g.save.bestHeight) g.save.bestHeight = (float) maxAbs;
+            if (g.save.finished && tower != null && !demo) g.save.records().infinity(g.save.seed, infinityMetres());
             int ms = (int) (maxAbs / 50f);
             if (ms > milestone) { milestone = ms; toast = ms * 50 + " M!"; toastT = 1.6f; g.audio.play("checkpoint", 0.55f, 1.35f); world.particles.burst(sim.s, sim.y + 1f, 12, gold, 2.6f, 3.2f, 0.1f, -0.5f, 1f); }
             for (int pi = pops.size() - 1; pi >= 0; pi--) { Pop pp = pops.get(pi); pp.age += dt; if (pp.age > 1.1f) pops.remove(pi); }
@@ -334,6 +336,7 @@ public final class PlayScreen extends ScreenAdapter {
         sd.splits = java.util.Arrays.copyOf(sd.splits, n + 1); sd.splits[n] = split;
         sd.towerTotals = java.util.Arrays.copyOf(sd.towerTotals, n + 1); sd.towerTotals[n] = total;
         sd.towers = n + 1;
+        if (n < RecordsData.LEGS) sd.records().legDone(sd.seed, n, split);          // times table: this leg, and whether it is a personal best
         boolean hadSplit = sd.bestSplit > 0f, pbSplit = !hadSplit || split < sd.bestSplit;
         if (pbSplit) sd.bestSplit = split;
         if (sd.bestTotals.length <= n) sd.bestTotals = java.util.Arrays.copyOf(sd.bestTotals, n + 1);
@@ -343,6 +346,19 @@ public final class PlayScreen extends ScreenAdapter {
         toast = KEY_NAMES[sim.lastGateColor] + " CASTLE OPENED!"; toastT = 3.2f;
         toastSub = "TOWER " + (n + 1) + "  " + fmtTime(split) + (pbSplit && hadSplit ? "  FASTEST TOWER!" : "") + "    TOTAL " + fmtTime(total) + (pbTotal && hadTotal ? "  PACE PB!" : "");
         g.persist();
+    }
+
+    /** Metres climbed beyond the finish castle (what the HUD shows as INFINITY +m), counting the highest point reached in this climb even across a resume. */
+    private float infinityMetres() {
+        return (float) Math.max(0.0, Math.max(maxAbs, g.save.climbHeight) - g.tuning.finishCastle * g.tuning.castleSpacing);
+    }
+
+    /** END RUN AND SAVE TIME: the times already stand in the records; the climb is forgotten and the end-of-run summary comes up. */
+    private void endRunToSummary() {
+        g.audio.play("click");
+        RecordsData.Run r = tower != null && !demo ? g.save.records().endRun(g.save.seed) : null;
+        g.forgetRun(); g.persist();
+        next = new RunSummaryScreen(g, r); disposeOnLeave = true;
     }
 
     /** m:ss.t (h:mm:ss.t from an hour). */
@@ -438,6 +454,7 @@ public final class PlayScreen extends ScreenAdapter {
             int r = RunRecord.complete(g.save);
             if (r >= 0) {
                 finishNewBest = r == 1;
+                if (tower != null) g.save.records().finish(g.save.seed, g.save.finishTime);
                 g.audio.fallStop(); g.audio.play("win", 1f, 1f); world.particles.burst(s, y + 1.2f, 40, new Color(1f, 0.85f, 0.3f, 1f), 4f, 4f, 0.14f, 1f, 1.6f); vibrate(60, 1); say("[RUN COMPLETE]");
                 state = State.FINISHED; stickPtr = jumpPtr = -1; jumpHeldTouch = false; g.persist();
             }
@@ -676,25 +693,27 @@ public final class PlayScreen extends ScreenAdapter {
     private void finishMenu() {
         Ui ui = g.ui; float W = ui.w(), H = ui.h(); SaveData sd = g.save;
         ui.rect(0, 0, W, H, new Color(0, 0, 0, 0.62f));
-        float pw = 640, ph = 560, x = W / 2 - pw / 2, y = H / 2 - ph / 2;
+        float pw = 640, ph = 650, x = W / 2 - pw / 2, y = H / 2 - ph / 2;
         ui.panel(x, y, pw, ph);
         ui.textC("CASTLE " + g.tuning.finishCastle + " REACHED!", W / 2, y + ph - 76, 4.8f, Ui.ACCENT);
         ui.textC("FINISH TIME", W / 2, y + ph - 150, 3.4f, Ui.DIM);
         ui.textC(fmtTime(sd.finishTime), W / 2, y + ph - 216, 8f, new Color(0.45f, 1f, 0.55f, 1f));
         ui.textC(finishNewBest ? "NEW RECORD!" : "BEST " + fmtTime(sd.bestFinish), W / 2, y + ph - 270, 3.6f, finishNewBest ? new Color(1f, 0.85f, 0.3f, 1f) : Ui.DIM);
         float bw = 520, bh = 90, bx = W / 2 - bw / 2;
-        if (ui.button("END RUN AND SAVE TIME", bx, y + 150, bw, bh, true)) { g.audio.play("click"); g.forgetRun(); g.persist(); next = new TitleScreen(g); disposeOnLeave = true; }
+        if (ui.button("END RUN AND SAVE TIME", bx, y + 240, bw, bh, true)) endRunToSummary();
+        if (ui.button("TIMES", bx, y + 140, bw, bh)) { g.audio.play("click"); g.persist(); next = new TimesScreen(g, this); disposeOnLeave = false; }
         if (ui.button("KEEP CLIMBING FOR EVER", bx, y + 40, bw, bh)) { resumePlay(); }
     }
 
     private void pauseMenu() {
         Ui ui = g.ui; float W = ui.w(), H = ui.h();
+        boolean canEnd = g.save.finished && tower != null && !demo;          // climbing for ever after castle 10: the run can be ended here and its times saved
+        float pw = 560, bw = 440, bh = 76, bs = 90, ph = 176 + (canEnd ? 5 : 4) * bs + 36, x = W / 2 - pw / 2, y = H / 2 - ph / 2;
         ui.rect(0, 0, W, H, new Color(0, 0, 0, 0.55f));
-        float pw = 560, ph = 560, x = W / 2 - pw / 2, y = H / 2 - ph / 2;
         ui.panel(x, y, pw, ph);
         ui.textC("PAUSED", W / 2, y + ph - 90, 8f, Ui.TEXT);
         if (W >= pw + 2 * 450f) {                  // speed-run splits beside the menu
-            SaveData sd = g.save; float sx = x + pw + 28, sw = 420, sh = 560;
+            SaveData sd = g.save; float sx = x + pw + 28, sw = 420, sh = ph;
             ui.panel(sx, y, sw, sh);
             ui.textC("TOWER SPLITS", sx + sw / 2, y + sh - 56, 4.4f, Ui.ACCENT);
             ui.text("NOW   " + fmtTime(sd.runClock - sd.towerStartClock), sx + 26, y + sh - 108, 3.4f, new Color(1f, 0.82f, 0.3f, 1f));
@@ -702,30 +721,36 @@ public final class PlayScreen extends ScreenAdapter {
             int first = Math.max(0, sd.towers - 7);
             for (int i = first; i < sd.towers; i++) ui.text((i + 1) + "  " + fmtTime(sd.splits[i]) + "  " + fmtTime(sd.towerTotals[i]), sx + 26, y + sh - 196 - (i - first) * 40, 3f, Ui.TEXT);
             if (sd.towers == 0) ui.text("NO TOWER OPENED YET", sx + 26, y + sh - 196, 3f, Ui.DIM);
-            if (sd.bestSplit > 0f) ui.text("FASTEST TOWER " + fmtTime(sd.bestSplit), sx + 26, y + 40, 3f, Ui.DIM);        } else {                                   // narrow screens: a compact line under the title
-            SaveData sd = g.save;
-            ui.textC("TOWER " + fmtTime(sd.runClock - sd.towerStartClock) + "   TOTAL " + fmtTime(sd.runClock), W / 2, y + ph - 140, 3f, new Color(1f, 0.82f, 0.3f, 1f));
-            if (sd.towers > 0) ui.textC("LAST TOWER " + fmtTime(sd.splits[sd.towers - 1]) + "   OPENED AT " + fmtTime(sd.towerTotals[sd.towers - 1]), W / 2, y + ph - 170, 2.6f, Ui.DIM);
+            if (sd.bestSplit > 0f) ui.text("FASTEST TOWER " + fmtTime(sd.bestSplit), sx + 26, y + 40, 3f, Ui.DIM);
         }
-        float bw = 440, bh = 84, bx = W / 2 - bw / 2;
-        if (ui.button("RESUME", bx, y + ph - 200, bw, bh, true)) resumePlay();
-        if (ui.button(confirmRestart ? "TAP AGAIN TO CONFIRM" : "RETRY CHECKPOINT", bx, y + ph - 304, bw, bh)) {
-            if (confirmRestart) { sim.respawn(); sim.consumeEvents(); world.snapCamera(sim); confirmRestart = false; resumePlay(); } else confirmRestart = true;
+        float bx = W / 2 - bw / 2, by = y + ph - 176;
+        if (ui.button("RESUME", bx, by, bw, bh, true)) resumePlay();
+        by -= bs;
+        if (ui.button(confirmRestart ? "TAP AGAIN TO CONFIRM" : "RETRY CHECKPOINT", bx, by, bw, bh)) {
+            if (confirmRestart) { sim.respawn(); sim.consumeEvents(); world.snapCamera(sim); confirmRestart = confirmEnd = false; resumePlay(); } else confirmRestart = true;
         }
-        if (ui.button("SETTINGS", bx, y + ph - 408, bw, bh)) { g.audio.play("click"); g.persist(); next = new SettingsScreen(g, this); disposeOnLeave = false; }
-        if (ui.button(tower != null ? "SAVE & EXIT" : "MAIN MENU", bx, y + ph - 512, bw, bh)) { g.audio.play("click"); saveRun(); g.persist(); next = new TitleScreen(g); disposeOnLeave = true; }
+        by -= bs;
+        if (ui.button("SETTINGS", bx, by, bw, bh)) { g.audio.play("click"); g.persist(); next = new SettingsScreen(g, this); disposeOnLeave = false; }
+        by -= bs;
+        if (ui.button("TIMES", bx, by, bw, bh)) { g.audio.play("click"); g.persist(); next = new TimesScreen(g, this); disposeOnLeave = false; }
+        by -= bs;
+        if (canEnd) {
+            if (ui.button(confirmEnd ? "TAP AGAIN TO CONFIRM" : "END RUN AND SAVE TIME", bx, by, bw, bh)) { if (confirmEnd) endRunToSummary(); else confirmEnd = true; }
+            by -= bs;
+        }
+        if (ui.button(tower != null ? "SAVE & EXIT" : "MAIN MENU", bx, by, bw, bh)) { g.audio.play("click"); saveRun(); g.persist(); next = new TitleScreen(g); disposeOnLeave = true; }
     }
 
     // ------------------------------------------------------------------ lifecycle
 
-    private void pauseGame() { if (state == State.PLAYING) { g.audio.fallStop(); state = State.PAUSED; confirmRestart = false; stickPtr = jumpPtr = -1; jumpHeldTouch = false; g.audio.play("click"); g.persist(); saveRun(); } }
+    private void pauseGame() { if (state == State.PLAYING) { g.audio.fallStop(); state = State.PAUSED; confirmRestart = confirmEnd = false; stickPtr = jumpPtr = -1; jumpHeldTouch = false; g.audio.play("click"); g.persist(); saveRun(); } }
     /** Writes the exact moment of the climb (not in the scripted demo, and not once the finish screen is up: that run is over). */
     private void saveRun() { if (tower != null && !demo && state != State.FINISHED) g.saveRun(tower, sim); }
     private void resumePlay() { state = State.PLAYING; acc = 0; g.audio.play("click"); }
     public void resumeFromSettings() { applySettings(); }
 
     @Override public void hide() { g.audio.fallStop(); g.persist(); }
-    @Override public void pause() { /* app backgrounded */ g.audio.fallStop(); if (state == State.PLAYING) { state = State.PAUSED; confirmRestart = false; stickPtr = jumpPtr = -1; jumpHeldTouch = false; } g.persist(); saveRun(); g.audio.pauseMusic(); }
+    @Override public void pause() { /* app backgrounded */ g.audio.fallStop(); if (state == State.PLAYING) { state = State.PAUSED; confirmRestart = confirmEnd = false; stickPtr = jumpPtr = -1; jumpHeldTouch = false; } g.persist(); saveRun(); g.audio.pauseMusic(); }
     @Override public void resume() { g.audio.resumeMusic(); }
 
     @Override public void dispose() { g.audio.fallStop(); if (world != null) { world.dispose(); world = null; } shapes.dispose(); }

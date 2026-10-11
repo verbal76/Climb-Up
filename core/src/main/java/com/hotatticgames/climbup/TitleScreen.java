@@ -82,6 +82,7 @@ public final class TitleScreen extends ScreenAdapter {
                 yy -= 88;
             }
             if (ui.button("SETTINGS", bx, yy, bw, bh)) { g.audio.play("click"); next = new SettingsScreen(g, this); }
+            if (ui.button("TIMES", Math.min(W - bw - 40f, W / 2 + 240f), y0 - 176, bw, bh)) { g.audio.play("click"); next = new TimesScreen(g, this); }      // times table (own spot in the right column; the coordinator reflows it)
             yy -= 88;
             if (ui.button("CREDITS", bx, yy, bw, bh)) { g.audio.play("click"); next = new CreditsScreen(g, this); }
         }

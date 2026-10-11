@@ -38,7 +38,7 @@ public final class SaveStore {
         recoveredFromCorruption = true;
     }
 
-    public void saveGame(SaveData d) { try { Json j = json(); j.setUsePrototypes(false); writeAtomic("save.json", j.toJson(d)); }   // every field, so the version number is always written (a default-valued version would be left out and read back as 0)
+    public void saveGame(SaveData d) { d.syncRecords(); try { Json j = json(); j.setUsePrototypes(false); writeAtomic("save.json", j.toJson(d)); }   // every field, so the version number is always written (a default-valued version would be left out and read back as 0)
          catch (IOException ignored) { } }
     public void saveSettings(Settings s) { try { writeAtomic("settings.json", json().toJson(s)); } catch (IOException ignored) { } }
 

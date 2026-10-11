@@ -40,6 +40,14 @@ public final class SaveData {
     public float bestFinish = 0f;                // fastest finish ever (0 = none)
     public float bestSplit = 0f;                 // fastest single tower ever (0 = none)
     public float[] bestTotals = new float[0];    // fastest run clock at the Nth unlock, ever
+    // personal records (times table, infinity distance): one self-contained object owned by whoever owns this save, stored as its own JSON text (see RecordsData)
+    public String recordsJson = "";
+    private transient RecordsData recordsObj;
+    public RecordsData records() {
+        if (recordsObj == null) { recordsObj = RecordsData.fromJson(recordsJson); if ((recordsJson == null || recordsJson.isEmpty()) && bestFinish > 0f) recordsObj.bestTotal = bestFinish; }      // an older save only knew its best finish
+        return recordsObj;
+    }
+    public void syncRecords() { if (recordsObj != null) recordsJson = recordsObj.toJson(); }       // call before writing
 
     /** A run that was in progress when an update changed the rules, kept as a stamped record (it cannot be resumed: its castles and obstacles came from the old rules). */
     public static final class LegacyRun {

@@ -31,6 +31,7 @@ public final class DesktopPlatform implements Platform {
     public final GraphicsManager graphics;
     private MenuNav nav;
     private ClimbGame g;
+    private final SteamManager steam = new SteamManager();     // Steam achievements (Windows); a silent no-op when Steam is not running
     private float hintT, saveClock;
     private InputManager.Device lastHintDevice = InputManager.Device.KEYBOARD;
     private boolean dirty;
@@ -62,7 +63,8 @@ public final class DesktopPlatform implements Platform {
         g = game; sources = sourceFactory.get(); input = new InputManager(cfg, sources); nav = new MenuNav(input);
         game.ui.nav = nav;
         try { graphics.start(game); save(); } catch (RuntimeException e) { DesktopLog.error("graphics setup failed; using the defaults", e); }
-            }
+        steam.init();                      // Steam achievements: silent if the Steam client is not running
+    }
 
     /** desktop.log in the data folder: startup time and frame pacing of this run (the evidence the packaged build can give without a console). */
     private void trace(long nowNs) {
@@ -85,6 +87,7 @@ public final class DesktopPlatform implements Platform {
 
     @Override public void frame(float dt) {
         trace(System.nanoTime());
+        steam.runCallbacks();              // pump Steam once per frame (no-op when Steam is not running)
         if (DesktopLauncher.exitAfter > 0f && (System.nanoTime() - startNs) / 1e9f > DesktopLauncher.exitAfter) { DesktopLauncher.exitAfter = 0f; DesktopLog.append("exit requested by --exit-after"); Gdx.app.exit(); }
         input.update(Math.min(dt, 0.1f));
         if (sources.justPressed(Input.Keys.F11) || (sources.justPressed(Input.Keys.ENTER) && (sources.down(Input.Keys.ALT_LEFT) || sources.down(Input.Keys.ALT_RIGHT)))) { display.toggle(cfg); save(); }
@@ -141,5 +144,7 @@ public final class DesktopPlatform implements Platform {
 
     @Override public List<SettingsTab> settingsTabs() { return Arrays.<SettingsTab>asList(new DesktopTabs.DisplayTab(this), new DesktopTabs.GraphicsTab(this), new DesktopTabs.ControlsTab(this)); }
 
-    @Override public void dispose() { save(); }
+    @Override public com.hotatticgames.climbup.platform.Achievements achievements() { return steam.achievements(); }
+
+    @Override public void dispose() { steam.shutdown(); save(); }
 }

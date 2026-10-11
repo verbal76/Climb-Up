@@ -7,6 +7,10 @@ dependencies {
     implementation "com.badlogicgames.gdx:gdx-platform:$gdxVersion:natives-desktop"
     implementation "com.badlogicgames.gdx-controllers:gdx-controllers-core:$controllersVersion"
     implementation "com.badlogicgames.gdx-controllers:gdx-controllers-desktop:$controllersVersion"
+    // Steam achievements (Windows/desktop only; never added to :core or :android). Bundles the Steamworks SDK
+    // redistributable natives. MIT-licensed wrapper over Valve's Steamworks SDK (a platform-SDK exception to the
+    // CC0 asset policy - it is required to ship on Steam and makes no network calls of its own).
+    implementation "com.code-disaster.steamworks4j:steamworks4j:1.9.0"
     testImplementation 'junit:junit:4.13.2'
 }
 tasks.named("test") { testLogging { events "passed", "failed", "skipped"; exceptionFormat "full" } }

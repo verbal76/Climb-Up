@@ -28,7 +28,9 @@ build/windows/steam/scripts/*.vdf       app/depot build TEMPLATES (placeholders 
 
 ## Notes
 * Saves: `%APPDATA%\HotAtticGames\Upwardly` (not the install folder, so Steam updates never touch them). Steam Cloud is deferred.
-* The game makes no network calls. Steam supplies updates.
-* Not shipped / deferred: Steamworks API, achievements, cards, cloud, leaderboards, Workshop, multiplayer.
+* The game makes no network calls of its own. Steam supplies updates, and the Steam client does any online work for achievements/stats.
+* **Achievements: IMPLEMENTED** (branch `exp/feature-steam`, Windows/desktop only) via the Steamworks `SteamUserStats` API through the MIT-licensed `steamworks4j` wrapper (added to `:desktop` only). The App ID is `5427130`. 27 achievements - see `docs/windows/STEAM_ACHIEVEMENTS.md`. Steam init fails silently when the client is not running, so the plain zip build is unaffected. The owner must create the matching achievement/stat definitions in Steamworks before they can unlock.
+* `steam_appid.txt` (at the repo root, contents `5427130`) is a DEV convenience only so `gradlew :desktop:run` can talk to a local Steam client. It is NOT bundled by `windowsJar`/`package.ps1` and must never ship in a release (Steam provides the App ID when it launches the real build).
+* Still deferred / not shipped: Steam Cloud, trading cards, leaderboards, Workshop, multiplayer, Rich Presence.
 * The runtime is not code-signed; Windows SmartScreen may warn on a non-Steam copy. Signing certificates are an owner decision.
 * Antivirus false positives on unsigned jpackage apps are possible; Steam distribution avoids most of this.

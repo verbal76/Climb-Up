@@ -36,6 +36,8 @@ public interface Platform {
     boolean drawPauseButton(Ui ui, float x, float y, float size);
     /** Extra Settings tabs (display, controls). Empty on mobile. */
     List<SettingsTab> settingsTabs();
+    /** The achievements/stats sink for this launcher. Default: a no-op (Android, headless). The Windows launcher returns a Steam-backed one. */
+    default Achievements achievements() { return Achievements.NONE; }
     /** Releases platform resources. */
     void dispose();
 

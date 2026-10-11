@@ -73,6 +73,22 @@ public class AimedCannonTest {
         assertEquals("not shot", 0, s.hits); assertTrue("never fired", s.aimFireT[0] < -1e8f);
     }
 
+    @Test public void theBarrelTurnsToFaceAHeroClimbingUpTowardAPillarCannonBeforeHeIsLevel() throws Exception {
+        Tuning t = TestUtil.tuning();
+        Course c = new Course(0, t.circumference());
+        Element plat = new Element(Element.Type.STATIC, 12f, 0f, 8f); plat.checkpoint = true; c.add(plat);
+        Element h = new Element(Element.Type.AIMED, 10f, 9.0f, 0f); h.period = 4.4f; h.phase = 0f; h.anchor = 0; c.hazards.add(h);   // a turret high on a pillar
+        Sim s = Sim.startOn(c, t, 0); s.s = 12f; s.y = 0f; s.mode = Sim.Mode.GROUND; s.onElem = 0;     // the hero on the platform below it, ~8 m under the barrel: below its firing layer, approaching from beneath
+        InputState in = new InputState();
+        for (int i = 0; i < (int) (h.period * Element.AIM_LOCK * 0.95f * 60); i++) { in.clear(); s.s = 12f; s.y = 0f; s.vx = s.vy = 0f; s.step(in); s.consumeEvents(); }
+        float towardHero = (float) Math.atan2(0.7f - h.y, 12f - 10f);                       // steeply down and to the side
+        assertEquals("the barrel turned to face the hero below, not idling straight up", towardHero, s.aimAng[0], 0.25f);
+        assertTrue("well away from the idle-up (straight up) position", Math.abs(s.aimAng[0] - (float) Math.PI * 0.5f) > 0.6f);
+        for (int i = 0; i < 60 * 12; i++) { in.clear(); s.s = 12f; s.y = 0f; s.vx = s.vy = 0f; s.step(in); s.consumeEvents(); }   // several more cycles
+        assertEquals("but it never shoots across its own layer", 0, s.hits);
+        assertTrue("and never fires at the lower layer", s.aimFireT[0] < -1e8f);
+    }
+
     @Test public void lateGameSlicesContainAimedCannonsAndTheyArePlacedOnPlatformsWithClearance() throws Exception {
         Tuning t = TestUtil.tuning(); t.zoneHeight = 50f;                 // compress the worlds so the late game (night world on) is reached within a few slices
         int aimed = 0;

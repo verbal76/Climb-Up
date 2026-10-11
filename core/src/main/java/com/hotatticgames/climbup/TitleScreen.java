@@ -108,19 +108,20 @@ public final class TitleScreen extends ScreenAdapter {
 
     /** The main menu buttons, top-left first. The first one is the big accent button; EXIT is always last. (A TIMES button goes between SETTINGS and CREDITS: add it here and in {@link #choose}.) */
     enum Item {
-        PLAY, NEW_RUN, PLAYERS, SETTINGS, CREDITS, EXIT;
+        PLAY, NEW_RUN, PLAYERS, SETTINGS, TIMES, CREDITS, EXIT;
         String label(boolean hasClimb) {
             switch (this) {
                 case PLAY: return hasClimb ? "CONTINUE" : "PLAY";
                 case NEW_RUN: return "NEW RUN";
                 case PLAYERS: return "PLAYERS";
                 case SETTINGS: return "SETTINGS";
+                case TIMES: return "TIMES";
                 case CREDITS: return "CREDITS";
                 default: return "EXIT";
             }
         }
     }
-    private static final Item[] WITH_CLIMB = Item.values(), NO_CLIMB = {Item.PLAY, Item.PLAYERS, Item.SETTINGS, Item.CREDITS, Item.EXIT};
+    private static final Item[] WITH_CLIMB = Item.values(), NO_CLIMB = {Item.PLAY, Item.PLAYERS, Item.SETTINGS, Item.TIMES, Item.CREDITS, Item.EXIT};
     static Item[] menu(boolean hasClimb) { return hasClimb ? WITH_CLIMB : NO_CLIMB; }      // NEW RUN only exists when there is a climb to replace
 
     private static final Color PLATE = new Color(0.05f, 0.07f, 0.14f, 0.6f);
@@ -131,6 +132,7 @@ public final class TitleScreen extends ScreenAdapter {
             case NEW_RUN: confirmNew = true; break;                 // replaces the saved climb: asks first
             case PLAYERS: next = new PlayersScreen(g, this); break;
             case SETTINGS: next = new SettingsScreen(g, this); break;
+            case TIMES: next = new TimesScreen(g, this); break;          // the speed-run times table (from the records feature)
             case CREDITS: next = new CreditsScreen(g, this); break;
             default: exitRequested = true;
         }

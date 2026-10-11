@@ -21,7 +21,7 @@ public class SlabTopTest {
     private static Element slab(Sim s) { return s.course.hazards.get(0); }
 
     @Test public void landingOnTheTopIsSafeAndTheSlabCarriesTheHeroUp() throws Exception {
-        Sim s = world(0.80f);              // slab at its lowest, about to rise (top 1.0 m up, rising 4 m/s)
+        Sim s = world(0.45f);              // slab at its lowest, about to rise
         s.s = 10f; s.mode = Sim.Mode.AIR; s.onElem = -1; s.y = 2.2f; s.vy = -1f; s.vx = 0f;
         InputState in = new InputState(); boolean landed = false; float firstTop = 0; int risen = 0;
         for (int i = 0; i < 70; i++) {
@@ -36,7 +36,7 @@ public class SlabTopTest {
     }
 
     @Test public void aSlamThrowsAHeroStandingOnTopOffGentlyAndHurtsNoOne() throws Exception {
-        Sim s = world(0.60f);              // slab hovering at the top of its travel, about to tremble and slam
+        Sim s = world(0.10f);              // slab paused at the top, about to tremble and slam
         s.mode = Sim.Mode.GROUND; s.onElem = -1; s.onSlab = 0; s.s = 10f; s.y = slab(s).dropTop(s.time); s.vx = s.vy = 0f;
         InputState in = new InputState(); boolean bounced = false; float peakVy = 0;
         for (int i = 0; i < 400; i++) {
@@ -49,7 +49,7 @@ public class SlabTopTest {
     }
 
     @Test public void theSpikedUndersideStillHurts() throws Exception {
-        Sim s = world(0.60f);
+        Sim s = world(0.10f);
         s.s = 10f; s.mode = Sim.Mode.GROUND; s.onElem = 0; s.y = 0f; s.vx = 0f;
         InputState in = new InputState();
         for (int i = 0; i < 90; i++) { in.clear(); s.step(in); s.consumeEvents(); }
@@ -57,7 +57,7 @@ public class SlabTopTest {
     }
 
     @Test public void theBodyOfTheSlabAboveItsSpikesDoesNotHurt() throws Exception {
-        Sim s = world(0.80f);              // slab down: spikes 0..0.5, body 0.5..1.0 above the platform
+        Sim s = world(0.38f);              // slab down (resting): spikes 0..0.5, body 0.5..1.0 above the platform
         s.s = 10f; s.mode = Sim.Mode.AIR; s.onElem = -1; s.y = 0.6f; s.vy = 0f; s.vx = 0f; s.invuln = 0f;
         InputState in = new InputState(); in.clear(); s.step(in);
         assertEquals("beside the stone body, above the spikes", 0, s.hits);

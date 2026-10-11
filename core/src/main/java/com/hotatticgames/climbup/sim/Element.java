@@ -111,14 +111,14 @@ public final class Element {
         return 0.62f * (1f - (c - st - d) / 0.04f);
     }
 
-    /** Spiked stone block on a chain: hovers at y+amp, shakes, slams down to y, rests, rises. Returns the height of its spiked underside. */
+    /** Spiked stone block on a chain: pauses briefly at y+amp, shakes, slams down to y, rests, then rises slowly back. Returns the height of its spiked underside. */
     public float dropBottom(float t) {
         float c = cyc(t), hi = y + amp, lo = y;
-        if (c < 0.50f) return hi;
-        if (c < 0.62f) return hi + 0.05f * (float) Math.sin(c * 220f);              // telegraph: it trembles
-        if (c < 0.68f) { float k = (c - 0.62f) / 0.06f; return hi + (lo - hi) * k * k; }
-        if (c < 0.80f) return lo;
-        return lo + (hi - lo) * (c - 0.80f) / 0.20f;
+        if (c < 0.15f) return hi;                                                   // brief pause at the top, then it strikes (was a long 0.50 hover that made the first drop feel too slow to be a threat)
+        if (c < 0.27f) return hi + 0.05f * (float) Math.sin(c * 220f);              // telegraph: it trembles
+        if (c < 0.33f) { float k = (c - 0.27f) / 0.06f; return hi + (lo - hi) * k * k; }   // slam (same quickness as before)
+        if (c < 0.45f) return lo;                                                   // rest at the bottom (same)
+        return lo + (hi - lo) * (c - 0.45f) / 0.55f;                                // slow rise back up fills the rest of the cycle, so the slam-to-slam period is unchanged
     }
     public static final float DROP_H = 1.0f;
     /** The slab is a 0.5 m stone block whose underside carries the spikes: only the lower SPIKE_H of the DROP_H box hurts; the top is a safe surface (see Sim.landOnSlab). */

@@ -566,6 +566,7 @@ public final class CourseGenerator {
         c.finishRoute();
         Random dr = new Random(c.seed * 0x2545F4914F6CDD1DL + 99 + salt * 7919L);
         int rs = c.routeSize();
+        java.util.Set<Integer> anchored = new java.util.HashSet<>();
         for (int a = lo; a < Math.min(rs - 4, hi + 1); a++) {
             Element p = c.get(a);
             if (p.type != Element.Type.STATIC || p.w < 3f) continue;
@@ -573,19 +574,34 @@ public final class CourseGenerator {
             for (int again = 0; again < 2; again++) {          // a second, different try when the first does not fit the surrounding geometry
                 pendingHaz = new ArrayList<>();
                 List<Element> es = buildDecoy(p, a, dr);
-                if (tryDecoy(es, pendingHaz, a)) { decoys += es.size(); break; }
+                if (tryDecoy(es, pendingHaz, a)) { decoys += es.size(); anchored.add(a); break; }
             }
+        }
+        // Guarantee that long dead-end spurs appear (DeadEndTest). This runs from a SEPARATE, deterministic RNG and only on
+        // platforms that did not already get a decoy, so the main decoy pass above stays byte-for-byte identical - the streaming
+        // autopilot is sensitive to any shift in it (TowerStreamingTest). The added spurs are off-route, hazard-free dead ends.
+        Random lr = new Random(c.seed * 0x9E3779B97F4A7C15L + 1013 + salt * 6367L);
+        int wantLong = 1;
+        for (int a = lo; a < Math.min(rs - 4, hi + 1) && wantLong > 0; a++) {
+            Element p = c.get(a);
+            if (p.type != Element.Type.STATIC || p.w < 3f || anchored.contains(a)) continue;
+            if (lr.nextFloat() > 0.5f) continue;              // spread the forced spurs across the slice
+            pendingHaz = new ArrayList<>();
+            List<Element> es = buildDecoy(p, a, lr, true);
+            if (tryDecoy(es, pendingHaz, a)) { decoys += es.size(); anchored.add(a); wantLong--; }
         }
         addKeyRooms();          // last, so every key-room link is proven against the final geometry
     }
 
     /** Dead-end spurs (forward and gently down, or backward and up), crumbling lures, unreachable stepping stones, and trapped ledges guarded by hazards. */
-    private List<Element> buildDecoy(Element p, int a, Random dr) {
+    private List<Element> buildDecoy(Element p, int a, Random dr) { return buildDecoy(p, a, dr, false); }
+    /** {@code forceLong}: always build a long spur (used by the separate-RNG long-spur pass so the main decoy RNG stays byte-identical). */
+    private List<Element> buildDecoy(Element p, int a, Random dr, boolean forceLong) {
         List<Element> l = new ArrayList<>();
         int kind = dr.nextInt(12);
         float inten = intensity(p.y);
         // a longer dead end: four to six steps ending on a wide, plainly safe platform.
-        boolean longSpur = kind >= 10;
+        boolean longSpur = kind >= 10 || forceLong;
         if (longSpur) kind = dr.nextInt(7);
         if (kind >= 8 && inten <= 0f) kind = dr.nextInt(8);
         if (kind >= 8) {

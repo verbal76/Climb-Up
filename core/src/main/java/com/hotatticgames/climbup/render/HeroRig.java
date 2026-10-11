@@ -275,6 +275,10 @@ public final class HeroRig implements Disposable {
     /** Test hook (-Dclimb.animCycle=true): cycles through every animation state, 1.5 s each, for contact-sheet screenshots. */
     private static final boolean CYCLE = Boolean.getBoolean("climb.animCycle");
     private float cycleClock;
+    private float climbRefY, climbRefS; private boolean climbRefSet;   // the hero's own position last frame: the climb/shimmy cycle advances by real travel per render FRAME, not per 60 Hz sim step, so it looks identical at any refresh rate
+
+    /** Distance travelled since the last frame, for advancing the climb/shimmy cycle by real movement rather than frame count. Returns 0 for an implausibly large jump (a floating-origin rebase or a teleport) so the cycle never lurches, and is frame-rate independent: the same travel advances the cycle the same amount at 60 or 300 fps. */
+    static float frameAdvance(float delta) { float d = Math.abs(delta); return d > 1.5f ? 0f : d; }
 
     private Anim pick(Sim sim, float speed) {
         if (CYCLE) {
@@ -317,9 +321,12 @@ public final class HeroRig implements Disposable {
         if (landT > 0) landT -= dt;
         cycleClock += dt;
         anim = pick(sim, speed);
+        if (!climbRefSet) { climbRefY = sim.y; climbRefS = sim.s; climbRefSet = true; }
+        float climbTravel = frameAdvance(sim.y - climbRefY), shimmyTravel = frameAdvance(sim.course.dsWrap(sim.s, climbRefS));
+        climbRefY = sim.y; climbRefS = sim.s;
         if (CYCLE && (anim == Anim.CLIMB || anim == Anim.SHIMMY)) climbPhase += dt * 2.8f;
-        else if (anim == Anim.CLIMB) climbPhase += Math.abs(sim.y - sim.py0) * 2.2f;            // a slow, deliberate inchworm pull up the rope (was 5.5, which read as a fast twitch)
-        else if (anim == Anim.SHIMMY) climbPhase += Math.abs(sim.course.dsWrap(sim.s, sim.ps0)) * 1.9f;   // likewise along the cable (was 4.5)
+        else if (anim == Anim.CLIMB) climbPhase += climbTravel * 2.2f;            // inchworm pull up the rope, advanced by the distance actually climbed THIS FRAME (the old delta was measured per 60 Hz sim step but added every render frame, so it ran ~refresh/60 too fast on a 144 Hz+ display)
+        else if (anim == Anim.SHIMMY) climbPhase += shimmyTravel * 1.9f;          // likewise along the cable
         lineMove += (((anim == Anim.CLIMB || anim == Anim.SHIMMY) ? 1f : 0f) - lineMove) * Math.min(1f, 14f * dt);      // eases the hand-over-hand in and out (the pose never snaps between hanging and moving)
 
         boolean still = sim.mode == Sim.Mode.GROUND && speed < 0.4f && landT <= 0 && hitT <= 0 && !sim.won;

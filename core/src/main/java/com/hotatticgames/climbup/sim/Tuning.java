@@ -7,6 +7,7 @@ public class Tuning {
     public float radius = 10f;
     public float runSpeed = 5.6f, groundAccel = 48f, groundDecel = 60f, airAccel = 28f, airDrag = 3f;
     public float gravity = 34f, jumpVel = 11.5f, jumpCutMul = 0.45f, maxFall = 24f;
+    public float wetGrip = 0.12f;           // wet (rain-cloud) platforms: ground acceleration and braking are this fraction of normal, so the hero slides
     public float coyote = 0.12f, jumpBuffer = 0.13f;
     public float halfWidth = 0.28f, height = 1.25f, handHeight = 1.15f, edgeOverhang = 0.2f;
     public float padBounce = 21f, padBounceHeld = 24f;

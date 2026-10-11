@@ -583,7 +583,7 @@ public final class Autopilot {
             int guard = (int) (20f / Sim.DT);
             while (guard-- > 0 && !succeeded(real, a)) {
                 in.clear(); p.act(real, in); real.step(in);
-                if (real.setbacks() != fallsBefore) { rep.failedLink = a; rep.simTime = real.time; return rep; }
+                if (real.setbacks() != fallsBefore) { rep.failedLink = a; rep.simTime = real.time; rep.failInfo = String.format("setback while executing the move: hits=%d falls=%d mode=%s s=%.2f y=%.2f", real.hits, real.falls, real.mode, real.s, real.y) + (real.hitBy != null ? " lastHazard=" + real.hitBy.type + String.format(" s=%.2f y=%.2f anchor=%d", real.hitBy.s, real.hitBy.y, real.hitBy.anchor) : ""); return rep; }
             }
             if (!succeeded(real, a)) { rep.failedLink = a; rep.simTime = real.time; return rep; }
             // settle: finish pull-ups and keep going from the attached element

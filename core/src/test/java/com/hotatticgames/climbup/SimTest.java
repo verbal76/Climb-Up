@@ -66,9 +66,14 @@ public class SimTest {
         for (int i = 0; i < 200 && !roped; i++) { in.clear(); in.moveX = 1; in.jumpHeld = true; in.jumpPressed = i == 40; s.step(in); roped = s.mode == Sim.Mode.ROPE; }
         assertTrue("grabbed the rope by jumping into it", roped);
         float y0 = s.y;
-        for (int i = 0; i < 60; i++) { in.clear(); in.moveY = 1; s.step(in); }
-        assertTrue("climbs up", s.y > y0 + 1.5f);
-        in.clear(); in.jumpPressed = true; in.moveX = -1; s.step(in);
+        // climb a good way up, then leap off sideways while still on the rope (holding up into the very top now pulls up onto the beam, which RopeTopTest covers)
+        boolean leapt = false;
+        for (int i = 0; i < 120 && !leapt; i++) {
+            in.clear();
+            if (s.mode == Sim.Mode.ROPE && s.y > y0 + 1.5f) { in.jumpPressed = true; in.moveX = -1; s.step(in); leapt = true; }
+            else { in.moveY = 1f; s.step(in); }
+        }
+        assertTrue("climbs up then leaps off the rope", leapt);
         assertEquals(Sim.Mode.AIR, s.mode); assertTrue(s.vx < -3f);
     }
 

@@ -274,8 +274,10 @@ public final class WorldRenderer implements Disposable {
                 int knots = (int) e.len;
                 for (int k = 1; k <= knots; k++) ps.add(boxPart(0, -k + 0.5f, 0, 0.2f, 0.12f, 0.2f, new Color(0.7f, 0.52f, 0.28f, 1f)));
                 ps.add(boxPart(0, 0.12f, -0.05f, 2.4f, 0.24f, 0.26f, beam));           // a thin standing board: the climber hauls himself up from behind it
-                ps.add(boxPart(-1.1f, -0.8f, -0.05f, 0.2f, 1.9f, 0.2f, beam));        // the posts run up into the board (they used to stop 0.05 short of it, leaving a gap)
-                ps.add(boxPart(1.1f, -0.8f, -0.05f, 0.2f, 1.9f, 0.2f, beam));
+                for (int sd = -1; sd <= 1; sd += 2) {                                   // the support posts stand behind the walking lane, clear of platforms and of the climber
+                    ps.add(boxPart(sd * 1.1f, -0.8f, -0.85f, 0.2f, 1.9f, 0.2f, beam));
+                    ps.add(boxPart(sd * 1.1f, 0.02f, -0.48f, 0.2f, 0.2f, 0.75f, beam));
+                }
                 break;
             }
             case CABLE: {
@@ -318,6 +320,42 @@ public final class WorldRenderer implements Disposable {
             for (Part q : f) { q.fixed = true; ps.add(q); }
         }
     }
+
+    private ModelInstance rainLow, rainHigh;
+    private final Color rainCol = new Color(0.62f, 0.78f, 1f, 1f);
+    private ModelInstance rainCloud(boolean low) {
+        ModelInstance m = low ? rainLow : rainHigh;
+        if (m == null) {
+            m = new ModelInstance(models.pack(low ? "cloud_2" : "cloud_3"));
+            m.materials.get(0).set(new BlendingAttribute(0.9f), ColorAttribute.createDiffuse(low ? new Color(0.42f, 0.38f, 0.74f, 1f) : new Color(0.94f, 0.95f, 1f, 1f)),
+                    ColorAttribute.createEmissive(low ? 0.10f : 0.26f, low ? 0.08f : 0.26f, low ? 0.22f : 0.30f, 1f));
+            if (low) rainLow = m; else rainHigh = m;
+        }
+        return m;
+    }
+
+    /**
+     * A wet platform: a foreground rain cloud (purplish-blue underside, white above) over it, rain falling from the cloud onto the platform, and a wet shimmer on its top face. With reduced motion the
+     * rain is a few still streaks and the shimmer does not move.
+     */
+    private void drawRain(Element e, float es, float ey, float camS, float time) {
+        float w = e.w, cy = ey + 4.3f, sc = Math.max(0.9f, w * 0.23f);
+        ModelInstance lo = rainCloud(true), hi = rainCloud(false);
+        place(lo, es, cy, -2.2f, camS, sc, sc * 0.8f, sc, 0f); batch.render(lo, env);
+        place(hi, es + 0.2f, cy + 0.55f * sc, -1.9f, camS, sc * 1.05f, sc * 0.9f, sc * 1.05f, 18f); batch.render(hi, env);
+        // wet shimmer on the top face (clear of the platform top by 2 cm): a pale film and a highlight that slides along it
+        drawBox(es, ey + SHIMMER_LIFT, 0f, camS, w * 0.97f, 0.02f, 1.5f, 0.55f, 0.72f, 0.92f);
+        float hl = reducedMotion ? 0f : MathUtils.sin(time * 1.3f) * w * 0.35f;
+        drawBox(es + hl, ey + SHIMMER_LIFT + 0.01f, 0f, camS, w * 0.16f, 0.02f, 1.3f, 0.86f, 0.94f, 1f);
+        if (reducedMotion) {
+            for (int k = -2; k <= 2; k++) drawBox(es + k * w * 0.17f, ey + 0.4f, 0.1f, camS, 0.04f, cy - ey - 0.8f, 0.04f, rainCol.r, rainCol.g, rainCol.b);
+        } else if (quality > 0) {
+            float rate = (quality > 1 ? 70f : 40f) * frameDt;
+            for (int n = (int) rate + (MathUtils.random() < rate - (int) rate ? 1 : 0); n > 0; n--)
+                particles.spawn(es + MathUtils.random(-0.5f, 0.5f) * w * 0.8f, cy - 0.4f, 0f, -10f - MathUtils.random(3f), rainCol, 0.05f, 0f, (cy - ey - 0.4f) / 11.5f);
+        }
+    }
+    static final float SHIMMER_LIFT = 0.02f;
 
     /** Block heights of the two mover models (block-moving-blue.obj is 0.5 m tall, block-moving.obj 0.3 m). */
     public static final float BLUE_MOVER_BLOCK_H = 0.5f, MOVER_BLOCK_H = 0.3f;
@@ -428,12 +466,13 @@ public final class WorldRenderer implements Disposable {
         cam.up.set(0, 1, 0);
         cam.update();
 
-        Gdx.gl.glViewport(0, 0, Gdx.graphics.getBackBufferWidth(), Gdx.graphics.getBackBufferHeight());
+        boolean scaled = beginScaledScene();
+        if (!scaled) Gdx.gl.glViewport(0, 0, Gdx.graphics.getBackBufferWidth(), Gdx.graphics.getBackBufferHeight());
         Gdx.gl.glClearColor(skyBot.r, skyBot.g, skyBot.b, 1f);
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT | GL20.GL_DEPTH_BUFFER_BIT);
         bg.render(sb, shapes, skyTop, skyBot, ps, bgY, zoneF, T.circumference(), reducedMotion, time);
         Gdx.gl.glClear(GL20.GL_DEPTH_BUFFER_BIT);
-        if (quality > 0) bg.renderGlow(sb, zoneF);
+        if (quality > 0 && GfxHooks.skyEffects) bg.renderGlow(sb, zoneF);
         if (quality > 0) {                 // planets and sky ships far behind the tower (wide-range camera, drawn first)
             if (space == null) { farCam = new com.badlogic.gdx.graphics.PerspectiveCamera(40f, cam.viewportWidth, cam.viewportHeight); farCam.near = 1f; farCam.far = 2500f; space = new SpaceScene(models, farCam, T.radius); }
             space.cloudGlow.set(skyTop).lerp(skyBot, 0.5f).lerp(Color.WHITE, 0.4f);
@@ -441,11 +480,11 @@ public final class WorldRenderer implements Disposable {
             if (space.whoosh) whooshPending = true;
             farCam.viewportWidth = cam.viewportWidth; farCam.viewportHeight = cam.viewportHeight; farCam.fieldOfView = cam.fieldOfView;
             farCam.position.set(cam.position); farCam.direction.set(cam.direction); farCam.up.set(cam.up); farCam.update();
-            batch.begin(farCam); space.renderFar(batch, ps, bgY, zoneF); batch.end();
+            if (GfxHooks.skyEffects) { batch.begin(farCam); space.renderFar(batch, ps, bgY, zoneF); batch.end(); }
             Gdx.gl.glClear(GL20.GL_DEPTH_BUFFER_BIT);
         }
 
-        if (quality > 0) bg.renderShafts(sb, zoneF, reducedMotion, time);
+        if (quality > 0 && GfxHooks.skyEffects) bg.renderShafts(sb, zoneF, reducedMotion, time);
         batch.begin(cam);
         syncVis();
         int lo = Math.max(0, sim.winLo), hi = Math.min(vis.size() - 1, sim.winHi);
@@ -466,7 +505,7 @@ public final class WorldRenderer implements Disposable {
             if (!v.built) build(i);
             drawElement(sim, i, v, es, ey, ps, time);
         }
-        for (int k = 0, cnt = sim.hz == null ? course.hazards.size() : sim.hz.length; k < cnt; k++) { int hi2 = sim.hz == null ? k : sim.hz[k]; drawHazard(course.hazards.get(hi2), sim.time + alpha * Sim.DT, ps, time, hi2 < sim.featDone.length && sim.featDone[hi2]); }
+        for (int k = 0, cnt = sim.hz == null ? course.hazards.size() : sim.hz.length; k < cnt; k++) { int hi2 = sim.hz == null ? k : sim.hz[k]; rsim = sim; rhz = hi2; drawHazard(course.hazards.get(hi2), sim.time + alpha * Sim.DT, ps, time, hi2 < sim.featDone.length && sim.featDone[hi2]); }
         if (space != null && quality > 0) space.renderNear(batch, env, (inst, arc, yy, dz, sx, sy, sz, yaw) -> place(inst, arc, yy, dz, ps, sx, sy, sz, yaw), ps, camY, py, 0f, reducedMotion, originY);
         // free the model parts of anything the player has left behind, above or below the simulated window (a fall or a long descent can build far more than a climb ever does); freed parts are rebuilt on demand
         for (int q = 0, n = Math.min(builtN, 48); q < n && builtN > 0; q++) {
@@ -479,7 +518,41 @@ public final class WorldRenderer implements Disposable {
         if (showPlayer) drawPlayer(sim, dt, time, ps, py, alpha);
         particles.render(batch, env, ps, T, course);
         batch.end();
+        if (scaled) endScaledScene();
         drawVignette(Palette.blendF(Palette.VIGNETTE, zoneF));
+    }
+
+    // ---- optional reduced-resolution scene (GfxHooks.renderScale < 1): the 3D scene is drawn into a smaller buffer and stretched to the window; at 1 nothing here runs
+    private com.badlogic.gdx.graphics.glutils.FrameBuffer sceneFbo;
+
+    private boolean beginScaledScene() {
+        float k = GfxHooks.renderScale;
+        if (!(k < 0.99f)) { if (sceneFbo != null) { sceneFbo.dispose(); sceneFbo = null; } return false; }
+        int bw = Math.max(1, Gdx.graphics.getBackBufferWidth()), bh = Math.max(1, Gdx.graphics.getBackBufferHeight());
+        int w = Math.max(64, Math.round(bw * Math.max(0.25f, k))), h = Math.max(36, Math.round(bh * Math.max(0.25f, k)));
+        try {
+            if (sceneFbo == null || sceneFbo.getWidth() != w || sceneFbo.getHeight() != h) {
+                if (sceneFbo != null) sceneFbo.dispose();
+                sceneFbo = new com.badlogic.gdx.graphics.glutils.FrameBuffer(com.badlogic.gdx.graphics.Pixmap.Format.RGBA8888, w, h, true);
+                sceneFbo.getColorBufferTexture().setFilter(com.badlogic.gdx.graphics.Texture.TextureFilter.Linear, com.badlogic.gdx.graphics.Texture.TextureFilter.Linear);
+            }
+            sceneFbo.begin();
+            return true;
+        } catch (RuntimeException e) {          // this graphics driver cannot do it: draw at full size from now on
+            if (sceneFbo != null) { try { sceneFbo.dispose(); } catch (RuntimeException ignored) { } sceneFbo = null; }
+            GfxHooks.renderScale = 1f;
+            return false;
+        }
+    }
+
+    private void endScaledScene() {
+        sceneFbo.end();
+        int bw = Math.max(1, Gdx.graphics.getBackBufferWidth()), bh = Math.max(1, Gdx.graphics.getBackBufferHeight());
+        Gdx.gl.glDisable(GL20.GL_DEPTH_TEST);
+        sb.getProjectionMatrix().setToOrtho2D(0, 0, bw, bh); sb.setTransformMatrix(new com.badlogic.gdx.math.Matrix4());
+        sb.begin(); sb.disableBlending(); sb.setColor(Color.WHITE);
+        sb.draw(sceneFbo.getColorBufferTexture(), 0, 0, bw, bh, 0, 0, 1, 1);         // v runs bottom-to-top in a framebuffer texture, so (0,0)-(1,1) is upright here
+        sb.end(); sb.enableBlending();
     }
 
     /** A soft dark vignette that pulls the eye to the middle of the screen (stronger at night and in space). */
@@ -548,6 +621,7 @@ public final class WorldRenderer implements Disposable {
             place(p.inst, es + du + shakeX, y + dy + fallY, p.dz + (e.type == Element.Type.MOVE_Z ? e.zAt(sim.time) : 0f), camS, p.sx, sy, p.sz, extraYaw, roll);
             batch.render(p.inst, env);
         }
+        if (e.wet()) drawRain(e, es, ey, camS, time);
         if (e.type == Element.Type.MOVE_Z) drawDepthRail(e, es, ey, camS, sim.time);
         if (course.isCheckpoint(e) && i > 0 && e.type == Element.Type.STATIC) drawGem(sim, i, es, ey, camS, time);
         if (e.type == Element.Type.SWING) drawSwingRopes(e, es, ey, camS);
@@ -742,9 +816,20 @@ public final class WorldRenderer implements Disposable {
     /** A cannonball that has left the screen is dropped: further than the widest view (21:9) reaches, and how many past launches are followed. */
     private static final float CANNON_OFFSCREEN = 14f; private static final int CANNON_TRAIL = 4;
 
+    private Sim rsim; private int rhz;            // the simulation and hazard index being drawn (aimed cannons draw the sim's own aim)
+
+    /** A pack model aimed in the play plane: barrel along +s at angle 0, turned counter-clockwise by {@code deg}, centred at (arc, y). */
+    private void drawPackAimed(String name, float arc, float y, float camS, float deg, float sc) {
+        ModelInstance m = pack(name);
+        float phi = wrapDiff(arc, camS) / T.radius, r = T.radius;
+        m.transform.idt().translate(r * MathUtils.sin(phi), y, -T.radius + r * MathUtils.cos(phi))
+                .rotate(0, 1, 0, phi * MathUtils.radiansToDegrees).rotate(0, 0, 1, deg).rotate(0, 1, 0, CANNON_YAW).scale(sc, sc, sc);
+        batch.render(m, env);
+    }
+
     private void drawHazard(Element h, float t, float camS, float time, boolean done) {
         float cs = h.type == Element.Type.CANNON ? h.s + h.dir * h.len * 0.5f : h.s;
-        float half = h.type == Element.Type.CANNON ? h.len * 0.5f + 1.5f + CANNON_OFFSCREEN : (h.type == Element.Type.SAW_H ? h.amp + 1.5f : 2f);
+        float half = h.type == Element.Type.AIMED ? 17f : h.type == Element.Type.CANNON ? h.len * 0.5f + 1.5f + CANNON_OFFSCREEN : (h.type == Element.Type.SAW_H ? h.amp + 1.5f : 2f);
         float cy = h.type == Element.Type.SAW_V ? h.y + h.amp * 0.5f : h.y;
         if (!visible(cs, cy, camS, half)) return;
         switch (h.type) {
@@ -769,6 +854,22 @@ public final class WorldRenderer implements Disposable {
                     if (Math.abs(course.dsWrap(bs, camS)) > CANNON_OFFSCREEN) continue;
                     drawPack("spikyball", bs, h.yAt(t), 0f, camS, 0.55f, 0.55f, 0.55f, 0f, -bs * 160f);
                 }
+                break;
+            }
+            case AIMED: {
+                // a turret on a pedestal; its barrel is turned by the SIMULATION's own aim, so the picture is where the ball goes. Locked = a red glow that pulses faster; then the ball leaves the barrel's tip.
+                float base = h.y - 2.0f, ang = rsim != null && rhz < rsim.aimAng.length ? rsim.aimAng[rhz] : (float) Math.PI * 0.5f;
+                drawBox(h.s, base, 0f, camS, 1.25f, CANNON_LIFT - 0.1f, 1.25f, 0.34f, 0.31f, 0.40f);
+                drawBox(h.s, base + CANNON_LIFT - 0.1f, 0f, camS, 1.45f, 0.16f, 1.45f, 0.3f, 0.27f, 0.36f);
+                drawPackAimed("cannon", h.s, h.y, camS, ang * MathUtils.radiansToDegrees, PK);
+                float c = h.cyc(t);
+                if (c >= Element.AIM_LOCK && c < Element.AIM_FIRE) {
+                    float k = (c - Element.AIM_LOCK) / (Element.AIM_FIRE - Element.AIM_LOCK), pulse = reducedMotion ? 1f : 0.7f + 0.3f * MathUtils.sin(time * (18f + 30f * k));
+                    float sz = (0.16f + 0.2f * k) * pulse, tip = 0.7f;
+                    drawBox(h.s + (float) Math.cos(ang) * tip - sz * 0.5f, h.y + (float) Math.sin(ang) * tip - sz * 0.5f, 0.2f, camS, sz, sz, sz, 1f, 0.2f, 0.12f);
+                }
+                float[] b = rsim != null ? rsim.aimedBall(rhz, h) : null;
+                if (b != null) drawPack("spikyball", b[0], b[1], 0f, camS, 0.5f, 0.5f, 0.5f, 0f, -b[0] * 160f);
                 break;
             }
             case MORTAR: {
@@ -997,6 +1098,6 @@ public final class WorldRenderer implements Disposable {
     public float getCamY() { return camY; }
 
     @Override public void dispose() {
-        batch.dispose(); shapes.dispose(); sb.dispose(); hero.dispose(); bg.dispose(); if (vignette != null) vignette.dispose();
+        batch.dispose(); shapes.dispose(); sb.dispose(); hero.dispose(); bg.dispose(); if (sceneFbo != null) sceneFbo.dispose(); if (vignette != null) vignette.dispose();
     }
 }

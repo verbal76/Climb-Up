@@ -44,6 +44,24 @@ public final class Element {
     public boolean isHazard() {
         switch (type) { case SAW_H: case SAW_V: case PENDULUM: case CANNON: case SPIKE_TRAP: case SPIKE_BLOCK: case SPIKE_DROP: case MORTAR: case AIMED: return true; default: return false; }
     }
+    /**
+     * Hazards that sit on top of their anchor platform (rather than hanging in a gap, standing beside the path, or flying): when that platform moves, the hazard rides it (see {@link Sim#hazCarryS}).
+     * Mirrors the "sits on" set in CourseGenerator.ownerOf. A spike pad on a moving block therefore moves with the block instead of staying put in world space.
+     */
+    public boolean ridesAnchor() {
+        switch (type) { case SPIKE_TRAP: case SPIKE_BLOCK: case SPIKE_DROP: case SAW_H: case CRAB: return true; default: return false; }
+    }
+    /**
+     * A cannon's firing aim in the play plane, in radians (0 = toward +s, measured counter-clockwise), for the renderer to point the barrel.
+     * A plain CANNON fires along this fixed line; an AIMED cannon turns to track the player, so its live aim is kept per-hazard in {@link Sim#aimAng} and supersedes this idle value; a MORTAR points straight up.
+     */
+    public float fireAim() {
+        switch (type) {
+            case CANNON: return dir >= 0 ? 0f : (float) Math.PI;
+            case AIMED: case MORTAR: return (float) Math.PI * 0.5f;
+            default: return 0f;
+        }
+    }
     /** Platforms that fall apart soon after being stood on. */
     public boolean crumbles() { return type == Type.CRUMBLE || (type == Type.RAMP && skin == 1) || (skin == 1 && (type == Type.MOVE_H || type == Type.MOVE_V || type == Type.SWING)); }
     /** How thick the platform's block is below its top (matches the renderer: wide blocks and the goal are 1 m, narrow ones 0.5 m). Its sides are edges: see Sim.stepAir. */

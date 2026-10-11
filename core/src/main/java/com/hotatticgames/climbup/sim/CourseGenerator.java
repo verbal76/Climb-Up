@@ -15,7 +15,9 @@ import java.util.Random;
  */
 public final class CourseGenerator {
     static final float RAMP_SLOPE = 0.576f;
-    enum Kind { HOP, STAIRS, CRUMBLE, MOVER_H, MOVER_V, PAD, ROPE, CABLE, SWING, GRAB, HAZ, TRAP, SPRING, SEESAW, BRIDGE, RAMP, MOVER_Z, ELEV_FALL, SLIDE_FALL, MORTAR, WET }
+    enum Kind { HOP, STAIRS, CRUMBLE, MOVER_H, MOVER_V, PAD, ROPE, CABLE, SWING, GRAB, HAZ, TRAP, SPRING, SEESAW, BRIDGE, RAMP, MOVER_Z, ELEV_FALL, SLIDE_FALL, MORTAR, WET,
+        /** A long walkable corridor (owner request): room to walk between scenery and stand fully in front of the back wall. */
+        LONG }
 
     private final Tuning T;
     private final Random rnd;
@@ -248,6 +250,7 @@ public final class CourseGenerator {
             }
             Kind k = pick(zone, last);
             if (th == 1 && last.type == Element.Type.STATIC && rnd.nextFloat() < 0.2f) k = Kind.WET;          // the Frost world: some platforms are under a rain cloud (slippery)
+            if (last.wet() && (k == Kind.HAZ || k == Kind.TRAP || k == Kind.MORTAR)) k = Kind.HOP;          // no hazard gap right after a slippery platform: its timing windows assume a normal run-up (SawFairnessTest, 30405f0 fix)
             if (!tryModuleBelow(k, d, th)) {
                 rejected++;
                 boolean ok = false;
@@ -569,7 +572,7 @@ public final class CourseGenerator {
             if (dr.nextFloat() > 0.44f + 0.08f * tier(p.y)) continue;          // more dead ends than before (was 0.30)
             for (int again = 0; again < 2; again++) {          // a second, different try when the first does not fit the surrounding geometry
                 pendingHaz = new ArrayList<>();
-                List<Element> es = buildDecoy(p, a, dr);
+                List<Element> es = buildDecoy(p, a, dr, again == 1);
                 if (tryDecoy(es, pendingHaz, a)) { decoys += es.size(); break; }
             }
         }
@@ -577,11 +580,13 @@ public final class CourseGenerator {
     }
 
     /** Dead-end spurs (forward and gently down, or backward and up), crumbling lures, unreachable stepping stones, and trapped ledges guarded by hazards. */
-    private List<Element> buildDecoy(Element p, int a, Random dr) {
+    private List<Element> buildDecoy(Element p, int a, Random dr, boolean preferLong) {
         List<Element> l = new ArrayList<>();
         int kind = dr.nextInt(12);
         float inten = intensity(p.y);
-        boolean longSpur = kind >= 10;           // a longer dead end: four to six steps ending on a wide, plainly safe platform
+        // a longer dead end: four to six steps ending on a wide, plainly safe platform. The corridor rule (e5db35d) thinned
+        // these to ~1 in 60 slices, so the second try per platform prefers a long spur half the time (the 30405f0 fix).
+        boolean longSpur = kind >= 10 || preferLong;
         if (longSpur) kind = dr.nextInt(7);
         if (kind >= 8 && inten <= 0f) kind = dr.nextInt(8);
         if (kind >= 8) {
@@ -855,6 +860,7 @@ public final class CourseGenerator {
         if (zone >= 1) { w[Kind.MOVER_Z.ordinal()] = 2.5f; w[Kind.ELEV_FALL.ordinal()] = 2f; w[Kind.SLIDE_FALL.ordinal()] = 2f; if (zone == 1) w[Kind.SWING.ordinal()] = 2.5f; }
         float inten = intensity(last.y);
         w[Kind.RAMP.ordinal()] = zone == 0 ? 1.5f : 3f;
+        w[Kind.LONG.ordinal()] = 1.6f;          // some long walkable corridors in every world (owner request); the spiral-pitch controller below de-prioritises them when the climb lags
         if (zone >= 1 && inten > 0f) w[Kind.MORTAR.ordinal()] = 1f + 3f * inten;          // a mortar row: any stage after the first world
         if (zone >= 1) { w[Kind.SEESAW.ordinal()] = 4f; w[Kind.BRIDGE.ordinal()] = 4f; }
         else w[Kind.BRIDGE.ordinal()] = 2f;
@@ -1001,6 +1007,10 @@ public final class CourseGenerator {
         int roll = rnd.nextInt(5);
         float w = roll == 4 ? 9f : 8f;
         Element p = plat(Element.Type.STATIC, uR + gapIn + w / 2f, last.y + dy, w, z);
+        // bug #14: sometimes the whole platform (carrying its red spike pad / block) slides sideways - a moving block with a spike on it.
+        // The spike rides the block (Sim.carryS/carryY), so the block simply translates while the timing across it stays exactly as on firm ground; commit() still proves every crossing.
+        boolean slideCarry = z >= 1 && (roll == 0 || roll == 2) && rnd.nextFloat() < 0.4f;
+        if (slideCarry) { p.type = Element.Type.MOVE_H; p.amp = lerp(0.8f, 1.6f, d); p.period = r(3.6f, 4.8f); p.phase = r(0f, 6.28f); }
         List<Element> es = new ArrayList<>(); es.add(p);
         Element h;
         if (roll == 0) {                // pop-up spikes: run through while they are down
@@ -1204,6 +1214,14 @@ public final class CourseGenerator {
                 float dy = r(0.7f, 1.3f);
                 float frac = 1.28f - 0.06f * attempt;
                 l.add(plat(S, eR + reach(dy) * frac + 1.5f, y0 + dy, 3f, z));
+                break;
+            }
+            case LONG: {
+                // a long, near-flat corridor you can walk along and stand fully in front of (owner request); trivially completable, it just takes more arc, so the spiral-pitch controller climbs after it
+                float dy = r(-0.3f, 0.5f);
+                float w = r(10f, 16f);
+                float gapIn = reach(Math.max(0f, dy)) * lerp(0.45f, 0.8f, d) * r(0.9f, 1.05f);
+                l.add(plat(S, eR + gapIn + w / 2f, y0 + dy, w, z));
                 break;
             }
         }

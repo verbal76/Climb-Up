@@ -29,6 +29,7 @@ import com.hotatticgames.climbup.sim.Tuning;
 public final class WorldRenderer implements Disposable {
     private static final class Part {
         ModelInstance inst; float du, dy, dz, sx = 1, sy = 1, sz = 1, yaw, roll; Color color; boolean fall; boolean tinted = true; boolean fixed; ColorAttribute tintAttr;
+        float localZ;   // optional pre-rotation translate along the model's own Z (model units, applied before scale): used to recentre an off-origin mesh (the ramp) so it can sit at the element centre without a big arc offset
     }
     private static final class Vis { Part[] parts; Element e; boolean built; }
 
@@ -66,6 +67,7 @@ public final class WorldRenderer implements Disposable {
     private double originY, originS;          // the world is expressed relative to a floating origin; absolute height = originY + local y (see Tower)
     private final Color skyTop = new Color(), skyBot = new Color(), tint = new Color(), amb = new Color();
     private final ModelInstance shadow;
+    private final BlendingAttribute shadowBlend;      // the drop shadow's opacity, faded per-frame with the player's height
     private float renderS, renderY;
     public float lastCamS;
     public int cloudsBroken;          // PlayScreen reads and clears this to play the poof sound
@@ -93,14 +95,15 @@ public final class WorldRenderer implements Disposable {
         hKey.set(1f, 0.97f, 0.9f, -0.5f, -0.9f, -0.6f); hFill.set(0.3f, 0.35f, 0.5f, 0.75f, -0.25f, -0.45f); hBounce.set(0.3f, 0.25f, 0.18f, 0.1f, 1f, -0.3f); hRim.set(0.55f, 0.75f, 1f, -0.35f, -0.2f, 1f);
         heroEnv.add(hKey); heroEnv.add(hFill); heroEnv.add(hBounce); heroEnv.add(hRim);
         env.set(new ColorAttribute(ColorAttribute.Fog, 0.8f, 0.9f, 1f, 1f));
-        cam.near = 0.5f; cam.far = 75f;
+        cam.near = 0.5f; cam.far = 64f;      // the climb you are heading into is drawn ~30 units out (see visible()); a nearer far-plane makes the distance-fog haze that geometry in gradually instead of popping it in hard
         for (String n : new String[]{"block-grass", "block-grass-low", "block-grass-long", "block-grass-low-long", "block-snow", "block-snow-low", "block-snow-long", "block-snow-low-long",
                 "block-moving", "block-moving-blue", "platform-fortified", "flag", "chest", "jewel", "tree", "tree-pine-small", "flowers", "mushrooms", "rocks", "plant",
                 "tree-pine-snow-small", "tree-snow", "stones", "sign"}) models.obj(n);
         for (String n : new String[]{"ramp", "rock_1", "rock_2", "rock_3", "rock_4", "rock_large_1", "rock_large_2", "rock_large_3"}) models.space(n);
         particles = new Particles(models);
         shadow = new ModelInstance(models.disc);
-        shadow.materials.get(0).set(ColorAttribute.createDiffuse(0f, 0f, 0f, 1f), new BlendingAttribute(0.28f));
+        shadowBlend = new BlendingAttribute(0.28f);
+        shadow.materials.get(0).set(ColorAttribute.createDiffuse(0f, 0f, 0f, 1f), shadowBlend);
         shadow.materials.get(0).set(ColorAttribute.createEmissive(0, 0, 0, 1));
     }
 
@@ -175,7 +178,11 @@ public final class WorldRenderer implements Disposable {
             case SEESAW: bridgeParts(ps, e.w, true); break;
             case RAMP: {
                 float sc = e.len;
-                Part rp = part(models.space("ramp"), 2.98f * sc, -0.62f * sc, 0f, 0.72f * sc, sc, sc); rp.yaw = -90f; rp.tinted = false; ps.add(rp);
+                // The ramp wedge's walking surface runs model-Z 2.0 (high, top y=1.39) -> 4.1 (low); its centre is model-Z ~3.1.
+                // Lay it IN the walking lane centred on the element: du=0 keeps the mesh's origin at the element centre so place()'s tower-rotation barely turns it
+                // (a large arc offset used to swing the whole rigid wedge ~30 deg around the cylinder, tilting it out of the lane in depth -> "I'm outside the ramp"). localZ recentres the off-origin mesh onto that origin.
+                // sy=0.84 matches the wedge's steeper native slope to the sim's RAMP_SLOPE (0.576); sx shapes the ~1.35 m depth centred on the lane; dy drops the surface mid-point onto e.y.
+                Part rp = part(models.space("ramp"), 0f, -0.571f * sc, 0f, 0.72f * sc, 0.84f * sc, sc); rp.yaw = -90f; rp.localZ = -3.1f; rp.tinted = false; ps.add(rp);
                 if (e.skin == 3) {          // sinking ramps carry two glowing hover pads
                     Color glow = new Color(0.30f, 0.85f, 1f, 1f), pad = new Color(0.30f, 0.32f, 0.40f, 1f);
                     for (int sd = -1; sd <= 1; sd += 2) { ps.add(boxPart(sd * e.halfW() * 0.62f, e.amp * sd * e.halfW() * 0.62f - 0.42f, 0f, 0.7f, 0.18f, 1.1f, pad)); ps.add(boxPart(sd * e.halfW() * 0.62f, e.amp * sd * e.halfW() * 0.62f - 0.56f, 0f, 0.5f, 0.08f, 0.8f, glow)); }
@@ -273,11 +280,14 @@ public final class WorldRenderer implements Disposable {
                 ps.add(boxPart(0, -e.len * 0.5f, 0, 0.11f, e.len, 0.11f, rope));
                 int knots = (int) e.len;
                 for (int k = 1; k <= knots; k++) ps.add(boxPart(0, -k + 0.5f, 0, 0.2f, 0.12f, 0.2f, new Color(0.7f, 0.52f, 0.28f, 1f)));
-                ps.add(boxPart(0, 0.12f, -0.05f, 2.4f, 0.24f, 0.26f, beam));           // a thin standing board: the climber hauls himself up from behind it
-                for (int sd = -1; sd <= 1; sd += 2) {                                   // the support posts stand behind the walking lane, clear of platforms and of the climber
-                    ps.add(boxPart(sd * 1.1f, -0.8f, -0.85f, 0.2f, 1.9f, 0.2f, beam));
-                    ps.add(boxPart(sd * 1.1f, 0.02f, -0.48f, 0.2f, 0.2f, 0.75f, beam));
-                }
+                // Sturdy wooden hanger, entirely behind the walking lane (+dz = away from the camera): a chunky top beam the rope hangs off the front of,
+                // carried by two upright posts tied with a back rail. (The old posts used -dz, which is TOWARDS the camera: they stood in front of the
+                // climber and splayed out like table legs. +0.85 is now genuinely behind the player plane, so nothing ground or climber clips the boards.)
+                Color railC = new Color(0.40f, 0.27f, 0.16f, 1f);
+                ps.add(boxPart(0f, 0.12f, 0.45f, 2.5f, 0.26f, 0.95f, beam));            // top beam (lintel): its front face sits at the lane so the rope hangs from it, its body extends back to the posts
+                for (int sd = -1; sd <= 1; sd += 2)                                     // two upright posts, flush behind the lane, flanking the rope (vertical, not splayed)
+                    ps.add(boxPart(sd * 1.05f, -0.55f, 0.85f, 0.22f, 1.7f, 0.22f, beam));
+                ps.add(boxPart(0f, 0.0f, 0.85f, 2.32f, 0.16f, 0.16f, railC));           // back cross-rail tying the two posts together
                 break;
             }
             case CABLE: {
@@ -396,7 +406,9 @@ public final class WorldRenderer implements Disposable {
             boolean tall = name.startsWith("tree");
             float side = (i == 0 ? -1 : 1) * (w / 2f - 0.7f);
             if (n == 1) side = ((h >> 9) % 2 == 0 ? -1 : 1) * (w / 2f - 0.5f);
-            Part p = part(models.obj(name), side, 0f, 0.5f, 1.35f, 1.35f, 1.35f);      // inside the slab's depth (it spans +-0.85 front to back), so every tree and prop stands on the ground it grows from
+            // Back-of-slab decoration: pushed back (+dz) and flattened in depth (sz) so the whole prop sits behind the walking lane (its front face clears z ~ -0.26, behind the climber's ~+/-0.2 body)
+            // while its back still stays within the slab (z >= -0.85). The player can now stand fully in front of trees/rocks instead of clipping into them. Width and height (sx, sy) are unchanged, so the front silhouette is unaffected.
+            Part p = part(models.obj(name), side, 0f, 0.6f, 1.35f, 1.35f, 0.58f);
             p.tinted = true; ps.add(p);
         }
     }
@@ -416,7 +428,7 @@ public final class WorldRenderer implements Disposable {
 
     private boolean visible(float arc, float y, float camS, float margin) {
         float d = wrapDiff(arc, camS);
-        return Math.abs(d) < 1.3f * T.radius * 1.0f + margin && Math.abs(y - camY) < 16f;
+        return Math.abs(d) < 1.3f * T.radius * 1.0f + margin && Math.abs(y - camY) < 30f;   // vertical draw reach: show ~30 units of the climb ahead/below (was 16, "only a few tiles"); the sim window already streams far more than this, and the distance-fog fades the far edge in
     }
 
     public void render(Sim sim, float alpha, float dt, float time, boolean showPlayer) {
@@ -619,6 +631,7 @@ public final class WorldRenderer implements Disposable {
                 else p.tintAttr.color.set(Color.WHITE);
             }
             place(p.inst, es + du + shakeX, y + dy + fallY, p.dz + (e.type == Element.Type.MOVE_Z ? e.zAt(sim.time) : 0f), camS, p.sx, sy, p.sz, extraYaw, roll);
+            if (p.localZ != 0f) p.inst.transform.translate(0f, 0f, p.localZ);     // recentre an off-origin mesh along its own Z (applied before scale): see Part.localZ / the ramp
             batch.render(p.inst, env);
         }
         if (e.wet()) drawRain(e, es, ey, camS, time);
@@ -996,20 +1009,23 @@ public final class WorldRenderer implements Disposable {
 
     private void drawPlayer(Sim sim, float dt, float time, float ps, float py, float alpha) {
         float phi = 0f; // player is the anchor: always at centre, tangent = camera-facing
-        // shadow blob on the nearest platform below
+        float heroZ = 0f;
+        if ((sim.mode == Sim.Mode.GROUND) && sim.onElem >= 0 && course.get(sim.onElem).type == Element.Type.MOVE_Z) heroZ = -course.get(sim.onElem).zAt(sim.time);      // carried toward / away from the camera with the platform
+        // Drop shadow projected straight down onto the platform currently beneath the player. The player is the camera anchor (always screen-centred),
+        // so x=0 keeps the blob directly under him every frame; it tracks the depth-mover in z, and fades + shrinks with height so it releases from the
+        // take-off platform as he rises (it used to stay a solid blob on the spot he jumped from).
         if (quality > 0) {
             float gy = groundBelow(sim, ps, py, alpha);
             if (gy > -1e8f && py - gy < 9f) {
                 float k = MathUtils.clamp(1f - (py - gy) / 9f, 0.2f, 1f);
-                shadow.transform.idt().translate(0, gy + SHADOW_LIFT + 0.4f * Math.abs(groundSlope) * (0.55f * k + 0.15f), 0.2f).rotate(0, 0, 1, MathUtils.atan(groundSlope) * MathUtils.radiansToDegrees).scale(0.55f * k + 0.15f, 1f, 0.4f * k + 0.15f);
+                shadowBlend.opacity = 0.30f * k;
+                shadow.transform.idt().translate(0, gy + SHADOW_LIFT + 0.4f * Math.abs(groundSlope) * (0.55f * k + 0.15f), 0.2f + heroZ).rotate(0, 0, 1, MathUtils.atan(groundSlope) * MathUtils.radiansToDegrees).scale(0.55f * k + 0.15f, 1f, 0.4f * k + 0.15f);
                 batch.render(shadow, env);
             }
         }
         float onRampLift = 0f;
         if (quality > 0 && sim.mode == Sim.Mode.GROUND && sim.onElem >= 0 && course.get(sim.onElem).type == Element.Type.RAMP) onRampLift = 0.07f;      // the ramp's edge never cuts across his legs
         float wy = py + onRampLift; heroY = py;
-        float heroZ = 0f;
-        if ((sim.mode == Sim.Mode.GROUND) && sim.onElem >= 0 && course.get(sim.onElem).type == Element.Type.MOVE_Z) heroZ = -course.get(sim.onElem).zAt(sim.time);      // carried toward / away from the camera with the platform
         hero.update(sim, dt, time, 0f, wy, heroZ, phi, reducedMotion);
         hero.render(batch, heroEnv);
         if (sim.clubTime > 0f) {

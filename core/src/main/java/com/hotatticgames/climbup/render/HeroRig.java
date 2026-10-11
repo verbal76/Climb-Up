@@ -88,12 +88,19 @@ public final class HeroRig implements Disposable {
     }
 
     /**
-     * Resets every limb bone's scale to its bind value, keeping the animation's rotation/translation. AnimationController
-     * blends between clips with an element-wise Matrix4.lerp, which turns a rotation into a slightly shrunken, sheared
-     * matrix (the straight line between two orientations cuts inside the unit sphere). On bones the grip poses then read
-     * and re-pose, that shrink is carried and re-read every frame, so over a run of constant state changes the arms, legs
-     * and ankles waste away to nothing. Re-clamping the scale right after ac.update, before anything reads these bones,
-     * removes the artifact at its source while leaving the real animation untouched (the clips never scale these bones).
+     * Supplies the scale "track" the animation clips lack, so the procedurally re-posed limbs never waste away.
+     *
+     * Root cause (proven by isolation - see GripProbe and climb.noPose/noBlend/noReclamp): the arm and leg bones are
+     * re-posed every frame by the grip/climb/pull-up code (aim/rotateBone -> commitBone reads a bone's transform and
+     * writes it back). The character clips carry rotation and translation tracks for these bones but NO scale track
+     * (verified: 0 scale keyframes in hero.g3dj), so nothing ever re-asserts their rest scale. Any scale error introduced
+     * into a bone therefore persists and feeds into the next frame's re-pose, compounding geometrically toward zero over
+     * a run. The error comes from the re-pose's own matrix/quaternion round-trip (dominant: collapses even with blending
+     * off) and, on top of it, AnimationController's cross-fade, which averages pose matrices with an element-wise lerp
+     * that shrinks rotations (an amplifier). Without the re-posing neither matters - the clips' clean per-frame set keeps
+     * restoring the bones. Resetting each limb bone to its captured bind scale (with a re-orthonormalised rotation) right
+     * after ac.update, before anything reads it, is the missing scale reset and breaks the feedback loop. The real
+     * animation is untouched (the clips never scale these bones); the hamster's deliberate stretch re-applies from here.
      */
     private void reclampLimbScales() {
         for (Node n : limbs) {
@@ -148,10 +155,9 @@ public final class HeroRig implements Disposable {
         if (!finite(wNew) || !parentInverse(bone)) return;
         cand.set(parInv).mul(wNew);
         if (!finite(cand) || !(Math.abs(cand.det()) > 1e-7f)) return;
-        // Re-pose with ROTATION ONLY: keep the bone's own scale (its bind scale, or the hamster's deliberate stretch from stretchArms)
-        // instead of adopting cand's scale. Conjugating a world rotation by a parent that carries any non-uniform scale - or plain
-        // float error - leaks a sliver of scale into cand; because the clips do not re-key the arm/leg scale every frame, adopting it
-        // compounded frame over frame and shrank the limbs toward zero over a long grip (the NaN guard only froze them once near zero).
+        // Re-pose with ROTATION ONLY: keep the bone's own scale (its bind scale, or the hamster's deliberate stretch) instead
+        // of adopting cand's, which carries scale/shear when the parent is non-uniformly scaled. Scale hygiene, not the limb-
+        // shrink fix on its own (reclampLimbScales, run every frame before this, is what breaks the no-scale-track feedback loop).
         bone.localTransform.getScale(keepScale);
         cand.getTranslation(bone.translation); cand.getRotation(bone.rotation, true); bone.scale.set(keepScale);
         bone.localTransform.set(bone.translation, bone.rotation, bone.scale);
@@ -246,10 +252,16 @@ public final class HeroRig implements Disposable {
         play("Idle", -1, 1f, 0f);
     }
 
+    // Root-cause isolation switches (diagnostics only; all three off in production). NO_RECLAMP disables the fix,
+    // NO_POSE disables all procedural grip/limb posing, NO_BLEND removes animation cross-fades (so clips are set, not lerped).
+    private static final boolean NO_RECLAMP = Boolean.getBoolean("climb.noReclamp");
+    private static final boolean NO_POSE = Boolean.getBoolean("climb.noPose");
+    private static final boolean NO_BLEND = Boolean.getBoolean("climb.noBlend");
+
     private void play(String id, int loops, float speed, float blend) {
         if (id.equals(current)) { if (ac.current != null) ac.current.speed = speed; return; }
         current = id;
-        ac.animate(id, loops, speed, null, blend);
+        ac.animate(id, loops, speed, null, NO_BLEND ? 0f : blend);
     }
 
     private static float smooth(float cur, float target, float rate, float dt) { return cur + (target - cur) * Math.min(1f, rate * dt); }
@@ -354,15 +366,15 @@ public final class HeroRig implements Disposable {
         inst.transform.idt().translate(wx, wy + 0.6f, wz).rotate(0, 0, 1, flip + knock).translate(0, -0.6f, 0)
                 .rotate(0, 1, 0, phi * MathUtils.radiansToDegrees + yaw).translate(0, 0.5f, 0).rotate(1, 0, 0, lean).translate(0, -0.5f, 0).scale(sx, sy, sz);
         ac.update(reduced ? Math.min(dt, 1f / 30f) : dt);
-        reclampLimbScales();     // undo AnimationController's blend-lerp scale shrink before anything reads these bones (the stretch/grip poses below re-apply from the clean bind scale, never accumulating)
-        if (slip > 0.05f) slipFlail(time, slip, reduced);
+        if (!NO_RECLAMP) reclampLimbScales();     // undo AnimationController's blend-lerp scale shrink before anything reads these bones (the stretch/grip poses below re-apply from the clean bind scale, never accumulating)
+        if (slip > 0.05f && !NO_POSE) slipFlail(time, slip, reduced);
         // gripping poses: both arms up on the ledge / rope / cable, hands snapped to the sim's grip point
         hangT = sim.mode == Sim.Mode.LEDGE ? hangT + dt : 0f;
         hangSway += dt * 2.4f;
         float grip = 0f;
         if (anim == Anim.HANG || anim == Anim.CLIMB || anim == Anim.SHIMMY) grip = 1f;
         else if (anim == Anim.PULLUP) grip = CYCLE ? 0.8f : Math.max(0f, 1f - sim.pullT / (sim.mode == Sim.Mode.BEAM ? Sim.BEAM_MOUNT_TIME : sim.T.pullUpTime) * 1.25f);
-        if (grip > 0.01f) {
+        if (grip > 0.01f && !NO_POSE) {
             if (ham) stretchArms(grip);
             boolean line = anim == Anim.CLIMB || anim == Anim.SHIMMY || (anim == Anim.HANG && (sim.mode == Sim.Mode.ROPE || sim.mode == Sim.Mode.CABLE));
             if (line) {                // rope or cable: both hands on the line, alternating hand over hand while moving; knees draw up alternately

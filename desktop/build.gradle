@@ -26,6 +26,17 @@ tasks.register('scenario', JavaExec) {
     systemProperties System.properties.findAll { it.key.toString().startsWith('scenario.') || it.key.toString().startsWith('climb.') }
 }
 
+// Captures the Settings screen's desktop tabs at many window sizes/aspect ratios plus the TEXT SIZE stepper extremes, for layout inspection.
+tasks.register('settingsShots', JavaExec) {
+    group = 'verification'
+    description = 'Screenshots every desktop Settings tab across aspect ratios 4:3..32:9, a 4K TV and small windows (see SettingsShots).'
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.hotatticgames.climbup.desktop.SettingsShots'
+    workingDir = file('../assets')
+    args = [project.findProperty('settingsShotsData') ?: "${buildDir}/settingsshots/data".toString(), project.findProperty('settingsShotsShots') ?: "${buildDir}/settingsshots/shots".toString()]
+    systemProperties System.properties.findAll { it.key.toString().startsWith('scenario.') || it.key.toString().startsWith('climb.') }
+}
+
 // ---- Windows distribution -------------------------------------------------------------------------------------------------------------------------------------------
 // One self-contained jar for jpackage: the shared game, the LWJGL3 backend and ONLY the Windows natives (Linux/macOS natives are left out of the shipped build).
 tasks.register('windowsJar', Jar) {

@@ -860,7 +860,7 @@ public final class CourseGenerator {
         if (zone >= 1) { w[Kind.MOVER_Z.ordinal()] = 2.5f; w[Kind.ELEV_FALL.ordinal()] = 2f; w[Kind.SLIDE_FALL.ordinal()] = 2f; if (zone == 1) w[Kind.SWING.ordinal()] = 2.5f; }
         float inten = intensity(last.y);
         w[Kind.RAMP.ordinal()] = zone == 0 ? 1.5f : 3f;
-        w[Kind.LONG.ordinal()] = 1.6f;          // some long walkable corridors in every world (owner request); the spiral-pitch controller below de-prioritises them when the climb lags
+        w[Kind.LONG.ordinal()] = 0.4f;          // an occasional long walkable corridor (owner request); kept rare so the climb stays a climb, not a flat walk, and the spiral-pitch controller below de-prioritises them further when the climb lags
         if (zone >= 1 && inten > 0f) w[Kind.MORTAR.ordinal()] = 1f + 3f * inten;          // a mortar row: any stage after the first world
         if (zone >= 1) { w[Kind.SEESAW.ordinal()] = 4f; w[Kind.BRIDGE.ordinal()] = 4f; }
         else w[Kind.BRIDGE.ordinal()] = 2f;

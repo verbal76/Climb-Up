@@ -20,13 +20,13 @@ public class TitleLayoutTest {
 
     @Test public void theMenuHasEveryButtonAndExitIsLast() {
         TitleScreen.Item[] with = TitleScreen.menu(true), without = TitleScreen.menu(false);
-        assertEquals(6, with.length); assertEquals(5, without.length);
+        assertEquals(7, with.length); assertEquals(6, without.length);          // PLAY/CONTINUE, NEW RUN, PLAYERS, SETTINGS, TIMES, CREDITS, EXIT (NEW RUN only with a climb)
         assertEquals(TitleScreen.Item.PLAY, with[0]); assertEquals(TitleScreen.Item.PLAY, without[0]);
         assertEquals("EXIT is the last button", TitleScreen.Item.EXIT, with[with.length - 1]); assertEquals(TitleScreen.Item.EXIT, without[without.length - 1]);
         assertEquals("EXIT", TitleScreen.Item.EXIT.label(true));
         java.util.Set<String> labels = new java.util.HashSet<>();
         for (TitleScreen.Item it : with) assertTrue("label is unique: " + it.label(true), labels.add(it.label(true)));
-        assertTrue(labels.contains("PLAYERS") && labels.contains("SETTINGS") && labels.contains("CREDITS") && labels.contains("NEW RUN") && labels.contains("CONTINUE"));
+        assertTrue(labels.contains("PLAYERS") && labels.contains("SETTINGS") && labels.contains("TIMES") && labels.contains("CREDITS") && labels.contains("NEW RUN") && labels.contains("CONTINUE"));
         assertEquals("PLAY", TitleScreen.Item.PLAY.label(false));
         assertFalse("NEW RUN only exists when there is a climb to replace", java.util.Arrays.asList(without).contains(TitleScreen.Item.NEW_RUN));
     }

@@ -644,10 +644,6 @@ public final class CourseGenerator {
             } else if (layersClash(c, d, e)) { decoyWhy = 2; return false; }
         }
         for (Element g : ghostElems) if (layersClash(c, d, g)) { decoyWhy = 3; return false; }
-        for (int j = Math.max(0, a - 4); j <= Math.min(rs - 1, a + 6); j++) {          // never in the flight corridor of a pad or spring launch (the hero would be carried onto it)
-            Element e = c.get(j);
-            if ((e.type == Element.Type.PAD || e.type == Element.Type.SPRING) && Math.abs(c.dsWrap(d.s, e.s)) < 10f + d.w / 2f && d.y > e.y - 1.5f && d.y < e.y + 9f) { decoyWhy = 5; return false; }
-        }
         for (int j = a + 2; j < rs; j++) {                 // never a stepping stone toward later route
             Element e = c.get(j);
             if (!e.isPlatform()) continue;
@@ -657,10 +653,20 @@ public final class CourseGenerator {
         return true;
     }
 
+    /** A dead end never lies in the flight corridor of a pad or spring launch near its anchor (the launched hero would be carried onto it). Only for dead ends: key rooms are proven separately. */
+    private boolean corridorOk(Element d, int a) {
+        int rs = c.routeSize();
+        for (int j = Math.max(0, a - 4); j <= Math.min(rs - 1, a + 6); j++) {
+            Element e = c.get(j);
+            if ((e.type == Element.Type.PAD || e.type == Element.Type.SPRING) && Math.abs(c.dsWrap(d.s, e.s)) < 10f + d.w / 2f && d.y > e.y - 1.5f && d.y < e.y + 9f) { decoyWhy = 5; return false; }
+        }
+        return true;
+    }
+
     private boolean tryDecoy(List<Element> es, List<Element> hz, int a) {
         int n0 = c.size(), h0 = c.hazards.size();
         boolean ok = true; decoyTried++;
-        for (Element d : es) { c.add(d); if (!decoyOk(d, a)) { ok = false; decoyGeoFail++; break; } }
+        for (Element d : es) { c.add(d); if (!decoyOk(d, a) || !corridorOk(d, a)) { ok = false; decoyGeoFail++; break; } }
         if (ok) for (Element h : hz) { c.hazards.add(h); if (!hazardOk(h, -1)) { ok = false; decoyGeoFail++; break; } }
         if (ok) {
             c.indexDecoys();

@@ -29,6 +29,7 @@ public final class TitleScreen extends ScreenAdapter {
     private boolean has;      // a climb in progress that can really be resumed
 
     @Override public void show() {
+        confirmNew = false;
         Tower tw = null; int idx = 0;
         has = g.climbValid();
         if (has) {        // backdrop: where the climb in progress stands
@@ -69,44 +70,97 @@ public final class TitleScreen extends ScreenAdapter {
         String bub = world.heroBubble();
         if (bub != null && !bub.equals(lastBub)) g.audio.play("talk", 0.4f, com.hotatticgames.climbup.render.Characters.voice(g.settings.character));
         lastBub = bub;
-        if (bub != null) { float[] hp = new float[2]; world.heroHeadScreen(W, H, hp); ui.bubble(bub, hp[0], hp[1] + 6, world.heroBubbleAlpha()); }
-        float bw = 400, bh = 76, bx = Math.max(40f, W / 2 - 640f + 40f);
+        world.heroHeadScreen(W, H, headPos);       // where his head is: the speech bubble sits above it, and the buttons stay out of its way
+        float headY = headPos[1] > 0f && headPos[1] < H ? headPos[1] : TitleLayout.typicalHeadY(H);
+        Item[] items = menu(has);
+        TitleLayout lay = layoutFor(ui, W, H, items.length, !g.save.legacy.isEmpty(), headY);
+        if (bub != null) drawBubble(ui, bub, headPos[0], headPos[1] + 6, world.heroBubbleAlpha(), lay.bubbleMinX);
         boolean notice = g.save.noticeOldClimb;        // the one-time notice that an old climb could not carry over comes first
         boolean prompt = notice || confirmNew;         // either dialog hides the menu behind it
-        float y0 = H * 0.46f;
         if (!prompt) {
-            if (ui.button(has ? "CONTINUE" : "PLAY", bx, y0, bw, bh, true)) { g.audio.play("click"); next = new PlayScreen(g, false); }
-            float yy = y0 - 88;
-            if (has) {
-                if (ui.button("NEW RUN", bx, yy, bw, bh)) { g.audio.play("click"); confirmNew = true; }       // replaces the saved climb: asks first
-                yy -= 88;
+            for (int i = 0; i < items.length; i++) {          // reading order: the Windows keyboard/pad walks the buttons in this order
+                TitleLayout.Rect r = lay.menu[i];
+                if (ui.button(items[i].label(has), r.x, r.y, r.w, r.h, i == 0)) { g.audio.play("click"); choose(items[i]); }
             }
-            if (ui.button("SETTINGS", bx, yy, bw, bh)) { g.audio.play("click"); next = new SettingsScreen(g, this); }
-            yy -= 88;
-            if (ui.button("CREDITS", bx, yy, bw, bh)) { g.audio.play("click"); next = new CreditsScreen(g, this); }
+            // right column: who is playing, the hero, old runs
+            TitleLayout.Rect pl = lay.playing; String who = g.save.name.isEmpty() ? Profiles.FIRST_NAME : g.save.name;
+            ui.rect(pl.x, pl.y, pl.w, pl.h, PLATE);                                    // a dim plate so the name reads on any sky
+            ui.textC("PLAYING AS", pl.x + pl.w / 2, pl.top() - 3f * 7f - 4f, 3f, Ui.DIM);
+            float npx = Math.min(5f * Math.min(ui.tm(), 1.3f), (pl.w - 16f) / Math.max(1, who.length() * 6 - 1));
+            ui.textC(who, pl.x + pl.w / 2, pl.top() - 3f * 7f - 4f - 10f - 7f * npx, npx, Ui.ACCENT);
+            if (ui.button("HERO: " + com.hotatticgames.climbup.render.Characters.name(g.settings.character), lay.hero.x, lay.hero.y, lay.hero.w, lay.hero.h)) {
+                g.settings.character = com.hotatticgames.climbup.render.Characters.next(g.settings.character);
+                world.setCharacter(g.settings.character); g.persist(); g.audio.play("click");
+            }
+            // old climbs live on the right under the hero picker, so the menu on the left keeps its room
+            if (lay.legacy != null && ui.button("LEGACY RUNS (" + g.save.legacy.size() + ")", lay.legacy.x, lay.legacy.y, lay.legacy.w, lay.legacy.h)) { g.audio.play("click"); next = new LegacyScreen(g, this); }
         }
-        float cx = Math.min(W - bw - 40f, W / 2 + 240f);
-        if (!prompt) ui.textC("HERO: TAP TO CHANGE", cx + bw / 2, y0 + bh + 14, 3.2f, Ui.TEXT);
-        if (!prompt && ui.button(com.hotatticgames.climbup.render.Characters.name(g.settings.character), cx, y0, bw, bh)) {
-            g.settings.character = com.hotatticgames.climbup.render.Characters.next(g.settings.character);
-            world.setCharacter(g.settings.character); g.persist(); g.audio.play("click");
-        }
-        // old climbs live on the right, under the hero picker: the left column keeps its four full-size buttons and never runs into the status bar at the bottom
-        if (!prompt && !g.save.legacy.isEmpty() && ui.button("LEGACY RUNS (" + g.save.legacy.size() + ")", cx, y0 - 88, bw, bh)) { g.audio.play("click"); next = new LegacyScreen(g, this); }
-        String stat = "BEST " + (int) g.save.bestHeight + " M" + (g.save.bestFinish > 0f ? "   BEST FINISH " + PlayScreen.fmtTime(g.save.bestFinish) : "");
+        String stat = (g.save.name.isEmpty() ? "" : g.save.name + "   ") + "BEST " + (int) g.save.bestHeight + " M" + (g.save.bestFinish > 0f ? "   BEST FINISH " + PlayScreen.fmtTime(g.save.bestFinish) : "");
         ui.rect(0, 0, W, 34, new Color(0.05f, 0.07f, 0.14f, 0.7f)); ui.text(stat, 72, 9, 2.8f, Ui.TEXT);          // thin bar; text kept 72 px from the edges (rounded phone corners clip anything closer)
         String ver = g.versionLabel();          // always visible: which build is this?
         ui.text(ver, W - 72 - ui.font.width(ver, 2.8f), 9, 2.8f, Ui.ACCENT);
         if (notice) legacyPrompt(ui, W, H); else if (confirmNew) newRunPrompt(ui, W, H);
         ui.end();
         g.autoShot("title", dt);
+        if (exitRequested) { exitRequested = false; g.persist(); Gdx.app.exit(); return; }       // EXIT: everything is already saved; persist once more and close the game
         if (next != null) { Screen n = next; next = null; g.setScreen(n); }
+    }
+
+    /** The main menu buttons, top-left first. The first one is the big accent button; EXIT is always last. (A TIMES button goes between SETTINGS and CREDITS: add it here and in {@link #choose}.) */
+    enum Item {
+        PLAY, NEW_RUN, PLAYERS, SETTINGS, CREDITS, EXIT;
+        String label(boolean hasClimb) {
+            switch (this) {
+                case PLAY: return hasClimb ? "CONTINUE" : "PLAY";
+                case NEW_RUN: return "NEW RUN";
+                case PLAYERS: return "PLAYERS";
+                case SETTINGS: return "SETTINGS";
+                case CREDITS: return "CREDITS";
+                default: return "EXIT";
+            }
+        }
+    }
+    private static final Item[] WITH_CLIMB = Item.values(), NO_CLIMB = {Item.PLAY, Item.PLAYERS, Item.SETTINGS, Item.CREDITS, Item.EXIT};
+    static Item[] menu(boolean hasClimb) { return hasClimb ? WITH_CLIMB : NO_CLIMB; }      // NEW RUN only exists when there is a climb to replace
+
+    private static final Color PLATE = new Color(0.05f, 0.07f, 0.14f, 0.6f);
+    private boolean exitRequested;
+    private void choose(Item it) {
+        switch (it) {
+            case PLAY: next = new PlayScreen(g, false); break;
+            case NEW_RUN: confirmNew = true; break;                 // replaces the saved climb: asks first
+            case PLAYERS: next = new PlayersScreen(g, this); break;
+            case SETTINGS: next = new SettingsScreen(g, this); break;
+            case CREDITS: next = new CreditsScreen(g, this); break;
+            default: exitRequested = true;
+        }
+    }
+
+    private final float[] headPos = new float[2];
+    private TitleLayout lay; private float layW, layH, layUpd, layHead; private int layN; private boolean layLegacy;
+    /** The layout for this screen shape; button heights come from the real screen density so every button is at least 48dp (see {@link TitleLayout}). */
+    private TitleLayout layoutFor(Ui ui, float W, float H, int n, boolean legacy, float headY) {
+        float upd = Dp.unitsPerDp(ui);
+        if (lay == null || W != layW || H != layH || n != layN || legacy != layLegacy || upd != layUpd || Math.abs(headY - layHead) > 0.5f) {
+            lay = TitleLayout.of(W, H, n, legacy, upd, headY); layW = W; layH = H; layN = n; layLegacy = legacy; layUpd = upd; layHead = headY;
+        }
+        return lay;
+    }
+
+    /** The hero's speech bubble: like {@code Ui.bubble}, but its body never starts left of {@code minX}, so a long line is not hidden behind the menu (the tail still points at his head). */
+    private static void drawBubble(Ui ui, String s, float cx, float y, float alpha, float minX) {
+        float px = 3.2f * ui.tm(), w = ui.font.width(s, px) + 36, h = ui.font.height(px) + 28;
+        float x = TitleLayout.bubbleX(ui.w(), w, cx, minX);
+        Color edge = new Color(0.08f, 0.08f, 0.14f, alpha), fill = new Color(1f, 1f, 1f, alpha);
+        ui.rect(x - 4, y - 4, w + 8, h + 8, edge); ui.rect(x, y, w, h, fill);
+        ui.rect(cx - 8, y - 14, 16, 14, edge); ui.rect(cx - 4, y - 8, 8, 10, fill);     // tail pointing down at him
+        ui.font.draw2(ui.batch, s, x + 18, y + 14, px, new Color(0.08f, 0.08f, 0.14f, alpha));
     }
 
     /** NEW RUN over a saved climb: nothing is lost unless the player confirms; CANCEL (the highlighted button) leaves the saved climb exactly as it was. */
     private void newRunPrompt(Ui ui, float W, float H) {
         ui.rect(0, 0, W, H, new Color(0f, 0f, 0.05f, 0.72f));
-        float scale = Math.min(ui.tm(), 1.3f), pw = Math.min(W - 60, 880), ph = 440 * Math.max(1f, scale * 0.9f), bw = Math.min(380, (pw - 90) / 2), bh = 84;
+        float scale = Math.min(ui.tm(), 1.3f), pw = Math.min(W - 60, 880), ph = 440 * Math.max(1f, scale * 0.9f), bw = Math.min(380, (pw - 90) / 2), bh = Dp.touchHeight(84f, 110f, 110f, Dp.unitsPerDp(ui));
         float px = W / 2 - pw / 2, py = Math.max(20, H / 2 - ph / 2);
         ui.panel(px, py, pw, ph);
         float t = 4.6f * scale, b = 3.2f * scale;
@@ -134,7 +188,7 @@ public final class TitleScreen extends ScreenAdapter {
      */
     private void legacyPrompt(Ui ui, float W, float H) {
         ui.rect(0, 0, W, H, new Color(0f, 0f, 0.05f, 0.72f));
-        float pad = 44, bw = 360, bh = 80, scale = ui.tm(), titlePx = 4.6f, body1 = 3.2f, body2 = 3f;
+        float pad = 44, bw = 360, bh = Dp.touchHeight(80f, 110f, 110f, Dp.unitsPerDp(ui)), scale = ui.tm(), titlePx = 4.6f, body1 = 3.2f, body2 = 3f;
         float pw, ph; java.util.List<String> a, b;
         while (true) {
             float t = titlePx * Math.min(scale, 1.3f), p1 = body1 * scale, p2 = body2 * scale;

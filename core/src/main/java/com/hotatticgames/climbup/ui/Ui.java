@@ -80,6 +80,10 @@ public final class Ui extends InputAdapter implements Disposable {
     public float deviceScale() { float ww = viewport.getWorldWidth(); return ww > 0 ? viewport.getScreenWidth() / ww : 1f; }
     /** Font-pixel size rounded to a whole number of device pixels (at least 1); pure. */
     public static float snapSize(float px, float scale) { return scale <= 0 ? px : Math.max(1, Math.round(px * scale)) / scale; }
+    /** Font-pixel size rounded DOWN to a whole number of device pixels (at least 1); pure. */
+    public static float floorSize(float px, float scale) { return scale <= 0 ? px : Math.max(1, (float) Math.floor(px * scale)) / scale; }
+    /** The largest text size that fits where {@code px} was meant to: with {@link #crisp} on, snapping then rounds DOWN so a label can only shrink into its box, never spill out of it. A no-op (returns {@code px}) when crisp is off, so mobile is unchanged. */
+    public float fitSize(float px) { return crisp ? floorSize(px, deviceScale()) : px; }
     /** A position rounded to a whole device pixel; pure. */
     public static float snapPos(float v, float scale) { return scale <= 0 ? v : Math.round(v * scale) / scale; }
 
@@ -113,7 +117,7 @@ public final class Ui extends InputAdapter implements Disposable {
         rect(x, y + o, w, h, accent ? ACCENT : PANEL);
         rect(x, y + o + h - 6, w, 6, new Color(1, 1, 1, 0.14f));
         float px = Math.min(5f * tm(), (w - 24) / Math.max(1, label.length() * PixelFont.ADV - 1));
-        px = Math.max(2f, px);
+        px = fitSize(Math.max(2f, px));                        // crisp snapping must not push the label past the button edge (mobile: unchanged)
         text(label, x + w / 2 - font.width(label, px) / 2, y + o + h / 2 - font.height(px) / 2, px, TEXT);
         if (nav != null) {
             if ((f & 1) != 0) focusRing(x, y + o, w, h);

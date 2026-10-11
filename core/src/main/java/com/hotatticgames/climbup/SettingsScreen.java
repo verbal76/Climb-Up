@@ -30,7 +30,7 @@ public final class SettingsScreen extends ScreenAdapter {
         for (int i = 0; i < lines.size(); i++) g.ui.textC(lines.get(i), W / 2, y + 30 - i * (g.ui.font.height(px) + 10), px, Ui.DIM);
         return y - step - Math.max(0, lines.size() - 1) * (g.ui.font.height(px) + 10);
     }
-    private static final String[] Q = {"LOW", "MEDIUM", "HIGH"}, TXT = {"100%", "130%", "160%"}, HAP = {"OFF", "LOW", "HIGH"};
+    private static final String[] Q = {"LOW", "MEDIUM", "HIGH"}, HAP = {"OFF", "LOW", "HIGH"};
 
     public float rowTop() { return rowY; }
     public void skip(float dy) { rowY -= dy; }
@@ -38,12 +38,12 @@ public final class SettingsScreen extends ScreenAdapter {
     public void row(String label, String value, Runnable minus, Runnable plus, Runnable tap) {
         Ui ui = g.ui; float W = ui.w();
         float cw = Math.min(980, W - 100), x = W / 2 - cw / 2, h = 64;
-        float px = Math.max(3.2f, Math.min(4f * ui.tm(), (cw * 0.5f) / (label.length() * 6f)));
+        float px = ui.fitSize(Math.max(3.2f, Math.min(4f * ui.tm(), (cw * 0.5f) / (label.length() * 6f))));   // fitSize keeps the label in its column under desktop pixel-snapping (mobile: no-op)
         ui.text(label, x, rowY + h / 2 - 3.5f * px, px, Ui.TEXT);
         float bx = x + cw * 0.56f, bw = cw * 0.44f;
         if (minus != null) {
             if (ui.button("-", bx, rowY, 86, h)) { minus.run(); g.audio.play("click"); g.audio.applyVolume(); }
-            ui.textC(value, bx + 86 + (bw - 172) / 2, rowY + h / 2 - 14, 4f, Ui.ACCENT);
+            ui.textC(value, bx + 86 + (bw - 172) / 2, rowY + h / 2 - 14, ui.fitSize(4f), Ui.ACCENT);
             if (ui.button("+", bx + bw - 86, rowY, 86, h)) { plus.run(); g.audio.play("click"); g.audio.applyVolume(); }
         } else if (ui.button(value, bx, rowY, bw, h)) { tap.run(); g.audio.play("click"); }
         rowY -= h + 10;
@@ -68,7 +68,7 @@ public final class SettingsScreen extends ScreenAdapter {
             String[] names = new String[3 + extra.size()];
             names[0] = "GENERAL"; names[1] = "ACCESS"; names[2] = "ABOUT";
             for (int i = 0; i < extra.size(); i++) names[3 + i] = extra.get(i).name();
-            float total = Math.min(W - 80, 1180), gap = 10, bw = (total - gap * (names.length - 1)) / names.length, x0 = W / 2 - total / 2;
+            float total = Math.min(W - 160, 1180), gap = 10, bw = (total - gap * (names.length - 1)) / names.length, x0 = W / 2 - total / 2;   // keep a gutter from both edges (TV safe area)
             for (int i = 0; i < names.length; i++) if (ui.button(names[i], x0 + i * (bw + gap), H - 168, bw, 60, page == i)) page = i;
         }
         rowY = H - 176 - 64;
@@ -79,7 +79,7 @@ public final class SettingsScreen extends ScreenAdapter {
             row("MUSIC VOLUME", String.valueOf(s.music), () -> s.music = Math.max(0, s.music - 1), () -> s.music = Math.min(10, s.music + 1), null);
             row("EFFECTS VOLUME", String.valueOf(s.sfx), () -> s.sfx = Math.max(0, s.sfx - 1), () -> s.sfx = Math.min(10, s.sfx + 1), null);
             row("GRAPHICS QUALITY", Q[s.quality], null, null, () -> s.quality = (s.quality + 1) % 3);
-            row("TEXT SIZE", TXT[s.textScale], null, null, () -> s.textScale = (s.textScale + 1) % 3);
+            row("TEXT SIZE", s.textPercent(), () -> s.setTextStep(s.textStep() - 1), () -> s.setTextStep(s.textStep() + 1), null);
             toggle("REDUCED MOTION", s.reducedMotion, () -> s.reducedMotion = !s.reducedMotion);
             toggle("CAPTIONS FOR SOUNDS", s.captions, () -> s.captions = !s.captions);
         } else if (page == 2) {

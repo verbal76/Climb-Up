@@ -12,9 +12,10 @@ import java.util.Locale;
 final class DesktopTabs {
     private DesktopTabs() { }
 
-    /** A dim help line under the rows, shrunk to fit the screen width. */
+    /** A dim help line under the rows, shrunk to fit a centred safe width so it never runs off either edge (even on a TV). */
     static void note(Ui ui, SettingsScreen s, String text) {
-        float px = Math.min(2.6f, (ui.w() - 60) / Math.max(1, text.length() * 6f));
+        float safe = Math.min(ui.w() - 144f, 1180f);
+        float px = ui.fitSize(Math.min(2.6f, safe / Math.max(1, text.length() * 6f)));
         ui.textC(text, ui.w() / 2, s.rowTop() + 30, px, Ui.DIM); s.skip(46);
     }
 

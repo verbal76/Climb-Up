@@ -26,11 +26,12 @@ Several named players, each with their own saved climb, records and stats. Setti
 
 ## Layout (`TitleLayout`, `Dp`)
 - Pure numbers, no GL. Everything sits in a 1200-unit area centred on the screen, so 21:9 only adds scenery. The menu is on the left, the hero keeps the middle, the right column holds the rest.
+- The hero's speech bubble (up to ~630 units wide, just above his head) starts right of the menu (`TitleLayout.bubbleX`, drawn by `TitleScreen.drawBubble`) and the right column starts under it, so no line is ever hidden behind a button. The head's real screen height is read every frame (`WorldRenderer.heroHeadScreen`).
 - Button height comes from the real density (`Dp.unitsPerDp`): at least 48dp (primary 56dp when there is room), the normal 84/96 units on big screens, and rows shrink to fit rather than overlap. `-Dclimb.upd=2` simulates a small phone on a desktop.
 - The same 48dp rule applies to the players list, the name picker and their dialogs.
 
 ## Tests
-`ProfilesTest` (migration, crash points, damaged index/saves, independence, delete, name rules, switching, guard), `TitleLayoutTest` (no overlaps for 1 to 8 buttons, 6 screen shapes, densities from a 4K TV to a 360dp phone; 48dp; labels fit). `PersistenceTest` still passes unchanged.
+`ProfilesTest` (migration, crash points, damaged index/saves, independence, delete, name rules, switching, guard), `TitleLayoutTest` (no overlaps for 1 to 8 buttons, 6 screen shapes, densities from a 4K TV to a 360dp phone; 48dp; labels fit; every line the hero can say stays clear of the buttons). `PersistenceTest` still passes unchanged.
 
 ## Changed for the OTA
 `SaveData.CURRENT_VERSION` is 7. A module that carries this must be signed with `--save-schema 7 --save-min 6` (it reads v6 saves and migrates them); the host then snapshots the data folder before its first launch, so a rollback finds the old single save untouched. `tools/otalab/ship/release.txt` and the workflow were not edited here.

@@ -37,6 +37,8 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y xvfb libgl1-mesa-dri libglx-mesa0 libopenal1
       - name: End-to-end desktop scenario (real window, keyboard-only navigation, rebinding, play, controller plug/unplug, resize, fullscreen)
         run: xvfb-run -a -s "-screen 0 3840x2160x24" ./gradlew :desktop:scenario --no-daemon -Dscenario.noaudio=true -Dscenario.ascii=true | tee scenario.log | grep -v "^Picked up"
+      - name: Limb-scale regression guard (every character auto-plays ten generated slices; fails if any arm/leg bone shrinks over the run)
+        run: xvfb-run -a -s "-screen 0 320x240x24" ./gradlew :desktop:gripProbe --no-daemon
       - name: Packaged-jar smoke (assets, natives, save folder) on Linux
         run: ./gradlew :desktop:run --no-daemon --args=--smoke -Dclimb.assets="$PWD/assets" -Dclimb.data="$RUNNER_TEMP/smoke" | grep SMOKE
       - uses: actions/upload-artifact@v4

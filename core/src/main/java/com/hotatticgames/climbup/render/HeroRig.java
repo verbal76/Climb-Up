@@ -68,13 +68,43 @@ public final class HeroRig implements Disposable {
 
     // ---- hanging: both arms are posed in code to reach up and grip (the pack has no hang/climb clips)
     private Node upL, loL, fiL, upR, loR, fiR, ulL, ulR, llL, llR;
+    private Node[] limbs = new Node[0];               // the arm and leg bones the animation/grip posing touches (filled by findNodes)
     private float hangT, lean;
-    private final Vector3 pB = new Vector3(), pC = new Vector3(), dir = new Vector3(), tgt = new Vector3();
-    private final Quaternion arc = new Quaternion(), part = new Quaternion(), ident = new Quaternion();
+    private final Vector3 pB = new Vector3(), pC = new Vector3(), dir = new Vector3(), tgt = new Vector3(), keepScale = new Vector3(), rcT = new Vector3();
+    private final Quaternion arc = new Quaternion(), part = new Quaternion(), ident = new Quaternion(), rcR = new Quaternion();
     private final Matrix4 rot = new Matrix4(), wNew = new Matrix4(), parInv = new Matrix4(), cand = new Matrix4();
+    private final java.util.IdentityHashMap<Node, Vector3> bindScale = new java.util.IdentityHashMap<>();   // each limb bone's rest scale, captured before any animation runs
 
     private void findNodes() {
         for (Node n : inst.nodes) collect(n);
+        limbs = new Node[]{upL, loL, fiL, upR, loR, fiR, ulL, llL, ulR, llR};
+    }
+
+    /** Records each limb bone's rest scale while the skeleton is still in its bind pose (before any animation has run). */
+    private void captureBind() {
+        for (Node n : limbs) {
+            if (n != null && !bindScale.containsKey(n)) { Vector3 v = new Vector3(); n.localTransform.getScale(v); bindScale.put(n, v); }
+        }
+    }
+
+    /**
+     * Resets every limb bone's scale to its bind value, keeping the animation's rotation/translation. AnimationController
+     * blends between clips with an element-wise Matrix4.lerp, which turns a rotation into a slightly shrunken, sheared
+     * matrix (the straight line between two orientations cuts inside the unit sphere). On bones the grip poses then read
+     * and re-pose, that shrink is carried and re-read every frame, so over a run of constant state changes the arms, legs
+     * and ankles waste away to nothing. Re-clamping the scale right after ac.update, before anything reads these bones,
+     * removes the artifact at its source while leaving the real animation untouched (the clips never scale these bones).
+     */
+    private void reclampLimbScales() {
+        for (Node n : limbs) {
+            if (n == null) continue;
+            Vector3 bind = bindScale.get(n);
+            if (bind == null) continue;
+            n.localTransform.getTranslation(rcT); n.localTransform.getRotation(rcR, true);
+            n.localTransform.set(rcT, rcR, bind);
+            n.scale.set(bind);
+        }
+        inst.calculateTransforms();
     }
     private void collect(Node n) {
         String id = n.id;
@@ -118,8 +148,13 @@ public final class HeroRig implements Disposable {
         if (!finite(wNew) || !parentInverse(bone)) return;
         cand.set(parInv).mul(wNew);
         if (!finite(cand) || !(Math.abs(cand.det()) > 1e-7f)) return;
-        bone.localTransform.set(cand);
-        bone.localTransform.getTranslation(bone.translation); bone.localTransform.getRotation(bone.rotation, true); bone.localTransform.getScale(bone.scale);
+        // Re-pose with ROTATION ONLY: keep the bone's own scale (its bind scale, or the hamster's deliberate stretch from stretchArms)
+        // instead of adopting cand's scale. Conjugating a world rotation by a parent that carries any non-uniform scale - or plain
+        // float error - leaks a sliver of scale into cand; because the clips do not re-key the arm/leg scale every frame, adopting it
+        // compounded frame over frame and shrank the limbs toward zero over a long grip (the NaN guard only froze them once near zero).
+        bone.localTransform.getScale(keepScale);
+        cand.getTranslation(bone.translation); cand.getRotation(bone.rotation, true); bone.scale.set(keepScale);
+        bone.localTransform.set(bone.translation, bone.rotation, bone.scale);
         inst.calculateTransforms();
     }
 
@@ -206,6 +241,7 @@ public final class HeroRig implements Disposable {
         }
         inst = new ModelInstance(model);
         if (Characters.astronaut(character)) { Node gun = inst.getNode("n22_Pistol", true, true); if (gun != null) gun.parts.clear(); }
+        findNodes(); captureBind();                 // record the limbs' rest scale now, while the skeleton is still in its bind pose
         ac = new AnimationController(inst);
         play("Idle", -1, 1f, 0f);
     }
@@ -317,8 +353,8 @@ public final class HeroRig implements Disposable {
         lean = smooth(lean, leanT, 9f, dt);
         inst.transform.idt().translate(wx, wy + 0.6f, wz).rotate(0, 0, 1, flip + knock).translate(0, -0.6f, 0)
                 .rotate(0, 1, 0, phi * MathUtils.radiansToDegrees + yaw).translate(0, 0.5f, 0).rotate(1, 0, 0, lean).translate(0, -0.5f, 0).scale(sx, sy, sz);
-        if (ham && upL != null) for (Node n : new Node[]{upL, upR, loL, loR}) if (n != null) n.scale.set(1f, 1f, 1f);     // the stretch below is re-applied every frame, never accumulated
         ac.update(reduced ? Math.min(dt, 1f / 30f) : dt);
+        reclampLimbScales();     // undo AnimationController's blend-lerp scale shrink before anything reads these bones (the stretch/grip poses below re-apply from the clean bind scale, never accumulating)
         if (slip > 0.05f) slipFlail(time, slip, reduced);
         // gripping poses: both arms up on the ledge / rope / cable, hands snapped to the sim's grip point
         hangT = sim.mode == Sim.Mode.LEDGE ? hangT + dt : 0f;
@@ -397,6 +433,37 @@ public final class HeroRig implements Disposable {
         }
     }
     private float hangSway;
+
+    /**
+     * Test hook: the smallest scale any arm or leg bone the grip posing drives has, read from its live local transform.
+     * Healthy limbs sit at (or above, for the hamster's deliberate stretch) 1; the old scale leak drove this toward 0 over
+     * a long grip, which is the shrinking arms/legs/ankles. Returns 1 before the skeleton has been located.
+     */
+    public float minLimbScale() {
+        if (upL == null) return 1f;
+        Vector3 s = new Vector3();
+        float m = Float.MAX_VALUE;
+        for (Node n : new Node[]{upL, loL, fiL, upR, loR, fiR, ulL, llL, ulR, llR}) {
+            if (n == null) continue;
+            n.localTransform.getScale(s);
+            m = Math.min(m, Math.min(s.x, Math.min(s.y, s.z)));
+        }
+        return m == Float.MAX_VALUE ? 1f : m;
+    }
+
+    /** Test hook: per-bone local scale (x/y/z) for every arm and leg bone, for diagnosing which limb shrinks and when. */
+    public String limbScalesDebug() {
+        String[] names = {"upL", "loL", "fiL", "upR", "loR", "fiR", "ulL", "llL", "ulR", "llR"};
+        Node[] ns = {upL, loL, fiL, upR, loR, fiR, ulL, llL, ulR, llR};
+        Vector3 v = new Vector3();
+        StringBuilder b = new StringBuilder();
+        for (int i = 0; i < ns.length; i++) {
+            if (ns[i] == null) continue;
+            ns[i].localTransform.getScale(v);
+            b.append(names[i]).append('=').append(String.format("%.2f/%.2f/%.2f ", v.x, v.y, v.z));
+        }
+        return b.toString();
+    }
 
     public void render(ModelBatch batch, Environment env) { batch.render(inst, env); }
 

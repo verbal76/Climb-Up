@@ -41,6 +41,16 @@ tasks.register('settingsShots', JavaExec) {
     systemProperties System.properties.findAll { it.key.toString().startsWith('scenario.') || it.key.toString().startsWith('climb.') }
 }
 
+// Drives the real player rig (every character) through a long rope climb in a real GL context and fails if any arm/leg bone shrinks (the grip scale-leak regression). CI runs it under Xvfb; locally: xvfb-run -a ./gradlew :desktop:gripProbe.
+tasks.register('gripProbe', JavaExec) {
+    group = 'verification'
+    description = 'Climbs a long rope with every character and asserts the arm/leg bones never shrink over a sustained grip (see GripProbe).'
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.hotatticgames.climbup.desktop.GripProbe'
+    workingDir = file('../assets')
+    systemProperties System.properties.findAll { it.key.toString().startsWith('climb.') }
+}
+
 // ---- Windows distribution -------------------------------------------------------------------------------------------------------------------------------------------
 // One self-contained jar for jpackage: the shared game, the LWJGL3 backend and ONLY the Windows natives (Linux/macOS natives are left out of the shipped build).
 tasks.register('windowsJar', Jar) {

@@ -1,9 +1,8 @@
 name: Android build
-# Not run on every push of every branch (deliberate: hosted CI minutes are only spent when the owner asks for a test APK): only the release branch, or by hand.
+# MANUAL ONLY (studio standard §9: a push must never auto-publish a release). The owner explicitly triggers this to
+# build + publish a numbered APK. Pushes run only the lightweight ci.yml validation, which publishes nothing.
 on:
   workflow_dispatch: {}
-  push:
-    branches: [ccr-cb458cd1-w4dh5c]
 permissions:
   contents: write   # publish GitHub Releases
   actions: read

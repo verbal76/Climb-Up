@@ -41,6 +41,7 @@ public final class HeroRig implements Disposable {
     private Model ballModel; private ModelInstance ballL, ballR;
     private final Matrix4 ballM = new Matrix4(); private final Vector3 ballP = new Vector3();
     private float ballFront;                          // this frame's forward (toward-camera) nudge for the hand balls: >0 on a vertical rope so they render in front of the line
+    private float ballPullX = 1f;                      // this frame's sideways pull of the hand balls toward the rope line (1 = none); <1 draws the hamster's balls in onto the line while keeping them on the arm (no forward push)
     // How big each ball hand is (fraction scaled by the character's size). The astronauts have small hands on big bodies,
     // so their ball is smaller than a strict bunny-proportion; the hamster's covers its chunky wrist. Both tunable.
     private static final float BALL_RATIO = Float.parseFloat(System.getProperty("climb.handBall", "0.10"));
@@ -52,6 +53,10 @@ public final class HeroRig implements Disposable {
     // On a rope, how much of the hand's own sideways offset is kept (0 = both balls dead on the rope's centre line, stacked;
     // 1 = left where the fists are). A little keeps the two hands from fully overlapping while they still clasp the line.
     private static final float ROPE_BALL_X = Float.parseFloat(System.getProperty("climb.ropeBallX", "0.3"));
+    // The hamster's short arm does not reach the rope, so instead of pushing its ball in front (which detaches it from the
+    // arm) we only draw it sideways onto the line: ball x -> this fraction of the arm's own x. Keeps the ball on the arm's
+    // depth (attached) while bringing both hands in to grip the rope. Tunable via climb.hamBallX.
+    private static final float HAM_BALL_X = Float.parseFloat(System.getProperty("climb.hamBallX", "0.12"));
     private String current = "";
     public float yaw, landT;
 
@@ -441,7 +446,7 @@ public final class HeroRig implements Disposable {
         // gripping poses: both arms up on the ledge / rope / cable, hands snapped to the sim's grip point
         hangT = sim.mode == Sim.Mode.LEDGE ? hangT + dt : 0f;
         hangSway += dt * 2.4f;
-        float grip = 0f; ballFront = 0f;
+        float grip = 0f; ballFront = 0f; ballPullX = 1f;
         if (anim == Anim.HANG || anim == Anim.CLIMB || anim == Anim.SHIMMY) grip = 1f;
         else if (anim == Anim.PULLUP) grip = CYCLE ? 0.8f : Math.max(0f, 1f - sim.pullT / (sim.mode == Sim.Mode.BEAM ? Sim.BEAM_MOUNT_TIME : sim.T.pullUpTime) * 1.25f);
         if (grip > 0.01f && !NO_POSE) {
@@ -452,7 +457,11 @@ public final class HeroRig implements Disposable {
             if (line) {                // rope or cable: both hands on the line, alternating hand over hand while moving; knees draw up alternately
                 float moving = MathUtils.clamp(lineMove, 0f, 1f);
                 gripLine(climbPhase, moving, cable);
-                if (!cable && (astro || ham)) { feetToLine(climbPhase, moving); if (astro) ballFront = BALL_FRONT * grip; }   // vertical rope: close the feet on the line (astro + hamster). Only the astronauts' hands are pulled onto and in front of the line - their arms reach it. The hamster's short arm does not, so its ball stays at the wrist (ballFront=0) and keeps attached to the arm instead of floating onto the rope.
+                if (!cable && (astro || ham)) {   // vertical rope: close the feet on the line (astro + hamster)
+                    feetToLine(climbPhase, moving);
+                    if (astro) ballFront = BALL_FRONT * grip;           // astronauts' hands clasp in front of the line (their arms reach it)
+                    else ballPullX = MathUtils.lerp(1f, HAM_BALL_X, grip);   // the hamster's hands are drawn sideways onto the line but stay on the arm (no forward push)
+                }
                 else climbLegs(climbPhase, moving);                                                               // the overhead cable, and the bunny on a rope, keep the dangling knee draw-up
             }
             else raiseArms(grip, (sim.mode == Sim.Mode.LEDGE || sim.mode == Sim.Mode.PULLUP || (CYCLE && anim == Anim.HANG)) ? 1.0f : 0.12f);
@@ -489,6 +498,7 @@ public final class HeroRig implements Disposable {
             ballP.z += ballFront;               // and toward the camera, so it renders in front of the line
         } else if (lower != null) {             // everywhere else: sit the ball over the stripped wrist, blended back toward the forearm
             ballM.set(inst.transform).mul(lower.globalTransform); ballM.getTranslation(ballP2); ballP.lerp(ballP2, 1f - BALL_AT);
+            ballP.x *= ballPullX;               // on a rope the hamster's balls are drawn sideways onto the line (ballPullX<1); its depth stays on the arm, so the ball keeps attached
         }
         ball.transform.idt().translate(ballP).scale(ballRad, ballRad, ballRad);
     }

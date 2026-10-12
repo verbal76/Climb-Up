@@ -87,6 +87,10 @@ public final class Element {
     public static final float MORTAR_FLIGHT = 0.82f, MORTAR_R = 0.4f;
     /** Aimed cannon timing, as fractions of its period: tracks the player until LOCK, holds (warning) until FIRE, fires; the ball flies AIM_LIFE seconds at AIM_SPEED; it only wakes when the player is within AIM_RANGE. */
     public static final float AIM_LOCK = 0.55f, AIM_FIRE = 0.70f, AIM_SPEED = 9f, AIM_LIFE = 1.6f, AIM_R = 0.35f, AIM_RANGE = 15f, AIM_TURN = 2.4f;
+    /** The ball leaves the muzzle TIP, not the barrel's centre: the barrel's model axis is 1.66 units long each way at PK=0.37 scale, so its mouth is ~0.6 world units ahead of (s,y). Without this the ball erupts from the middle of the cannon. */
+    public static final float AIM_MUZZLE = 0.62f;
+    /** How far an aimed cannon leads a moving player (fraction of the full "where will they be when the ball lands" prediction): it tries to put the shot in front of you, but partially, so a committed move still slips past. A plain CANNON stays a fixed straight-line shot for the "measure the gap" variety. */
+    public static final float AIM_LEAD = 0.5f;
     /** Mortar ball height at time t: a parabola from the muzzle (y) to y + amp and back during the first MORTAR_FLIGHT of the cycle, then it sits in the barrel while the mortar reloads. */
     public float mortarBallY(float t) {
         float c = cyc(t);

@@ -62,6 +62,17 @@ tasks.register('rigShot', JavaExec) {
     systemProperties System.properties.findAll { it.key.toString().startsWith('climb.') }
 }
 
+// Renders the cannon model posed like drawPackAimed at several aim angles with the ball's real flight direction marked,
+// to confirm the muzzle points where the ball goes. Locally: xvfb-run -a -s "-screen 0 320x240x24" ./gradlew :desktop:cannonShot
+tasks.register('cannonShot', JavaExec) {
+    group = 'verification'
+    description = 'Screenshots the cannon at several aim angles with the ball path, to check muzzle alignment (see CannonShot).'
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.hotatticgames.climbup.desktop.CannonShot'
+    workingDir = file('../assets')
+    systemProperties System.properties.findAll { it.key.toString().startsWith('climb.') }
+}
+
 // ---- Windows distribution -------------------------------------------------------------------------------------------------------------------------------------------
 // One self-contained jar for jpackage: the shared game, the LWJGL3 backend and ONLY the Windows natives (Linux/macOS natives are left out of the shipped build).
 tasks.register('windowsJar', Jar) {

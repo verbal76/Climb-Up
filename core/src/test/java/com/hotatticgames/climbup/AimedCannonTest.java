@@ -40,6 +40,32 @@ public class AimedCannonTest {
         assertEquals("the ball passes the player's height where he stands", 0.7f, atPlayer[1], 0.6f);
     }
 
+    @Test public void theBallLeavesTheMuzzleNotTheBarrelCentre() throws Exception {
+        Sim s = world(20f, 0f, 0f);
+        Element h = s.course.hazards.get(0);
+        InputState in = new InputState();
+        for (int i = 0; i < 60 * 5; i++) {
+            in.clear(); s.step(in); s.consumeEvents();
+            float[] b = s.aimedBall(0, h);
+            if (b != null) { float d = (float) Math.hypot(b[0] - h.s, b[1] - h.y);
+                assertTrue("the ball starts at/ahead of the muzzle, never inside the barrel (d=" + d + ")", d >= Element.AIM_MUZZLE - 1e-3f); return; }
+        }
+        fail("it never fired");
+    }
+
+    @Test public void theBarrelHoldsItsAimWhileItsBallCrossesTheLane() throws Exception {
+        Sim s = world(20f, 0f, 0f);
+        Element h = s.course.hazards.get(0);
+        InputState in = new InputState();
+        float fireAng = Float.NaN;
+        for (int i = 0; i < 60 * 5 && Float.isNaN(fireAng); i++) { in.clear(); s.step(in); s.consumeEvents(); if (s.aimedBall(0, h) != null) fireAng = s.aimAng[0]; }
+        assertFalse("it fired", Float.isNaN(fireAng));
+        for (int i = 0; i < (int) (Element.AIM_LIFE * 60) - 4; i++) {
+            in.clear(); s.step(in); s.consumeEvents();
+            if (s.aimedBall(0, h) != null) assertEquals("the barrel holds the fired line while its ball is still flying", fireAng, s.aimAng[0], 1e-4f);
+        }
+    }
+
     @Test public void aHeroWhoStaysPutIsKnockedAwayAndNeverSentToACheckpoint() throws Exception {
         Sim s = world(20f, 0f, 0f);
         InputState in = new InputState(); int hits = 0;

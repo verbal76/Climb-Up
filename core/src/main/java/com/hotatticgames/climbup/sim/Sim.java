@@ -468,7 +468,7 @@ public final class Sim {
         if (hi >= aimFireT.length) return null;
         float age = time - aimFireT[hi];
         if (age < 0f || age > Element.AIM_LIFE) return null;
-        float d = Element.AIM_SPEED * age;
+        float d = Element.AIM_MUZZLE + Element.AIM_SPEED * age;      // starts at the muzzle tip, not the barrel centre
         return new float[]{h.s + (float) Math.cos(aimAng[hi]) * d, h.y + (float) Math.sin(aimAng[hi]) * d};
     }
 
@@ -483,8 +483,13 @@ public final class Sim {
             boolean inRange = dx * dx + dy * dy <= Element.AIM_RANGE * Element.AIM_RANGE;
             boolean near = inRange && dy >= -9f && dy <= 8f;             // the barrel ROTATES to face a nearby hero, including one still climbing up toward a cannon on a pillar, so it visibly tracks instead of idling straight up until he is level
             boolean awake = inRange && dy >= -4f && dy <= 5f;            // but it only ARMS and FIRES on its own layer of the spiral (the tower spirals; a hero on the turn above or below, same arc 10+ m away, must never be shot through the floor)
-            if (c < Element.AIM_LOCK) {
-                float target = near ? (float) Math.atan2(dy, dx) : (float) Math.PI * 0.5f;
+            float ageBall = time - aimFireT[hi];
+            boolean ballFlying = ageBall >= 0f && ageBall < Element.AIM_LIFE;          // while its shot is still crossing the lane the barrel HOLDS the fired angle, so it points along the ball instead of already swinging back to re-aim at you (which read as "the ball came out the wrong way")
+            if (c < Element.AIM_LOCK && !ballFlying) {
+                float flight = Math.max(0f, Math.min(1f, (float) Math.sqrt(dx * dx + dy * dy) / Element.AIM_SPEED));   // ~time for the ball to reach you
+                float lead = Element.AIM_LEAD * flight;
+                float tdx = dx + vx * lead, tdy = dy + vy * lead;                      // lead the player: aim where they are heading, so a cannon you have passed shoots across in front of you
+                float target = near ? (float) Math.atan2(tdy, tdx) : (float) Math.PI * 0.5f;
                 float d = angDiff(target, aimAng[hi]), step = Element.AIM_TURN * DT;
                 aimAng[hi] += Math.max(-step, Math.min(step, d));
             }

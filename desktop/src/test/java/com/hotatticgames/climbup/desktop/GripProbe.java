@@ -31,6 +31,7 @@ public final class GripProbe {
     private static final int FRAMES_PER_SLICE = 1400;
     private static final int WARMUP = 20;
     private static final float HEALTHY = 0.70f;     // a limb below this has visibly shrunk (healthy climb pose sits ~0.80)
+    private static final float HAND_MAX = Float.parseFloat(System.getProperty("climb.handMax", "2.0"));   // a fist above this has ballooned (the hamster's arm stretch leaking into the paws); healthy paws sit near 1
     private static final long SEED = Long.getLong("climb.seed", 11L);
 
     public static void main(String[] args) {
@@ -46,7 +47,7 @@ public final class GripProbe {
                     Tuning t = Tuning.parse(Gdx.files.internal("data/tuning.json").readString("UTF-8"));
                     for (int ch = 0; ch < CHARACTERS; ch++) {
                         HeroRig rig = new HeroRig(ch);
-                        float min = Float.MAX_VALUE, time = 0f, dt = Sim.DT;
+                        float min = Float.MAX_VALUE, maxHand = 0f, time = 0f, dt = Sim.DT;
                         int worstSlice = -1;
                         Map<HeroRig.Anim, Integer> tally = new EnumMap<>(HeroRig.Anim.class);
                         InputState in = new InputState();
@@ -71,15 +72,18 @@ public final class GripProbe {
                                         min = m; worstSlice = k;
                                         if (m < 0.5f && dumps < 14) { dumps++; System.out.println("  DUMP ch=" + ch + " slice=" + k + " f=" + f + " min=" + String.format("%.3f", m) + " anim=" + rig.anim + " mode=" + sim.mode + " pullT=" + String.format("%.2f", sim.pullT) + " | " + rig.limbScalesDebug()); }
                                     }
+                                    float hsv = rig.maxHandScale();
+                                    if (hsv > maxHand) { maxHand = hsv; if (hsv > HAND_MAX && dumps < 14) { dumps++; System.out.println("  HANDDUMP ch=" + ch + " slice=" + k + " f=" + f + " handScale=" + String.format("%.2f", hsv) + " anim=" + rig.anim); } }
                                 }
                                 if (sim.won) break;
                                 if (driver.failed) { sim.respawn(); sim.consumeEvents(); driver = new Autopilot.Driver(sim); }
                             }
                         }
-                        boolean ok = min > HEALTHY;
+                        boolean ok = min > HEALTHY && maxHand < HAND_MAX;
                         if (!ok) failures[0]++;
                         System.out.println("GRIP_PROBE char=" + ch + " minLimbScale=" + String.format("%.4f", min)
-                                + " worstSlice=" + worstSlice + " " + (ok ? "OK" : "SHRUNK") + " anim=" + tally);
+                                + " maxHandScale=" + String.format("%.2f", maxHand)
+                                + " worstSlice=" + worstSlice + " " + (ok ? "OK" : (min <= HEALTHY ? "SHRUNK" : "BALLOONED")) + " anim=" + tally);
                         rig.dispose();
                     }
                 } catch (Throwable e) {

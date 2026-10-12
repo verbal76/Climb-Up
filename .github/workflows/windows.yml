@@ -172,13 +172,13 @@ jobs:
           [ -n "$T" ] || { echo "::error::no Linux tar.gz"; exit 1; }
           unzip -l "$Z" | grep -qi 'Upwardly.exe' || { echo "::error::no Upwardly.exe in the zip"; exit 1; }
           tar tzf "$T" | grep -q 'Upwardly/bin/Upwardly' || { echo "::error::no native launcher in the tar.gz"; exit 1; }
-          # standard artifact names (studio standard §7): "Climb up Build NN <Platform>.<ext>"
-          EXE="Climb up Build ${N} EXE.zip"; LINUX="Climb up Build ${N} Linux.tar.gz"
+          # standard artifact names (studio standard §7): "Upwardly Build NN <Platform>.<ext>"
+          EXE="Upwardly Build ${N} EXE.zip"; LINUX="Upwardly Build ${N} Linux.tar.gz"
           cp "$Z" "$EXE"; cp "$T" "$LINUX"
           SUM_EXE=$(sha256sum "$EXE" | cut -d' ' -f1); SUM_LINUX=$(sha256sum "$LINUX" | cut -d' ' -f1)
           printf '%s  %s\n%s  %s\n' "$SUM_EXE" "$EXE" "$SUM_LINUX" "$LINUX" > checksums.sha256
           cat > build-manifest.json <<JSON
-          { "game": "Climb up", "build": ${N}, "version": "${VER}", "source_sha": "${{ github.sha }}",
+          { "game": "Upwardly", "build": ${N}, "version": "${VER}", "source_sha": "${{ github.sha }}",
             "built": "$(date -u +%Y-%m-%dT%H:%M:%SZ)", "runtime": "jlink JRE 17 (jpackage app-image)",
             "artifacts": [
               { "platform": "windows-x86_64", "file": "${EXE}", "sha256": "${SUM_EXE}" },
@@ -186,7 +186,7 @@ jobs:
             ] }
           JSON
           TAG="build-${N}-desktop"
-          NOTES="Climb up Build ${N} — desktop (Windows EXE + native Linux x86-64). Same game as the Android APK, built from the SAME commit ${{ github.sha }}. Self-contained (no Java needed). Linux is native (Steam Deck / Steam Machine), not Proton.\n\nNot verified on real hardware: controllers, real GPU/fullscreen, audio, Steam Deck."
+          NOTES="Upwardly Build ${N} — desktop (Windows EXE + native Linux x86-64). Same game as the Android APK, built from the SAME commit ${{ github.sha }}. Self-contained (no Java needed). Linux is native (Steam Deck / Steam Machine), not Proton.\n\nNot verified on real hardware: controllers, real GPU/fullscreen, audio, Steam Deck."
           printf '%b' "$NOTES" > notes.md
-          gh release create "$TAG" "$EXE" "$LINUX" build-manifest.json checksums.sha256 --repo "$REPO" --target "${{ github.sha }}" --title "Climb up Build ${N} — Desktop (Windows + Linux)" --notes-file notes.md --latest=false
+          gh release create "$TAG" "$EXE" "$LINUX" build-manifest.json checksums.sha256 --repo "$REPO" --target "${{ github.sha }}" --title "Upwardly Build ${N} — Desktop (Windows + Linux)" --notes-file notes.md --latest=false
           echo "published https://github.com/$REPO/releases/tag/$TAG"

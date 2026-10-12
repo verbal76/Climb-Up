@@ -7,8 +7,8 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * The seam between the shared game and a launcher. Android uses {@link #MOBILE}, whose every answer reproduces the original behaviour exactly
- * (touch controls, OTA allowed, "CLIMB UP"). The Windows launcher supplies its own implementation (keyboard, mouse, controllers, UPWARDLY title, no network).
+ * The seam between the shared game and a launcher. Android uses {@link #MOBILE} (touch controls, OTA allowed, the "UPWARDLY"
+ * title). The Windows launcher supplies its own implementation (keyboard, mouse, controllers, same UPWARDLY title, no network).
  * Nothing here touches the simulation: platforms only decide how the {@code InputState} gets filled and what is drawn around the game.
  */
 public interface Platform {
@@ -52,7 +52,7 @@ public interface Platform {
         @Override public boolean desktop() { return false; }
         @Override public boolean touchControls() { return true; }
         @Override public boolean networkAllowed() { return true; }
-        @Override public String title() { return "CLIMB UP"; }
+        @Override public String title() { return "UPWARDLY"; }
         @Override public GameInput gameInput() { return null; }
         @Override public void attach(ClimbGame game) { }
         @Override public void frame(float dt) { }

@@ -50,7 +50,7 @@ jobs:
           set -e
           SRC=$(ls android/build/outputs/apk/debug/*.apk | head -1)
           VER=$(grep -oP "appVersionName = '\K[^']+" build.gradle)
-          OUT=android/build/outputs/apk/debug/climb-up-${VER}-build${{ github.run_number }}-debug.apk
+          OUT=android/build/outputs/apk/debug/upwardly-${VER}-build${{ github.run_number }}-debug.apk
           cp "$SRC" "$OUT"; rm -f "$SRC"
           BT=$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -1)
           echo "SOURCE_SHA=${{ github.sha }}"
@@ -65,7 +65,7 @@ jobs:
           unzip -l "$OUT" | grep -E "\.so$|classes.*dex|assets/pack|assets/ota" | head -20
       - uses: actions/upload-artifact@v4
         with:
-          name: climb-up-debug-apk-${{ github.run_number }}
+          name: upwardly-debug-apk-${{ github.run_number }}
           path: android/build/outputs/apk/debug/*.apk
       - name: Build, sign and verify the OTA baseline (the content bundled in this APK)
         env:

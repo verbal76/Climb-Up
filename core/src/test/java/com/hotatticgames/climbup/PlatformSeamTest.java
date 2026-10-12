@@ -12,7 +12,7 @@ public class PlatformSeamTest {
         assertFalse(p.desktop());
         assertTrue("touch controls are drawn and steer the hero", p.touchControls());
         assertTrue("the signed OTA check is allowed", p.networkAllowed());
-        assertEquals("CLIMB UP", p.title());
+        assertEquals("UPWARDLY", p.title());
         assertNull("no desktop input source: the original touch/keyboard path is used", p.gameInput());
         assertTrue(p.settingsTabs().isEmpty());
         assertFalse("the shared touch pause icon is drawn", p.drawPauseButton(null, 0, 0, 0));

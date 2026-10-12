@@ -50,8 +50,19 @@ public class OtaConfigTest {
     }
 
     @Test public void theWorkflowsAndTheContentVersionFileAreWiredToTheGateAndTheRightBranch() throws Exception {
-        String android = read("../.github/workflows/android.yml"), ota = read("../.github/workflows/ota-publish.yml");
-        for (String w : new String[]{android, ota}) assertTrue(w.contains("branches: [ccr-cb458cd1-w4dh5c]"));
+        String android = read("../.github/workflows/android.yml"), ota = read("../.github/workflows/ota-publish.yml"), ci = read("../.github/workflows/ci.yml");
+        // Studio standard §9/§10: a push must NEVER auto-publish. The release (APK) and OTA workflows are manual
+        // (workflow_dispatch) with no push trigger, and every publishing job is pinned to the release branch by a job
+        // guard; a push runs only the read-only ci.yml validator, which can publish nothing.
+        Pattern pushTrigger = Pattern.compile("(?m)^\\s*push:");
+        for (String w : new String[]{android, ota}) {
+            assertTrue("a publishing workflow is manual (workflow_dispatch)", w.contains("workflow_dispatch"));
+            assertFalse("a push must never trigger a publishing workflow (§9/§10)", pushTrigger.matcher(w).find());
+            assertTrue("the publishing job is pinned to the release branch", w.contains("github.ref == 'refs/heads/ccr-cb458cd1-w4dh5c'"));
+        }
+        assertTrue("ci.yml validates a push to the release branch", pushTrigger.matcher(ci).find() && ci.contains("branches: [ccr-cb458cd1-w4dh5c]"));
+        assertTrue("the push validator is read-only (cannot publish a release)", ci.contains("contents: read"));
+        assertFalse("the push validator must not create a release", ci.contains("gh release create"));
         assertTrue(android.contains("tools/ci/verify_secrets.sh") && android.contains(":core:verifyOta") && android.contains("--sign") && android.contains("apksigner"));
         assertTrue(ota.contains(":core:verifyOta") && ota.contains("tools/ci/verify_secrets.sh --ota-only") && ota.contains("tools/ota/content_version.txt"));
         int v = Integer.parseInt(read("../tools/ota/content_version.txt").trim());

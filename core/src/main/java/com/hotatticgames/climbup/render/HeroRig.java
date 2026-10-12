@@ -43,7 +43,7 @@ public final class HeroRig implements Disposable {
     private float ballFront;                          // this frame's forward (toward-camera) nudge for the hand balls: >0 on a vertical rope so they render in front of the line
     // How big each ball hand is (fraction scaled by the character's size). The astronauts have small hands on big bodies,
     // so their ball is smaller than a strict bunny-proportion; the hamster's covers its chunky wrist. Both tunable.
-    private static final float BALL_RATIO = Float.parseFloat(System.getProperty("climb.handBall", "0.20"));
+    private static final float BALL_RATIO = Float.parseFloat(System.getProperty("climb.handBall", "0.10"));
     private static final float BALL_ASTRO = Float.parseFloat(System.getProperty("climb.handBallAstro", "0.09"));
     // On a vertical rope the ball hands are nudged toward the camera (world +z) so they draw IN FRONT of the line, reading
     // as hands clasping the rope instead of the rope drawing over them. Cosmetic depth only: the fists, arms, reach, grip
@@ -303,9 +303,10 @@ public final class HeroRig implements Disposable {
         handBall = ham || astro;                    // the bunny keeps its own tidy paws; the astronauts and hamster get ball hands
         if (handBall) {
             ballRad = (astro ? BALL_ASTRO : BALL_RATIO) * SCALE / Characters.scale(0);   // astronauts smaller (small hands, big body); hamster covers its wrist
-            // The astronauts' hands are near-black; the hamster's are a warm brown paw (its own darker fur tone) that reads
-            // against its light beige fur instead of blending in - a plain beige ball just disappeared on the body.
-            Color hc = astro ? new Color(0.12f, 0.12f, 0.14f, 1f) : new Color(0.46f, 0.29f, 0.17f, 1f);
+            // The astronauts' hands are near-black; the hamster's are its own yellowish-tan fur/foot colour (the same diffuse
+            // the feet use, so under the game lights the paws read as that warm tan) - not the grey beige that blended in, nor
+            // the darker brown that read too dark.
+            Color hc = astro ? new Color(0.12f, 0.12f, 0.14f, 1f) : new Color(0.78f, 0.51f, 0.34f, 1f);
             Material bm = new Material(ColorAttribute.createDiffuse(hc), ColorAttribute.createEmissive(hc.r * 0.12f, hc.g * 0.12f, hc.b * 0.12f, 1f));
             ballModel = new ModelBuilder().createSphere(2f, 2f, 2f, 12, 12, bm, VertexAttributes.Usage.Position | VertexAttributes.Usage.Normal);
             ballL = new ModelInstance(ballModel); ballR = new ModelInstance(ballModel);

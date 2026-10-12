@@ -370,6 +370,15 @@ Verified toolchain facts (captured with sources by Game Designer; re-verify only
 
 Use GitHub Actions to build the installable artifact on every push to the working branch and on tags, and upload it as a downloadable workflow artifact. Claude writes and maintains the workflow, reads the run results, and repairs failures until green. Gradle: wrapper pinned, Android Gradle Plugin and compile/target SDK pinned to a verified compatible set; `assembleDebug` for owner playtests and `bundleRelease` for stores.
 
+#### How to trigger a build (operational note — do not ask the owner how to do this)
+
+The installable builds are produced by two **manual-only** (`workflow_dispatch`) workflows; `ci.yml` runs on every push but is validation-only and publishes nothing. Do not change this — the owner has directed: **no tag triggers, no auto-publish on push, no alternative build pipelines.** Triggering a build is a publish action, so dispatch only when the owner has authorized that build in the conversation.
+
+- `.github/workflows/android.yml` — **"Android build"**: signed APK + GitHub Release (and the OTA baseline).
+- `.github/workflows/windows.yml` — **"Desktop (Windows + Linux) build + release"**: Windows `.exe` + native Linux, one Release.
+
+Dispatch them with the GitHub MCP tool (not the `gh` CLI, whose `GH_TOKEN` is not valid here): `mcp__github__actions_run_trigger`, `method: "run_workflow"`, `owner: "verbal76"`, `repo: "Climb-Up"`, `workflow_id: "android.yml"` (or `"windows.yml"`), `ref: "<the working branch>"`. A `204 / queued` means success; then read the run with `mcp__github__actions_list` (`list_workflow_runs`, `event: workflow_dispatch`) for its `html_url`, and when it finishes fetch the Release / artifact links for the owner. The workflows are branch-guarded, so `ref` must be the working branch. This needs the Claude GitHub App to hold **Actions: read/write** (granted 2026-10-12); a `403 "Resource not accessible by integration"` means that scope is missing — the owner re-grants it at `github.com/settings/installations` → Configure Claude. Do not substitute a tag push or any other workaround.
+
 ## 10. Performance requirements
 
 - Hold the target frame rate (60 fps) on the minimum hardware in normal play, with graceful quality degradation instead of stutter.

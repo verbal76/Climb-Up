@@ -53,10 +53,6 @@ public final class HeroRig implements Disposable {
     // On a rope, how much of the hand's own sideways offset is kept (0 = both balls dead on the rope's centre line, stacked;
     // 1 = left where the fists are). A little keeps the two hands from fully overlapping while they still clasp the line.
     private static final float ROPE_BALL_X = Float.parseFloat(System.getProperty("climb.ropeBallX", "0.3"));
-    // The hamster's short arm does not reach the rope, so instead of pushing its ball in front (which detaches it from the
-    // arm) we only draw it sideways onto the line: ball x -> this fraction of the arm's own x. Keeps the ball on the arm's
-    // depth (attached) while bringing both hands in to grip the rope. Tunable via climb.hamBallX.
-    private static final float HAM_BALL_X = Float.parseFloat(System.getProperty("climb.hamBallX", "0.12"));
     private String current = "";
     public float yaw, landT;
 
@@ -457,10 +453,10 @@ public final class HeroRig implements Disposable {
             if (line) {                // rope or cable: both hands on the line, alternating hand over hand while moving; knees draw up alternately
                 float moving = MathUtils.clamp(lineMove, 0f, 1f);
                 gripLine(climbPhase, moving, cable);
-                if (!cable && (astro || ham)) {   // vertical rope: close the feet on the line (astro + hamster)
+                if (!cable && (astro || ham)) {   // vertical rope: close the feet on the line, and clasp the ball hands in front of it (astro + hamster)
                     feetToLine(climbPhase, moving);
-                    if (astro) ballFront = BALL_FRONT * grip;           // astronauts' hands clasp in front of the line (their arms reach it)
-                    else ballPullX = MathUtils.lerp(1f, HAM_BALL_X, grip);   // the hamster's hands are drawn sideways onto the line but stay on the arm (no forward push)
+                    ballFront = BALL_FRONT * grip;                      // push the ball toward the camera, in front of the line
+                    ballPullX = ROPE_BALL_X;                            // draw the ball in onto the line (both); the hamster is rendered double-sided so its paw no longer shows sky behind the ball
                 }
                 else climbLegs(climbPhase, moving);                                                               // the overhead cable, and the bunny on a rope, keep the dangling knee draw-up
             }
@@ -493,12 +489,11 @@ public final class HeroRig implements Disposable {
     }
     private void placeBall(ModelInstance ball, Node lower, Node fist) {
         ballM.set(inst.transform).mul(fist.globalTransform); ballM.getTranslation(ballP);   // the hand (fist) world position
-        if (ballFront > 0f) {                   // on a vertical rope: clasp the line - sit the ball ON the rope (x->~0, where gripLine already lands the fist) and in front of it
-            ballP.x *= ROPE_BALL_X;             // draw the ball onto the rope's lateral line (the hero is centred at phi~=0, so world x is the rope's x)
+        if (ballFront > 0f) {                   // on a vertical rope: clasp the line - the astronauts' ball draws onto the rope's line (ballPullX=ROPE_BALL_X, their fist is there); the hamster keeps its fist x (ballPullX=1) so the ball sits in front of its own paw
+            ballP.x *= ballPullX;
             ballP.z += ballFront;               // and toward the camera, so it renders in front of the line
         } else if (lower != null) {             // everywhere else: sit the ball over the stripped wrist, blended back toward the forearm
             ballM.set(inst.transform).mul(lower.globalTransform); ballM.getTranslation(ballP2); ballP.lerp(ballP2, 1f - BALL_AT);
-            ballP.x *= ballPullX;               // on a rope the hamster's balls are drawn sideways onto the line (ballPullX<1); its depth stays on the arm, so the ball keeps attached
         }
         ball.transform.idt().translate(ballP).scale(ballRad, ballRad, ballRad);
     }

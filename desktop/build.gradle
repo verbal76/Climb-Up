@@ -51,6 +51,17 @@ tasks.register('gripProbe', JavaExec) {
     systemProperties System.properties.findAll { it.key.toString().startsWith('climb.') }
 }
 
+// Renders every character in each grip/stance it reaches (idle, rope/cable hang+move, ledge, pull-up) to PNGs, with a
+// reference bar on the line, for human inspection of the grip poses. Locally: xvfb-run -a -s "-screen 0 320x240x24" ./gradlew :desktop:rigShot
+tasks.register('rigShot', JavaExec) {
+    group = 'verification'
+    description = 'Screenshots every character in each grip pose to desktop/build/rigshot/ (see RigShot).'
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.hotatticgames.climbup.desktop.RigShot'
+    workingDir = file('../assets')
+    systemProperties System.properties.findAll { it.key.toString().startsWith('climb.') }
+}
+
 // ---- Windows distribution -------------------------------------------------------------------------------------------------------------------------------------------
 // One self-contained jar for jpackage: the shared game, the LWJGL3 backend and ONLY the Windows natives (Linux/macOS natives are left out of the shipped build).
 tasks.register('windowsJar', Jar) {

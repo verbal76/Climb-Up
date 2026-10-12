@@ -403,6 +403,27 @@ public final class HeroRig implements Disposable {
                         .translate(0, pivot, 0).rotate(0, 0, 1, roll).translate(0, -pivot, 0).rotate(0, 0, 1, tremble).scale(sx, sy, sz);
             }
         }
+        else if (anim == Anim.IDLE && beat == null && !NO_POSE) armsRest();     // plain standing: tuck the arms in from the clip's slight A-pose so he doesn't read as T-posing
+    }
+
+    private static final float ARMS_REST = Float.parseFloat(System.getProperty("climb.armsRest", "0.80"));
+    /**
+     * Standing idle only: both skeletons' bare Idle clips rest the arms out in an A/T-pose (the bunny-skeleton hamster
+     * worst of all). AIM each arm straight down (slightly out and forward) by a blend weight, so it ends hanging at the
+     * side regardless of where the clip left it - a fixed rotation can't do that because the two skeletons start the arm
+     * at different angles. Not applied during run (the clip swings them) or an idle "beat" (Wave/Punch pose the arms).
+     */
+    private void armsRest() {
+        if (upL == null) findNodes();
+        if (upL == null || upR == null) return;
+        for (int side = 0; side < 2; side++) {
+            Node up = side == 0 ? upL : upR, lo = side == 0 ? loL : loR, fi = side == 0 ? fiL : fiR;
+            up.globalTransform.getTranslation(pB);
+            float out = (pB.x >= 0f ? 1f : -1f) * 0.16f;
+            tgt.set(out, -1f, 0.10f).nor();                 // down, a touch out and forward: arms rest at the sides
+            aim(up, lo, tgt, ARMS_REST);
+            if (lo != null && fi != null) aim(lo, fi, tgt, ARMS_REST);
+        }
     }
 
     /** The hamster's arms are tiny stubs: while gripping they stretch (cartoon rubber arms) so the paws can reach the rope or ledge above the head. */
@@ -428,17 +449,32 @@ public final class HeroRig implements Disposable {
     private void gripLine(float phase, float moving, boolean cable) {
         if (upL == null) findNodes();
         if (upL == null || upR == null || fiL == null || fiR == null) return;
+        float m = MathUtils.clamp(moving, 0f, 1f);
         for (int side = 0; side < 2; side++) {
             Node up = side == 0 ? upL : upR, lo = side == 0 ? loL : loR, fi = side == 0 ? fiL : fiR;
             up.globalTransform.getTranslation(pB); lo.globalTransform.getTranslation(pC); fi.globalTransform.getTranslation(pF);
-            float len = pB.dst(pC) + pC.dst(pF);
-            float reach = MathUtils.lerp(side == 0 ? 0.95f : 0.62f, 0.5f + 0.5f * MathUtils.sin(phase + side * MathUtils.PI), moving);
-            float sgn = Math.signum(pB.x == 0f ? (side == 0 ? 1f : -1f) : pB.x);
-            // rope: arms cross in front of the chest, one hand stepping up the rope while the other pulls down; cable: hands reach up and out along the line
-            float ty = cable ? pB.y + len * (0.26f + 0.68f * reach) : pB.y + len * (-0.10f + 0.42f * reach);
-            float tx = cable ? sgn * len * (0.10f + 0.30f * (1f - reach)) : sgn * len * 0.45f;
-            float tz = cable ? pB.z + ROPE_FRONT / SCALE : pB.z + len * 0.95f;                          // the line hangs in front of him (he is drawn a little behind it); hands sit just in front of it
-            tgt.set(tx - pB.x, ty - pB.y, tz - pB.z).nor();         // (aim() reuses 'dir' internally, so the target lives in its own vector)
+            float len = pB.dst(pC) + pC.dst(pF);                                  // shoulder -> hand reach, in world units
+            float lead = 0.5f + 0.5f * MathUtils.sin(phase + side * MathUtils.PI);   // 0..1, the two hands out of phase: hand over hand
+            float side0 = pB.x == 0f ? (side == 0 ? -1f : 1f) : Math.signum(pB.x);   // which side this shoulder is on (left = -1)
+            float tx, ty, tz;
+            if (cable) {
+                // a horizontal bar overhead: BOTH hands grip the bar spread apart along it (monkey-bar style), at the same
+                // bar height, the leading hand reaching a little further along the traverse. (Was: hands clustered together
+                // above the head because the spread was tiny and both reached to nearly the same point.)
+                float spread = len * (0.40f + 0.16f * lead * m);
+                tx = side0 * spread;                                   // each hand out to its own side, onto the bar
+                ty = pB.y + len * 0.82f;                               // up at the bar (nearly full overhead reach)
+                tz = pB.z + len * 0.40f;                               // reach forward to the line (he hangs a little behind it)
+            } else {
+                // a vertical rope in front: BOTH hands close onto the rope at the body centre (x -> 0, hands just crossing),
+                // stacked one high and one low, swapping as he inches up. (Was: sgn*len*0.45 flung both hands OUT to the
+                // sides, away from the rope - the splayed-arms bug.)
+                tx = -side0 * len * 0.05f;                             // meet on the rope, hands barely crossing
+                float h = MathUtils.lerp(side == 0 ? 0.60f : 0.16f, 0.12f + 0.62f * lead, m);
+                ty = pB.y + len * h;                                   // one hand high, one low; alternate while climbing
+                tz = pB.z + len * 0.70f;                               // reach forward to the rope
+            }
+            tgt.set(tx - pB.x, ty - pB.y, tz - pB.z).nor();            // (aim() reuses 'dir' internally, so the target lives in its own vector)
             aim(up, lo, tgt, 1f); aim(lo, fi, tgt, 1f);
         }
     }

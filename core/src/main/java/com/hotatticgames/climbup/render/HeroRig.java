@@ -8,6 +8,10 @@ import com.badlogic.gdx.graphics.g3d.ModelInstance;
 import com.badlogic.gdx.graphics.g3d.attributes.ColorAttribute;
 import com.badlogic.gdx.graphics.g3d.loader.G3dModelLoader;
 import com.badlogic.gdx.graphics.g3d.utils.AnimationController;
+import com.badlogic.gdx.graphics.g3d.utils.ModelBuilder;
+import com.badlogic.gdx.graphics.g3d.Material;
+import com.badlogic.gdx.graphics.Color;
+import com.badlogic.gdx.graphics.VertexAttributes;
 import com.badlogic.gdx.graphics.g3d.model.Node;
 import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.math.Matrix4;
@@ -30,6 +34,16 @@ public final class HeroRig implements Disposable {
     private final AnimationController ac;
     private final boolean ham;                       // the chibi hamster: same skeleton and clips as the bunny, textured instead of vertex-coloured
     private final boolean astro;                     // an astronaut (index >= 2): a much deeper, larger helmet than the bunny's head, so it sits back further off the rope
+    // Ball hands: the astronauts' finger-gloves splay out and never curl (no finger articulation), and the hamster's paws
+    // read messy. Replace each hand with a simple coloured ball, proportioned from the bunny, matching the hand's colour.
+    private final boolean handBall;
+    private float ballRad;                           // ball radius in world units (proportional to this character's size)
+    private Model ballModel; private ModelInstance ballL, ballR;
+    private final Matrix4 ballM = new Matrix4(); private final Vector3 ballP = new Vector3();
+    // How big each ball hand is (fraction scaled by the character's size). The astronauts have small hands on big bodies,
+    // so their ball is smaller than a strict bunny-proportion; the hamster's covers its chunky wrist. Both tunable.
+    private static final float BALL_RATIO = Float.parseFloat(System.getProperty("climb.handBall", "0.20"));
+    private static final float BALL_ASTRO = Float.parseFloat(System.getProperty("climb.handBallAstro", "0.11"));
     private String current = "";
     public float yaw, landT;
 
@@ -249,6 +263,14 @@ public final class HeroRig implements Disposable {
         inst = new ModelInstance(model);
         if (Characters.astronaut(character)) { Node gun = inst.getNode("n22_Pistol", true, true); if (gun != null) gun.parts.clear(); }
         findNodes(); captureBind();                 // record the limbs' rest scale now, while the skeleton is still in its bind pose
+        handBall = ham || astro;                    // the bunny keeps its own tidy paws; the astronauts and hamster get ball hands
+        if (handBall) {
+            ballRad = (astro ? BALL_ASTRO : BALL_RATIO) * SCALE / Characters.scale(0);   // astronauts smaller (small hands, big body); hamster covers its wrist
+            Color hc = astro ? new Color(0.12f, 0.12f, 0.14f, 1f) : new Color(0.93f, 0.90f, 0.85f, 1f);   // match the hand it replaces
+            Material bm = new Material(ColorAttribute.createDiffuse(hc), ColorAttribute.createEmissive(hc.r * 0.12f, hc.g * 0.12f, hc.b * 0.12f, 1f));
+            ballModel = new ModelBuilder().createSphere(2f, 2f, 2f, 12, 12, bm, VertexAttributes.Usage.Position | VertexAttributes.Usage.Normal);
+            ballL = new ModelInstance(ballModel); ballR = new ModelInstance(ballModel);
+        }
         ac = new AnimationController(inst);
         play("Idle", -1, 1f, 0f);
     }
@@ -406,6 +428,22 @@ public final class HeroRig implements Disposable {
             }
         }
         else if (anim == Anim.IDLE && beat == null && !NO_POSE) armsRest();     // plain standing: tuck the arms in from the clip's slight A-pose so he doesn't read as T-posing
+        placeHandBalls();                                                        // sit a ball on each hand (same world spot the hand renders at)
+    }
+
+    // Where along the forearm->fist line the ball sits (1 = at the fist, lower = back toward the wrist). The hand mesh is
+    // stripped at the wrist, so the ball must sit over that opening, not out at the fist bone (which floats past it).
+    private static final float BALL_AT = Float.parseFloat(System.getProperty("climb.ballAt", "0.6"));
+    private final Vector3 ballP2 = new Vector3();
+    /** Position each hand ball over the stripped wrist (blended between the lower-arm and fist bones, as the arm renders). */
+    private void placeHandBalls() {
+        if (!handBall || ballL == null || fiL == null || fiR == null) return;
+        placeBall(ballL, loL, fiL); placeBall(ballR, loR, fiR);
+    }
+    private void placeBall(ModelInstance ball, Node lower, Node fist) {
+        ballM.set(inst.transform).mul(fist.globalTransform); ballM.getTranslation(ballP);
+        if (lower != null) { ballM.set(inst.transform).mul(lower.globalTransform); ballM.getTranslation(ballP2); ballP.lerp(ballP2, 1f - BALL_AT); }
+        ball.transform.idt().translate(ballP).scale(ballRad, ballRad, ballRad);
     }
 
     private static final float ARMS_REST = Float.parseFloat(System.getProperty("climb.armsRest", "0.80"));
@@ -582,7 +620,10 @@ public final class HeroRig implements Disposable {
         return b.toString();
     }
 
-    public void render(ModelBatch batch, Environment env) { batch.render(inst, env); }
+    public void render(ModelBatch batch, Environment env) {
+        batch.render(inst, env);
+        if (handBall && ballL != null) { batch.render(ballL, env); batch.render(ballR, env); }
+    }
 
-    @Override public void dispose() { model.dispose(); }
+    @Override public void dispose() { model.dispose(); if (ballModel != null) ballModel.dispose(); }
 }

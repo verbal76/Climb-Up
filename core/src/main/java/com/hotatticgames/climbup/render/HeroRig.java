@@ -450,6 +450,7 @@ public final class HeroRig implements Disposable {
             boolean cable = anim == Anim.SHIMMY || sim.mode == Sim.Mode.CABLE;
             if (ham) stretchArms(grip);
             else if (astro && line && !cable) stretchArmsBy(grip, 0.08f, ASTRO_STRETCH);   // lengthen the astronauts' arms so the hands reach the rope that sits forward of the deep helmet
+            else if (!astro && line && cable) stretchArmsBy(grip, BUN_STRETCH, BUN_STRETCH);   // bunny: a UNIFORM stretch (X==Y==Z, or the fist counter-scale distorts its real paws) so its short arms reach up and grip the overhead cable instead of hanging below it with no visible arms
             if (line) {                // rope or cable: both hands on the line, alternating hand over hand while moving; knees draw up alternately
                 float moving = MathUtils.clamp(lineMove, 0f, 1f);
                 gripLine(climbPhase, moving, cable);
@@ -536,6 +537,10 @@ public final class HeroRig implements Disposable {
         inst.calculateTransforms();
     }
     private static final float HAM_REACH = Float.parseFloat(System.getProperty("climb.hamReach", "1.5"));
+    // The bunny grips the vertical rope fine with its natural arms, but its short arms don't reach up to the overhead cable, so
+    // on the cable it hangs below with no visible arms. A uniform stretch (widen == lengthen) lengthens the reach without the
+    // non-uniform fist counter-scale that would distort its REAL paws (the hamster/astronauts avoid that via ball hands).
+    private static final float BUN_STRETCH = Float.parseFloat(System.getProperty("climb.bunStretch", "0.4"));
     // A small lengthening of the astronauts' arms while on a rope so the hands reach the line, which has to sit well forward
     // of their deep helmets (the body is pushed back by ASTRO_BACK to clear the visor; a normal-length arm falls short of it).
     private static final float ASTRO_STRETCH = Float.parseFloat(System.getProperty("climb.astroStretch", "0.35"));

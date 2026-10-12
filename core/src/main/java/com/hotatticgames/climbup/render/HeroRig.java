@@ -409,8 +409,11 @@ public final class HeroRig implements Disposable {
     private void stretchArms(float grip) {
         if (upL == null) findNodes();
         if (upL == null || upR == null) return;
-        float k = 1f + HAM_REACH * grip;
-        for (Node n : new Node[]{upL, upR, loL, loR}) if (n != null) n.localTransform.scale(1f + 0.7f * grip, k, 1f + 0.7f * grip);
+        float a = 1f + 0.7f * grip, k = 1f + HAM_REACH * grip;
+        for (Node n : new Node[]{upL, upR, loL, loR}) if (n != null) n.localTransform.scale(a, k, a);
+        // each fist hangs below BOTH the upper and the lower arm, so it inherits the stretch twice over (~a*a wide, ~k*k long) and balloons into a giant paw; cancel that compounded scale so the hands keep their natural size while the arms still reach (the reach is arm length, not hand size).
+        float ia = 1f / (a * a), ik = 1f / (k * k);
+        for (Node n : new Node[]{fiL, fiR}) if (n != null) n.localTransform.scale(ia, ik, ia);
         inst.calculateTransforms();
     }
     private static final float HAM_REACH = Float.parseFloat(System.getProperty("climb.hamReach", "1.5"));
@@ -462,12 +465,33 @@ public final class HeroRig implements Disposable {
         if (upL == null) return 1f;
         Vector3 s = new Vector3();
         float m = Float.MAX_VALUE;
-        for (Node n : new Node[]{upL, loL, fiL, upR, loR, fiR, ulL, llL, ulR, llR}) {
+        // arm and leg bones: their LOCAL scale catches the re-pose leak. The fists are NOT here: for the hamster their
+        // local scale is deliberately counter-scaled to undo the compounded arm stretch, so their rendered size is
+        // guarded by maxHandScale() (balloon) instead - a small fist LOCAL scale is correct here, not shrinkage.
+        for (Node n : new Node[]{upL, loL, upR, loR, ulL, llL, ulR, llR}) {
             if (n == null) continue;
             n.localTransform.getScale(s);
             m = Math.min(m, Math.min(s.x, Math.min(s.y, s.z)));
         }
         return m == Float.MAX_VALUE ? 1f : m;
+    }
+
+    /**
+     * Test hook: the largest scale component either fist reaches ON SCREEN (its global transform, so it includes the whole
+     * arm chain), after all grip and stretch posing. The hamster stretches its arms to reach the line; its paws must NOT
+     * balloon with them. Healthy paws sit near their bind scale (~1); the compounded arm stretch used to drive this well
+     * above 2. Returns 0 before the skeleton has been located.
+     */
+    public float maxHandScale() {
+        if (fiL == null && fiR == null) return 0f;
+        Vector3 s = new Vector3();
+        float m = 0f;
+        for (Node n : new Node[]{fiL, fiR}) {
+            if (n == null) continue;
+            n.globalTransform.getScale(s);
+            m = Math.max(m, Math.max(s.x, Math.max(s.y, s.z)));
+        }
+        return m;
     }
 
     /** Test hook: per-bone local scale (x/y/z) for every arm and leg bone, for diagnosing which limb shrinks and when. */

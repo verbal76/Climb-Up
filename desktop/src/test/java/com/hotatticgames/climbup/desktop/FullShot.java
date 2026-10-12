@@ -97,6 +97,10 @@ public final class FullShot {
                     wr.heroRig().fistWorld(l, r);
                     System.out.printf("  GRIP ch=%d %s fistL=(%.2f,%.2f,%.2f) fistR=(%.2f,%.2f,%.2f)  rope@(x=0,z=0)%n",
                             ch, label, l.x, l.y, l.z, r.x, r.y, r.z);
+                    com.badlogic.gdx.math.Vector3 fl = new com.badlogic.gdx.math.Vector3(), fr = new com.badlogic.gdx.math.Vector3();
+                    wr.heroRig().footWorld(fl, fr);
+                    System.out.printf("  FEET ch=%d %s footL=(%.2f,%.2f,%.2f) footR=(%.2f,%.2f,%.2f)  rope@(x=0,z=0)%n",
+                            ch, label, fl.x, fl.y, fl.z, fr.x, fr.y, fr.z);
                 }
                 Pixmap pm = Pixmap.createFromFrameBuffer(0, 0, W, H);
                 fbo.end();

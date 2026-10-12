@@ -40,10 +40,18 @@ public final class HeroRig implements Disposable {
     private float ballRad;                           // ball radius in world units (proportional to this character's size)
     private Model ballModel; private ModelInstance ballL, ballR;
     private final Matrix4 ballM = new Matrix4(); private final Vector3 ballP = new Vector3();
+    private float ballFront;                          // this frame's forward (toward-camera) nudge for the hand balls: >0 on a vertical rope so they render in front of the line
     // How big each ball hand is (fraction scaled by the character's size). The astronauts have small hands on big bodies,
     // so their ball is smaller than a strict bunny-proportion; the hamster's covers its chunky wrist. Both tunable.
     private static final float BALL_RATIO = Float.parseFloat(System.getProperty("climb.handBall", "0.20"));
     private static final float BALL_ASTRO = Float.parseFloat(System.getProperty("climb.handBallAstro", "0.09"));
+    // On a vertical rope the ball hands are nudged toward the camera (world +z) so they draw IN FRONT of the line, reading
+    // as hands clasping the rope instead of the rope drawing over them. Cosmetic depth only: the fists, arms, reach, grip
+    // and all mechanics are untouched; the game camera looks straight down -z, so this is genuine 3D in-front, not a trick.
+    private static final float BALL_FRONT = Float.parseFloat(System.getProperty("climb.ballFront", "0.17"));
+    // On a rope, how much of the hand's own sideways offset is kept (0 = both balls dead on the rope's centre line, stacked;
+    // 1 = left where the fists are). A little keeps the two hands from fully overlapping while they still clasp the line.
+    private static final float ROPE_BALL_X = Float.parseFloat(System.getProperty("climb.ropeBallX", "0.3"));
     private String current = "";
     public float yaw, landT;
 
@@ -82,7 +90,9 @@ public final class HeroRig implements Disposable {
     }
 
     // ---- hanging: both arms are posed in code to reach up and grip (the pack has no hang/climb clips)
-    private Node upL, loL, fiL, upR, loR, fiR, ulL, ulR, llL, llR;
+    private Node upL, loL, fiL, upR, loR, fiR, ulL, ulR, llL, llR, ftL, ftR;
+    private Vector3 footLocalL, footLocalR;           // where each foot sits inside its lower-leg bone (bind pose) - the Foot node is a static Root helper, so we track the foot mesh (skinned to the lower leg) this way
+    private final Vector3 footEst = new Vector3();    // scratch: a foot's live world position, estimated from the lower leg + its bind offset
     private Node[] limbs = new Node[0];               // the arm and leg bones the animation/grip posing touches (filled by findNodes)
     private float hangT, lean;
     private final Vector3 pB = new Vector3(), pC = new Vector3(), dir = new Vector3(), tgt = new Vector3(), keepScale = new Vector3(), rcT = new Vector3();
@@ -100,6 +110,17 @@ public final class HeroRig implements Disposable {
         for (Node n : limbs) {
             if (n != null && !bindScale.containsKey(n)) { Vector3 v = new Vector3(); n.localTransform.getScale(v); bindScale.put(n, v); }
         }
+        footLocalL = footInShin(llL, ftL); footLocalR = footInShin(llR, ftR);   // where the foot mesh sits inside the lower leg, captured in bind pose
+    }
+
+    /** The foot node's bind position expressed in its lower-leg bone's local space, so the foot mesh (skinned to the lower
+     *  leg) can be located and aimed at runtime even though the Foot node is a static, Root-parented helper. Null if absent. */
+    private Vector3 footInShin(Node shin, Node foot) {
+        if (shin == null || foot == null) return null;
+        Matrix4 inv = new Matrix4();
+        if (!safeInvert(inv, shin.globalTransform)) return null;
+        Vector3 fw = new Vector3(); foot.globalTransform.getTranslation(fw);
+        return fw.mul(inv);                 // foot world (bind) -> lower-leg-local
     }
 
     /**
@@ -132,6 +153,7 @@ public final class HeroRig implements Disposable {
         String id = n.id;
         if (id.endsWith("_UpperArm.L")) upL = n; else if (id.endsWith("_LowerArm.L")) loL = n; else if (id.endsWith("_Fist.L") || id.endsWith("_Middle1.L")) fiL = n;
         else if (id.endsWith("_UpperLeg.L")) ulL = n; else if (id.endsWith("_UpperLeg.R")) ulR = n; else if (id.endsWith("_LowerLeg.L")) llL = n; else if (id.endsWith("_LowerLeg.R")) llR = n;
+        else if (id.endsWith("_Foot.L")) ftL = n; else if (id.endsWith("_Foot.R")) ftR = n;
         else if (id.endsWith("_UpperArm.R")) upR = n; else if (id.endsWith("_LowerArm.R")) loR = n; else if (id.endsWith("_Fist.R") || id.endsWith("_Middle1.R")) fiR = n;
         for (Node c : n.getChildren()) collect(c);
     }
@@ -185,6 +207,21 @@ public final class HeroRig implements Disposable {
         bone.globalTransform.getTranslation(pB); child.globalTransform.getTranslation(pC);
         dir.set(pC).sub(pB);
         if (dir.isZero(1e-5f)) return;         // shoulder and hand coincide this frame: no direction to aim along, leave the pose
+        dir.nor();
+        arc.setFromCross(dir, target);
+        part.set(ident).slerp(arc, weight);
+        rot.setToTranslation(pB).rotate(part).translate(-pB.x, -pB.y, -pB.z);
+        wNew.set(rot).mul(bone.globalTransform);
+        commitBone(bone);
+    }
+
+    /** Like aim(), but the child reference is an explicit world (model-space) position instead of a child node - used to aim
+     *  the lower leg at the foot mesh, whose position we estimate (the Foot node is a static helper, not under the leg). */
+    private void aimTo(Node bone, Vector3 childWorld, Vector3 target, float weight) {
+        if (target.isZero(1e-5f)) return;
+        bone.globalTransform.getTranslation(pB);
+        dir.set(childWorld).sub(pB);
+        if (dir.isZero(1e-5f)) return;
         dir.nor();
         arc.setFromCross(dir, target);
         part.set(ident).slerp(arc, weight);
@@ -401,7 +438,7 @@ public final class HeroRig implements Disposable {
         // gripping poses: both arms up on the ledge / rope / cable, hands snapped to the sim's grip point
         hangT = sim.mode == Sim.Mode.LEDGE ? hangT + dt : 0f;
         hangSway += dt * 2.4f;
-        float grip = 0f;
+        float grip = 0f; ballFront = 0f;
         if (anim == Anim.HANG || anim == Anim.CLIMB || anim == Anim.SHIMMY) grip = 1f;
         else if (anim == Anim.PULLUP) grip = CYCLE ? 0.8f : Math.max(0f, 1f - sim.pullT / (sim.mode == Sim.Mode.BEAM ? Sim.BEAM_MOUNT_TIME : sim.T.pullUpTime) * 1.25f);
         if (grip > 0.01f && !NO_POSE) {
@@ -411,7 +448,9 @@ public final class HeroRig implements Disposable {
             else if (astro && line && !cable) stretchArmsBy(grip, 0.08f, ASTRO_STRETCH);   // lengthen the astronauts' arms so the hands reach the rope that sits forward of the deep helmet
             if (line) {                // rope or cable: both hands on the line, alternating hand over hand while moving; knees draw up alternately
                 float moving = MathUtils.clamp(lineMove, 0f, 1f);
-                gripLine(climbPhase, moving, cable); climbLegs(climbPhase, moving);
+                gripLine(climbPhase, moving, cable);
+                if (!cable && (astro || ham)) { feetToLine(climbPhase, moving); ballFront = BALL_FRONT * grip; }   // vertical rope: close the feet on the line and sit the ball hands in front of it (astronauts/hamster; the bunny's dangle is fine)
+                else climbLegs(climbPhase, moving);                                                               // the overhead cable, and the bunny on a rope, keep the dangling knee draw-up
             }
             else raiseArms(grip, (sim.mode == Sim.Mode.LEDGE || sim.mode == Sim.Mode.PULLUP || (CYCLE && anim == Anim.HANG)) ? 1.0f : 0.12f);
             if ((sim.mode == Sim.Mode.LEDGE || (CYCLE && anim == Anim.HANG)) && !reduced) flail(time);
@@ -441,8 +480,13 @@ public final class HeroRig implements Disposable {
         placeBall(ballL, loL, fiL); placeBall(ballR, loR, fiR);
     }
     private void placeBall(ModelInstance ball, Node lower, Node fist) {
-        ballM.set(inst.transform).mul(fist.globalTransform); ballM.getTranslation(ballP);
-        if (lower != null) { ballM.set(inst.transform).mul(lower.globalTransform); ballM.getTranslation(ballP2); ballP.lerp(ballP2, 1f - BALL_AT); }
+        ballM.set(inst.transform).mul(fist.globalTransform); ballM.getTranslation(ballP);   // the hand (fist) world position
+        if (ballFront > 0f) {                   // on a vertical rope: clasp the line - sit the ball ON the rope (x->~0, where gripLine already lands the fist) and in front of it
+            ballP.x *= ROPE_BALL_X;             // draw the ball onto the rope's lateral line (the hero is centred at phi~=0, so world x is the rope's x)
+            ballP.z += ballFront;               // and toward the camera, so it renders in front of the line
+        } else if (lower != null) {             // everywhere else: sit the ball over the stripped wrist, blended back toward the forearm
+            ballM.set(inst.transform).mul(lower.globalTransform); ballM.getTranslation(ballP2); ballP.lerp(ballP2, 1f - BALL_AT);
+        }
         ball.transform.idt().translate(ballP).scale(ballRad, ballRad, ballRad);
     }
 
@@ -560,12 +604,45 @@ public final class HeroRig implements Disposable {
     }
     private float hangSway;
 
+    // How far inward (model units from the rope's x=0) each knee is aimed; the straightish leg then carries the shin+foot
+    // (which are skinned to the lower leg) in to just beside the rope. Smaller = the legs angle in more. A gentle alternating
+    // lift keeps the climb reading as moving. Both tunable via climb.kneeX / climb.footShuffle.
+    private static final float KNEE_X = Float.parseFloat(System.getProperty("climb.kneeX", "0.11"));
+    private static final float FOOT_SHUFFLE = Float.parseFloat(System.getProperty("climb.footShuffle", "0.12"));
+    private final Vector3 legTgt = new Vector3();
+    /** Angle the legs in against the vertical rope: aim each thigh (hip->knee direction) down and inward so the shin and foot
+     *  (skinned to the lower leg) close on the line. The Foot node is a Root-parented helper that does NOT follow the leg, so
+     *  the lower leg is the real leg tip. Axis-agnostic (aim finds the rotation). Astronauts and hamster only, rope only
+     *  (gated by the caller); the bunny's dangle is left alone. */
+    private void feetToLine(float phase, float moving) {
+        if (ulL == null || ulR == null || llL == null || llR == null) return;
+        float m = MathUtils.clamp(moving, 0f, 1f);
+        for (int side = 0; side < 2; side++) {
+            Node ul = side == 0 ? ulL : ulR, ll = side == 0 ? llL : llR; Vector3 footLocal = side == 0 ? footLocalL : footLocalR;
+            ul.globalTransform.getTranslation(pB);                                           // hip (model space)
+            float sideSign = side == 0 ? 1f : -1f;                                           // measured: the .L leg is on +x, the .R leg on -x
+            float lift = FOOT_SHUFFLE * MathUtils.sin(phase + side * MathUtils.PI) * m;      // a small alternating shuffle up the line
+            legTgt.set(sideSign * KNEE_X - pB.x, -1f + lift * 0.2f, 0f).nor();               // point the thigh down (-y) and inward toward the rope's lateral line
+            aim(ul, ll, legTgt, 1f);                                                         // thigh: swing the knee down and in
+            if (footLocal != null) { footEst.set(footLocal).mul(ll.globalTransform); aimTo(ll, footEst, legTgt, 1f); }   // shin: bring the foot the rest of the way in, straightening the leg toward the line
+        }
+    }
+
     /** Diagnostic hook: each fist's true on-screen world position (inst.transform x the bone's global), for checking the
      *  hands sit on the rope, which hangs at world x=0, z=0. Set NaN until the skeleton has been located. */
     public void fistWorld(Vector3 outL, Vector3 outR) {
         if (fiL == null || fiR == null) { outL.set(Float.NaN, Float.NaN, Float.NaN); outR.set(outL); return; }
         new Matrix4(inst.transform).mul(fiL.globalTransform).getTranslation(outL);
         new Matrix4(inst.transform).mul(fiR.globalTransform).getTranslation(outR);
+    }
+
+    /** Diagnostic hook: each foot's world position (the foot mesh is skinned to the lower leg; we locate it via its bind
+     *  offset inside that bone, since the Foot node itself is a static Root-parented helper), for checking the feet rotate in
+     *  against the vertical rope (world x=0). NaN until located. */
+    public void footWorld(Vector3 outL, Vector3 outR) {
+        if (llL == null || llR == null || footLocalL == null || footLocalR == null) { outL.set(Float.NaN, Float.NaN, Float.NaN); outR.set(outL); return; }
+        outL.set(footLocalL).mul(llL.globalTransform).mul(inst.transform);
+        outR.set(footLocalR).mul(llR.globalTransform).mul(inst.transform);
     }
 
     /**

@@ -43,7 +43,7 @@ public final class HeroRig implements Disposable {
     // How big each ball hand is (fraction scaled by the character's size). The astronauts have small hands on big bodies,
     // so their ball is smaller than a strict bunny-proportion; the hamster's covers its chunky wrist. Both tunable.
     private static final float BALL_RATIO = Float.parseFloat(System.getProperty("climb.handBall", "0.20"));
-    private static final float BALL_ASTRO = Float.parseFloat(System.getProperty("climb.handBallAstro", "0.11"));
+    private static final float BALL_ASTRO = Float.parseFloat(System.getProperty("climb.handBallAstro", "0.09"));
     private String current = "";
     public float yaw, landT;
 

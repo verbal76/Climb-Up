@@ -303,7 +303,9 @@ public final class HeroRig implements Disposable {
         handBall = ham || astro;                    // the bunny keeps its own tidy paws; the astronauts and hamster get ball hands
         if (handBall) {
             ballRad = (astro ? BALL_ASTRO : BALL_RATIO) * SCALE / Characters.scale(0);   // astronauts smaller (small hands, big body); hamster covers its wrist
-            Color hc = astro ? new Color(0.12f, 0.12f, 0.14f, 1f) : new Color(0.93f, 0.90f, 0.85f, 1f);   // match the hand it replaces
+            // The astronauts' hands are near-black; the hamster's are a warm brown paw (its own darker fur tone) that reads
+            // against its light beige fur instead of blending in - a plain beige ball just disappeared on the body.
+            Color hc = astro ? new Color(0.12f, 0.12f, 0.14f, 1f) : new Color(0.46f, 0.29f, 0.17f, 1f);
             Material bm = new Material(ColorAttribute.createDiffuse(hc), ColorAttribute.createEmissive(hc.r * 0.12f, hc.g * 0.12f, hc.b * 0.12f, 1f));
             ballModel = new ModelBuilder().createSphere(2f, 2f, 2f, 12, 12, bm, VertexAttributes.Usage.Position | VertexAttributes.Usage.Normal);
             ballL = new ModelInstance(ballModel); ballR = new ModelInstance(ballModel);

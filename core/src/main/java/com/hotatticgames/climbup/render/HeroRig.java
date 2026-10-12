@@ -456,7 +456,7 @@ public final class HeroRig implements Disposable {
                 if (!cable && (astro || ham)) {   // vertical rope: close the feet on the line, and clasp the ball hands in front of it (astro + hamster)
                     feetToLine(climbPhase, moving);
                     ballFront = BALL_FRONT * grip;                      // push the ball toward the camera, in front of the line
-                    ballPullX = ROPE_BALL_X;                            // draw the ball in onto the line (both); the hamster is rendered double-sided so its paw no longer shows sky behind the ball
+                    if (astro) ballPullX = ROPE_BALL_X;                 // astronauts: draw the ball in onto the rope's line (their fist sits there). The hamster's own fist already lands beside the line, so its ball stays on its paw (ballPullX stays 1) and only pushes forward - pulling it in was what detached it from the arm.
                 }
                 else climbLegs(climbPhase, moving);                                                               // the overhead cable, and the bunny on a rope, keep the dangling knee draw-up
             }
@@ -489,7 +489,7 @@ public final class HeroRig implements Disposable {
     }
     private void placeBall(ModelInstance ball, Node lower, Node fist) {
         ballM.set(inst.transform).mul(fist.globalTransform); ballM.getTranslation(ballP);   // the hand (fist) world position
-        if (ballFront > 0f) {                   // on a vertical rope: clasp the line - the astronauts' ball draws onto the rope's line (ballPullX=ROPE_BALL_X, their fist is there); the hamster keeps its fist x (ballPullX=1) so the ball sits in front of its own paw
+        if (ballFront > 0f) {                   // on a vertical rope: the astronauts' ball draws onto the rope's line (ballPullX=ROPE_BALL_X, their fist is there); the hamster keeps its fist x (ballPullX=1) so the ball sits on its own paw, in front of the line
             ballP.x *= ballPullX;
             ballP.z += ballFront;               // and toward the camera, so it renders in front of the line
         } else if (lower != null) {             // everywhere else: sit the ball over the stripped wrist, blended back toward the forearm

@@ -452,7 +452,7 @@ public final class HeroRig implements Disposable {
             if (line) {                // rope or cable: both hands on the line, alternating hand over hand while moving; knees draw up alternately
                 float moving = MathUtils.clamp(lineMove, 0f, 1f);
                 gripLine(climbPhase, moving, cable);
-                if (!cable && (astro || ham)) { feetToLine(climbPhase, moving); ballFront = BALL_FRONT * grip; }   // vertical rope: close the feet on the line and sit the ball hands in front of it (astronauts/hamster; the bunny's dangle is fine)
+                if (!cable && (astro || ham)) { feetToLine(climbPhase, moving); if (astro) ballFront = BALL_FRONT * grip; }   // vertical rope: close the feet on the line (astro + hamster). Only the astronauts' hands are pulled onto and in front of the line - their arms reach it. The hamster's short arm does not, so its ball stays at the wrist (ballFront=0) and keeps attached to the arm instead of floating onto the rope.
                 else climbLegs(climbPhase, moving);                                                               // the overhead cable, and the bunny on a rope, keep the dangling knee draw-up
             }
             else raiseArms(grip, (sim.mode == Sim.Mode.LEDGE || sim.mode == Sim.Mode.PULLUP || (CYCLE && anim == Anim.HANG)) ? 1.0f : 0.12f);

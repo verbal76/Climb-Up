@@ -140,6 +140,7 @@ public final class WorldRenderer implements Disposable {
 
     /** Switches the player model (Settings: CHARACTER) without rebuilding the world. */
     public void setCharacter(int c) { if (c == character) return; character = c; hero.dispose(); hero = new HeroRig(c); }
+    public HeroRig heroRig() { return hero; }   // diagnostic access (grip-pose probes)
 
     public void resize(int w, int h) { cam.viewportWidth = w; cam.viewportHeight = h; cam.update(); bg.resize(w, h); }
 

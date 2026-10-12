@@ -92,6 +92,12 @@ public final class FullShot {
                 Gdx.gl.glClearColor(0.6f, 0.78f, 0.95f, 1f);
                 Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT | GL20.GL_DEPTH_BUFFER_BIT);
                 wr.render(sim, 1f, dt, time, true);
+                if (label.equals("rope_climb") || label.equals("cable_shimmy")) {
+                    com.badlogic.gdx.math.Vector3 l = new com.badlogic.gdx.math.Vector3(), r = new com.badlogic.gdx.math.Vector3();
+                    wr.heroRig().fistWorld(l, r);
+                    System.out.printf("  GRIP ch=%d %s fistL=(%.2f,%.2f,%.2f) fistR=(%.2f,%.2f,%.2f)  rope@(x=0,z=0)%n",
+                            ch, label, l.x, l.y, l.z, r.x, r.y, r.z);
+                }
                 Pixmap pm = Pixmap.createFromFrameBuffer(0, 0, W, H);
                 fbo.end();
                 flipY(pm);

@@ -29,6 +29,7 @@ public final class HeroRig implements Disposable {
     private final ModelInstance inst;
     private final AnimationController ac;
     private final boolean ham;                       // the chibi hamster: same skeleton and clips as the bunny, textured instead of vertex-coloured
+    private final boolean astro;                     // an astronaut (index >= 2): a much deeper, larger helmet than the bunny's head, so it sits back further off the rope
     private String current = "";
     public float yaw, landT;
 
@@ -238,7 +239,7 @@ public final class HeroRig implements Disposable {
 
     public HeroRig(int character) {
         character = Characters.clamp(character);
-        ham = character == 1; SCALE = Characters.scale(character);
+        ham = character == 1; astro = Characters.astronaut(character); SCALE = Characters.scale(character);
         model = new G3dModelLoader(new JsonReader()).loadModel(Gdx.files.internal(Characters.model(character)));
         for (com.badlogic.gdx.graphics.g3d.Material m : model.materials) m.set(ColorAttribute.createEmissive(0.10f, 0.10f, 0.12f, 1f));
         if (ham) for (com.badlogic.gdx.graphics.g3d.Material m : model.materials) {
@@ -382,10 +383,11 @@ public final class HeroRig implements Disposable {
         if (anim == Anim.HANG || anim == Anim.CLIMB || anim == Anim.SHIMMY) grip = 1f;
         else if (anim == Anim.PULLUP) grip = CYCLE ? 0.8f : Math.max(0f, 1f - sim.pullT / (sim.mode == Sim.Mode.BEAM ? Sim.BEAM_MOUNT_TIME : sim.T.pullUpTime) * 1.25f);
         if (grip > 0.01f && !NO_POSE) {
-            if (ham) stretchArms(grip);
             boolean line = anim == Anim.CLIMB || anim == Anim.SHIMMY || (anim == Anim.HANG && (sim.mode == Sim.Mode.ROPE || sim.mode == Sim.Mode.CABLE));
+            boolean cable = anim == Anim.SHIMMY || sim.mode == Sim.Mode.CABLE;
+            if (ham) stretchArms(grip);
+            else if (astro && line && !cable) stretchArmsBy(grip, 0.08f, ASTRO_STRETCH);   // lengthen the astronauts' arms so the hands reach the rope that sits forward of the deep helmet
             if (line) {                // rope or cable: both hands on the line, alternating hand over hand while moving; knees draw up alternately
-                boolean cable = anim == Anim.SHIMMY || sim.mode == Sim.Mode.CABLE;
                 float moving = MathUtils.clamp(lineMove, 0f, 1f);
                 gripLine(climbPhase, moving, cable); climbLegs(climbPhase, moving);
             }
@@ -395,7 +397,7 @@ public final class HeroRig implements Disposable {
                 float handWorld = wy + handModelY() * sy;
                 float shift = (sim.y + sim.T.handHeight) - handWorld;
                 float tremble = sim.mode == Sim.Mode.LEDGE && !reduced ? MathUtils.sin(time * 22f) * (0.4f + Math.min(0.8f, hangT * 0.3f)) : 0f;
-                float behind = line ? ROPE_FRONT * grip : 0f;
+                float behind = line ? (cable ? ROPE_FRONT : lineBack()) * grip : 0f;   // the vertical rope sits in front of the face (bigger for the astronauts' helmets); the overhead cable keeps its tuned offset
                 // cable shimmy: the whole body swings side to side under the hands with each hand-over-hand, like a playful monkey swing (not with reduced motion)
                 boolean shimmy = anim == Anim.SHIMMY && !reduced;
                 float roll = shimmy ? 11f * MathUtils.clamp(lineMove, 0f, 1f) * MathUtils.sin(climbPhase + 0.6f) : 0f, pivot = handModelY() * sy;
@@ -427,21 +429,45 @@ public final class HeroRig implements Disposable {
     }
 
     /** The hamster's arms are tiny stubs: while gripping they stretch (cartoon rubber arms) so the paws can reach the rope or ledge above the head. */
-    private void stretchArms(float grip) {
+    private void stretchArms(float grip) { stretchArmsBy(grip, 0.7f, HAM_REACH); }
+    /**
+     * Lengthen (k) and widen (w) the arm bones so the hands reach a line that sits forward of the body - the hamster's big
+     * rubber stretch, and a small astronaut stretch so their normal-length arms can still reach the rope that sits well
+     * forward of their deep helmets. The fists are counter-scaled so they keep their natural size (the reach is arm length,
+     * not hand size): each fist hangs below BOTH the upper and the lower arm, so it inherits the stretch twice over.
+     */
+    private void stretchArmsBy(float grip, float w, float lengthen) {
         if (upL == null) findNodes();
         if (upL == null || upR == null) return;
-        float a = 1f + 0.7f * grip, k = 1f + HAM_REACH * grip;
+        float a = 1f + w * grip, k = 1f + lengthen * grip;
         for (Node n : new Node[]{upL, upR, loL, loR}) if (n != null) n.localTransform.scale(a, k, a);
-        // each fist hangs below BOTH the upper and the lower arm, so it inherits the stretch twice over (~a*a wide, ~k*k long) and balloons into a giant paw; cancel that compounded scale so the hands keep their natural size while the arms still reach (the reach is arm length, not hand size).
         float ia = 1f / (a * a), ik = 1f / (k * k);
         for (Node n : new Node[]{fiL, fiR}) if (n != null) n.localTransform.scale(ia, ik, ia);
         inst.calculateTransforms();
     }
     private static final float HAM_REACH = Float.parseFloat(System.getProperty("climb.hamReach", "1.5"));
+    // A small lengthening of the astronauts' arms while on a rope so the hands reach the line, which has to sit well forward
+    // of their deep helmets (the body is pushed back by ASTRO_BACK to clear the visor; a normal-length arm falls short of it).
+    private static final float ASTRO_STRETCH = Float.parseFloat(System.getProperty("climb.astroStretch", "0.35"));
 
     private final Vector3 pF = new Vector3();
     /** While hanging on a rope or cable the hero is drawn this far behind the line (world units) so his arms visibly reach forward and grip it. */
     private static final float ROPE_FRONT = 0.30f;
+    /**
+     * How far the body sits BEHIND the rope/cable so the LINE renders in front of the chest and face instead of spearing
+     * the head. 0.30 was tuned to the bunny's small head; the astronauts' helmets are far deeper and drawn larger, so the
+     * old offset left the rope punching through the visor. The hero reaches forward onto the line (gripLine) from here.
+     */
+    private static final float ASTRO_BACK = Float.parseFloat(System.getProperty("climb.astroBack", "0.82"));
+    private static final float BUN_BACK   = Float.parseFloat(System.getProperty("climb.bunBack", "0.37"));
+    // Forward reach of the hands onto the rope. gripLine poses the arms BEFORE the body is pushed back off the rope, so the
+    // hands must reach forward by about the push-back distance to land on the line once the body slides back.
+    private static final float ROPE_REACH = Float.parseFloat(System.getProperty("climb.ropeReach", "1.3"));
+    // Grip heights (fraction of arm length above the shoulder): the two hands sit a little above/below each other around
+    // chest-to-face height and alternate while climbing. Kept low on purpose so the head stays up and camera-facing.
+    private static final float GRIP_HI = Float.parseFloat(System.getProperty("climb.gripHi", "0.26"));
+    private static final float GRIP_LO = Float.parseFloat(System.getProperty("climb.gripLo", "0.02"));
+    private float lineBack() { return astro ? ASTRO_BACK : BUN_BACK; }
     private static final float INCH = 0.15f;
 
     /** Both hands go to the rope (or along the cable): each arm is aimed from its shoulder at a point on the line, one hand reaching high while the other pulls down, swapping with the climb. */
@@ -466,13 +492,17 @@ public final class HeroRig implements Disposable {
                 ty = pB.y + len * 0.82f;                               // up at the bar (nearly full overhead reach)
                 tz = pB.z + len * 0.40f;                               // reach forward to the line (he hangs a little behind it)
             } else {
-                // a vertical rope in front: BOTH hands close onto the rope at the body centre (x -> 0, hands just crossing),
-                // stacked one high and one low, swapping as he inches up. (Was: sgn*len*0.45 flung both hands OUT to the
-                // sides, away from the rope - the splayed-arms bug.)
-                tx = -side0 * len * 0.05f;                             // meet on the rope, hands barely crossing
-                float h = MathUtils.lerp(side == 0 ? 0.60f : 0.16f, 0.12f + 0.62f * lead, m);
-                ty = pB.y + len * h;                                   // one hand high, one low; alternate while climbing
-                tz = pB.z + len * 0.70f;                               // reach forward to the rope
+                // a vertical rope straight in front of him at world (x=0, z=0); the body sits back off it by lineBack(). Each
+                // hand reaches ONTO that line and closes on it - one high, one low, alternating as he inches up - instead of
+                // crossing in front of it. Aiming at the rope's own world position keeps the hands on the rope however far the
+                // body sits back. (Was: tx=-side0*len*0.05 crossed the two hands past centre and tz=pB.z+len*0.70 reached to a
+                // point in front of the shoulder, not onto the rope - the "hands crossed in front, face through the rope" bug.)
+                tx = 0f;                                               // onto the rope's lateral line (he is centred under it)
+                // grip around chest/face height (NOT reaching overhead): reaching up tucks the head down between the arms and
+                // hides the face; a forward reach keeps the head up and camera-facing, and reaches the rope more easily.
+                float h = MathUtils.lerp(side == 0 ? GRIP_HI : GRIP_LO, GRIP_LO + (GRIP_HI - GRIP_LO) * lead, m);
+                ty = pB.y + len * h;                                   // one hand a little higher, one a little lower; alternate while climbing
+                tz = pB.z + ROPE_REACH;                                // reach FORWARD onto the rope: gripLine poses before the body is pushed back, so a forward reach here lands the hand on the line once the body slides back
             }
             tgt.set(tx - pB.x, ty - pB.y, tz - pB.z).nor();            // (aim() reuses 'dir' internally, so the target lives in its own vector)
             aim(up, lo, tgt, 1f); aim(lo, fi, tgt, 1f);
@@ -491,6 +521,14 @@ public final class HeroRig implements Disposable {
         }
     }
     private float hangSway;
+
+    /** Diagnostic hook: each fist's true on-screen world position (inst.transform x the bone's global), for checking the
+     *  hands sit on the rope, which hangs at world x=0, z=0. Set NaN until the skeleton has been located. */
+    public void fistWorld(Vector3 outL, Vector3 outR) {
+        if (fiL == null || fiR == null) { outL.set(Float.NaN, Float.NaN, Float.NaN); outR.set(outL); return; }
+        new Matrix4(inst.transform).mul(fiL.globalTransform).getTranslation(outL);
+        new Matrix4(inst.transform).mul(fiR.globalTransform).getTranslation(outR);
+    }
 
     /**
      * Test hook: the smallest scale any arm or leg bone the grip posing drives has, read from its live local transform.

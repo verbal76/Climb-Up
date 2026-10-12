@@ -9,9 +9,18 @@ Owner (Kevin) is playtesting EXE on PC + APK on phone. This batch, all on the on
 - **Single-source CI:** `windows.yml` rewritten to build **and** release the EXE from `ccr-cb458cd1-w4dh5c` (one branch for both platforms, like `android.yml`); retires the old `exp/upwardly-windows` + `exp/windows-release` three-branch dance. APK title "— Android APK", EXE title "— Windows EXE".
 - Branch note: `ccr` and the old `exp/upwardly-windows` had byte-identical `core/src/main`; the "it never shipped" was insufficient fixes (grips/cannon never actually looked right), not lost branches.
 
-Tests: GripProbe PASS (limb scale guard, all 6 characters); AimedCannonTest +2 (muzzle, barrel-hold); cannon/mortar/ballpath/fit green. Full `:core:test` run at this checkpoint.
-Open/deferred: hamster whiskers clip the face (model-geometry nit); Steam Deck compatibility pass — deferred by owner until grips resolved (now resolved); general "other assets clipping" — only the two cited (cannon pillar, cable post) addressed.
-Next action: push `ccr-cb458cd1-w4dh5c` → `android.yml` (APK) + `windows.yml` (EXE) both build+release from the same commit; watch both runs; send the owner both links.
+Grip VERIFIED in the REAL renderer (`:desktop:fullShot`, not just the synthetic harness): astronauts' hands grip the rope overhead; hamster grips at chest (short-arm limitation, acceptable — a longer stretch splays, reverted). The grip-fix APK (Android build 54) + EXE (Desktop build 26) were published from `f8ed876`.
+
+### Overnight standard-compliance pass (master standard v2.0, provided by owner)
+- **Linux x86-64 target added** (`:desktop:linuxJar` + `tools/linux/package.sh`, jpackage native app-image). BUILT + EXECUTED locally: ELF launcher, GL first frame at 1280×800, clean exit, smoke PASS. Third platform now exists.
+- **CI publishing safety (§9/§10):** push no longer auto-publishes. `android.yml`/`windows.yml`/`ota-publish.yml` are **manual dispatch only**; new `ci.yml` runs tests on push (publishes nothing). `windows.yml` now builds Windows EXE **and** Linux tar.gz into ONE release with standard filenames + manifest + checksums. VERIFIED: the post-change push triggered only `ci.yml`.
+- **Docs (§19):** PLATFORM_SUPPORT, UPDATES, RELEASES, STEAM_HARDWARE_CHECKLIST, BRANCH_LEDGER, THIRD_PARTY_ASSETS.
+- **Branch audit:** `ccr` is the authoritative superset; no valuable unmerged game work on any branch (BRANCH_LEDGER).
+- **Glyph pack** (`Source.zip`, JulioCacko Input Prompts, CC0) received + archived; integration PENDING (YELLOW).
+
+Tests: full `:core:test` green; GripProbe PASS (all 6 characters); AimedCannonTest 9/9; Linux smoke PASS; all workflow YAML validated.
+Open/deferred (RED/owner/hardware): glyph integration (YELLOW, assets in hand); Steam on-screen keyboard + Steam Input config + Steam Cloud (need Steamworks); physical Deck/phone/Windows tests; coordinated single `release.yml` (needs a hosted dry-run); name decision "Climb up" vs "Upwardly"; hamster whiskers model nit.
+Next action: owner playtests the published grip-fix APK/EXE; when satisfied, cut a coordinated numbered build (dispatch `android.yml` + `windows.yml`); then the glyph-integration YELLOW task.
 
 ## Current state (version 1.1.4, OTA-capable release candidate)
 - Streaming tower, floating origin, v6 save format, solver fixes: validated at source commit `6199e59` (see docs/VERIFICATION.md); unchanged by the OTA work (diff since is OTA, CI, version, docs only).

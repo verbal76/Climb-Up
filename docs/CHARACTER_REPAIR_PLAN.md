@@ -228,3 +228,30 @@ Executed in the planned order with the faithful harness as the gate after each s
 **Remaining / noted.** (1) Hamster rope: in 1 of 4 climb frames the upper ball touches the lower muzzle (face metric 5 %, mean 2 %; eyes never covered) — the hamster keeps the bunny's grip heights by design; a hamster-only height would need an owner call. (2) Astronaut `fall`: Barbara 24 %, Rae 11 % of the camera-facing head behind a ball — the `Jump_Idle` clip's raised arm passing in front of the face while falling, unchanged from before and not a rope state. (3) The hamster's cable pose (head above the cable) is pre-existing and unchanged. (4) The hamster's legs, ears and spine keep their 12–49° frame offset (no visible symptom; feet-on-rope unchanged). (5) The body on the rope sits ~0.25 world units higher relative to the grab point for the astronauts (the hands moved down, `shift` keeps the hands at the sim's grip point); the sim is untouched. (6) Not verified on hardware: everything above is harness evidence on the Build-55-equivalent runtime; the four device captures listed in §H of the plan are still the gate for sign-off.
 
 **Regression checks.** Core unit tests and desktop tests: see the chat report for the final counts. Simulation, camera, tuning, course generation, ball sizes and colours, `ballFront`, push-back distances, cable and ledge code: unchanged.
+
+## Build 58 addendum — hamster running arms (2026-10-13, final)
+
+**Owner report on build 57.** Everything else accepted; the hamster still runs with its arms extended outward from its sides, swaying rather than hanging beside the torso and swinging fore and aft like the bunny (the approved reference).
+
+**Root cause (measured).** Step 1 made the hamster reproduce the bunny's world arm directions *exactly* — and the bunny's running upper arm points 43° outward from straight down (rest direction (0.66, −0.73, −0.19); 26–68° from down over the Run cycle, which is what the step-1 harness numbers "24–70°" were). On the bunny's narrow round body that is a hanging arm; on the hamster — upper-arm joints at x = ±0.965 on a torso 0.72–0.87 wide, 0.227-unit arm bones — the same directions are wings. A second, hidden problem: the bunny bends its forearms across its belly (mean sideways bend −0.06 in Run, −0.17 in Walk); once the hamster's upper arm hangs, that bend drives the hand ball (radius 0.27, centred 60 % down a 0.227 forearm whose elbow hangs only 0.19 outside the torso) into the body. Nothing is wrong with the frames any more; the bunny's running *pose* is wrong for this body.
+
+**Fix (`tools/hamster/retarget_run_arms.py`, model file only; HeroRig untouched).** For clips `Run` and `Walk`, every `UpperArm.L/R` rotation key becomes `C_S · key · T`:
+- `C_S` — one constant rotation in the Shoulder frame, equal to the world rotation taking the bunny's rest upper-arm direction onto straight-down-with-outward-tilt (27.1°). Pre-multiplying every key by one unit quaternion commutes with libGDX's key slerp (in-between frames are exact) and the correction co-rotates with the torso's own motion in the clip (verified: retargeted direction = `C_world` × original within 4.8° Run / 5.9° Walk, the torso bob).
+- `T` — a twist about the upper arm's own axis (changes where the elbow bends, never where the upper arm points; least squares over the cycle: Run −11°/+6°, Walk −49°/+48°) that turns the forearm bend into the fore/aft plane pointing forward. Elbow angles are the bunny's exactly (Run 28–76°, Walk 16–33°).
+- **Tilt 17°, derived not chosen:** the smallest whole degree at which the hand ball never presses more than a quarter of its radius into the body (every vertex not skinned to arms/head/ears) at any of 60 samples of either cycle, the script evaluating the clips as libGDX plays them (per-channel key lerp/slerp, parent·local globals, linear-blend skinning with the bind matrices). Worst case: Run −0.062 (23 % of the radius, right hand at the back-swing extreme against the lower back), Walk −0.041. The ball cannot clear the body outright without holding the arm out — the very look being removed.
+- Untouched: LowerArm/Fist keys, every other clip, rest pose, bind matrices, geometry, weights; the script asserts exactly four tracks changed. Regeneration from the pristine model `5e9bb11`: `rebase_arm_frames.py` → `remove_paw_stub.py` (sha256 `b88930a3…`, the build-57 model, reproduced bit-for-bit) → `retarget_run_arms.py` (sha256 `65ed83d4…`).
+
+**Offline (tool output).** Run upper arm 4–52° from down (was 26–68°), fore/aft swing −52..+39°; Walk 10–37° (was 36–52°); forearm bend sideways 0.00/−0.02 (was −0.06/−0.17), forward +0.67 / +0.35.
+
+**Faithful harness (game camera, seed 11, slice 0, 29 consecutive frames = Run clip time 0.14–0.64 s of 0.71 s; `final_fix/run_sheet.png`, `zoom_sheet.png`).**
+
+| | hamster before (build 57) | hamster after | bunny (same frames) |
+|---|---|---|---|
+| upper arm from straight down | 24–70° | **3–60°** (L 4–60, R 3–51; the range is the fore/aft swing) | 20–77° |
+| forearm from straight down | — | 2–107° (forward at the front of the swing) | 24–96° |
+| look (side view = normal gameplay) | arms out toward/away from the camera, swaying | arms hang beside the torso, elbows bent, balls beside the belly swinging fore and aft | reference |
+| look (front view, `run_front`) | wings | arms at the sides, balls beside the torso | — |
+
+**Regression (hamster, same simulated frames as the step-3 matrix).** idle 16°/16°, jump 40–68°, fall 60–101°, rope grab 97–110°, rope climb 95–110° with both hands on the line (L +0.05…+0.07, R −0.03…−0.01), rope leave 40–81°, feet on the rope x ±0.09 / z −0.37: all identical to build 57. Cable traversal and ledge hang (scripted `startOn`): the ARMS / HANDS / FACE diagnostics at the common capture frames (29 and 41) are byte-identical to build 57. No stub, no residual LowerArm vertices.
+
+**Not covered.** `Walk` is verified offline only (the autopilot never walks); the first 7 frames of a run are the Idle→Run cross-fade (unchanged mechanism). Device confirmation remains the owner's.

@@ -19,6 +19,7 @@ public class Tuning {
     public float moverCrumbleDelay = 1.6f;       // movers that fall apart (elevators, sliders, swings) hold a little longer than plain crumbling tiles
     public float swingSuper = 5.5f, swingSuperVx = 3.5f;   // jumping from the top of a swing's arc catapults you: extra upward and outward speed
     public float fallRespawnDepth = 12f;
+    public float hitKnockSide = 6.9f, hitKnockUp = 6.9f;   // a hazard hit (saw, spikes, pendulum, cannon ball) throws you off: sideways and upward speed (owner: 15 % more than the earlier 6 / 6, nothing kills you)
     public float seesawMaxTilt = 0.55f, seesawRate = 1.0f, seesawRelax = 1.0f, seesawSlide = 5f, seesawUphill = 0.45f;   // seesaw bridge: slope (height per metre), tip / relax speed, downhill slide, uphill slow-down
     public float courseHeight = 520f;        // finite test towers only; the shipped game is endless
     public float zoneHeight = 400f; public int zoneCount = 5; public float gemSpacing = 30f;   // red-gem checkpoints about every gemSpacing metres (+-15%);   // each world (meadow, frost, dusk, night, space) lasts zoneHeight metres, then they repeat

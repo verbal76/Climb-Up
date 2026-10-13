@@ -254,7 +254,7 @@ public final class Sim {
     private void knockOff() {
         float side = hitBy == null ? 0f : course.dsWrap(s, hitBy.sAt(time));
         mode = Mode.AIR; onElem = -1; coyote = 0; jumpBuf = 0;
-        vx = (side >= 0f ? 1f : -1f) * 6f; vy = 6f; invuln = 0.7f;
+        vx = (side >= 0f ? 1f : -1f) * T.hitKnockSide; vy = T.hitKnockUp; invuln = 0.7f;      // tuning.json: hitKnockSide / hitKnockUp
     }
 
     /** Falls to the checkpoint plus hazard knock-offs: any of them means a move was not clean (the solver and the generator proofs reject such moves). */

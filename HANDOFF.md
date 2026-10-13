@@ -1,6 +1,14 @@
 # Handoff
 
-## Latest batch — playtest fixes + single-source CI (branch `ccr-cb458cd1-w4dh5c`)
+## Latest batch — character hands, rope grip and hamster arms repair (2026-10-13, branch `ccr-cb458cd1-w4dh5c`)
+Owner/reviewer-controlled repair after the 12 October hand-fix attempts were found to have been judged on a non-faithful harness. Diagnosis: `docs/HAND_ROPE_FORENSIC_AUDIT.md`; plan + results: `docs/CHARACTER_REPAIR_PLAN.md`; decisions: `docs/DECISIONS.md` (2026-10-13 entry).
+- **Hamster model regenerated** (`assets/hero/hamster.g3dj`) by two new deterministic tools run on the pristine builder output: `tools/hamster/rebase_arm_frames.py` (arm bone rest frames aligned with the bunny's so the copied clips swing the arms correctly: no more horizontal arms while running, jumping, falling or leaving a rope) then `tools/hamster/remove_paw_stub.py` (the paw stub that showed beside the ball hands is gone; arm ends capped). Ball size/colour, feet, muzzle caps unchanged.
+- **`HeroRig.gripLine`:** rope hands are aimed at the rope's own depth (`lineBack()/SCALE`) instead of a fixed reach ahead, so both hamster hands land on the line; astronauts grip below the shoulder line (`ASTRO_GRIP_HI/LO`) so the balls no longer cover the visor. Bunny unchanged in effect. No sim, camera, tuning or generator change.
+- **Faithful validation harness** `desktop/src/test/.../GameplayShot.java` (real WorldRenderer/HeroRig on real simulated frames, phone aspect; scripted `climb.startOn=cable|ledge`). Use it as the gate for any character/grip change; the old `FullShot`/`RigShot` previews are not representative.
+- **Verified in the harness (all six characters):** astronaut face coverage 0 % on the rope (was 10–49 %), hamster both hands on the rope, no stub, arms bunny-equal in every clip; feet, cable and ledge poses unchanged. **Not yet verified on a device** — owner test build pending (android.yml `test_build` input = draft release, no OTA publish).
+- Known residuals: hamster upper ball can touch the lower muzzle in one climb phase; Barbara/Rae raised arm in front of the face while falling (clip pose, pre-existing); hamster cable pose (head above the cable) pre-existing and untouched; hamster legs/ears/spine keep a frame offset with no visible symptom.
+
+## Previous batch — playtest fixes + single-source CI (branch `ccr-cb458cd1-w4dh5c`)
 Owner (Kevin) is playtesting EXE on PC + APK on phone. This batch, all on the one branch `ccr-cb458cd1-w4dh5c`:
 - **Grip poses fixed (all characters):** `HeroRig.gripLine` flung both hands OUT to the sides; now rope hands converge onto the line (one high/one low, hand over hand) and cable hands spread apart ON the bar. Worst on the astronaut skeletons. Verified by the new `:desktop:rigShot` harness (renders every character in every grip/stance to `assets/build/rigshot/*.png` with a reference bar on the line).
 - **Idle arms rest:** new `HeroRig.armsRest()` AIMS the arms straight down (works on both the astronaut and bunny/hamster skeletons) so standing no longer reads as a T-pose. Not applied during run or idle beats.

@@ -555,13 +555,15 @@ public final class HeroRig implements Disposable {
      */
     private static final float ASTRO_BACK = Float.parseFloat(System.getProperty("climb.astroBack", "0.82"));
     private static final float BUN_BACK   = Float.parseFloat(System.getProperty("climb.bunBack", "0.37"));
-    // Forward reach of the hands onto the rope. gripLine poses the arms BEFORE the body is pushed back off the rope, so the
-    // hands must reach forward by about the push-back distance to land on the line once the body slides back.
-    private static final float ROPE_REACH = Float.parseFloat(System.getProperty("climb.ropeReach", "1.3"));
-    // Grip heights (fraction of arm length above the shoulder): the two hands sit a little above/below each other around
+    // Grip heights (fraction of arm length above the upper-arm joint): the two hands sit a little above/below each other around
     // chest-to-face height and alternate while climbing. Kept low on purpose so the head stays up and camera-facing.
     private static final float GRIP_HI = Float.parseFloat(System.getProperty("climb.gripHi", "0.26"));
     private static final float GRIP_LO = Float.parseFloat(System.getProperty("climb.gripLo", "0.02"));
+    // The astronauts grip below the shoulder line: their helmet's front bottom edge sits only ~0.05 world units above the
+    // upper-arm joint, so a hand at the bunny's heights (and its ball, r 0.12, pushed 0.17 toward the camera) draws over the
+    // visor. Derived from the measured helmet/joint geometry (docs/CHARACTER_REPAIR_PLAN.md, defect 3), same 0.24 alternation.
+    private static final float ASTRO_GRIP_HI = Float.parseFloat(System.getProperty("climb.astroGripHi", "-0.20"));
+    private static final float ASTRO_GRIP_LO = Float.parseFloat(System.getProperty("climb.astroGripLo", "-0.44"));
     private float lineBack() { return astro ? ASTRO_BACK : BUN_BACK; }
     private static final float INCH = 0.15f;
 
@@ -587,17 +589,19 @@ public final class HeroRig implements Disposable {
                 ty = pB.y + len * 0.82f;                               // up at the bar (nearly full overhead reach)
                 tz = pB.z + len * 0.40f;                               // reach forward to the line (he hangs a little behind it)
             } else {
-                // a vertical rope straight in front of him at world (x=0, z=0); the body sits back off it by lineBack(). Each
-                // hand reaches ONTO that line and closes on it - one high, one low, alternating as he inches up - instead of
-                // crossing in front of it. Aiming at the rope's own world position keeps the hands on the rope however far the
-                // body sits back. (Was: tx=-side0*len*0.05 crossed the two hands past centre and tz=pB.z+len*0.70 reached to a
-                // point in front of the shoulder, not onto the rope - the "hands crossed in front, face through the rope" bug.)
+                // a vertical rope straight in front of him at world (x=0, z=0); the body sits back off it by lineBack() world
+                // units, which in bone space (before the instance scale) is lineBack()/SCALE ahead of the body's origin. Each
+                // hand is aimed at the rope's own position so it lands ON the line whatever the arm's length - one high, one
+                // low, alternating as he inches up. (Was: a target 1.3 bone units ahead of the shoulder, a reach unrelated to
+                // the push-back; the aim then ran mostly forward and the short-armed hamster's higher hand landed 0.18 world
+                // units beside the line. Earlier still: tx=-side0*len*0.05 crossed the hands past centre.)
                 tx = 0f;                                               // onto the rope's lateral line (he is centred under it)
-                // grip around chest/face height (NOT reaching overhead): reaching up tucks the head down between the arms and
-                // hides the face; a forward reach keeps the head up and camera-facing, and reaches the rope more easily.
-                float h = MathUtils.lerp(side == 0 ? GRIP_HI : GRIP_LO, GRIP_LO + (GRIP_HI - GRIP_LO) * lead, m);
+                // grip around chest height (NOT reaching overhead): reaching up tucks the head down between the arms and hides
+                // the face. The astronauts' heights sit below the shoulder line so the balls clear the helmet (ASTRO_GRIP_*).
+                float gHi = astro ? ASTRO_GRIP_HI : GRIP_HI, gLo = astro ? ASTRO_GRIP_LO : GRIP_LO;
+                float h = MathUtils.lerp(side == 0 ? gHi : gLo, gLo + (gHi - gLo) * lead, m);
                 ty = pB.y + len * h;                                   // one hand a little higher, one a little lower; alternate while climbing
-                tz = pB.z + ROPE_REACH;                                // reach FORWARD onto the rope: gripLine poses before the body is pushed back, so a forward reach here lands the hand on the line once the body slides back
+                tz = lineBack() / SCALE;                               // the rope's depth in bone space: gripLine poses before the body is pushed back, so aiming at where the line will be lands the hand on it once the body slides back
             }
             tgt.set(tx - pB.x, ty - pB.y, tz - pB.z).nor();            // (aim() reuses 'dir' internally, so the target lives in its own vector)
             aim(up, lo, tgt, 1f); aim(lo, fi, tgt, 1f);

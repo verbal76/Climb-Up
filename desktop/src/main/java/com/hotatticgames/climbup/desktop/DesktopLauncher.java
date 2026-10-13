@@ -41,7 +41,7 @@ public final class DesktopLauncher {
         c.setIdleFPS(30);
         final ClimbGame game = new ClimbGame(dir, platform);
         c.setWindowListener(new Lwjgl3WindowAdapter() {
-            @Override public void focusLost() { try { game.pause(); } catch (RuntimeException ignored) { } }      // alt-tab pauses the run (the pause menu is shown on return)
+            @Override public void focusLost() { if (System.getProperty("climb.shots") != null) return; try { game.pause(); } catch (RuntimeException ignored) { } }      // alt-tab pauses the run (the pause menu is shown on return); the screenshot hook runs unfocused under a virtual display
             @Override public void focusGained() { try { game.resume(); } catch (RuntimeException ignored) { } }
         });
         try {

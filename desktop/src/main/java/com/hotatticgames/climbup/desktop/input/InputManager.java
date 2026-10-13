@@ -212,6 +212,22 @@ public final class InputManager implements GameInput {
         return k == null ? "-" : KeyCodes.name(k);
     }
 
+    /** The glyph image for an action on the current device (see {@link Glyphs}), or null when text must be shown. */
+    public String promptGlyph(Act a) {
+        if (promptDevice() == Device.CONTROLLER) { Ctl c = cfg.padFor(active.id()).first(a); return c == null ? null : Glyphs.pad(family(), c); }
+        Integer k = cfg.keyboard.first(a);
+        return k == null ? null : Glyphs.key(k);
+    }
+    /** The glyph for the MOVE prompt on a controller: the left stick or the d-pad when both directions sit on it, else null (two glyphs or text are shown instead). */
+    public String promptMoveGlyph() {
+        if (promptDevice() != Device.CONTROLLER) return null;
+        Bindings<Ctl> pb = cfg.padFor(active.id());
+        Ctl l = pb.first(Act.LEFT), r = pb.first(Act.RIGHT);
+        if (l != null && r != null && l.name().startsWith("LS_") && r.name().startsWith("LS_")) return Glyphs.stick(family());
+        if (l != null && r != null && l.name().startsWith("DPAD") && r.name().startsWith("DPAD")) return Glyphs.dpad(family());
+        return null;
+    }
+
     /** The prompt for a pair of directions, e.g. "A/D" or "L STICK". */
     public String promptMove() {
         if (promptDevice() == Device.CONTROLLER) {

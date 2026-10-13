@@ -65,8 +65,8 @@ public final class PlayScreen extends ScreenAdapter {
     private static final String[] STRAIN = {"UNGH!", "HNNG!", "AGH!", "NOPE NOPE NOPE!", "HOLD ON!", "NOT TODAY!"};
     private static final String[] CATCH = {"NICE CATCH!", "FINGERTIPS!", "CLUTCH!", "HANG ON!"}, CLOSE = {"JUST MADE IT!", "CLOSE ONE!", "WHEW!", "THAT WAS TIGHT!"};
 
-    private static final String[] KEY_NAMES = {"RED", "BLUE", "GREEN", "GOLD"};
-    private static final float[][] KEY_RGB = {{0.95f, 0.22f, 0.20f}, {0.25f, 0.55f, 1f}, {0.30f, 0.85f, 0.35f}, {1f, 0.82f, 0.18f}};
+    private String keyName(int c) { return com.hotatticgames.climbup.render.KeyColors.name(c); }
+    private float[] keyRgb(int c) { return com.hotatticgames.climbup.render.KeyColors.rgb(c, g.settings.colourblind); }
     private float lockedT;
 
     private void pop(String t, Color c) { if (pops.size() > 3) pops.remove(0); pops.add(new Pop(t, c)); }
@@ -166,6 +166,7 @@ public final class PlayScreen extends ScreenAdapter {
 
     private void applySettings() {
         world.reducedMotion = g.settings.reducedMotion;
+        world.colourblind = g.settings.colourblind;
         world.quality = g.settings.quality;
         world.setCharacter(g.settings.character);
         world.particles.density = g.settings.quality == 0 ? 0.4f : g.settings.quality == 1 ? 0.7f : 1f;
@@ -377,7 +378,7 @@ public final class PlayScreen extends ScreenAdapter {
     /** A castle was opened: record the split (time since the previous unlock) and the total, keep the personal bests, start timing the next tower. */
     private void towerUnlocked() {
         SaveData sd = g.save;
-        if (sd.finished) { toast = KEY_NAMES[sim.lastGateColor] + " CASTLE " + sim.lastGateNo + " OPENED!"; toastT = 3f; g.persist(); return; }      // after the official finish nothing more is timed or recorded
+        if (sd.finished) { toast = keyName(sim.lastGateColor) + " CASTLE " + sim.lastGateNo + " OPENED!"; toastT = 3f; g.persist(); return; }      // after the official finish nothing more is timed or recorded
         float split = sd.runClock - sd.towerStartClock, total = sd.runClock;
         int n = sd.towers;
         sd.splits = java.util.Arrays.copyOf(sd.splits, n + 1); sd.splits[n] = split;
@@ -390,7 +391,7 @@ public final class PlayScreen extends ScreenAdapter {
         boolean hadTotal = sd.bestTotals[n] > 0f, pbTotal = !hadTotal || total < sd.bestTotals[n];
         if (pbTotal) sd.bestTotals[n] = total;
         sd.towerStartClock = sd.runClock; sd.towerStartHeight = (float) Math.max(0.0, maxAbs);
-        toast = KEY_NAMES[sim.lastGateColor] + " CASTLE OPENED!"; toastT = 3.2f;
+        toast = keyName(sim.lastGateColor) + " CASTLE OPENED!"; toastT = 3.2f;
         toastSub = "TOWER " + (n + 1) + "  " + fmtTime(split) + (pbSplit && hadSplit ? "  FASTEST TOWER!" : "") + "    TOTAL " + fmtTime(total) + (pbTotal && hadTotal ? "  PACE PB!" : "");
         g.persist();
     }
@@ -488,12 +489,12 @@ public final class PlayScreen extends ScreenAdapter {
             pop("BONK!", gold); world.particles.burst(sim.crabS, sim.crabY + 0.4f, 12, red, 3.5f, 3.5f, 0.12f, 6f, 0.6f);
         }
         if ((ev & Sim.EV_KEY) != 0) {
-            float[] kc = KEY_RGB[sim.lastKeyColor];
+            float[] kc = keyRgb(sim.lastKeyColor);
             g.audio.play("key", 1f, 1f); world.particles.burst(s, y + 1f, 16, new Color(kc[0], kc[1], kc[2], 1f), 3f, 3.5f, 0.12f, -1f, 1.0f); vibrate(25, 1); freeze(0.06f);
-            toast = KEY_NAMES[sim.lastKeyColor] + " KEY! NOW BACK TO THE " + KEY_NAMES[sim.lastKeyColor] + " CASTLE"; toastT = 3f; say("[KEY]");
+            toast = keyName(sim.lastKeyColor) + " KEY! NOW BACK TO THE " + keyName(sim.lastKeyColor) + " CASTLE"; toastT = 3f; say("[KEY]");
         }
         if ((ev & Sim.EV_DOOR) != 0) {
-            float[] kc = KEY_RGB[sim.lastGateColor];
+            float[] kc = keyRgb(sim.lastGateColor);
             g.audio.play("door", 1f, 1f); world.particles.burst(s + sim.facing * 1.4f, y + 1.2f, 22, new Color(kc[0], kc[1], kc[2], 1f), 3.5f, 3.5f, 0.14f, 0f, 1.0f); world.shake(0.5f); vibrate(40, 1);
             if (ResumeState.gateOpened(g.save, sim.lastGateNo)) towerUnlocked();          // a castle counts (and is timed) once, even if the climb is resumed and its door walked through again
             say("[DOOR OPENS]");
@@ -509,7 +510,7 @@ public final class PlayScreen extends ScreenAdapter {
         }
         if ((ev & Sim.EV_BLOCKED) != 0 && lockedT <= 0f) {
             lockedT = 1.6f; g.audio.play("locked", 0.8f, 1f); vibrate(15, 2);
-            toast = "LOCKED. FIND THE " + KEY_NAMES[sim.lastGateColor] + " KEY"; toastT = 2.6f; say("[LOCKED]");
+            toast = "LOCKED. FIND THE " + keyName(sim.lastGateColor) + " KEY"; toastT = 2.6f; say("[LOCKED]");
         }
         if ((ev & Sim.EV_HIT) != 0) {
             g.save.climbHits++;
@@ -653,12 +654,13 @@ public final class PlayScreen extends ScreenAdapter {
         float kx0 = m, ky0 = barY - 44 * zk;
         for (int c = 0; c < 4; c++) {
             if ((sim.keys & (1 << c)) == 0) continue;
-            Color kc = new Color(KEY_RGB[c][0], KEY_RGB[c][1], KEY_RGB[c][2], 1f);
+            Color kc = new Color(keyRgb(c)[0], keyRgb(c)[1], keyRgb(c)[2], 1f);
             float ks = 30f * zk;
-            ui.rect(kx0 - 3, ky0 - 3, ks * 1.9f + 6, ks + 6, new Color(0.05f, 0.07f, 0.14f, 0.7f));
+            ui.rect(kx0 - 3, ky0 - 3, ks * 2.75f + 6, ks + 6, new Color(0.05f, 0.07f, 0.14f, 0.7f));
             ui.rect(kx0, ky0 + ks * 0.1f, ks * 0.7f, ks * 0.8f, kc); ui.rect(kx0 + ks * 0.18f, ky0 + ks * 0.3f, ks * 0.34f, ks * 0.4f, new Color(0.05f, 0.07f, 0.14f, 1f));
             ui.rect(kx0 + ks * 0.7f, ky0 + ks * 0.4f, ks * 1.0f, ks * 0.2f, kc); ui.rect(kx0 + ks * 1.3f, ky0 + ks * 0.15f, ks * 0.18f, ks * 0.3f, kc); ui.rect(kx0 + ks * 1.6f, ky0 + ks * 0.15f, ks * 0.18f, ks * 0.3f, kc);
-            kx0 += ks * 2.1f + 10;
+            ui.marker(com.hotatticgames.climbup.render.KeyColors.shape(c), kx0 + ks * 2.3f, ky0 + ks * 0.5f, ks * 0.72f, kc);      // the colour's shape, so the key reads without its colour
+            kx0 += ks * 2.95f + 10;
         }
         if (sim.clubTime > 0f) {                                       // club timer
             float cw = 150 * zk, cx0 = m, cy0 = ky0 - 34 * zk;
@@ -681,8 +683,19 @@ public final class PlayScreen extends ScreenAdapter {
             float a = Math.min(1f, zoneT);
             ui.textC(Palette.NAMES[zone] + (lap > 0 ? " " + (lap + 1) : ""), W / 2, H - 70, 7f, new Color(1f, 0.95f, 0.8f, a));
         }
-        if (toastT > 0) { ui.textC(toast, W / 2, H - 125f, 6f, new Color(1f, 0.9f, 0.4f, Math.min(1f, toastT))); if (!toastSub.isEmpty() && toast.endsWith("OPENED!")) ui.textC(toastSub, W / 2, H - 168f, Math.min(3.6f * tm, (W - 60) / Math.max(1, toastSub.length() * 6f)), new Color(1f, 1f, 1f, Math.min(1f, toastT))); }
-        if (captionT > 0 && g.settings.captions) { float cw = ui.font.width(caption, 4f * tm); ui.rect(W / 2 - cw / 2 - 14, 28, cw + 28, 44 * tm, new Color(0, 0, 0, 0.6f)); ui.text(caption, W / 2 - cw / 2, 40, 4f * tm, Ui.TEXT); }
+        if (toastT > 0) {                                        // event toast: as large as fits between the height plate and the pause button; a long one wraps onto a second line (at a size that still clears the tip box) instead of printing over the plate
+            float lim = Math.max(W * 0.3f, 2f * Math.min(W / 2 - (m + 380f * zk + 20f), W / 2 - (m + 116f)));      // the floor keeps a 4:3 tablet at 160 % text readable (the plate then takes most of the half-width)
+            float ts = 6f; String[] tl = { toast };
+            for (float s : new float[] { 6f, 5f, 4.4f, 3.8f, 3.4f, 3f }) { ts = ui.fitSize(s); tl = ui.font.width(toast, ts) <= lim ? new String[] { toast } : wrap(toast, ts, lim); if (tl.length == 1 || (tl.length == 2 && s <= 3.8f)) break; }      // fitSize: measured at the size the crisp text will really draw at
+            float lh = PixelFont_H * ts + 4f, top = H - 83f; Color tc = new Color(1f, 0.9f, 0.4f, Math.min(1f, toastT));
+            for (int i = 0; i < tl.length; i++) ui.textC(tl[i], W / 2, top - (i + 1) * lh + 4f, ts, tc);
+            if (!toastSub.isEmpty() && toast.endsWith("OPENED!")) ui.textC(toastSub, W / 2, top - tl.length * lh - 39f, Math.min(3.6f * tm, (W - 60) / Math.max(1, toastSub.length() * 6f)), new Color(1f, 1f, 1f, Math.min(1f, toastT)));
+        }
+        if (captionT > 0 && g.settings.captions) {           // sound caption: CAPTION SIZE scales it on top of TEXT SIZE; CAPTION BACKGROUND is none, dark or solid
+            float cpx = 4f * tm * g.settings.captionMul(), cw = ui.font.width(caption, cpx), chh = ui.font.height(cpx);
+            if (g.settings.captionBg > 0) ui.rect(W / 2 - cw / 2 - 14, 28, cw + 28, chh + 24, g.settings.captionBg == 2 ? Color.BLACK : new Color(0, 0, 0, 0.6f));
+            ui.text(caption, W / 2 - cw / 2, 40, cpx, Ui.TEXT);
+        }
         if (!tip.isEmpty() && state == State.PLAYING) {
             float px2 = 3.4f * tm; float maxW = W * 0.5f;
             String[] lines = wrap(tip, px2, maxW);

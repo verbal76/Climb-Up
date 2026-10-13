@@ -32,6 +32,7 @@ public final class DesktopPlatform implements Platform {
     private MenuNav nav;
     private ClimbGame g;
     private final SteamManager steam = new SteamManager();     // Steam achievements (Windows); a silent no-op when Steam is not running
+    final GlyphCache glyphs = new GlyphCache();                // the controller / key images behind the prompts (CC0 Input Prompts pack)
     private float hintT, saveClock;
     private InputManager.Device lastHintDevice = InputManager.Device.KEYBOARD;
     private boolean dirty;
@@ -118,33 +119,65 @@ public final class DesktopPlatform implements Platform {
         return Prompts.rewrite(text, input.prompt(Act.JUMP), input.prompt(Act.SWING), input.promptMove(), input.prompt(Act.CLIMB_UP), input.prompt(Act.CLIMB_DOWN), input.prompt(Act.LEFT), input.prompt(Act.RIGHT));
     }
 
+    /** One piece of the hint bar: a glyph image (by asset path) or a run of text. */
+    private static final class Hint { final String glyph, text; Hint(String glyph, String text) { this.glyph = glyph; this.text = text; } }
+    private final java.util.List<Hint> hints = new java.util.ArrayList<>();
+    private void prompt(Act a) { String g = input.promptGlyph(a); if (g != null && glyphs.get(g) != null) hints.add(new Hint(g, null)); else hints.add(new Hint(null, input.prompt(a))); }
+    private void word(String s) { hints.add(new Hint(null, s)); }
+
+    /**
+     * The control hints under the play area: each prompt is the device's own glyph (an Xbox, PlayStation or Switch button, a key cap) from the
+     * CC0 Input Prompts pack, followed by what it does; a control the pack has no image for shows its name instead, so nothing ever goes blank.
+     */
     @Override public void drawPlayHints(Ui ui, boolean club, float W, float H) {
         float dt = Gdx.graphics.getDeltaTime();
         hintT = Math.max(0f, hintT - dt);
         if (hintT <= 0f) return;
-        StringBuilder sb = new StringBuilder();
-        sb.append(input.promptMove()).append(" MOVE    ").append(input.prompt(Act.JUMP)).append(" JUMP");
-        if (input.promptDevice() == InputManager.Device.KEYBOARD) sb.append("    ").append(input.prompt(Act.CLIMB_UP)).append('/').append(input.prompt(Act.CLIMB_DOWN)).append(" CLIMB");
-        if (club) sb.append("    ").append(input.prompt(Act.SWING)).append(" SWING");
-        sb.append("    ").append(input.prompt(Act.PAUSE)).append(" PAUSE");
-        String s = sb.toString();
-        float px = Math.min(3.2f * Math.min(ui.tm(), 1.3f), (W - 80) / Math.max(1, s.length() * 6f)), w = ui.font.width(s, px) + 40, a = Math.min(1f, hintT / 1.5f);
-        ui.rect(W / 2 - w / 2, 22, w, ui.font.height(px) + 28, new Color(0.05f, 0.07f, 0.14f, 0.55f * a));
-        ui.text(s, W / 2 - w / 2 + 20, 36, px, new Color(1f, 0.98f, 0.92f, a));
+        hints.clear();
+        String mv = input.promptMoveGlyph();
+        if (mv != null && glyphs.get(mv) != null) hints.add(new Hint(mv, null));
+        else if (input.promptDevice() == InputManager.Device.KEYBOARD) { prompt(Act.LEFT); prompt(Act.RIGHT); }
+        else word(input.promptMove());
+        word("MOVE");
+        prompt(Act.JUMP); word("JUMP");
+        if (input.promptDevice() == InputManager.Device.KEYBOARD) { prompt(Act.CLIMB_UP); prompt(Act.CLIMB_DOWN); word("CLIMB"); }
+        if (club) { prompt(Act.SWING); word("SWING"); }
+        prompt(Act.PAUSE); word("PAUSE");
+        float px = 3.2f * Math.min(ui.tm(), 1.3f), a = Math.min(1f, hintT / 1.5f);
+        float total = width(ui, px);
+        if (total > W - 80) { px *= (W - 80) / total; total = width(ui, px); }         // a narrow window: shrink the whole bar to fit
+        float gh = ui.font.height(px) * 1.9f, x = W / 2 - total / 2 + 20, y = 30, bh = gh + 16;
+        ui.rect(W / 2 - total / 2, y - 8, total, bh, new Color(0.05f, 0.07f, 0.14f, 0.55f * a));
+        for (int i = 0; i < hints.size(); i++) {
+            Hint h = hints.get(i);
+            if (h.glyph != null) { ui.image(glyphs.get(h.glyph), x, y, gh, gh, a); x += gh + 6; }
+            else { ui.text(h.text, x, y + (gh - ui.font.height(px)) / 2, px, new Color(1f, 0.98f, 0.92f, a)); x += ui.font.width(h.text, px) + (i + 1 < hints.size() && hints.get(i + 1).glyph != null ? 28 : 12); }
+        }
+    }
+    private float width(Ui ui, float px) {
+        float gh = ui.font.height(px) * 1.9f, w = 40;
+        for (int i = 0; i < hints.size(); i++) { Hint h = hints.get(i); w += h.glyph != null ? gh + 6 : ui.font.width(h.text, px) + (i + 1 < hints.size() && hints.get(i + 1).glyph != null ? 28 : 12); }
+        return w;
     }
 
     @Override public boolean drawPauseButton(Ui ui, float x, float y, float size) {
-        String k = input.prompt(Act.PAUSE);
+        String k = input.prompt(Act.PAUSE), gp = input.promptGlyph(Act.PAUSE);
         ui.rect(x - 3, y - 3, size + 6, size + 6, Ui.EDGE); ui.rect(x, y, size, size, Ui.PANEL);
-        float px = Math.max(2f, Math.min(4.4f, (size - 14) / Math.max(1, k.length() * 6f)));
-        ui.textC(k, x + size / 2, y + size / 2 + 4, px, Ui.TEXT);
+        com.badlogic.gdx.graphics.g2d.TextureRegion g = glyphs.get(gp);
+        if (g != null) { float gs = size * 0.62f; ui.image(g, x + size / 2 - gs / 2, y + size - 6 - gs, gs, gs, 1f); }    // the device's own button image
+        else { float px = Math.max(2f, Math.min(4.4f, (size - 14) / Math.max(1, k.length() * 6f))); ui.textC(k, x + size / 2, y + size / 2 + 4, px, Ui.TEXT); }
         ui.textC("PAUSE", x + size / 2, y + 14, 2.4f, Ui.DIM);
         return true;
     }
+
+    /** The glyph image for a physical control of the active pad (or null), for the bindings editor. */
+    com.badlogic.gdx.graphics.g2d.TextureRegion padGlyph(Ctl c) { return glyphs.get(Glyphs.pad(input.family(), c)); }
+    /** The glyph image for a key or mouse button (or null), for the bindings editor. */
+    com.badlogic.gdx.graphics.g2d.TextureRegion keyGlyph(int code) { return glyphs.get(Glyphs.key(code)); }
 
     @Override public List<SettingsTab> settingsTabs() { return Arrays.<SettingsTab>asList(new DesktopTabs.DisplayTab(this), new DesktopTabs.GraphicsTab(this), new DesktopTabs.ControlsTab(this)); }
 
     @Override public com.hotatticgames.climbup.platform.Achievements achievements() { return steam.achievements(); }
 
-    @Override public void dispose() { steam.shutdown(); save(); }
+    @Override public void dispose() { steam.shutdown(); save(); glyphs.dispose(); }
 }

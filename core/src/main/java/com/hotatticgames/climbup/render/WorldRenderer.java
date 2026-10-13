@@ -11,6 +11,7 @@ import com.badlogic.gdx.graphics.g3d.ModelBatch;
 import com.badlogic.gdx.graphics.g3d.ModelInstance;
 import com.badlogic.gdx.graphics.g3d.attributes.BlendingAttribute;
 import com.badlogic.gdx.graphics.g3d.attributes.ColorAttribute;
+import com.badlogic.gdx.graphics.g3d.utils.ModelBuilder;
 import com.badlogic.gdx.graphics.g3d.environment.DirectionalLight;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.math.MathUtils;
@@ -62,6 +63,9 @@ public final class WorldRenderer implements Disposable {
     private static final float CAM_DIST = Float.parseFloat(System.getProperty("climb.camDist", "9.6"));
     public int quality = 2;           // 0 low, 1 medium, 2 high
     public boolean reducedMotion;
+    /** COLOURBLIND-SAFE COLOURS: the keys and castle gates use the safe palette (see {@link KeyColors}); the shape markers are always drawn. */
+    public boolean colourblind;
+    private boolean paletteSafe;      // the palette the cached coloured instances were built with
 
     private float camY, camShake, shakeT, camPull;
     private double originY, originS;          // the world is expressed relative to a floating origin; absolute height = originY + local y (see Tower)
@@ -433,6 +437,7 @@ public final class WorldRenderer implements Disposable {
     }
 
     public void render(Sim sim, float alpha, float dt, float time, boolean showPlayer) {
+        applyPalette();
         frameDt = Math.min(dt, 0.05f);
         // interpolated player position (render only; simulation stays on the fixed step)
         float ps = sim.teleported ? sim.s : sim.ps0 + course.dsWrap(sim.s, sim.ps0) * alpha;
@@ -733,7 +738,9 @@ public final class WorldRenderer implements Disposable {
         batch.render(m, env);
     }
 
-    static final float[][] KEY_RGB = {{0.95f, 0.22f, 0.20f}, {0.25f, 0.55f, 1f}, {0.30f, 0.85f, 0.35f}, {1f, 0.82f, 0.18f}};
+    private float[] keyRgb(int color) { return KeyColors.rgb(color, colourblind); }
+    /** Drops every instance coloured with the other palette when COLOURBLIND-SAFE COLOURS is toggled (from the pause menu's settings, say). */
+    private void applyPalette() { if (paletteSafe != colourblind) { paletteSafe = colourblind; colorInst.clear(); gateInsts.clear(); markerInsts.clear(); } }
     private final java.util.HashMap<String, ModelInstance> colorInst = new java.util.HashMap<>();
 
     /** A pack model with its flag / key material recoloured for one of the four key colours. */
@@ -745,7 +752,7 @@ public final class WorldRenderer implements Disposable {
         if (m == null) {
             if (gateInsts.size() > 16) gateInsts.clear();
             m = new ModelInstance(models.pack("tower2"));          // the castle with a door on both sides (tools/make_tower_door.py)
-            float[] c = KEY_RGB[h.color % KEY_RGB.length];
+            float[] c = keyRgb(h.color);
             for (com.badlogic.gdx.graphics.g3d.Material mat : m.materials) {
                 if (mat.id.contains("Flag") || mat.id.contains("Gold") || mat.id.contains("Wood")) { mat.set(ColorAttribute.createDiffuse(c[0], c[1], c[2], 1f)); mat.set(ColorAttribute.createEmissive(c[0] * 0.25f, c[1] * 0.25f, c[2] * 0.25f, 1f)); }
             }
@@ -754,12 +761,47 @@ public final class WorldRenderer implements Disposable {
         return m;
     }
 
+    // ---- the shape marker that always goes with a key colour (red circle, blue square, green triangle, gold diamond): the identity of a key or
+    // castle gate never depends on colour alone. One small solid, lit like the keys, floating above a key and in front of a castle's door wall.
+    private final Model[] markerModels = new Model[4];
+    private final java.util.HashMap<Integer, ModelInstance> markerInsts = new java.util.HashMap<>();
+    private Model markerModel(int shape) {
+        if (markerModels[shape] == null) {
+            ModelBuilder mb = new ModelBuilder();
+            com.badlogic.gdx.graphics.g3d.Material mat = new com.badlogic.gdx.graphics.g3d.Material(ColorAttribute.createDiffuse(1f, 1f, 1f, 1f));
+            long attrs = com.badlogic.gdx.graphics.VertexAttributes.Usage.Position | com.badlogic.gdx.graphics.VertexAttributes.Usage.Normal;
+            switch (shape) {
+                case KeyColors.CIRCLE: markerModels[shape] = mb.createSphere(1f, 1f, 1f, 14, 10, mat, attrs); break;
+                case KeyColors.TRIANGLE: markerModels[shape] = mb.createCone(1f, 1f, 1f, 3, mat, attrs); break;        // a three-sided cone reads as a triangle from the front
+                default: markerModels[shape] = mb.createBox(0.85f, 0.85f, 0.85f, mat, attrs);                           // square; the diamond is the same box rolled 45 degrees
+            }
+        }
+        return markerModels[shape];
+    }
+    private ModelInstance markerInst(int color) {
+        int shape = KeyColors.shape(color);
+        ModelInstance m = markerInsts.get(shape);
+        if (m == null) {
+            m = new ModelInstance(markerModel(shape));
+            float[] c = keyRgb(color);
+            for (com.badlogic.gdx.graphics.g3d.Material mat : m.materials) { mat.set(ColorAttribute.createDiffuse(c[0], c[1], c[2], 1f)); mat.set(ColorAttribute.createEmissive(c[0] * 0.35f, c[1] * 0.35f, c[2] * 0.35f, 1f)); }
+            markerInsts.put(shape, m);
+        }
+        return m;
+    }
+    /** Draws the colour's shape marker at (arc, y), {@code dz} toward the tower axis (negative = toward the camera), {@code size} world units across. */
+    private void drawMarker(int color, float arc, float y, float dz, float camS, float size) {
+        ModelInstance m = markerInst(color);
+        place(m, arc, y, dz, camS, size, size, size, 0f, KeyColors.shape(color) == KeyColors.DIAMOND ? 45f : 0f);
+        batch.render(m, env);
+    }
+
     private ModelInstance colored(String name, int color) {
         String k = name + color;
         ModelInstance m = colorInst.get(k);
         if (m == null) {
             m = new ModelInstance(models.pack(name));
-            float[] c = KEY_RGB[color];
+            float[] c = keyRgb(color);
             for (com.badlogic.gdx.graphics.g3d.Material mat : m.materials) {
                 if (mat.id.contains("Flag") || mat.id.contains("Gold") || (name.equals("tower") && mat.id.contains("Wood"))) { mat.set(ColorAttribute.createDiffuse(c[0], c[1], c[2], 1f)); mat.set(ColorAttribute.createEmissive(c[0] * 0.25f, c[1] * 0.25f, c[2] * 0.25f, 1f)); }
             }
@@ -919,15 +961,15 @@ public final class WorldRenderer implements Disposable {
                 k.transform.idt().translate(T.radius * MathUtils.sin(phi), h.y + bob, -T.radius + T.radius * MathUtils.cos(phi))
                         .rotate(0, 1, 0, phi * MathUtils.radiansToDegrees + time * 140f).rotate(0, 0, 1, 25f).scale(0.5f, 0.5f, 0.5f).translate(-0.45f, 0f, 0f);
                 batch.render(k, env);
+                drawMarker(h.color, h.s, h.y + bob + 1.0f, -0.2f, camS, 0.42f);          // the key's shape floats above it
                 if (!reducedMotion && quality > 0 && MathUtils.random() < frameDt * 12f) {       // a thin stream of sparkles in the key's colour rises from it: a hidden key can be spotted from a distance
-                    float[] rgb = KEY_RGB[h.color % KEY_RGB.length]; keyCol.set(rgb[0], rgb[1], rgb[2], 1f);
+                    float[] rgb = keyRgb(h.color); keyCol.set(rgb[0], rgb[1], rgb[2], 1f);
                     particles.spawn(h.s + MathUtils.random(-0.15f, 0.15f), h.y + 0.5f, 0f, 1.6f + MathUtils.random(0.6f), keyCol, 0.09f, 0f, 2.4f);
                 }
                 break;
             }
             case GATE: {
                 float dxg = wrapDiff(h.s, camS);
-                float[] rgb = KEY_RGB[h.color % KEY_RGB.length];
                 boolean inside = Math.abs(dxg) < 1.6f;
                 ModelInstance g = gateInst(h);
                 for (com.badlogic.gdx.graphics.g3d.Material mt : g.materials) { if (inside) mt.set(gateBlend); else mt.remove(BlendingAttribute.Type); }       // the walls turn glassy while you walk through, so you stay visible inside
@@ -937,6 +979,7 @@ public final class WorldRenderer implements Disposable {
                 g.transform.idt().translate(T.radius * MathUtils.sin(phi), h.y, -T.radius + T.radius * MathUtils.cos(phi))
                         .rotate(0, 1, 0, phi * MathUtils.radiansToDegrees + 90f).scale(0.4f, 0.4f, 0.4f);
                 batch.render(g, env);
+                drawMarker(h.color, h.s, h.y + 2.4f, -2.0f, camS, 0.6f);                // the gate's shape on its near wall, above the door line
                 break;
             }
             case CRAB: {
@@ -1124,5 +1167,6 @@ public final class WorldRenderer implements Disposable {
 
     @Override public void dispose() {
         batch.dispose(); shapes.dispose(); sb.dispose(); hero.dispose(); bg.dispose(); if (sceneFbo != null) sceneFbo.dispose(); if (vignette != null) vignette.dispose();
+        for (Model m : markerModels) if (m != null) m.dispose();
     }
 }

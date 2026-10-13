@@ -21,9 +21,11 @@ license summary plus the controller glyph library. "Verified" = license text/sou
   listing + itch page both state CC0; 128×128 PNGs, color-blind friendly, "no generative AI".
 - **Families in the archive:** `Keyboard_Mouse/`, `XGamepad/` (Xbox/Deck ABXY), `P4Gamepad/` (PS4), `P5Gamepad/` (PS5),
   `SGamepad/` (Switch) — each with Default/Alt/Light etc. variants.
-- **Status:** received and archived (not yet in the repo tree); **integration PENDING** (Steam Deck prompts, §12.1/§13).
-  When integrated, copy only the needed glyphs into `assets/`, keep the original archive, record this row, and add the
-  CC0 license text under `assets/licenses/`.
+- **Status: INTEGRATED (2026-10-13, build 60).** 146 glyphs copied, renamed and otherwise unmodified, into `assets/glyphs/{xbox,ps,switch,key}/`
+  (XGamepad/Default, P5Gamepad/Default, SGamepad/Default, Keyboard_Mouse/Dark); the original archive stays outside the repo. License text saved
+  as `assets/licenses/JulioCacko_InputPrompts_License.txt`; credited on the in-game CREDITS screen. The desktop build draws them in the play
+  hints, the pause corner and the bindings editor (`desktop/.../input/Glyphs.java` maps control -> file; `GlyphsTest` checks every file exists).
+  Known gaps shown as text: the Switch set has no stick-click image, the keyboard set has no "4" key.
 - **Before commercial release:** verify the original license source (itch/FAB page) and save its license text — do not rely
   only on the owner listing.
 
@@ -31,4 +33,4 @@ license summary plus the controller glyph library. "Verified" = license text/sou
 1. Archive the Quaternius Space Kit's own CC0 license .txt (currently only the Platformer Pack's is saved).
 2. Decide the jeageroni raw-`.ogg`-in-public-repo question (ship-inside is fine; redistribution is not).
 3. Confirm Suno commercial terms for the owner's plan (music, `fall.ogg`).
-4. Save the glyph pack's CC0 license text under `assets/licenses/` when the glyphs are integrated.
+4. ~~Save the glyph pack's CC0 license text under `assets/licenses/` when the glyphs are integrated.~~ Done (build 60): `assets/licenses/JulioCacko_InputPrompts_License.txt`; the itch/FAB page's own license wording is still to be re-verified before a commercial release.

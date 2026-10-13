@@ -39,6 +39,11 @@ final class BindingsScreen extends ScreenAdapter {
         if (pad) { List<Ctl> l = pb.get(a); return slot < l.size() ? dp.input.family().label(l.get(slot)) : null; }
         List<Integer> l = kb.get(a); return slot < l.size() ? KeyCodes.name(l.get(slot)) : null;
     }
+    /** The glyph image of a bound control (the device's own button or key cap), or null when the pack has none. */
+    private com.badlogic.gdx.graphics.g2d.TextureRegion glyph(Act a, int slot) {
+        if (pad) { List<Ctl> l = pb.get(a); return slot < l.size() ? dp.padGlyph(l.get(slot)) : null; }
+        List<Integer> l = kb.get(a); return slot < l.size() ? dp.keyGlyph(l.get(slot)) : null;
+    }
     private int count(Act a) { return pad ? pb.get(a).size() : kb.get(a).size(); }
 
     @Override public void render(float dt) {
@@ -69,6 +74,7 @@ final class BindingsScreen extends ScreenAdapter {
             if (!status.isEmpty()) ui.textC(status, W / 2, 112, 2.8f, Ui.ACCENT);
         } else drawDialog(ui, W, H);
         ui.end();
+        g.autoShot("bindings", dt);
     }
 
     private void column(Ui ui, float x, float top, String head, boolean game) {
@@ -82,7 +88,10 @@ final class BindingsScreen extends ScreenAdapter {
                 int n = count(a);
                 if (label == null && slot != n) continue;            // only the next free slot offers "add"
                 float bx = x + 210 + slot * 128;
-                if (ui.button(label == null ? "+ ADD" : label, bx, y, 120, 50, label != null && slot == 0)) begin(a, slot);
+                com.badlogic.gdx.graphics.g2d.TextureRegion g = label == null ? null : glyph(a, slot);
+                // a bound control shows as its glyph (the Xbox / PlayStation / Switch button or the key cap) with its name small underneath it; no glyph = the name alone
+                if (ui.button(label == null ? "+ ADD" : g != null ? "" : label, bx, y, 120, 50, label != null && slot == 0)) begin(a, slot);
+                if (g != null) { ui.image(g, bx + 60 - 17, y + 15, 34, 34, 1f); ui.textC(label, bx + 60, y + 3, Math.min(1.6f, 112f / Math.max(1, label.length() * 6f)), Ui.DIM); }
             }
             y -= 58;
         }

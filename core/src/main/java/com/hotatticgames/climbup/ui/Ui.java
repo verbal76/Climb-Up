@@ -72,6 +72,29 @@ public final class Ui extends InputAdapter implements Disposable {
 
     public void rect(float x, float y, float w, float h, Color c) { batch.setColor(c); font.rect(batch, x, y, w, h); batch.setColor(Color.WHITE); }
 
+    /** An image (a controller glyph, say) drawn into a box; alpha 1 = opaque. */
+    public void image(com.badlogic.gdx.graphics.g2d.TextureRegion r, float x, float y, float w, float h, float alpha) {
+        batch.setColor(1f, 1f, 1f, alpha); batch.draw(r, x, y, w, h); batch.setColor(Color.WHITE);
+    }
+
+    /** Row widths (sevenths of the size), bottom row first, of the four key shapes: circle, square, triangle (apex up), diamond. */
+    private static final int[][] SHAPE_ROWS = {{3, 5, 7, 7, 7, 5, 3}, {7, 7, 7, 7, 7, 7, 7}, {7, 7, 5, 5, 3, 3, 1}, {1, 3, 5, 7, 5, 3, 1}};
+    /**
+     * A key-colour shape marker (see {@code render.KeyColors}: 0 circle, 1 square, 2 triangle, 3 diamond) centred on (cx, cy), {@code size} units across,
+     * as seven pixel-art rows with a dark edge, so a key's identity reads without its colour.
+     */
+    public void marker(int shape, float cx, float cy, float size, Color c) {
+        int[] rows = SHAPE_ROWS[((shape % 4) + 4) % 4];
+        float cell = size / 7f, edge = Math.max(1.5f, cell * 0.45f);
+        for (int pass = 0; pass < 2; pass++) {
+            Color col = pass == 0 ? INK : c; float grow = pass == 0 ? edge : 0f;
+            for (int r = 0; r < 7; r++) {
+                float w = rows[r] * cell + 2 * grow, h = cell + 2 * grow;
+                rect(cx - w / 2f, cy - size / 2f + r * cell - grow, w, h, col);
+            }
+        }
+    }
+
     public void panel(float x, float y, float w, float h) {
         rect(x - 6, y - 6, w + 12, h + 12, SHADOW); rect(x - 4, y - 4, w + 8, h + 8, EDGE); rect(x, y, w, h, PANEL);
     }

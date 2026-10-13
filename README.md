@@ -17,7 +17,7 @@ Local APK builds need the Android SDK (`ANDROID_HOME`) and access to Google's Ma
 * **Right half of the screen: JUMP.** Hold for a higher jump, tap for a hop. Jump is buffered and has coyote time. In the air the stick steers.
 * Short of a ledge? Push toward it and you grab it with your fingertips; stick up or JUMP pulls you up. Ropes and cables are grabbed by jumping into them.
 * **SWING** (appears above JUMP only while you carry the floating spiked club): knocks crabs off. Desktop: X or J.
-* Pause button top-right. Settings (volume, text size, haptics, reduced motion, captions, left-handed layout, slower-speed and jump-forgiveness assists, tips on/off, erase data) are in the pause menu and on the title screen.
+* Pause button top-right. Settings (volume, text size, haptics, reduced motion, captions with their own size and background, colourblind-safe key colours, left-handed layout, slower-speed and jump-forgiveness assists, tips on/off, erase data) are in the pause menu and on the title screen. Every key colour also carries a shape (red circle, blue square, green triangle, gold diamond) above the key, on its castle and beside the key you carry.
 * Desktop testing keys: A/D or arrows move, W/S climb, Space/Z jump, Esc pause.
 
 ## Build and run on desktop

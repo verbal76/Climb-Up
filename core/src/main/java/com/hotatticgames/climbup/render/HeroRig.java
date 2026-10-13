@@ -442,13 +442,13 @@ public final class HeroRig implements Disposable {
         // gripping poses: both arms up on the ledge / rope / cable, hands snapped to the sim's grip point
         hangT = sim.mode == Sim.Mode.LEDGE ? hangT + dt : 0f;
         hangSway += dt * 2.4f;
-        float grip = 0f; ballFront = 0f; ballPullX = 1f;
+        float grip = 0f; ballFront = 0f; ballPullX = 1f; ballLift = 0f;
         if (anim == Anim.HANG || anim == Anim.CLIMB || anim == Anim.SHIMMY) grip = 1f;
         else if (anim == Anim.PULLUP) grip = CYCLE ? 0.8f : Math.max(0f, 1f - sim.pullT / (sim.mode == Sim.Mode.BEAM ? Sim.BEAM_MOUNT_TIME : sim.T.pullUpTime) * 1.25f);
         if (grip > 0.01f && !NO_POSE) {
             boolean line = anim == Anim.CLIMB || anim == Anim.SHIMMY || (anim == Anim.HANG && (sim.mode == Sim.Mode.ROPE || sim.mode == Sim.Mode.CABLE));
             boolean cable = anim == Anim.SHIMMY || sim.mode == Sim.Mode.CABLE;
-            if (ham) stretchArms(grip);
+            if (ham) stretchArmsBy(grip, 0.7f, cable ? HAM_CABLE_REACH : HAM_REACH);   // on the overhead cable the hamster stretches further, so it hangs with its head below the line (not above it)
             else if (astro && line && !cable) stretchArmsBy(grip, 0.08f, ASTRO_STRETCH);   // lengthen the astronauts' arms so the hands reach the rope that sits forward of the deep helmet
             else if (!astro && line && cable) stretchArmsBy(grip, BUN_STRETCH, BUN_STRETCH);   // bunny: a UNIFORM stretch (X==Y==Z, or the fist counter-scale distorts its real paws) so its short arms reach up and grip the overhead cable instead of hanging below it with no visible arms
             if (line) {                // rope or cable: both hands on the line, alternating hand over hand while moving; knees draw up alternately
@@ -466,6 +466,7 @@ public final class HeroRig implements Disposable {
             if (fiL != null && fiR != null) {
                 float handWorld = wy + handModelY() * sy;
                 float shift = (sim.y + sim.T.handHeight) - handWorld;
+                if (ham && cable) { shift -= HAM_CABLE_DROP * grip; ballLift = HAM_CABLE_DROP * grip; }   // hang lower under the cable; the balls stay on the line
                 float tremble = sim.mode == Sim.Mode.LEDGE && !reduced ? MathUtils.sin(time * 22f) * (0.4f + Math.min(0.8f, hangT * 0.3f)) : 0f;
                 float behind = line ? (cable ? ROPE_FRONT : lineBack()) * grip : 0f;   // the vertical rope sits in front of the face (bigger for the astronauts' helmets); the overhead cable keeps its tuned offset
                 // cable shimmy: the whole body swings side to side under the hands with each hand-over-hand, like a playful monkey swing (not with reduced motion)
@@ -476,6 +477,7 @@ public final class HeroRig implements Disposable {
             }
         }
         else if (anim == Anim.IDLE && beat == null && !NO_POSE) armsRest();     // plain standing: tuck the arms in from the clip's slight A-pose so he doesn't read as T-posing
+        else if (astro && anim == Anim.FALL && !NO_POSE) armsFall();            // astronauts: the falling clip raised an arm in front of the visor; spread the arms out and down instead
         placeHandBalls();                                                        // sit a ball on each hand (same world spot the hand renders at)
     }
 
@@ -496,6 +498,7 @@ public final class HeroRig implements Disposable {
         } else if (lower != null) {             // everywhere else: sit the ball over the stripped wrist, blended back toward the forearm
             ballM.set(inst.transform).mul(lower.globalTransform); ballM.getTranslation(ballP2); ballP.lerp(ballP2, 1f - BALL_AT);
         }
+        ballP.y += ballLift;                        // the hamster on the cable: the ball sits on the line while the body hangs lower
         ball.transform.idt().translate(ballP).scale(ballRad, ballRad, ballRad);
     }
 
@@ -519,6 +522,25 @@ public final class HeroRig implements Disposable {
         }
     }
 
+    private static final float ASTRO_FALL_ARMS = Float.parseFloat(System.getProperty("climb.astroFallArms", "0.85"));
+    /**
+     * Astronauts falling: their Jump_Idle clip swings one arm up across the face (Barbara 24 %, Rae 11 % of the camera-facing head
+     * behind a ball in the harness). Aim both arms out to the sides and down, a little forward - a skydiver's spread - by a blend
+     * weight, so the visor stays clear whatever the clip does; the legs keep the clip. Bunny and hamster are untouched.
+     */
+    private void armsFall() {
+        if (upL == null) findNodes();
+        if (upL == null || upR == null) return;
+        for (int side = 0; side < 2; side++) {
+            Node up = side == 0 ? upL : upR, lo = side == 0 ? loL : loR, fi = side == 0 ? fiL : fiR;
+            up.globalTransform.getTranslation(pB);
+            float out = (pB.x >= 0f ? 1f : -1f) * 0.75f;
+            tgt.set(out, -0.60f, 0.15f).nor();
+            aim(up, lo, tgt, ASTRO_FALL_ARMS);
+            if (lo != null && fi != null) aim(lo, fi, tgt, ASTRO_FALL_ARMS);
+        }
+    }
+
     /** The hamster's arms are tiny stubs: while gripping they stretch (cartoon rubber arms) so the paws can reach the rope or ledge above the head. */
     private void stretchArms(float grip) { stretchArmsBy(grip, 0.7f, HAM_REACH); }
     /**
@@ -537,6 +559,15 @@ public final class HeroRig implements Disposable {
         inst.calculateTransforms();
     }
     private static final float HAM_REACH = Float.parseFloat(System.getProperty("climb.hamReach", "1.5"));
+    // The hamster's rope reach (1.5) only lifts its hands to the top of its own head, so on the overhead cable the line ran through
+    // its ears. A longer cable-only stretch hangs the body with the head under the line like the other characters (derived with
+    // the GameplayShot cable captures, docs/VERIFICATION.md build 60); the rope reach, tuned for the face-level grip, is unchanged.
+    private static final float HAM_CABLE_REACH = Float.parseFloat(System.getProperty("climb.hamCableReach", "4.2"));
+    // Even fully stretched, the hamster's fists only reach 0.6 world units above its upper-arm joints (the non-uniform stretch shears as the
+    // forearm aims), which is barely its own head height: so on the cable the body is hung this much lower than the fists dictate and the
+    // ball hands are drawn up at the line instead (placeHandBalls), leaving the head clear of the cable. The arm ends sit inside the balls.
+    private static final float HAM_CABLE_DROP = Float.parseFloat(System.getProperty("climb.hamCableDrop", "0.3"));
+    private float ballLift;        // world units the ball hands are drawn above the fists this frame (the hamster on the cable)
     // The bunny grips the vertical rope fine with its natural arms, but its short arms don't reach up to the overhead cable, so
     // on the cable it hangs below with no visible arms. A uniform stretch (widen == lengthen) lengthens the reach without the
     // non-uniform fist counter-scale that would distort its REAL paws (the hamster/astronauts avoid that via ball hands).
@@ -564,6 +595,11 @@ public final class HeroRig implements Disposable {
     // visor. Derived from the measured helmet/joint geometry (docs/CHARACTER_REPAIR_PLAN.md, defect 3), same 0.24 alternation.
     private static final float ASTRO_GRIP_HI = Float.parseFloat(System.getProperty("climb.astroGripHi", "-0.20"));
     private static final float ASTRO_GRIP_LO = Float.parseFloat(System.getProperty("climb.astroGripLo", "-0.44"));
+    // The hamster's hands at the bunny's heights sat level with its big chibi head (ball centre within 0.1 world units of the head
+    // centre), so the upper ball brushed the lower muzzle in one climb phase. Its own heights put both balls below the muzzle at
+    // chest height (same 0.24 alternation); derived with the GameplayShot FACE metric (docs/VERIFICATION.md, build 60).
+    private static final float HAM_GRIP_HI = Float.parseFloat(System.getProperty("climb.hamGripHi", "-0.10"));
+    private static final float HAM_GRIP_LO = Float.parseFloat(System.getProperty("climb.hamGripLo", "-0.34"));
     private float lineBack() { return astro ? ASTRO_BACK : BUN_BACK; }
     private static final float INCH = 0.15f;
 
@@ -598,7 +634,7 @@ public final class HeroRig implements Disposable {
                 tx = 0f;                                               // onto the rope's lateral line (he is centred under it)
                 // grip around chest height (NOT reaching overhead): reaching up tucks the head down between the arms and hides
                 // the face. The astronauts' heights sit below the shoulder line so the balls clear the helmet (ASTRO_GRIP_*).
-                float gHi = astro ? ASTRO_GRIP_HI : GRIP_HI, gLo = astro ? ASTRO_GRIP_LO : GRIP_LO;
+                float gHi = astro ? ASTRO_GRIP_HI : ham ? HAM_GRIP_HI : GRIP_HI, gLo = astro ? ASTRO_GRIP_LO : ham ? HAM_GRIP_LO : GRIP_LO;
                 float h = MathUtils.lerp(side == 0 ? gHi : gLo, gLo + (gHi - gLo) * lead, m);
                 ty = pB.y + len * h;                                   // one hand a little higher, one a little lower; alternate while climbing
                 tz = lineBack() / SCALE;                               // the rope's depth in bone space: gripLine poses before the body is pushed back, so aiming at where the line will be lands the hand on it once the body slides back

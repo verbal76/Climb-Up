@@ -15,7 +15,7 @@ Legend: PASS (evidence) · PARTIAL · PENDING (needs owner/hardware) · UNVERIFI
 | 4 | Controller-only: launch, menus, settings, gameplay, pause, resume, save/load, exit | **PARTIAL** | Desktop has Xbox/gamepad support (proportional stick, View-button pause, controller menu nav). Full controller-only coverage of every screen PENDING hardware verification. |
 | 5 | No mandatory mouse/keyboard | **PARTIAL** | Gameplay + pause are controller-driven; verify every menu/dialog is reachable on a pad (PENDING). |
 | 6 | Default controller mapping via Steam Input | **UNVERIFIED** | Native gamepad works; a Steam Input config/mapping is not yet authored. |
-| 7 | Controller glyphs (ABXY etc., not hardcoded Xbox) | **PENDING** | Approved CC0 glyph pack received (`Source.zip`: Xbox/PS4/PS5/Switch/Keyboard families). **Not yet integrated** — see §13 / THIRD_PARTY_ASSETS. YELLOW task. |
+| 7 | Controller glyphs (ABXY etc., not hardcoded Xbox) | **DONE (build 60)** | CC0 glyph pack integrated: Xbox / Deck, PlayStation and Switch families plus key caps, chosen by the connected pad's family (`PadFamily`); play hints, pause corner and the bindings editor draw them. Not yet seen on a physical Deck. |
 | 8 | Automatic Steam on-screen keyboard for text entry | **PENDING** | Game has a player-name text field; `ShowFloatingGamepadTextInput` not yet wired. Needs Steamworks. |
 | 9 | Mixed mouse + joystick camera input | **N/A** | Fixed camera (owner-locked: camera anchored on player, tower rotates). No free-look camera. §12.3/§12.4 do not apply. |
 | 10 | Offline single-player (launch, play, save, load) | **PASS (desktop local)** | Fully offline; only the OTA check uses network and fails silently. Local Linux run saved settings offline. On-Deck PENDING. |

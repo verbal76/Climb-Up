@@ -29,7 +29,7 @@ public final class TitleScreen extends ScreenAdapter {
     private boolean has;      // a climb in progress that can really be resumed
 
     @Override public void show() {
-        confirmNew = false;
+        confirmNew = false; showMore = false;
         Tower tw = null; int idx = 0;
         has = g.climbValid();
         if (has) {        // backdrop: where the climb in progress stands
@@ -46,7 +46,7 @@ public final class TitleScreen extends ScreenAdapter {
         for (int i = 0; i < 30; i++) sim.step(new InputState());
         world = new WorldRenderer(g.tuning, course, g.models, g.settings.quality, g.settings.character);
         world.setOrigin(tw.originY, tw.originS);
-        world.reducedMotion = g.settings.reducedMotion;
+        world.reducedMotion = g.settings.reducedMotion; world.colourblind = g.settings.colourblind;
         world.snapCamera(sim);
         Gdx.input.setInputProcessor(new InputMultiplexer(g.ui));
         g.audio.music("music_menu");
@@ -73,78 +73,105 @@ public final class TitleScreen extends ScreenAdapter {
         world.heroHeadScreen(W, H, headPos);       // where his head is: the speech bubble sits above it, and the buttons stay out of its way
         float headY = headPos[1] > 0f && headPos[1] < H ? headPos[1] : TitleLayout.typicalHeadY(H);
         Item[] items = menu(has);
-        TitleLayout lay = layoutFor(ui, W, H, items.length, !g.save.legacy.isEmpty(), headY);
+        TitleLayout lay = layoutFor(ui, W, H, items.length, headY);
         if (bub != null) drawBubble(ui, bub, headPos[0], headPos[1] + 6, world.heroBubbleAlpha(), lay.bubbleMinX);
         boolean notice = g.save.noticeOldClimb;        // the one-time notice that an old climb could not carry over comes first
-        boolean prompt = notice || confirmNew;         // either dialog hides the menu behind it
+        boolean prompt = notice || confirmNew || showMore;   // a dialog or the MORE panel hides the menu behind it
         if (!prompt) {
             for (int i = 0; i < items.length; i++) {          // reading order: the Windows keyboard/pad walks the buttons in this order
                 TitleLayout.Rect r = lay.menu[i];
                 if (ui.button(items[i].label(has), r.x, r.y, r.w, r.h, i == 0)) { g.audio.play("click"); choose(items[i]); }
             }
-            // right column: who is playing, the hero, old runs
-            TitleLayout.Rect pl = lay.playing; String who = g.save.name.isEmpty() ? Profiles.FIRST_NAME : g.save.name;
-            ui.rect(pl.x, pl.y, pl.w, pl.h, PLATE);                                    // a dim plate so the name reads on any sky
-            ui.textC("PLAYING AS", pl.x + pl.w / 2, pl.top() - 3f * 7f - 4f, 3f, Ui.DIM);
-            float npx = Math.min(5f * Math.min(ui.tm(), 1.3f), (pl.w - 16f) / Math.max(1, who.length() * 6 - 1));
-            ui.textC(who, pl.x + pl.w / 2, pl.top() - 3f * 7f - 4f - 10f - 7f * npx, npx, Ui.ACCENT);
-            if (ui.button("HERO: " + com.hotatticgames.climbup.render.Characters.name(g.settings.character), lay.hero.x, lay.hero.y, lay.hero.w, lay.hero.h)) {
-                g.settings.character = com.hotatticgames.climbup.render.Characters.next(g.settings.character);
-                world.setCharacter(g.settings.character); g.persist(); g.audio.play("click");
-            }
-            // old climbs live on the right under the hero picker, so the menu on the left keeps its room
-            if (lay.legacy != null && ui.button("LEGACY RUNS (" + g.save.legacy.size() + ")", lay.legacy.x, lay.legacy.y, lay.legacy.w, lay.legacy.h)) { g.audio.play("click"); next = new LegacyScreen(g, this); }
         }
-        String stat = (g.save.name.isEmpty() ? "" : g.save.name + "   ") + "BEST " + (int) g.save.bestHeight + " M" + (g.save.bestFinish > 0f ? "   BEST FINISH " + PlayScreen.fmtTime(g.save.bestFinish) : "");
+        // status bar: who is playing and as which hero (the old PLAYING AS plate and HERO button on the right are gone; the hero picker lives in MORE), best height, best finish
+        String who = g.save.name.isEmpty() ? Profiles.FIRST_NAME : g.save.name;
+        String stat = who + " (" + com.hotatticgames.climbup.render.Characters.name(g.settings.character) + ")   BEST " + (int) g.save.bestHeight + " M" + (g.save.bestFinish > 0f ? "   BEST FINISH " + PlayScreen.fmtTime(g.save.bestFinish) : "");
         ui.rect(0, 0, W, 34, new Color(0.05f, 0.07f, 0.14f, 0.7f)); ui.text(stat, 72, 9, 2.8f, Ui.TEXT);          // thin bar; text kept 72 px from the edges (rounded phone corners clip anything closer)
         String ver = g.versionLabel();          // always visible: which build is this?
         ui.text(ver, W - 72 - ui.font.width(ver, 2.8f), 9, 2.8f, Ui.ACCENT);
-        if (notice) legacyPrompt(ui, W, H); else if (confirmNew) newRunPrompt(ui, W, H);
+        if (notice) legacyPrompt(ui, W, H); else if (confirmNew) newRunPrompt(ui, W, H); else if (showMore) morePanel(ui, W, H);
         ui.end();
         g.autoShot("title", dt);
         if (exitRequested) { exitRequested = false; g.persist(); Gdx.app.exit(); return; }       // EXIT: everything is already saved; persist once more and close the game
         if (next != null) { Screen n = next; next = null; g.setScreen(n); }
     }
 
-    /** The main menu buttons, top-left first. The first one is the big accent button; EXIT is always last. (A TIMES button goes between SETTINGS and CREDITS: add it here and in {@link #choose}.) */
+    /** The main menu: one column, top first. The first one is the big accent button; MORE is always last and opens the panel with everything else. */
     enum Item {
-        PLAY, NEW_RUN, PLAYERS, SETTINGS, TIMES, CREDITS, EXIT;
+        PLAY, NEW_RUN, SETTINGS, MORE;
         String label(boolean hasClimb) {
             switch (this) {
                 case PLAY: return hasClimb ? "CONTINUE" : "PLAY";
                 case NEW_RUN: return "NEW RUN";
-                case PLAYERS: return "PLAYERS";
                 case SETTINGS: return "SETTINGS";
+                default: return "MORE";
+            }
+        }
+    }
+    private static final Item[] WITH_CLIMB = Item.values(), NO_CLIMB = {Item.PLAY, Item.SETTINGS, Item.MORE};
+    static Item[] menu(boolean hasClimb) { return hasClimb ? WITH_CLIMB : NO_CLIMB; }      // NEW RUN only exists when there is a climb to replace
+
+    /** The MORE panel's buttons in reading order (two columns); EXIT is always last. The hero picker cycles in place; LEGACY RUNS only exists when there are old climbs. */
+    enum More {
+        PLAYERS, HERO, TIMES, LEGACY, CREDITS, EXIT;
+        String label(int character, int legacyRuns) {
+            switch (this) {
+                case PLAYERS: return "PLAYERS";
+                case HERO: return "HERO: " + com.hotatticgames.climbup.render.Characters.name(character);
                 case TIMES: return "TIMES";
+                case LEGACY: return "LEGACY RUNS (" + legacyRuns + ")";
                 case CREDITS: return "CREDITS";
                 default: return "EXIT";
             }
         }
     }
-    private static final Item[] WITH_CLIMB = Item.values(), NO_CLIMB = {Item.PLAY, Item.PLAYERS, Item.SETTINGS, Item.TIMES, Item.CREDITS, Item.EXIT};
-    static Item[] menu(boolean hasClimb) { return hasClimb ? WITH_CLIMB : NO_CLIMB; }      // NEW RUN only exists when there is a climb to replace
+    private static final More[] MORE_ALL = More.values(), MORE_NO_LEGACY = {More.PLAYERS, More.HERO, More.TIMES, More.CREDITS, More.EXIT};
+    static More[] more(boolean hasLegacy) { return hasLegacy ? MORE_ALL : MORE_NO_LEGACY; }
 
-    private static final Color PLATE = new Color(0.05f, 0.07f, 0.14f, 0.6f);
-    private boolean exitRequested;
+    private boolean exitRequested, showMore;
     private void choose(Item it) {
         switch (it) {
             case PLAY: next = new PlayScreen(g, false); break;
             case NEW_RUN: confirmNew = true; break;                 // replaces the saved climb: asks first
-            case PLAYERS: next = new PlayersScreen(g, this); break;
             case SETTINGS: next = new SettingsScreen(g, this); break;
-            case TIMES: next = new TimesScreen(g, this); break;          // the speed-run times table (from the records feature)
-            case CREDITS: next = new CreditsScreen(g, this); break;
+            default: showMore = true;
+        }
+    }
+    private void chooseMore(More it) {
+        switch (it) {
+            case PLAYERS: showMore = false; next = new PlayersScreen(g, this); break;
+            case HERO:                                                 // cycles in place; the hero on the title changes at once
+                g.settings.character = com.hotatticgames.climbup.render.Characters.next(g.settings.character);
+                world.setCharacter(g.settings.character); g.persist(); break;
+            case TIMES: showMore = false; next = new TimesScreen(g, this); break;          // the speed-run times table (from the records feature)
+            case LEGACY: showMore = false; next = new LegacyScreen(g, this); break;
+            case CREDITS: showMore = false; next = new CreditsScreen(g, this); break;
             default: exitRequested = true;
         }
     }
 
+    /** The MORE panel over the dimmed title: PLAYERS, the hero picker, TIMES, LEGACY RUNS (when there are any), CREDITS and EXIT, with BACK (the pad's back button, Esc) closing it. */
+    private void morePanel(Ui ui, float W, float H) {
+        ui.rect(0, 0, W, H, new Color(0f, 0f, 0.05f, 0.72f));
+        More[] items = more(!g.save.legacy.isEmpty());
+        TitleLayout.More m = TitleLayout.more(W, H, items.length, Dp.unitsPerDp(ui));
+        ui.panel(m.panel.x, m.panel.y, m.panel.w, m.panel.h);
+        float t = Math.min(4.6f * Math.min(ui.tm(), 1.3f), TitleLayout.MORE_TITLE_H / 7f);
+        ui.textC("MORE", W / 2, m.panel.top() - TitleLayout.MORE_PAD - ui.font.height(t), t, Ui.ACCENT);
+        for (int i = 0; i < items.length; i++) {          // reading order: the Windows keyboard/pad walks the buttons in this order
+            TitleLayout.Rect r = m.buttons[i];
+            if (ui.button(items[i].label(g.settings.character, g.save.legacy.size()), r.x, r.y, r.w, r.h)) { g.audio.play("click"); chooseMore(items[i]); }
+        }
+        if (ui.button("BACK", m.back.x, m.back.y, m.back.w, m.back.h, true)) { g.audio.play("click"); showMore = false; }
+    }
+
     private final float[] headPos = new float[2];
-    private TitleLayout lay; private float layW, layH, layUpd, layHead; private int layN; private boolean layLegacy;
+    private TitleLayout lay; private float layW, layH, layUpd, layHead; private int layN;
     /** The layout for this screen shape; button heights come from the real screen density so every button is at least 48dp (see {@link TitleLayout}). */
-    private TitleLayout layoutFor(Ui ui, float W, float H, int n, boolean legacy, float headY) {
+    private TitleLayout layoutFor(Ui ui, float W, float H, int n, float headY) {
         float upd = Dp.unitsPerDp(ui);
-        if (lay == null || W != layW || H != layH || n != layN || legacy != layLegacy || upd != layUpd || Math.abs(headY - layHead) > 0.5f) {
-            lay = TitleLayout.of(W, H, n, legacy, upd, headY); layW = W; layH = H; layN = n; layLegacy = legacy; layUpd = upd; layHead = headY;
+        if (lay == null || W != layW || H != layH || n != layN || upd != layUpd || Math.abs(headY - layHead) > 0.5f) {
+            lay = TitleLayout.of(W, H, n, upd, headY); layW = W; layH = H; layN = n; layUpd = upd; layHead = headY;
         }
         return lay;
     }

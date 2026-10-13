@@ -229,7 +229,7 @@ Executed in the planned order with the faithful harness as the gate after each s
 
 **Regression checks.** Core unit tests and desktop tests: see the chat report for the final counts. Simulation, camera, tuning, course generation, ball sizes and colours, `ballFront`, push-back distances, cable and ledge code: unchanged.
 
-## Build 58 addendum — hamster running arms (2026-10-13, final)
+## Build 59 addendum — hamster running arms (2026-10-13, final)
 
 **Owner report on build 57.** Everything else accepted; the hamster still runs with its arms extended outward from its sides, swaying rather than hanging beside the torso and swinging fore and aft like the bunny (the approved reference).
 

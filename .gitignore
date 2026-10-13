@@ -15,3 +15,7 @@ ci-secrets/
 *.pem
 OTA_SIGNING_*
 ANDROID_KEY*
+
+# runtime scratch the desktop launcher leaves beside the assets when run from there (screenshot/probe runs): LWJGL's native-library cache and JVM crash logs
+assets/.lwjgl/
+assets/hs_err_pid*.log

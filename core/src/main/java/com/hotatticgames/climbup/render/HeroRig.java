@@ -463,6 +463,7 @@ public final class HeroRig implements Disposable {
             }
             else raiseArms(grip, (sim.mode == Sim.Mode.LEDGE || sim.mode == Sim.Mode.PULLUP || (CYCLE && anim == Anim.HANG)) ? 1.0f : 0.12f);
             if ((sim.mode == Sim.Mode.LEDGE || (CYCLE && anim == Anim.HANG)) && !reduced) flail(time);
+            restoreFistScale();                                                   // the arms are posed: give the paws their natural size back (no-op unless stretchArmsBy ran this frame)
             if (fiL != null && fiR != null) {
                 float handWorld = wy + handModelY() * sy;
                 float shift = (sim.y + sim.T.handHeight) - handWorld;
@@ -552,10 +553,39 @@ public final class HeroRig implements Disposable {
     private void stretchArmsBy(float grip, float w, float lengthen) {
         if (upL == null) findNodes();
         if (upL == null || upR == null) return;
+        // the paws' natural on-screen size, read before the arms are touched (the bones were re-clamped to bind this frame): restoreFistScale() puts it back once the arms are posed
+        if (fiL != null) fiL.globalTransform.getScale(fistNatL);
+        if (fiR != null) fiR.globalTransform.getScale(fistNatR);
+        fistStretched = fiL != null || fiR != null;
         float a = 1f + w * grip, k = 1f + lengthen * grip;
         for (Node n : new Node[]{upL, upR, loL, loR}) if (n != null) n.localTransform.scale(a, k, a);
-        float ia = 1f / (a * a), ik = 1f / (k * k);
-        for (Node n : new Node[]{fiL, fiR}) if (n != null) n.localTransform.scale(ia, ik, ia);
+        inst.calculateTransforms();
+    }
+    private final Vector3 fistNatL = new Vector3(), fistNatR = new Vector3(), fistT = new Vector3();
+    private final Quaternion fistQ = new Quaternion();
+    private boolean fistStretched;
+    /**
+     * Gives each fist back the on-screen size it had before stretchArmsBy, once the arms are aimed. The old fixed counter-scale
+     * (1/k^2, the stretch inherited from both arm bones) was only exact for a straight arm: the elbow bend that aim() puts
+     * between two non-uniformly scaled bones shears the chain, so the fist's real size depended on the pose (the hamster's
+     * paws read up to 2.05x at some rope-climb phases, the astronauts' 1.42x). Here the fist's world frame is rebuilt from
+     * its sheared one - same position, the orientation its axes point in, and its natural scale - and written back through
+     * the parent, so the fist is exactly its natural size in every pose. Its position (what the ball hands and the hand
+     * height use) is unchanged; the sheared local matrix is discarded by reclampLimbScales next frame like every limb pose.
+     */
+    private void restoreFistScale() {
+        if (!fistStretched) return;
+        fistStretched = false;
+        for (int side = 0; side < 2; side++) {
+            Node n = side == 0 ? fiL : fiR; Vector3 nat = side == 0 ? fistNatL : fistNatR;
+            if (n == null || !finite(n.globalTransform)) continue;
+            n.globalTransform.getTranslation(fistT); n.globalTransform.getRotation(fistQ, true);
+            wNew.set(fistT, fistQ, nat);
+            if (!finite(wNew) || !parentInverse(n)) continue;
+            cand.set(parInv).mul(wNew);
+            if (!finite(cand) || !(Math.abs(cand.det()) > 1e-7f)) continue;
+            n.localTransform.set(cand);
+        }
         inst.calculateTransforms();
     }
     private static final float HAM_REACH = Float.parseFloat(System.getProperty("climb.hamReach", "1.5"));

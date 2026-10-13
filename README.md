@@ -1,4 +1,6 @@
-# Climb up
+# Upwardly
+
+(Working title "Climb up": the package id `com.hotatticgames.climbup`, the repository and the `climb.*` developer properties keep that word; everything a player sees says Upwardly.)
 
 A 2.5D skill-platformer by **Hot Attic Games**: climb a spiral tower that doesn't exist. The camera is anchored on the player and the whole
 course rotates around you as you climb. Ropes, cables, swinging and moving platforms, crumbling tiles, bounce pads and fingertip ledge grabs, in
@@ -19,6 +21,7 @@ Local APK builds need the Android SDK (`ANDROID_HOME`) and access to Google's Ma
 * **SWING** (appears above JUMP only while you carry the floating spiked club): knocks crabs off. Desktop: X or J.
 * Pause button top-right. Settings (volume, text size, haptics, reduced motion, captions with their own size and background, colourblind-safe key colours, left-handed layout, slower-speed and jump-forgiveness assists, tips on/off, erase data) are in the pause menu and on the title screen. Every key colour also carries a shape (red circle, blue square, green triangle, gold diamond) above the key, on its castle and beside the key you carry.
 * Desktop testing keys: A/D or arrows move, W/S climb, Space/Z jump, Esc pause.
+* Controllers (desktop): Xbox, PlayStation, Switch and the Steam Deck's own controls work out of the box with their own button glyphs; every menu is reachable on the pad. Unplugging the controller you are playing with pauses the climb; plug it back in and press RESUME.
 
 ## Build and run on desktop
 ```

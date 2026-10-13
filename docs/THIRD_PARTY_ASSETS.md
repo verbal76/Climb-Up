@@ -1,4 +1,4 @@
-# Third-party assets & licenses — Climb up
+# Third-party assets & licenses — Upwardly
 
 Commercial-readiness inventory (studio standard §13/§19). Full per-file provenance is in `ASSETS.md`; this is the
 license summary plus the controller glyph library. "Verified" = license text/source checked; "Stated" = owner-provided.

@@ -12,6 +12,8 @@ import java.util.Locale;
 /** Applies the Graphics tab to the running window and does the first-run auto-detect. Only changes how the picture is paced and drawn, never the simulation. */
 public final class GraphicsManager {
     private final DesktopConfig cfg;
+    /** Set by the platform once Steam is up: the Steamworks client says the game runs on a Steam Deck (the SteamDeck=1 environment variable is checked as well). */
+    public boolean steamOnDeck;
     /** What the graphics driver calls itself (shown in the Graphics tab); empty before the window exists. */
     public String renderer = "";
     /** True after the High-performance preference was written during this run: Windows only uses it from the next start. */
@@ -57,7 +59,8 @@ public final class GraphicsManager {
         if (!cfg.graphicsDecided) {
             Graphics.DisplayMode d = Gdx.graphics.getDisplayMode();
             long vram = videoMemoryMb();
-            GraphicsProfile.Decision dec = GraphicsProfile.decide(renderer, vram, d.width, d.height, d.refreshRate);
+            boolean deck = GraphicsProfile.isSteamDeck(System.getenv("SteamDeck"), steamOnDeck);
+            GraphicsProfile.Decision dec = deck ? GraphicsProfile.steamDeck(d.refreshRate) : GraphicsProfile.decide(renderer, vram, d.width, d.height, d.refreshRate);
             cfg.renderScale = dec.renderScale; cfg.skyEffects = dec.skyEffects; cfg.frameLimit = dec.frameLimit; cfg.vsync = true; cfg.aa = dec.aa; cfg.anisotropy = dec.anisotropy;
             if (game != null && game.settings != null) { game.settings.quality = dec.quality; try { game.store.saveSettings(game.settings); } catch (RuntimeException ignored) { } }
             cfg.graphicsDecided = true;

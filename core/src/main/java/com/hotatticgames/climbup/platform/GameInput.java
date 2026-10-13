@@ -17,4 +17,6 @@ public interface GameInput {
     boolean backPressed();
     /** Drops latched presses (pausing, resuming, finishing). */
     void clear();
+    /** True once when the controller the player was using has just been unplugged (the game pauses so the run is not lost); false on platforms without controllers. */
+    default boolean controllerLost() { return false; }
 }

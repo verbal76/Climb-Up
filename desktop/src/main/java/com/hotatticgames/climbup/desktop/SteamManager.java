@@ -7,6 +7,8 @@ import com.codedisaster.steamworks.SteamLeaderboardHandle;
 import com.codedisaster.steamworks.SteamResult;
 import com.codedisaster.steamworks.SteamUserStats;
 import com.codedisaster.steamworks.SteamUserStatsCallback;
+import com.codedisaster.steamworks.SteamUtils;
+import com.codedisaster.steamworks.SteamUtilsCallback;
 import com.hotatticgames.climbup.platform.Achievements;
 import com.hotatticgames.climbup.sim.AchievementRules;
 import java.util.HashMap;
@@ -38,6 +40,7 @@ public final class SteamManager {
     private boolean available;
     private boolean statsReady;                 // Steam has delivered the current stats; safe to read/merge/store
     private SteamUserStats userStats;
+    private SteamUtils utils;
     private final SteamAchievements sink = new SteamAchievements(this);
 
     private final Set<String> pendingUnlocks = new LinkedHashSet<>();
@@ -51,12 +54,16 @@ public final class SteamManager {
 
     public boolean available() { return available; }
 
+    /** The Steam client reports the game is running on a Steam Deck (Game Mode or desktop mode). False when Steam is not running. */
+    public boolean onSteamDeck() { try { return available && utils != null && utils.isSteamRunningOnSteamDeck(); } catch (Throwable t) { return false; } }
+
     /** Initialise Steam if the client is running. Any failure is swallowed and logged; the game keeps running without Steam. */
     public void init() {
         try {
             SteamAPI.loadLibraries();
             if (!SteamAPI.init()) { log("Steam client not running or init failed - achievements disabled"); return; }
             userStats = new SteamUserStats(new Callbacks());
+            try { utils = new SteamUtils(new SteamUtilsCallback() { @Override public void onSteamShutdown() { } }); } catch (Throwable t) { utils = null; }
             available = true;
             userStats.requestCurrentStats();        // onUserStatsReceived flips statsReady and flushes anything queued
             lastStoreNs = System.nanoTime();
@@ -81,7 +88,7 @@ public final class SteamManager {
         if (!available) return;
         try { storeNow(); } catch (Throwable ignored) { }
         try { SteamAPI.shutdown(); } catch (Throwable ignored) { }
-        available = false; statsReady = false; userStats = null;
+        available = false; statsReady = false; userStats = null; utils = null;
     }
 
     // ---- operations the Achievements sink forwards here --------------------------------------------------------------

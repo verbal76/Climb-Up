@@ -1,10 +1,10 @@
-# Climb up - AUTHORITATIVE BUILD SPECIFICATION
+# Upwardly (working title "Climb up") - AUTHORITATIVE BUILD SPECIFICATION
 
 Spec version 6 (Reevaluation) - generated 2026-10-08 by Game Designer. This file supersedes earlier versions; earlier versions are preserved in the Game Designer project history and must not be re-derived from memory.
 
 ## 0. Authority and how to use this file
 
-This file is the authoritative specification for **Climb up**. Read it completely before making decisions. Preserve the owner's intent over convenience. If repository reality conflicts with this document, investigate, preserve recoverable working state, and take the safest path that satisfies this specification. Never silently reduce scope to a prototype, toy, mockup or gray-box. Where this file is explicit, follow it; where it is silent on a non-creative engineering detail, make the best reversible decision and record it in `docs/DECISIONS.md`.
+This file is the authoritative specification for **Upwardly** (the owner's 12 October 2026 rename of the working title "Climb up": every player-facing name and all release metadata say Upwardly; technical identifiers that saves, signing and automation depend on - the package id `com.hotatticgames.climbup`, the keystore, the `climb.*` properties and the repository and branch names - keep the old word; see docs/DECISIONS.md). Read it completely before making decisions. Preserve the owner's intent over convenience. If repository reality conflicts with this document, investigate, preserve recoverable working state, and take the safest path that satisfies this specification. Never silently reduce scope to a prototype, toy, mockup or gray-box. Where this file is explicit, follow it; where it is silent on a non-creative engineering detail, make the best reversible decision and record it in `docs/DECISIONS.md`.
 
 The owner is Kevin. Creative and product decisions belong to the owner; engineering decisions belong to you.
 
@@ -66,7 +66,7 @@ The owner is Kevin. Creative and product decisions belong to the owner; engineer
 - **Difficulty and failure:** Checkpoints and quick retry (owner said: "Checkpoints and quick retry")
 - **Art style:** Voxel-look 2.5D (owner said: "Voxel-look 2.5D")
 - **Over-the-air updates:** Yes - over-the-air updates (least intrusive) (owner said: "Yes - over-the-air updates (least intrusive)")
-- **Game name:** Climb up (owner said: "Climb up")
+- **Game name:** Upwardly (owner said: "Climb up" at concept time and renamed the game to "Upwardly" on 2026-10-12 for everything the player sees)
 - **Player progression:** No
 - **What updates may change:** Content, tuning and game logic
 
@@ -443,7 +443,7 @@ A successful gameplay loop throughout the entire game from start to finish
 
 ## 14. Packaging, identity and release
 
-- Display name: **Climb up**
+- Display name: **Upwardly** (the concept-time working title "Climb up" survives only in technical identifiers)
 - Application/package ID: `com.hotatticgames.climbup` (never change after first release)
 - Versioning: Semantic version + incrementing build code; the CI sets the build code from the run number.
 - Distribution: Just me / sideload

@@ -8,11 +8,16 @@ on:
         description: "Owner test build: attach the APK to a DRAFT GitHub Release (visible to collaborators only, no tag, nothing public) and skip the OTA baseline publish. Off = the normal published release."
         type: boolean
         default: false
+      build_number:
+        description: "Build number for the versionCode, APK name, tag and release title (blank = this run's number). Set it so a re-run after a failure, or the desktop build dispatched alongside, still carries the number the owner expects."
+        type: string
+        default: ""
 permissions:
   contents: write   # publish GitHub Releases
   actions: read
 
 env:
+  BUILD_NUMBER: ${{ inputs.build_number || github.run_number }}
   # The signing certificate of the installed Build 42 (builds 37-42). The build fails if the APK it produces is signed by anything else, so an update can never be un-installable.
   EXPECTED_CERT_SHA256: "CE:DD:D6:86:8B:F9:4C:30:B2:70:F3:59:01:88:66:95:EE:6A:E9:AB:95:51:19:6C:2C:A9:E2:99:50:04:1C:39"
 
@@ -55,7 +60,7 @@ jobs:
           set -e
           SRC=$(ls android/build/outputs/apk/debug/*.apk | head -1)
           VER=$(grep -oP "appVersionName = '\K[^']+" build.gradle)
-          OUT=android/build/outputs/apk/debug/upwardly-${VER}-build${{ github.run_number }}-debug.apk
+          OUT=android/build/outputs/apk/debug/upwardly-${VER}-build${{ env.BUILD_NUMBER }}-debug.apk
           cp "$SRC" "$OUT"; rm -f "$SRC"
           BT=$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -1)
           echo "SOURCE_SHA=${{ github.sha }}"
@@ -70,7 +75,7 @@ jobs:
           unzip -l "$OUT" | grep -E "\.so$|classes.*dex|assets/pack|assets/ota" | head -20
       - uses: actions/upload-artifact@v4
         with:
-          name: upwardly-debug-apk-${{ github.run_number }}
+          name: upwardly-debug-apk-${{ env.BUILD_NUMBER }}
           path: android/build/outputs/apk/debug/*.apk
       - name: Build, sign and verify the OTA baseline (the content bundled in this APK)
         env:
@@ -91,13 +96,13 @@ jobs:
           VER=$(grep -oP "appVersionName = '\K[^']+" build.gradle)
           RT=$(grep -oP "RUNTIME = \K[0-9]+" core/src/main/java/com/hotatticgames/climbup/ota/OtaConfig.java)
           BV=$(grep -oP "BUNDLED_CONTENT_VERSION = \K[0-9]+" core/src/main/java/com/hotatticgames/climbup/ota/OtaConfig.java)
-          printf 'Physical-test build ${{ github.run_number }} (sideload; signed with the same certificate as every build since 37, so it installs over the previous one).\n\nVersion: %s build ${{ github.run_number }}\nSource: ${{ github.sha }}\nPackage: com.hotatticgames.climbup, versionName %s, versionCode ${{ github.run_number }}\nSHA-256: %s\nSigning certificate SHA-256: %s\nOTA: signed manifests, runtime %s, bundled content version %s\n' "$VER" "$VER" "$SHA" "$EXPECTED_CERT_SHA256" "$RT" "$BV" > notes.md
+          printf 'Physical-test build ${{ env.BUILD_NUMBER }} (sideload; signed with the same certificate as every build since 37, so it installs over the previous one).\n\nVersion: %s build ${{ env.BUILD_NUMBER }}\nSource: ${{ github.sha }}\nPackage: com.hotatticgames.climbup, versionName %s, versionCode ${{ env.BUILD_NUMBER }}\nSHA-256: %s\nSigning certificate SHA-256: %s\nOTA: signed manifests, runtime %s, bundled content version %s\n' "$VER" "$VER" "$SHA" "$EXPECTED_CERT_SHA256" "$RT" "$BV" > notes.md
           if [ "${{ inputs.test_build }}" = "true" ]; then
             # owner test build: a DRAFT release (collaborators only, creates no tag, never public) carries the APK
-            gh release create "v${VER}-build${{ github.run_number }}" "$APK" --target ${{ github.sha }} --title "Upwardly v${VER} (build ${{ github.run_number }}) — Android APK (owner test build, draft)" --notes-file notes.md --draft
+            gh release create "v${VER}-build${{ env.BUILD_NUMBER }}" "$APK" --target ${{ github.sha }} --title "Upwardly v${VER} (build ${{ env.BUILD_NUMBER }}) — Android APK (owner test build, draft)" --notes-file notes.md --draft
           else
             # release name as the owner specified for the published test releases: "Upwardly build NN apk"
-            gh release create "v${VER}-build${{ github.run_number }}" "$APK" --target ${{ github.sha }} --title "Upwardly build ${{ github.run_number }} apk" --notes-file notes.md --latest
+            gh release create "v${VER}-build${{ env.BUILD_NUMBER }}" "$APK" --target ${{ github.sha }} --title "Upwardly build ${{ env.BUILD_NUMBER }} apk" --notes-file notes.md --latest
           fi
       - name: Publish the OTA baseline (only if the channel does not already carry this version or a newer one)
         if: ${{ inputs.test_build != true }}   # an owner test build never touches the OTA channel

@@ -103,7 +103,7 @@ tasks.register('windowsJar', Jar) {
 }
 
 // ---- Linux distribution ---------------------------------------------------------------------------------------------------------------------------------------------
-// The SAME shared game, the LWJGL3 backend and ONLY the Linux x86-64 natives (Windows .dll / macOS .dylib are left out). Packaged by tools/linux/package.sh with jpackage into a native app-image + Climb up Build NN Linux.tar.gz. Suitable for Steam Deck / Steam Machine (native Linux, not Proton).
+// The SAME shared game, the LWJGL3 backend and ONLY the Linux x86-64 natives (Windows .dll / macOS .dylib are left out). Packaged by tools/linux/package.sh with jpackage into a native app-image + Upwardly Build NN Linux.tar.gz. Suitable for Steam Deck / Steam Machine (native Linux, not Proton).
 tasks.register('linuxJar', Jar) {
     group = 'distribution'
     description = 'upwardly.jar for the Linux app-image (Linux natives only); see tools/linux/package.sh.'

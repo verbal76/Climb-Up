@@ -90,7 +90,10 @@ public final class InputManager implements GameInput {
             if (firstConnected == null) firstConnected = p;
             if (p == active) activeStillThere = true;
         }
-        if (!activeStillThere) { active = firstConnected; java.util.Arrays.fill(prevPad, false); }
+        if (!activeStillThere) {
+            if (active != null && device == Device.CONTROLLER) padLost = true;      // the pad the player was using is gone: the play screen pauses on this
+            active = firstConnected; java.util.Arrays.fill(prevPad, false);
+        }
         Pad winner = null;
         for (Pad p : pads) {
             if (!p.connected()) continue;
@@ -172,6 +175,9 @@ public final class InputManager implements GameInput {
     @Override public boolean pausePressed() { return just[Act.PAUSE.ordinal()]; }
     @Override public boolean backPressed() { return just[Act.BACK.ordinal()]; }
     @Override public void clear() { jumpLatch = false; swingLatch = false; }
+    private boolean padLost;
+    /** True once after the controller the player was actually using (prompts on the controller) was unplugged; a pad that was merely connected, or one removed while the keyboard was in use, raises nothing. */
+    @Override public boolean controllerLost() { boolean r = padLost; padLost = false; return r; }
 
     // ------------------------------------------------------------------ queries for menus and prompts
 

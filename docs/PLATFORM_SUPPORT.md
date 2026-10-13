@@ -1,4 +1,4 @@
-# Platform support — Climb up
+# Platform support — Upwardly
 
 One authoritative source line (`ccr-cb458cd1-w4dh5c`), three platform targets, shared gameplay (studio standard §2/§4).
 
@@ -27,5 +27,5 @@ Platform is selected by the Gradle module and build flags — **never** by a dif
 ## Notes
 - Linux is a **native** build (not Proton). Suitable for Steam Deck / Steam Machine; Proton is additional coverage, not a substitute.
 - The desktop builds run at 1280×800 (Steam Deck native) and other aspect ratios; see `docs/STEAM_HARDWARE_CHECKLIST.md`.
-- Public desktop name is "Upwardly" (window title / app-image name); the game's display title is "Climb up". This naming
+- The game is "Upwardly" everywhere a player looks (window title, app-image name, Android launcher label, release titles); "Climb up" was the working title and survives only in technical identifiers. This naming
   split is intentional-ish and a pending owner decision (see RELEASES.md).

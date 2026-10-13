@@ -89,6 +89,37 @@ public final class Scenario implements ApplicationListener {
     }
     private Step goTo(String label) { return goTo(label, 0); }
 
+    // ---- the same, driven only through a controller (no keyboard, no mouse): what a Steam Deck or couch player does
+    private FakePad pad() { return src.pads.isEmpty() ? null : src.pads.get(0); }
+    /** One controller press: held for two frames, then released. */
+    private Step padTap(Ctl c) { return new Step() { int n; public boolean tick() { FakePad p = pad(); if (p == null) { check("padTap " + c, false, "no controller connected"); return true; } if (n == 0) p.set(c, 1f); if (n == 2) p.set(c, 0f); return ++n > 3; } }; }
+    /** Taps the d-pad (press, release, settle) until the button whose label matches has the focus - like goTo, but on the controller. */
+    private Step padGoTo(String label, int nth) {
+        return new Step() {
+            int pause, tries; Ctl held;
+            public boolean tick() {
+                FakePad p = pad(); if (p == null) { check("padGoTo " + label, false, "no controller connected"); return true; }
+                if (held != null) { p.set(held, 0f); held = null; pause = 3; return false; }       // the press lasted one frame: a clean edge, never a held repeat
+                if (pause-- > 0) return false;
+                FocusModel fm = nav().fm;
+                int target = -1, seen = 0;
+                for (int i = 0; i < 80; i++) { FocusModel.Item it = fm.lastItem(i); if (it == null) break; if (it.label.equals(label) && seen++ == nth) { target = i; break; } }
+                if (target < 0) { if (++tries > 120) { check("padGoTo " + label, false, "button not found on " + screenName()); return true; } return false; }
+                if (fm.focus == target) return true;
+                if (++tries > 90) { FocusModel.Item ff = fm.focused(); check("padGoTo " + label, false, "could not reach on " + screenName() + " focus=" + (ff == null ? null : ff.label)); return true; }
+                FocusModel.Item f = fm.focused(), t = fm.lastItem(target);
+                Ctl c;
+                if (f == null) c = Ctl.DPAD_DOWN;
+                else { float dx = t.x + t.w / 2 - (f.x + f.w / 2), dy = t.y + t.h / 2 - (f.y + f.h / 2); c = Math.abs(dy) >= Math.abs(dx) * 0.6f ? (dy > 0 ? Ctl.DPAD_UP : Ctl.DPAD_DOWN) : (dx > 0 ? Ctl.DPAD_RIGHT : Ctl.DPAD_LEFT); }
+                p.set(c, 1f); held = c;
+                return false;
+            }
+        };
+    }
+    private Step padGoTo(String label) { return padGoTo(label, 0); }
+    /** A couple of frames of nothing pressed between a navigation and the press that follows it. */
+    private Step padIdle() { return wait(2); }
+
     private void takeShot(String name) {
         try {
             Pixmap raw = Pixmap.createFromFrameBuffer(0, 0, Gdx.graphics.getBackBufferWidth(), Gdx.graphics.getBackBufferHeight());
@@ -124,22 +155,25 @@ public final class Scenario implements ApplicationListener {
         steps.add(tap(Input.Keys.S)); steps.add(wait(3));
         steps.add(act(() -> check("down arrow moves focus to SETTINGS", nav().fm.focused() != null && nav().fm.focused().label.equals("SETTINGS"), String.valueOf(nav().fm.focused() == null ? null : nav().fm.focused().label))));
         steps.add(shot("03_title_focus"));
-        // --- mouse: hover focuses, left click activates, right click does not
-        steps.add(act(() -> { FocusModel.Item it = null; for (int i = 0; i < 20; i++) { FocusModel.Item c = nav().fm.lastItem(i); if (c == null) break; if (c.label.equals("CREDITS")) it = c; } hover(it.x + it.w / 2, it.y + it.h / 2); }));
+        // --- mouse: hover focuses, left click activates, right click does not (MORE opens the panel that holds PLAYERS, HERO, TIMES, CREDITS, EXIT since build 60)
+        steps.add(act(() -> { FocusModel.Item it = null; for (int i = 0; i < 20; i++) { FocusModel.Item c = nav().fm.lastItem(i); if (c == null) break; if (c.label.equals("MORE")) it = c; } if (it == null) check("MORE button on the title", false, screenName()); else hover(it.x + it.w / 2, it.y + it.h / 2); }));
         steps.add(wait(3));
-        steps.add(act(() -> check("mouse hover focuses CREDITS", nav().fm.focused() != null && nav().fm.focused().label.equals("CREDITS"), String.valueOf(nav().fm.focused() == null ? null : nav().fm.focused().label))));
+        steps.add(act(() -> check("mouse hover focuses MORE", nav().fm.focused() != null && nav().fm.focused().label.equals("MORE"), String.valueOf(nav().fm.focused() == null ? null : nav().fm.focused().label))));
         steps.add(act(() -> click(Input.Buttons.RIGHT))); steps.add(wait(3));
-        steps.add(act(() -> check("right click does not activate", screen() instanceof TitleScreen, screenName())));
+        steps.add(act(() -> check("right click does not activate", screen() instanceof TitleScreen && !hasButton("CREDITS"), screenName())));
         steps.add(act(() -> click(Input.Buttons.LEFT))); steps.add(wait(3));
-        steps.add(act(() -> check("left click activates CREDITS", screenName().equals("CreditsScreen"), screenName())));
-        steps.add(shot("04_credits")); steps.add(wait(30)); steps.add(tap(Input.Keys.ESCAPE)); steps.add(wait(5));
+        steps.add(act(() -> check("left click opens the MORE panel", screen() instanceof TitleScreen && hasButton("CREDITS") && hasButton("PLAYERS") && hasButton("TIMES"), screenName())));
+        steps.add(shot("04_more"));
+        steps.add(goTo("CREDITS")); steps.add(tap(Input.Keys.ENTER)); steps.add(wait(5));
+        steps.add(act(() -> check("CREDITS opens from the MORE panel", screenName().equals("CreditsScreen"), screenName())));
+        steps.add(shot("05_credits")); steps.add(wait(30)); steps.add(tap(Input.Keys.ESCAPE)); steps.add(wait(5));
         steps.add(act(() -> check("escape goes back from credits", screen() instanceof TitleScreen, screenName())));
         steps.add(wait(40));
         // --- settings, controls tab (keyboard only)
         steps.add(goTo("SETTINGS")); steps.add(tap(Input.Keys.ENTER)); steps.add(wait(30));
-        steps.add(act(() -> check("settings opened with the desktop tabs", screen() instanceof SettingsScreen && hasButton("CONTROLS") && hasButton("WINDOW"), screenName())));
+        steps.add(act(() -> check("settings opened with the desktop tabs", screen() instanceof SettingsScreen && hasButton("CONTROLS") && hasButton("DISPLAY"), screenName())));
         steps.add(shot("05_settings_audio"));
-        steps.add(goTo("WINDOW")); steps.add(tap(Input.Keys.ENTER)); steps.add(wait(10)); steps.add(shot("06_settings_window"));
+        steps.add(goTo("DISPLAY")); steps.add(tap(Input.Keys.ENTER)); steps.add(wait(10)); steps.add(shot("06_settings_window"));
         steps.add(goTo("CONTROLS")); steps.add(tap(Input.Keys.ENTER)); steps.add(wait(10)); steps.add(shot("07_settings_controls"));
         steps.add(act(() -> check("controls tab lists the device rows", hasButton("AUTO DETECT") && hasButton("NONE DETECTED"), "input device + connected controller")));
         // --- keyboard rebinding
@@ -185,8 +219,11 @@ public final class Scenario implements ApplicationListener {
         steps.add(act(() -> check("controller removed mid-run: run intact and keyboard still active", game.save.seed == seedAtPlay && playScreen() != null && dp.input.activePad() == null && dp.input.promptDevice() == InputManager.Device.KEYBOARD, dp.input.promptDevice().toString())));
         steps.add(act(() -> src.release(Input.Keys.D)));
         steps.add(act(() -> collecting = false));
-        // --- pause, controls during a paused run, resume
-        steps.add(tap(Input.Keys.ESCAPE)); steps.add(wait(40)); steps.add(shot("17_pause"));
+        // --- the controller that was in use is gone: the run paused itself (build 62); the pause menu says so
+        steps.add(wait(10));
+        steps.add(act(() -> check("unplugging the controller in use paused the run by itself", playScreen() != null && hasButton("RESUME") && game.save.seed == seedAtPlay, screenName())));
+        steps.add(shot("17_pause"));
+        // --- controls during a paused run, resume
         steps.add(goTo("SETTINGS")); steps.add(tap(Input.Keys.ENTER)); steps.add(wait(40)); steps.add(goTo("CONTROLS")); steps.add(tap(Input.Keys.ENTER)); steps.add(wait(10));
         steps.add(act(() -> check("controls reachable from a paused run", screen() instanceof SettingsScreen && hasButton("AUTO DETECT"), screenName()))); steps.add(shot("18_controls_from_pause"));
         steps.add(tap(Input.Keys.ESCAPE)); steps.add(wait(40));
@@ -203,9 +240,69 @@ public final class Scenario implements ApplicationListener {
         steps.add(act(() -> { check("fullscreen entered", Gdx.graphics.isFullscreen(), Gdx.graphics.getWidth() + "x" + Gdx.graphics.getHeight()); takeShot("21_fullscreen"); }));
         steps.add(act(() -> dp.display.toggle(dp.cfg))); steps.add(wait(30));
         steps.add(act(() -> check("windowed again", !Gdx.graphics.isFullscreen(), Gdx.graphics.getWidth() + "x" + Gdx.graphics.getHeight())));
+        // --- controller only, from here on: the keyboard and mouse are never touched again (Steam Deck / couch play)
+        steps.add(act(() -> { src.pads.clear(); src.pads.add(new FakePad("deck", "Steam Deck Controller")); })); steps.add(wait(5));
+        steps.add(act(() -> check("a Steam Deck's own controls are a controller with the Xbox layout", dp.input.activePad() != null && dp.input.family() == PadFamily.XBOX, String.valueOf(dp.input.family()))));
+        steps.add(padTap(Ctl.A)); steps.add(wait(3));         // a deliberate press makes it the device in use
+        steps.add(act(() -> check("prompts follow the Deck's controller", dp.input.promptDevice() == InputManager.Device.CONTROLLER, String.valueOf(dp.input.promptDevice()))));
+        // unplug the pad that is being used mid-run: the run pauses by itself; plug it back in and resume with the pad
+        steps.add(act(() -> { pad().connected = false; src.pads.clear(); })); steps.add(wait(8));
+        steps.add(act(() -> check("unplugging the controller in use pauses the run", playScreen() != null && hasButton("RESUME") && game.save.seed == seedAtPlay, screenName())));
+        steps.add(shot("22_pad_unplugged_pause"));
+        steps.add(act(() -> src.pads.add(new FakePad("deck", "Steam Deck Controller")))); steps.add(wait(5));
+        steps.add(padGoTo("RESUME")); steps.add(padIdle()); steps.add(padTap(Ctl.A)); steps.add(wait(10));
+        steps.add(act(() -> check("plugged back in: the pad resumes the same run", playScreen() != null && !hasButton("RESUME") && game.save.seed == seedAtPlay && dp.input.promptDevice() == InputManager.Device.CONTROLLER, screenName() + " " + dp.input.promptDevice())));
+        // pause with the pad, every pause-menu screen, back out, and the 1280 x 800 Deck panel
+        steps.add(act(() -> Gdx.graphics.setWindowedMode(1280, 800))); steps.add(wait(20));
+        steps.add(act(() -> check("window at the Steam Deck's 1280x800", Gdx.graphics.getWidth() == 1280 && Gdx.graphics.getHeight() == 800, Gdx.graphics.getWidth() + "x" + Gdx.graphics.getHeight())));
+        steps.add(shot("23_deck_play_1280x800"));
+        steps.add(padTap(Ctl.START)); steps.add(wait(30));
+        steps.add(act(() -> check("the pad's Menu button pauses", playScreen() != null && hasButton("RESUME"), screenName()))); steps.add(shot("24_deck_pause_1280x800"));
+        steps.add(padGoTo("TIMES")); steps.add(padIdle()); steps.add(padTap(Ctl.A)); steps.add(wait(30));
+        steps.add(act(() -> check("TIMES opens from the pause menu on the pad", screenName().equals("TimesScreen"), screenName()))); steps.add(shot("25_deck_times_1280x800"));
+        steps.add(padTap(Ctl.B)); steps.add(wait(30));
+        steps.add(act(() -> check("B backs out of TIMES to the pause menu", playScreen() != null && hasButton("RESUME"), screenName())));
+        steps.add(padGoTo("SETTINGS")); steps.add(padIdle()); steps.add(padTap(Ctl.A)); steps.add(wait(30));
+        steps.add(act(() -> check("SETTINGS opens on the pad", screen() instanceof SettingsScreen, screenName())));
+        for (String tab : new String[]{"ACCESS", "ABOUT", "DISPLAY", "GRAPHICS", "CONTROLS", "GENERAL"}) {
+            steps.add(padGoTo(tab)); steps.add(padIdle()); steps.add(padTap(Ctl.A)); steps.add(wait(12));
+            steps.add(act(() -> check("settings tab " + tab + " reachable on the pad", screen() instanceof SettingsScreen && hasButton(tab), screenName())));
+            steps.add(shot("26_deck_settings_" + tab.toLowerCase(java.util.Locale.ROOT) + "_1280x800"));
+        }
+        steps.add(padGoTo("CONTROLS")); steps.add(padIdle()); steps.add(padTap(Ctl.A)); steps.add(wait(12));
+        steps.add(padGoTo("EDIT", 1)); steps.add(padIdle()); steps.add(padTap(Ctl.A)); steps.add(wait(20));        // the CONTROLLER BINDINGS row's EDIT (the keyboard row's is the first)
+        steps.add(act(() -> check("the controller bindings editor opens on the pad", screenName().equals("BindingsScreen") && hasButton("BACK"), screenName()))); steps.add(shot("27_deck_bindings_1280x800"));
+        steps.add(padTap(Ctl.B)); steps.add(wait(20));
+        steps.add(act(() -> check("B leaves the bindings editor", screen() instanceof SettingsScreen, screenName())));
+        steps.add(padTap(Ctl.B)); steps.add(wait(30));
+        steps.add(act(() -> check("B leaves settings back to the pause menu", playScreen() != null && hasButton("RESUME"), screenName())));
+        steps.add(padGoTo("SAVE & EXIT")); steps.add(padIdle()); steps.add(padTap(Ctl.A)); steps.add(until(() -> screen() instanceof TitleScreen, 90, "title on the pad")); steps.add(wait(40));
+        steps.add(shot("28_deck_title_1280x800"));
+        // the title's MORE panel, the players list and a new player typed on the picker - all on the pad
+        steps.add(padGoTo("MORE")); steps.add(padIdle()); steps.add(padTap(Ctl.A)); steps.add(wait(20));
+        steps.add(act(() -> check("MORE panel opens on the pad", screen() instanceof TitleScreen && hasButton("PLAYERS") && hasButton("CREDITS"), screenName()))); steps.add(shot("29_deck_more_1280x800"));
+        steps.add(padGoTo("PLAYERS")); steps.add(padIdle()); steps.add(padTap(Ctl.A)); steps.add(wait(20));
+        steps.add(act(() -> check("PLAYERS opens on the pad", screenName().equals("PlayersScreen"), screenName()))); steps.add(shot("30_deck_players_1280x800"));
+        steps.add(padGoTo("NEW PLAYER")); steps.add(padIdle()); steps.add(padTap(Ctl.A)); steps.add(wait(20));
+        steps.add(act(() -> check("the name picker opens on the pad", screenName().equals("NameScreen") && hasButton("OK") && hasButton("D"), screenName())));
+        for (String key : new String[]{"D", "E", "C", "K"}) { steps.add(padGoTo(key)); steps.add(padIdle()); steps.add(padTap(Ctl.A)); steps.add(wait(4)); }
+        steps.add(shot("31_deck_name_1280x800"));
+        steps.add(padGoTo("OK")); steps.add(padIdle()); steps.add(padTap(Ctl.A)); steps.add(wait(30));
+        steps.add(act(() -> check("a player named on the pad alone exists and is selected", screen() instanceof TitleScreen && game.profiles.last() != null && "DECK".equals(game.profiles.last().name), screenName() + " " + (game.profiles.last() == null ? "none" : game.profiles.last().name))));
+        steps.add(padGoTo("MORE")); steps.add(padIdle()); steps.add(padTap(Ctl.A)); steps.add(wait(10));
+        steps.add(padGoTo("CREDITS")); steps.add(padIdle()); steps.add(padTap(Ctl.A)); steps.add(wait(20));
+        steps.add(act(() -> check("CREDITS opens on the pad", screenName().equals("CreditsScreen"), screenName())));
+        steps.add(padTap(Ctl.B)); steps.add(wait(20));
+        steps.add(act(() -> check("B leaves credits", screen() instanceof TitleScreen, screenName())));
+        steps.add(padGoTo("PLAY")); steps.add(padIdle()); steps.add(padTap(Ctl.A)); steps.add(until(() -> playScreen() != null, 90, "play on the pad")); steps.add(wait(30));
+        steps.add(act(() -> check("a climb starts for the new player on the pad", playScreen() != null, screenName())));
+        steps.add(padTap(Ctl.START)); steps.add(wait(30));
+        steps.add(padGoTo("SAVE & EXIT")); steps.add(padIdle()); steps.add(padTap(Ctl.A)); steps.add(until(() -> screen() instanceof TitleScreen, 90, "title again on the pad")); steps.add(wait(20));
+        steps.add(act(() -> { src.pads.clear(); })); steps.add(wait(5));
+        steps.add(act(() -> Gdx.graphics.setWindowedMode(1280, 720))); steps.add(wait(20));
         // --- exit through the menu, then a clean shutdown
-        steps.add(tap(Input.Keys.ESCAPE)); steps.add(wait(40)); steps.add(goTo("MAIN MENU")); steps.add(tap(Input.Keys.ENTER)); steps.add(until(() -> screen() instanceof TitleScreen, 60, "title again"));
-        steps.add(act(() -> { check("progress saved", new File(data, "save.json").isFile() && new File(data, "settings.json").isFile() && dp.configFile.isFile(), data.getAbsolutePath()); report(); Gdx.app.exit(); }));
+        steps.add(until(() -> screen() instanceof TitleScreen, 60, "title again"));
+        steps.add(act(() -> { check("progress saved", new File(data, "players.json").isFile() && new File(new File(data, "players/p1"), "save.json").isFile() && new File(data, "settings.json").isFile() && dp.configFile.isFile(), data.getAbsolutePath()); report(); Gdx.app.exit(); }));
     }
 
     private boolean hasButton(String label) { for (int i = 0; i < 80; i++) { FocusModel.Item it = nav().fm.lastItem(i); if (it == null) return false; if (it.label.equals(label)) return true; } return false; }

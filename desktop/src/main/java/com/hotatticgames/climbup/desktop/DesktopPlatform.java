@@ -64,7 +64,7 @@ public final class DesktopPlatform implements Platform {
         g = game; sources = sourceFactory.get(); input = new InputManager(cfg, sources); nav = new MenuNav(input);
         game.ui.nav = nav;
         try { graphics.start(game); save(); } catch (RuntimeException e) { DesktopLog.error("graphics setup failed; using the defaults", e); }
-        steam.init();                      // Steam achievements: silent if the Steam client is not running
+        steam.init(); graphics.steamOnDeck = steam.onSteamDeck();                      // Steam achievements: silent if the Steam client is not running
     }
 
     /** desktop.log in the data folder: startup time and frame pacing of this run (the evidence the packaged build can give without a console). */

@@ -28,3 +28,5 @@ The pinned key is part of the APK. A new key means a new APK carrying the new pu
 
 ## Verification performed (see docs/VERIFICATION.md)
 `OtaTest` (14), `OtaConfigTest` (3), `OtaEndToEndTest` (4: full pipeline over local HTTP incl. a signed gameplay change measured in the Sim after the next start, forged/altered releases, interrupted transfer, and the release produced by `make_ota.py` accepted by the Java verifier), and the release gate `:core:verifyOta` on every CI build with the real key.
+
+**Scope reminder (Build 62):** this channel updates `tuning.json` only. Code, rigs, screens and assets need a new native build; the code-module OTA design is a post-release roadmap item (see `docs/UPDATES.md`).

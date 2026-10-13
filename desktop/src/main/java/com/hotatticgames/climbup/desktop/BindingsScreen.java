@@ -90,7 +90,7 @@ final class BindingsScreen extends ScreenAdapter {
                 float bx = x + 210 + slot * 128;
                 com.badlogic.gdx.graphics.g2d.TextureRegion g = label == null ? null : glyph(a, slot);
                 // a bound control shows as its glyph (the Xbox / PlayStation / Switch button or the key cap) with its name small underneath it; no glyph = the name alone
-                if (ui.button(label == null ? "+ ADD" : g != null ? "" : label, bx, y, 120, 50, label != null && slot == 0)) begin(a, slot);
+                if (g != null ? ui.buttonPicture(label, bx, y, 120, 50, slot == 0) : ui.button(label == null ? "+ ADD" : label, bx, y, 120, 50, label != null && slot == 0)) begin(a, slot);   // a glyph button keeps its name for the focus ring and the tests
                 if (g != null) { ui.image(g, bx + 60 - 17, y + 15, 34, 34, 1f); ui.textC(label, bx + 60, y + 3, Math.min(1.6f, 112f / Math.max(1, label.length() * 6f)), Ui.DIM); }
             }
             y -= 58;

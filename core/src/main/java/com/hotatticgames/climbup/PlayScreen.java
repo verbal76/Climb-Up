@@ -56,6 +56,7 @@ public final class PlayScreen extends ScreenAdapter {
     private String toastSub = "";
     private float acc, time, runTime, fade, toastT, zoneT, stepT, ropeT, autosaveT, tipT, shotT;
     private float pauseCd;               // short lock-out after a pause toggle so one controller press can never flip it twice (no flashing, no 10-click close)
+    private boolean padLost;             // the pause was forced by the controller being unplugged: the pause menu says so until the run resumes
     private String toast = "", tip = "", caption = ""; private float captionT;
     private int lastZone = -1, shots;
     private boolean confirmRestart, confirmEnd;
@@ -248,6 +249,10 @@ public final class PlayScreen extends ScreenAdapter {
             in.moveY = sim.mode == Sim.Mode.ROPE || sim.mounting() ? 1f : 0f; in.moveX = 0f;
             if (sim.mode == Sim.Mode.BEAM && !sim.mounting()) { in.moveX = scriptT % 3f < 1.2f ? 1f : 0f; in.jumpPressed = scriptT > Float.parseFloat(System.getProperty("climb.ropeJumpAt", "99")); }
         }
+        if (Boolean.getBoolean("climb.walkScript")) {   // test hook: a half stick to the right for a few seconds, then stop - the slow Walk clip in the real game (screenshots of the hero walking)
+            scriptT += Sim.DT;
+            in.moveX = scriptT < Float.parseFloat(System.getProperty("climb.walkFor", "4")) ? Float.parseFloat(System.getProperty("climb.walkStick", "0.5")) : 0f; in.moveY = 0f; in.jumpPressed = false; in.jumpHeld = false;
+        }
     }
     private float scriptT;
 
@@ -261,6 +266,7 @@ public final class PlayScreen extends ScreenAdapter {
         if (pauseCd > 0f) pauseCd -= dt;
         if (gi() != null) {                                              // desktop: pause / resume from the keyboard or controller (the pause button and menus work through the mouse and the focus ring)
             boolean p = gi().pausePressed(), b = gi().backPressed();
+            if (state == State.PLAYING && gi().controllerLost()) { pauseGame(); pauseCd = 0.30f; padLost = true; }      // the pad in use was unplugged: hold the run until the player is back on a device
             if (pauseCd <= 0f) {                                          // one press = one toggle; the lock-out swallows any double-fire from the pad
                 if (state == State.PLAYING && p) { pauseGame(); pauseCd = 0.30f; }
                 else if (state == State.PAUSED && (p || b)) { resumePlay(); pauseCd = 0.30f; }
@@ -627,7 +633,8 @@ public final class PlayScreen extends ScreenAdapter {
         // height meter (top-left): current height, best height, and where we are in the repeating worlds
         float zk = Math.min(tm, 1.3f);
         double hAbs = absNow();
-        int Z = Palette.ZONES; int zone = Math.min(Z - 1, (int) (((hAbs / g.tuning.zoneHeight) % Z + Z) % Z)), lap = (int) (hAbs / (g.tuning.zoneHeight * Z));
+        double hZone = Math.max(0.0, hAbs);          // a fall below the very first platform (before the respawn catches it) is still the meadow, not the last world wrapped around
+        int Z = Palette.ZONES; int zone = Math.min(Z - 1, (int) (((hZone / g.tuning.zoneHeight) % Z + Z) % Z)), lap = (int) (hZone / (g.tuning.zoneHeight * Z));
         String hs = (long) Math.max(0, hAbs) + " M";
         ui.rect(m - 6, H - m - 136 * zk, 380 * zk + 12, 136 * zk + 6, new Color(0.05f, 0.07f, 0.14f, 0.55f));
         ui.text(hs, m, H - m - 30 * zk, 4f * zk, Ui.TEXT);
@@ -805,7 +812,8 @@ public final class PlayScreen extends ScreenAdapter {
         float pw = 560, bw = 440, bh = 76, bs = 90, ph = 176 + (canEnd ? 5 : 4) * bs + 36, x = W / 2 - pw / 2, y = H / 2 - ph / 2;
         ui.rect(0, 0, W, H, new Color(0, 0, 0, 0.55f));
         ui.panel(x, y, pw, ph);
-        ui.textC("PAUSED", W / 2, y + ph - 90, 8f, Ui.TEXT);
+        if (padLost) { String pl = "CONTROLLER DISCONNECTED"; ui.textC(pl, W / 2, y + ph - 82, Math.min(5f, (pw - 40) / (pl.length() * 6f)), Ui.ACCENT); }      // the pause was forced by the pad going away: say so where PAUSED would be
+        else ui.textC("PAUSED", W / 2, y + ph - 90, 8f, Ui.TEXT);
         if (W >= pw + 2 * 450f) {                  // speed-run splits beside the menu
             SaveData sd = g.save; float sx = x + pw + 28, sw = 420, sh = ph;
             ui.panel(sx, y, sw, sh);
@@ -840,7 +848,7 @@ public final class PlayScreen extends ScreenAdapter {
     private void pauseGame() { if (state == State.PLAYING) { if (gi() != null) gi().clear(); g.audio.fallStop(); state = State.PAUSED; confirmRestart = confirmEnd = false; stickPtr = jumpPtr = -1; jumpHeldTouch = false; g.audio.play("click"); g.persist(); saveRun(); } }
     /** Writes the exact moment of the climb (not in the scripted demo, and not once the finish screen is up: that run is over). */
     private void saveRun() { if (tower != null && !demo && state != State.FINISHED) g.saveRun(tower, sim); }
-    private void resumePlay() { if (gi() != null) gi().clear(); state = State.PLAYING; acc = 0; g.audio.play("click"); }
+    private void resumePlay() { if (gi() != null) gi().clear(); state = State.PLAYING; acc = 0; padLost = false; g.audio.play("click"); }
     public void resumeFromSettings() { applySettings(); }
 
     @Override public void hide() { g.audio.fallStop(); g.persist(); }

@@ -9,6 +9,7 @@ public enum PadFamily {
     public static PadFamily of(String name) {
         String n = name == null ? "" : name.toLowerCase(Locale.ROOT);
         if (n.contains("xbox") || n.contains("xinput") || n.contains("microsoft")) return XBOX;
+        if (n.contains("steam") || n.contains("valve")) return XBOX;        // the Steam Deck's own controls and Steam Input's virtual pad print the Xbox layout (A bottom, B right)
         if (n.contains("playstation") || n.contains("dualshock") || n.contains("dualsense") || n.contains("sony") || n.contains("ps4") || n.contains("ps5") || n.contains("ps3") || n.equals("wireless controller")) return PLAYSTATION;
         if (n.contains("nintendo") || n.contains("switch") || n.contains("pro controller") || n.contains("joy-con")) return SWITCH;
         return GENERIC;

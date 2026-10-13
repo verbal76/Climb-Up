@@ -130,7 +130,12 @@ public final class Ui extends InputAdapter implements Disposable {
     /** A big tappable button; returns true on the frame the tap is released inside it. */
     public boolean button(String label, float x, float y, float w, float h) { return button(label, x, y, w, h, false); }
 
-    public boolean button(String label, float x, float y, float w, float h, boolean accent) {
+    public boolean button(String label, float x, float y, float w, float h, boolean accent) { return button(label, x, y, w, h, accent, true); }
+
+    /** A button whose label is registered for focus / navigation (and tests) but not printed - the caller draws a glyph or picture on it instead. */
+    public boolean buttonPicture(String label, float x, float y, float w, float h, boolean accent) { return button(label, x, y, w, h, accent, false); }
+
+    private boolean button(String label, float x, float y, float w, float h, boolean accent, boolean printLabel) {
         boolean pressed = down && in(downX, downY, x, y, w, h) && in(curX, curY, x, y, w, h);
         float o = pressed ? 4 : 0;
         int f = nav != null ? nav.button(label, x, y, w, h, accent) : 0;
@@ -141,7 +146,7 @@ public final class Ui extends InputAdapter implements Disposable {
         rect(x, y + o + h - 6, w, 6, new Color(1, 1, 1, 0.14f));
         float px = Math.min(5f * tm(), (w - 24) / Math.max(1, label.length() * PixelFont.ADV - 1));
         px = fitSize(Math.max(2f, px));                        // crisp snapping must not push the label past the button edge (mobile: unchanged)
-        text(label, x + w / 2 - font.width(label, px) / 2, y + o + h / 2 - font.height(px) / 2, px, TEXT);
+        if (printLabel) text(label, x + w / 2 - font.width(label, px) / 2, y + o + h / 2 - font.height(px) / 2, px, TEXT);
         if (nav != null) {
             if ((f & 1) != 0) focusRing(x, y + o, w, h);
             if ((f & 2) != 0) return true;

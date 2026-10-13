@@ -29,7 +29,7 @@ public final class DesktopLauncher {
         DesktopConfig cfg = platform.cfg;
         if (!cfg.graphicsDecided) {          // first run: a large display (a TV) starts full screen, a small one in a window; the rest of the defaults follow once the graphics chip is known
             com.badlogic.gdx.Graphics.DisplayMode nat = Lwjgl3ApplicationConfiguration.getDisplayMode();
-            cfg.display = GraphicsProfile.defaultDisplay(nat.width, nat.height);
+            cfg.display = GraphicsProfile.defaultDisplay(nat.width, nat.height, GraphicsProfile.isSteamDeck(System.getenv("SteamDeck"), false));
             DesktopLog.append("first run: display " + nat.width + "x" + nat.height + " @" + nat.refreshRate + " -> " + cfg.display);
         }
         DisplayManager.configureStartup(c, cfg, System.getProperty("climb.w") != null ? Integer.getInteger("climb.w", cfg.width) : 0, Integer.getInteger("climb.h", cfg.height));

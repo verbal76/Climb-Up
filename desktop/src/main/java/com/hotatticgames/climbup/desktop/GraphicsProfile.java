@@ -74,9 +74,18 @@ public final class GraphicsProfile {
         }
     }
 
-    /** First-run window kind: a large display (1920 x 1080 or more, which includes a TV) starts full screen, anything smaller starts in a window. */
-    public static com.hotatticgames.climbup.desktop.input.DesktopConfig.DisplayMode defaultDisplay(int displayW, int displayH) {
-        return displayW >= 1920 && displayH >= 1080 ? com.hotatticgames.climbup.desktop.input.DesktopConfig.DisplayMode.FULLSCREEN : com.hotatticgames.climbup.desktop.input.DesktopConfig.DisplayMode.WINDOWED;
+    /** First-run window kind: a large display (1920 x 1080 or more, which includes a TV) starts full screen, anything smaller starts in a window; a Steam Deck always starts full screen (its 1280 x 800 panel, or the TV it is docked to). */
+    public static com.hotatticgames.climbup.desktop.input.DesktopConfig.DisplayMode defaultDisplay(int displayW, int displayH) { return defaultDisplay(displayW, displayH, false); }
+    public static com.hotatticgames.climbup.desktop.input.DesktopConfig.DisplayMode defaultDisplay(int displayW, int displayH, boolean steamDeck) {
+        return steamDeck || (displayW >= 1920 && displayH >= 1080) ? com.hotatticgames.climbup.desktop.input.DesktopConfig.DisplayMode.FULLSCREEN : com.hotatticgames.climbup.desktop.input.DesktopConfig.DisplayMode.WINDOWED;
+    }
+
+    /** Running on a Steam Deck: Steam's Game Mode sets {@code SteamDeck=1} in the game's environment, and the Steamworks client reports it too when it is up. Pure: the caller passes both. */
+    public static boolean isSteamDeck(String steamDeckEnv, boolean steamClientSaysDeck) { return "1".equals(steamDeckEnv) || steamClientSaysDeck; }
+
+    /** The Steam Deck's defaults (Valve's device recommendations): full quality is affordable at 1280 x 800 on its RDNA 2 part, but the thermal and battery budget is better spent as MEDIUM quality, full render scale, 2x anti-aliasing, the sky effects on, and the frame rate capped at the panel (60) with vsync - a steady 60 rather than a hot, uneven 90+. */
+    public static Decision steamDeck(int refreshHz) {
+        return new Decision(Tier.MIDDLE, 1, 100, true, refreshHz > 0 ? Math.min(60, refreshHz) : 60, 2, 4, "Steam Deck" + (refreshHz > 0 ? " @" + refreshHz + " Hz" : ""));
     }
 
     /** The cap to hand the window system. With vsync on the monitor already paces frames, so a limit at or above its rate (or none) asks for no extra cap. */

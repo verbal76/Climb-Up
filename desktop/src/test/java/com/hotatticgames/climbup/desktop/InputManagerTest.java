@@ -257,6 +257,49 @@ public class InputManagerTest {
         assertEquals(1f, read().moveX, 0);
     }
 
+    @Test public void unpluggingTheControllerInUseRaisesControllerLostOnce() {
+        FakePad p = connect("x1", "Xbox Controller"); frame();
+        p.set(Ctl.A, 1f); frames(2); p.set(Ctl.A, 0f); frame();
+        assertEquals(InputManager.Device.CONTROLLER, im.promptDevice());
+        assertFalse("nothing lost while it is plugged in", im.controllerLost());
+        p.connected = false; src.pads.clear(); frame();
+        assertTrue("the pad the player was using is gone: the play screen pauses on this", im.controllerLost());
+        assertFalse("reported once, not every frame", im.controllerLost());
+        frame();
+        assertFalse(im.controllerLost());
+    }
+
+    @Test public void removingAControllerNobodyWasUsingRaisesNothing() {
+        FakePad p = connect("x1", "Xbox Controller"); frame();
+        src.press(Keys.D); frame(); src.release(Keys.D); frame();        // the keyboard is the device in use
+        assertEquals(InputManager.Device.KEYBOARD, im.promptDevice());
+        p.connected = false; src.pads.clear(); frame();
+        assertFalse("a spare pad unplugged while the keyboard is in use is not an interruption", im.controllerLost());
+    }
+
+    @Test public void aReconnectedControllerIsPickedUpAgainAndItsPromptsReturn() {
+        FakePad p = connect("x1", "Xbox Controller"); frame();
+        p.set(Ctl.A, 1f); frames(2); p.set(Ctl.A, 0f); frame();
+        p.connected = false; src.pads.clear(); frame(); im.controllerLost();
+        assertNull(im.activePad());
+        frames(20);
+        FakePad again = connect("x1", "Xbox Controller"); frame();
+        assertSame("the same pad plugged back in is active again", again, im.activePad());
+        again.set(Ctl.A, 1f); frames(2); again.set(Ctl.A, 0f); frame();
+        assertEquals("prompts are back on the controller", InputManager.Device.CONTROLLER, im.promptDevice());
+        assertEquals("A", im.prompt(Act.JUMP));
+    }
+
+    @Test public void theSteamDeckAndSteamInputPadsUseTheXboxLayout() {
+        assertEquals(PadFamily.XBOX, PadFamily.of("Steam Deck Controller"));
+        assertEquals(PadFamily.XBOX, PadFamily.of("Steam Virtual Gamepad"));
+        assertEquals(PadFamily.XBOX, PadFamily.of("Valve Software Steam Controller"));
+        assertEquals(PadFamily.PLAYSTATION, PadFamily.of("Sony DualSense Wireless Controller"));
+        assertEquals(PadFamily.SWITCH, PadFamily.of("Nintendo Switch Pro Controller"));
+        assertEquals(PadFamily.GENERIC, PadFamily.of("USB Gamepad"));
+        assertEquals("a generic pad falls back to the Xbox labels", "A", PadFamily.GENERIC.label(Ctl.A));
+    }
+
     @Test public void withTwoControllersTheLastOneUsedWinsAndTheirInputsAreNeverCombined() {
         FakePad a = connect("a", "Pad A"), b = connect("b", "Pad B"); frame();
         assertSame("the first connected is the default", a, im.activePad());

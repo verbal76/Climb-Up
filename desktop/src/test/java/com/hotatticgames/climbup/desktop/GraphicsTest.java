@@ -77,6 +77,28 @@ public class GraphicsTest {
         assertEquals(DisplayMode.WINDOWED, GraphicsProfile.defaultDisplay(1366, 768));
     }
 
+    @Test public void aSteamDeckIsRecognisedFromGameModeOrTheSteamClient() {
+        assertTrue(GraphicsProfile.isSteamDeck("1", false));
+        assertTrue(GraphicsProfile.isSteamDeck(null, true));
+        assertFalse(GraphicsProfile.isSteamDeck(null, false));
+        assertFalse(GraphicsProfile.isSteamDeck("0", false));
+        assertFalse(GraphicsProfile.isSteamDeck("", false));
+    }
+
+    @Test public void theSteamDeckGetsASteadySixtyAtMediumQualityAndStartsFullScreen() {
+        GraphicsProfile.Decision d = GraphicsProfile.steamDeck(60);
+        assertEquals(1, d.quality); assertEquals(100, d.renderScale); assertTrue(d.skyEffects);
+        assertEquals(60, d.frameLimit); assertEquals(2, d.aa); assertEquals(4, d.anisotropy);
+        assertEquals("a docked Deck on a 120 Hz screen still caps at 60", 60, GraphicsProfile.steamDeck(120).frameLimit);
+        assertEquals("the OLED panel's 90 Hz is capped at 60 too", 60, GraphicsProfile.steamDeck(90).frameLimit);
+        assertEquals("unknown refresh: 60", 60, GraphicsProfile.steamDeck(0).frameLimit);
+        assertEquals(DesktopConfig.DisplayMode.FULLSCREEN, GraphicsProfile.defaultDisplay(1280, 800, true));
+        assertEquals("the same small screen without a Deck starts in a window", DesktopConfig.DisplayMode.WINDOWED, GraphicsProfile.defaultDisplay(1280, 800, false));
+        for (int v : new int[]{d.renderScale}) assertTrue(java.util.Arrays.stream(DesktopConfig.SCALES).anyMatch(x -> x == v));
+        assertTrue(java.util.Arrays.stream(DesktopConfig.FRAME_LIMITS).anyMatch(x -> x == d.frameLimit));
+        assertTrue(java.util.Arrays.stream(DesktopConfig.AA_LEVELS).anyMatch(x -> x == d.aa));
+    }
+
     @Test public void vsyncPacesFramesSoALimitAtOrAboveTheMonitorAsksForNoExtraCap() {
         assertEquals(0, GraphicsProfile.effectiveFrameLimit(true, 0, 60));
         assertEquals(0, GraphicsProfile.effectiveFrameLimit(true, 144, 144));

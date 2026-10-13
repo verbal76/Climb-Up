@@ -83,6 +83,8 @@ public final class GameplayShot {
     // placed directly on the first cable (Sim.startOn, the game's own helper) or hanging from the first platform's edge (the same fields
     // Sim's ledge grab sets), then driven by the autopilot after a short hold; everything else (rig, camera, rendering) is unchanged.
     private static final String START_ON = System.getProperty("climb.startOn", "");
+    private static final int WALK_FRAMES = Integer.getInteger("climb.walkFrames", 0);     // > 0: for that many frames the stick is held half right instead of the autopilot (the slow Walk clip; the autopilot only ever runs)
+    private static final float WALK_STICK = Float.parseFloat(System.getProperty("climb.walkStick", "0.5"));
 
     public static void main(String[] args) {
         Lwjgl3ApplicationConfiguration c = new Lwjgl3ApplicationConfiguration();
@@ -147,7 +149,7 @@ public final class GameplayShot {
                         String holding = null; int held = 0; String seqLabel = null; int seqIdx = 0, sinceCap = 0; int frames = 0;
                         Sim.Mode lastMode = sim.mode, prevMode = null; int modeAge = 0;
                         for (int f = 0; f < FRAMES; f++) {
-                            in.clear(); if (f >= hold) driver.drive(sim, in); sim.step(in);
+                            in.clear(); if (f < WALK_FRAMES) in.moveX = WALK_STICK; else if (f >= hold) driver.drive(sim, in); sim.step(in);
                             int ev = sim.consumeEvents(); wr.heroEvents(ev, sim.landSpeed);   // PlayScreen:292/444
                             time += dt; frames++;
                             if (sim.mode != lastMode) { prevMode = lastMode; lastMode = sim.mode; modeAge = 0; } else modeAge++;

@@ -1,35 +1,41 @@
-# Steam Deck / Steam Machine checklist — Climb up
+# Steam Deck / Steam Machine checklist — Upwardly
 
 Per studio standard §12 and Valve's docs
 ([recommendations](https://partner.steamgames.com/doc/steamhardware/recommendations),
-[compat](https://partner.steamgames.com/doc/steamhardware/compat)). Status is evidence-based; **no physical Steam Deck
-test has occurred** — hardware-dependent rows are PENDING, not PASS.
+[compat](https://partner.steamgames.com/doc/steamhardware/compat)). Status is evidence-based. **No physical Steam Deck or
+physical controller test has occurred**: every row that needs the hardware says OWNER HARDWARE TEST, never PASS.
 
-Legend: PASS (evidence) · PARTIAL · PENDING (needs owner/hardware) · UNVERIFIED (no evidence yet) · N/A
+Dispositions (Build 62 closure): **COMPLETE** (engineering done, automated evidence) · **OWNER HARDWARE TEST**
+(implementation complete, physical verification still needed) · **OWNER STEAMWORKS ACTION** (needs the partner account;
+see `docs/STEAMWORKS_SETUP.md`) · **N/A**.
 
-| # | Requirement (Valve Verified unless noted) | Status | Evidence / note |
+| # | Requirement (Valve Verified unless noted) | Disposition | Evidence / note |
 |---|---|---|---|
-| 1 | Native Linux x86-64 build exists | **PASS** | `tools/linux/package.sh` builds an ELF app-image; ran locally, GL first frame + clean exit (see HANDOFF). |
-| 2 | Launches & runs at 1280×800 | **PARTIAL** | Local Linux run opened a 1280×800 window and rendered; **on-Deck** test PENDING. |
-| 3 | 16:10 / 16:9 / other ratios, responsive HUD, readable text | **PARTIAL** | Game targets landscape 16:9–21:9 with text-size options; Deck 16:10 + handheld readability PENDING on hardware. |
-| 4 | Controller-only: launch, menus, settings, gameplay, pause, resume, save/load, exit | **PARTIAL** | Desktop has Xbox/gamepad support (proportional stick, View-button pause, controller menu nav). Full controller-only coverage of every screen PENDING hardware verification. |
-| 5 | No mandatory mouse/keyboard | **PARTIAL** | Gameplay + pause are controller-driven; verify every menu/dialog is reachable on a pad (PENDING). |
-| 6 | Default controller mapping via Steam Input | **UNVERIFIED** | Native gamepad works; a Steam Input config/mapping is not yet authored. |
-| 7 | Controller glyphs (ABXY etc., not hardcoded Xbox) | **DONE (build 60)** | CC0 glyph pack integrated: Xbox / Deck, PlayStation and Switch families plus key caps, chosen by the connected pad's family (`PadFamily`); play hints, pause corner and the bindings editor draw them. Not yet seen on a physical Deck. |
-| 8 | Automatic Steam on-screen keyboard for text entry | **PENDING** | Game has a player-name text field; `ShowFloatingGamepadTextInput` not yet wired. Needs Steamworks. |
-| 9 | Mixed mouse + joystick camera input | **N/A** | Fixed camera (owner-locked: camera anchored on player, tower rotates). No free-look camera. §12.3/§12.4 do not apply. |
-| 10 | Offline single-player (launch, play, save, load) | **PASS (desktop local)** | Fully offline; only the OTA check uses network and fails silently. Local Linux run saved settings offline. On-Deck PENDING. |
-| 11 | Update checks fail gracefully offline | **PASS** | OTA check is silent, non-blocking, unmetered-only, short timeout; gameplay never waits on it. |
-| 12 | No external launcher | **PASS** | Launches directly into the game (jpackage native launcher). |
-| 13 | Graphics settings stored per device, not Cloud | **PASS** | Settings saved locally (`settings.json`); not in Steam Cloud. Quality low/med/high present. |
-| 14 | Device graphics defaults (Auto/Quality/Battery) | **PARTIAL** | Quality tiers + display modes exist (`GraphicsProfile`/`DisplayManager`); a Deck-tuned 30fps@800p default profile is a pending tuning item. |
-| 15 | Vulkan | **N/A / UNVERIFIED** | libGDX LWJGL3 uses OpenGL; ran fine under Mesa (llvmpipe) locally. Deck GPU (RADV, real Vulkan-backed GL) PENDING; renderer rewrite to Vulkan is NOT recommended (§12.6). |
-| 16 | Suspend/resume, focus changes, controller reconnect, extended play, clean exit | **PENDING** | Hardware-only; prepare an owner test checklist. |
-| 17 | Performance (FPS, frame pacing, thermal, battery) | **PENDING** | No physical measurement; llvmpipe software numbers are not representative. |
-| 18 | Steam Cloud saves (cross-device) | **PENDING** | Not integrated; needs Steamworks app + credentials. |
+| 1 | Native Linux x86-64 build exists | **COMPLETE** | `tools/linux/package.sh` builds an ELF app-image; the desktop workflow smokes it headless at 1280×800 on every run ("SMOKE_RESULT PASS"); published as `Upwardly Build NN Linux.tar.gz`. |
+| 2 | Launches & runs at 1280×800 | **COMPLETE** + OWNER HARDWARE TEST | The end-to-end scenario (`:desktop:scenario`, CI gate) resizes the real window to 1280×800 and screenshots play, pause, TIMES, every settings tab, the bindings editor, the title, MORE, PLAYERS and the name picker there (shots 23–31): nothing clipped or overlapping. A first run on a Deck starts full screen at the panel's native mode. On-Deck launch itself: owner. |
+| 3 | 16:10 / 16:9 / other ratios, responsive HUD, readable text | **COMPLETE** + OWNER HARDWARE TEST | Same scenario at 1024×768, 1280×720, 1280×800, 1600×900, 1920×1080, 2560×1080 and full screen; the HUD, toasts and tips fit between the plates at every ratio (build 60's toast fit); TEXT SIZE 100/130/160 % and the caption options exist. Handheld readability at arm's length: owner. |
+| 4 | Controller-only: launch, menus, settings, gameplay, pause, resume, save/load, exit | **COMPLETE** + OWNER HARDWARE TEST | Every button in the game is a focusable `Ui.button`, so the pad's d-pad/stick, A and B reach all of them. The scenario drives a controller-only pass with the keyboard and mouse never touched: title → MORE → PLAYERS → NEW PLAYER (the name "DECK" typed on the picker with the pad) → PLAY → pause (Menu button) → TIMES → SETTINGS (all six tabs) → the controller bindings editor → back → SAVE & EXIT → CREDITS → EXIT path. Physical pad: owner. |
+| 5 | No mandatory mouse/keyboard | **COMPLETE** | As #4; the bindings editor, the name picker and every dialog (rebind, conflict, restore defaults, erase) are buttons. |
+| 6 | Default controller mapping via Steam Input | **OWNER STEAMWORKS ACTION** | The game reads a standard gamepad natively; the partner-site default should be the Gamepad template (`docs/STEAMWORKS_SETUP.md` §3). |
+| 7 | Controller glyphs (ABXY etc., not hardcoded Xbox) | **COMPLETE** + OWNER HARDWARE TEST | CC0 glyph pack (build 60): Xbox, PlayStation and Switch families chosen from the pad's name; build 62 maps the Steam Deck's own controls and Steam Input's virtual pad to the Xbox layout; unknown pads fall back to the Xbox glyphs; controls the pack lacks show their names. Unit-tested (`InputManagerTest`, `GlyphsTest`). Seen only in screenshots, never on a physical pad: owner. |
+| 8 | Automatic Steam on-screen keyboard for text entry | **COMPLETE** (in-game keyboard) | The only text field is the player name, entered on the game's own on-screen picker (A–Z, 0–9, space, delete, OK, cancel) that the pad drives (scenario shot 31). Steam's floating keyboard is deliberately not wired (it injects key presses the picker ignores because the same keys drive the menus); Valve's requirement is text entry without a physical keyboard, which the picker meets. |
+| 9 | Mixed mouse + joystick camera input | **N/A** | Fixed camera (owner-locked: anchored on the player, the tower rotates). |
+| 10 | Offline single-player (launch, play, save, load) | **COMPLETE** + OWNER HARDWARE TEST | Fully offline; only the OTA check uses the network and fails silently. The scenario saves and reloads progress; the Linux smoke runs with no network. On-Deck: owner. |
+| 11 | Update checks fail gracefully offline | **COMPLETE** | Silent, non-blocking, unmetered-only, 6 s timeouts; gameplay never waits on it (OTA tests). |
+| 12 | No external launcher | **COMPLETE** | jpackage native launcher straight into the game. |
+| 13 | Graphics settings stored per device, not Cloud | **COMPLETE** | `settings.json` and `upwardly-desktop.cfg` are per device and excluded from the Auto-Cloud patterns in `docs/STEAMWORKS_SETUP.md`. |
+| 14 | Device graphics defaults (Auto/Quality/Battery) | **COMPLETE** + OWNER HARDWARE TEST | Build 62: a Steam Deck (Game Mode's `SteamDeck=1`, or the Steam client saying so) gets its own first-run defaults — full screen at the native mode, MEDIUM quality, full render scale, 2× anti-aliasing, sky effects, vsync, frame limit 60 (`GraphicsProfile.steamDeck`, `GraphicsTest`). Whether 60 holds on the device, and the thermal/battery trade: owner. |
+| 15 | Vulkan | **N/A** | OpenGL through LWJGL3; runs on Mesa (llvmpipe locally; RADV's GL on the Deck). No rewrite (§12.6). |
+| 16 | Suspend/resume, focus changes, controller reconnect, extended play, clean exit | **COMPLETE** + OWNER HARDWARE TEST | Losing window focus pauses and autosaves (`ClimbGame.pause`, `PlayScreen.pause`: progress, run snapshot, settings); a frame after a long freeze is clamped to 0.1 s so a suspend can never run minutes of simulation at once; unplugging the controller in use pauses the run with a "CONTROLLER DISCONNECTED" note and plugging it back in makes it active again with its prompts (build 62; `InputManagerTest`, scenario checks 22). Clean exit smoked in both packages. Real suspend on a Deck and hours-long sessions: owner. |
+| 17 | Performance (FPS, frame pacing, thermal, battery) | **OWNER HARDWARE TEST** | No physical measurement; llvmpipe software numbers are not representative. |
+| 18 | Steam Cloud saves (cross-device) | **OWNER STEAMWORKS ACTION** | Code side complete: atomic writes, per-player folders, per-device files separate; the exact Auto-Cloud root paths and patterns to enter are in `docs/STEAMWORKS_SETUP.md` §2. Steam's own conflict dialog protects newer progress. |
 
-## Summary
-- **Implemented & evidenced:** native Linux build, offline play, local settings, direct launch, fixed-camera (mixed-input N/A).
-- **Highest-value remaining (safe, no hardware):** integrate the CC0 glyph pack (#7), author a Deck-default graphics profile (#14), confirm controller-only menu coverage (#4/#5).
-- **Blocked on Steamworks:** on-screen keyboard (#8), Steam Input config (#6), Steam Cloud (#18).
-- **Blocked on hardware (owner):** #2/#3 on-Deck, #16 suspend/resume, #17 performance.
+## Owner hardware test list (what only a real Deck or pad can show)
+
+1. Install `Upwardly Build 62 Linux.tar.gz` on the Deck (Game Mode, add as a non-Steam game or through the partner app): the game should open full screen at 1280×800 with no window frame and no mouse needed.
+2. Play one tower on the Deck's controls only: d-pad/stick to move, A to jump, Menu to pause, B to back out of every menu. Open SETTINGS → CONTROLS and confirm the prompts show Xbox-style A/B/X/Y glyphs.
+3. Pause, press the power button (suspend), wait a minute, resume: the pause menu should still be up, the run intact, and the clock not jumped.
+4. With a Bluetooth or USB pad: unplug it mid-climb (the run must pause and say CONTROLLER DISCONNECTED), plug it back in and press RESUME on it.
+5. Type a new player name on the picker with the pad only.
+6. Read the HUD at arm's length with TEXT SIZE 100 % and 130 %.
+7. Note frame rate and warmth after 15 minutes (the default cap is 60).

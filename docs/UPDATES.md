@@ -1,4 +1,4 @@
-# Update architecture — Climb up
+# Update architecture — Upwardly
 
 Per studio standard §10. Different platforms use different, engine-appropriate mechanisms; each publish is separately
 authorized (never triggered by a push — see RELEASES.md). Full OTA design/tests: `docs/OTA.md`.
@@ -32,3 +32,15 @@ versioned save system (`docs/` save notes / `SaveData` schema).
 ## Separation (safety)
 Creating a GitHub Release does **not** publish an OTA; publishing an OTA does **not** create a native build; neither
 touches Steam. Each is a distinct, explicitly-authorized manual workflow.
+
+## Post-release roadmap: code-module OTA (decision, Build 62)
+
+The shipped over-the-air channel carries **tuning data only** (`assets/data/tuning.json`, signed, verified, rollback-safe).
+Anything else a build changes - simulation rules, screens, rigs, assets, workflows - reaches players as a new native build:
+on Android the next APK installs over the previous one (same package id `com.hotatticgames.climbup`, same signing
+certificate since build 37, saves kept); on desktop the next EXE / Linux package replaces the old one.
+
+The deeper design (a sandboxed game module loaded by a host, so logic updates could ship without a reinstall: OTA-FULL
+phase 3 and the E1 series in the task history) is **explicitly reserved for after release**. It is substantial,
+non-essential architecture, it needs its own validation campaign on devices, and nothing in the first release depends on
+it. Build 62 ships without it and no OTA update is published as part of Build 62.

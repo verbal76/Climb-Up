@@ -4,8 +4,9 @@ Ten minutes per device. Note anything that feels wrong, with a screenshot or a s
 
 ## Install
 - **Android:** install `upwardly-1.1.5-build62-debug.apk` over Build 61 (no uninstall). Your players, climbs and times must still be there.
-- **Windows:** unzip `Upwardly Build 62 EXE.zip` anywhere and run `Upwardly.exe` (no Java needed). Saves live in `%APPDATA%\HotAtticGames\Upwardly`.
-- **Linux / Steam Deck:** unpack `Upwardly Build 62 Linux.tar.gz` and run `Upwardly/bin/Upwardly`.
+- **Windows:** unzip `Upwardly.Build.62.EXE.zip` anywhere and run `Upwardly\Upwardly.exe` (no Java needed). Saves live in `%APPDATA%\HotAtticGames\Upwardly`.
+- **Linux / Steam Deck:** unpack `Upwardly.Build.62.Linux.tar.gz` and run `Upwardly/bin/Upwardly`.
+- Downloads: https://github.com/verbal76/Climb-Up/releases/tag/v1.1.5-build62 (APK) and https://github.com/verbal76/Climb-Up/releases/tag/build-62-desktop (Windows + Linux). All three come from commit `52c2008`.
 
 ## Play (all devices)
 1. Title: PLAY or CONTINUE, then MORE → PLAYERS, HERO, TIMES, CREDITS, BACK. Everything readable, nothing cut off.

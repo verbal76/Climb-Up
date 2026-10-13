@@ -449,6 +449,9 @@ public final class Sim {
                 if (keysFree || (keys & (1 << e.color)) != 0) {
                     featDone[hi_] = true; if (!keysFree) keys &= ~(1 << e.color);
                     lastGateColor = e.color; lastGateNo = e.skin; events |= EV_DOOR;
+                    // the castle is a checkpoint as well as the red gems (owner): opening its door saves you at its deck, so a long fall afterwards
+                    // comes back to the castle - inside it, behind the door you opened (it stays open) - never to the gem half a section below
+                    if (e.anchor > checkpoint && e.anchor < course.size()) { checkpoint = e.anchor; events |= EV_CHECKPOINT; }
                 } else {
                     float side = Math.signum(course.dsWrap(ps0, e.s)); if (side == 0f) side = Math.signum(dx) == 0f ? 1f : Math.signum(dx);
                     s = course.wrap(e.s + side * (half + 0.01f));

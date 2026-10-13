@@ -2,7 +2,12 @@ name: Android build
 # MANUAL ONLY (studio standard §9: a push must never auto-publish a release). The owner explicitly triggers this to
 # build + publish a numbered APK. Pushes run only the lightweight ci.yml validation, which publishes nothing.
 on:
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      test_build:
+        description: "Owner test build: attach the APK to a DRAFT GitHub Release (visible to collaborators only, no tag, nothing public) and skip the OTA baseline publish. Off = the normal published release."
+        type: boolean
+        default: false
 permissions:
   contents: write   # publish GitHub Releases
   actions: read
@@ -87,8 +92,14 @@ jobs:
           RT=$(grep -oP "RUNTIME = \K[0-9]+" core/src/main/java/com/hotatticgames/climbup/ota/OtaConfig.java)
           BV=$(grep -oP "BUNDLED_CONTENT_VERSION = \K[0-9]+" core/src/main/java/com/hotatticgames/climbup/ota/OtaConfig.java)
           printf 'Physical-test build ${{ github.run_number }} (sideload; signed with the same certificate as every build since 37, so it installs over the previous one).\n\nVersion: %s build ${{ github.run_number }}\nSource: ${{ github.sha }}\nPackage: com.hotatticgames.climbup, versionName %s, versionCode ${{ github.run_number }}\nSHA-256: %s\nSigning certificate SHA-256: %s\nOTA: signed manifests, runtime %s, bundled content version %s\n' "$VER" "$VER" "$SHA" "$EXPECTED_CERT_SHA256" "$RT" "$BV" > notes.md
-          gh release create "v${VER}-build${{ github.run_number }}" "$APK" --target ${{ github.sha }} --title "Upwardly v${VER} (build ${{ github.run_number }}) — Android APK" --notes-file notes.md --latest
+          if [ "${{ inputs.test_build }}" = "true" ]; then
+            # owner test build: a DRAFT release (collaborators only, creates no tag, never public) carries the APK
+            gh release create "v${VER}-build${{ github.run_number }}" "$APK" --target ${{ github.sha }} --title "Upwardly v${VER} (build ${{ github.run_number }}) — Android APK (owner test build, draft)" --notes-file notes.md --draft
+          else
+            gh release create "v${VER}-build${{ github.run_number }}" "$APK" --target ${{ github.sha }} --title "Upwardly v${VER} (build ${{ github.run_number }}) — Android APK" --notes-file notes.md --latest
+          fi
       - name: Publish the OTA baseline (only if the channel does not already carry this version or a newer one)
+        if: ${{ inputs.test_build != true }}   # an owner test build never touches the OTA channel
         env:
           GH_TOKEN: ${{ github.token }}
         run: |

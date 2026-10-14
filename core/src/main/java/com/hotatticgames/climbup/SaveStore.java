@@ -32,6 +32,12 @@ public final class SaveStore {
         try { return new String(Files.readAllBytes(f.toPath()), StandardCharsets.UTF_8); } catch (IOException e) { return null; }
     }
 
+    /** Keeps a copy of a file under another name once (never overwritten): what a save looked like before a one-way upgrade. */
+    public void backupOnce(String name, String copy) {
+        File f = new File(dir, name), c = new File(dir, copy);
+        if (!f.exists() || c.exists()) return;
+        try { Files.copy(f.toPath(), c.toPath()); } catch (IOException ignored) { }
+    }
     private void backupCorrupt(String name) {
         File f = new File(dir, name);
         try { Files.move(f.toPath(), new File(dir, name + ".corrupt").toPath(), StandardCopyOption.REPLACE_EXISTING); } catch (IOException ignored) { f.delete(); }
@@ -51,6 +57,7 @@ public final class SaveStore {
             JsonValue v = migrate(raw);
             SaveData d = json().readValue(SaveData.class, v);
             if (d == null || d.shownTips == null) throw new IllegalStateException("empty");
+            if (d.recordsJson != null && !d.recordsJson.isEmpty() && RecordsData.fromJson(d.recordsJson).loadedVersion() < RecordsData.VERSION) backupOnce("save.json", "save-before-build64.json");   // Build 64: the records layout is upgraded on the next write; keep the Build 63 file as it was
             if (ver < 6 && d.seed != 0) {                   // v6 changed how a climb is stored (slice history + floating origin): an older climb cannot carry over. Keep it as a record, tell the player once, start fresh. Records and settings stay.
                 Legacy.archive(d, Legacy.today()); d.noticeOldClimb = true;
             }

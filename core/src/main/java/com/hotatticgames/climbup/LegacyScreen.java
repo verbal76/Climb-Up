@@ -25,7 +25,8 @@ public final class LegacyScreen extends ScreenAdapter {
         float y = H - 200, step = Math.min(92f, (H - 200 - 130) / Math.max(1, shown));
         for (int i = 0; i < shown; i++) {
             SaveData.LegacyRun r = l.get(l.size() - 1 - i);
-            ui.textC(Legacy.stampLabel(r.version, r.build, ClimbGame.VERSION) + (r.date.isEmpty() ? "" : "   STARTED " + r.date), W / 2, y, 3.4f, Ui.ACCENT);
+            String head = Legacy.stampLabel(r.version, r.build, ClimbGame.VERSION) + (r.date.isEmpty() ? "" : "   STARTED " + r.date) + (r.seed != 0 ? "   SEED " + SeedCode.encode(r.seed) : "");   // Build 64: the course it was on, in full
+            ui.textC(head, W / 2, y, Math.min(3.4f, (W - 40f) / (head.length() * 6f)), Ui.ACCENT);
             ui.textC((int) r.height + " M   " + r.towers + " CASTLE" + (r.towers == 1 ? "" : "S") + "   " + PlayScreen.fmtTime(r.runClock) + (r.finished ? "   FINISHED " + PlayScreen.fmtTime(r.finishTime) : "") + (r.savedDate.isEmpty() ? "" : "   SAVED " + r.savedDate), W / 2, y - 36, 3f, Ui.TEXT);
             y -= step;
         }

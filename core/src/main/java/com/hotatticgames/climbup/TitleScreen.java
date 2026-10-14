@@ -21,6 +21,10 @@ public final class TitleScreen extends ScreenAdapter {
     private WorldRenderer world;
     private float time;
     private boolean confirmNew;
+    /** Build 64 (owner): the two approved taglines, shown turn and turn about each time the title screen comes up (never rotated during play). */
+    static final String[] TAGLINES = {"TEN TOWERS. ONE CLOCK.", "TRAMPOLINES, CRABS AND CANNONS. YOU'RE WELCOME."};
+    static String taglineFor(int visit) { return TAGLINES[Math.floorMod(visit, TAGLINES.length)]; }
+    private static int visits = -1;         // how many times the title screen has been shown this session (the first visit shows the first tagline)
     private String lastBub;
     private com.badlogic.gdx.Screen next;   // screen change is applied after ui.end() so the sprite batch is never left open
 
@@ -29,7 +33,7 @@ public final class TitleScreen extends ScreenAdapter {
     private boolean has;      // a climb in progress that can really be resumed
 
     @Override public void show() {
-        confirmNew = false; showMore = false;
+        confirmNew = false; showMore = false; visits++;
         Tower tw = null; int idx = 0;
         has = g.climbValid();
         if (has) {        // backdrop: where the climb in progress stands
@@ -66,7 +70,8 @@ public final class TitleScreen extends ScreenAdapter {
         float tx = W / 2 - tw / 2, ty = H - 190 + (float) Math.sin(time * 1.6f) * 4f;
         ui.font.drawShadow(ui.batch, t1, tx + 6, ty - 8, px, new Color(0.35f, 0.12f, 0.02f, 1f), new Color(0, 0, 0, 0.6f));
         ui.font.drawShadow(ui.batch, t1, tx, ty, px, new Color(1f, 0.74f, 0.16f, 1f), new Color(0.2f, 0.07f, 0.0f, 0.9f));
-        ui.textC("A TOWER THAT DOESN'T EXIST. A CLIMB THAT DOES.", W / 2, ty - 56, 3.4f, Ui.TEXT);
+        String tagline = taglineFor(visits);
+        ui.textC(tagline, W / 2, ty - 56, Math.min(3.4f, (W - 40f) / (tagline.length() * 6f)), Ui.TEXT);      // Build 64: one of the two approved lines, alternating per visit; shrinks on a narrow screen rather than clip
         String bub = world.heroBubble();
         if (bub != null && !bub.equals(lastBub)) g.audio.play("talk", 0.4f, com.hotatticgames.climbup.render.Characters.voice(g.settings.character));
         lastBub = bub;
@@ -108,8 +113,8 @@ public final class TitleScreen extends ScreenAdapter {
             }
         }
     }
-    private static final Item[] WITH_CLIMB = Item.values(), NO_CLIMB = {Item.PLAY, Item.SETTINGS, Item.MORE};
-    static Item[] menu(boolean hasClimb) { return hasClimb ? WITH_CLIMB : NO_CLIMB; }      // NEW RUN only exists when there is a climb to replace
+    private static final Item[] WITH_CLIMB = Item.values(), NO_CLIMB = Item.values();
+    static Item[] menu(boolean hasClimb) { return hasClimb ? WITH_CLIMB : NO_CLIMB; }      // Build 64: NEW RUN is always there (RANDOM RUN or a typed course code); PLAY alone starts a random climb when there is none
 
     /** The MORE panel's buttons in reading order (two columns); EXIT is always last. The hero picker cycles in place; LEGACY RUNS only exists when there are old climbs. */
     enum More {
@@ -186,23 +191,29 @@ public final class TitleScreen extends ScreenAdapter {
         ui.font.draw2(ui.batch, s, x + 18, y + 14, px, new Color(0.08f, 0.08f, 0.14f, alpha));
     }
 
-    /** NEW RUN over a saved climb: nothing is lost unless the player confirms; CANCEL (the highlighted button) leaves the saved climb exactly as it was. */
+    /**
+     * NEW RUN (Build 64): RANDOM RUN draws a fresh course, SEEDED RUN asks for a friend's course code. Over a saved climb nothing is lost unless one of them is chosen;
+     * CANCEL (the highlighted button) leaves the saved climb exactly as it was.
+     */
     private void newRunPrompt(Ui ui, float W, float H) {
         ui.rect(0, 0, W, H, new Color(0f, 0f, 0.05f, 0.72f));
-        float scale = Math.min(ui.tm(), 1.3f), pw = Math.min(W - 60, 880), ph = 440 * Math.max(1f, scale * 0.9f), bw = Math.min(380, (pw - 90) / 2), bh = Dp.touchHeight(84f, 110f, 110f, Dp.unitsPerDp(ui));
+        float scale = Math.min(ui.tm(), 1.3f), pw = Math.min(W - 60, 880), bh = Dp.touchHeight(84f, 110f, 110f, Dp.unitsPerDp(ui)), ph = Math.min(H - 40, 300 * Math.max(1f, scale * 0.9f) + 2 * bh), bw = Math.min(380, (pw - 90) / 2);
         float px = W / 2 - pw / 2, py = Math.max(20, H / 2 - ph / 2);
         ui.panel(px, py, pw, ph);
         float t = 4.6f * scale, b = 3.2f * scale;
-        String l1 = "YOUR SAVED CLIMB (" + (int) g.save.climbHeight + " M) WILL BE REPLACED.";
+        String l1 = has ? "YOUR SAVED CLIMB (" + (int) g.save.climbHeight + " M) WILL BE REPLACED." : "A RANDOM COURSE, OR A FRIEND'S COURSE CODE.";
         java.util.List<String> body = TextWrap.wrap(l1, str -> ui.font.width(str, b), pw - 80);
         ui.textC("START A NEW RUN?", W / 2, py + ph - 40 - ui.font.height(t), t, Ui.ACCENT);
         float y = py + ph - 40 - ui.font.height(t) - 40;
         for (String line : body) { y -= ui.font.height(b); ui.textC(line, W / 2, y, b, Ui.TEXT); y -= 14; }
-        if (ui.button("CANCEL", W / 2 - bw - 14, py + 40, bw, bh, true)) { g.audio.play("click"); confirmNew = false; }
-        if (ui.button("NEW RUN", W / 2 + 14, py + 40, bw, bh)) {
-            confirmNew = false; g.forgetRun(); g.save.falls = 0; g.runFresh = true; g.persist(); g.audio.play("click"); next = new PlayScreen(g, false);
-        }
+        float row = py + 40 + bh + 18;
+        if (ui.button("RANDOM RUN", W / 2 - bw - 14, row, bw, bh)) { confirmNew = false; startRun(null); }
+        if (ui.button("SEEDED RUN", W / 2 + 14, row, bw, bh)) { confirmNew = false; g.audio.play("click"); next = new SeedScreen(g, this); }
+        if (ui.button("CANCEL", W / 2 - bw / 2, py + 40, bw, bh, true)) { g.audio.play("click"); confirmNew = false; }
     }
+
+    /** Starts a fresh climb: a random course ({@code seed} null), or the course behind a typed code. The saved climb, if any, is forgotten first. */
+    void startRun(Long seed) { g.beginFreshRun(seed); g.audio.play("click"); next = new PlayScreen(g, false); }
 
     private static final String[] NOTICE_A = {"THIS UPDATE CHANGED HOW A CLIMB IS STORED, SO YOUR", "UNFINISHED CLIMB COULD NOT CARRY OVER."};
     private static final String[] NOTICE_B = {"IT IS KEPT AS A LEGACY RUN. YOUR RECORDS AND SETTINGS ARE SAFE.", "YOUR NEXT CLIMB STARTS FRESH."};

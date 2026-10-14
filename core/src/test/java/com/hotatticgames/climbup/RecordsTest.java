@@ -263,6 +263,81 @@ public class RecordsTest {
         assertFalse(rec.current.totalPb); assertEquals(total, rec.bestTotal, 0f);
     }
 
+    // ------------------------------------------------------------------ Build 64: bests per seed, stamped with the rules version
+    @Test public void aSeedKeepsItsOwnBestLegsAndBestTotalApartFromTheGlobalOnes() {
+        RecordsData r = new RecordsData();
+        long a = 1001L, b = 1002L;
+        r.legDone(a, 1, 0, 100f); r.legDone(a, 1, 1, 200f); r.finish(a, 1, 1000f);           // first run on seed a
+        RecordsData.SeedBests sa = r.seedBests(a, 1);
+        assertNotNull(sa); assertEquals(100f, sa.bestLegs[0], 0f); assertEquals(200f, sa.bestLegs[1], 0f); assertEquals(1000f, sa.bestTotal, 0f);
+        assertTrue("first leg on a seed is its seed best", r.current.legSeedPb[0]); assertEquals("nothing to compare with yet", 0f, r.current.legSeedPrev[0], 0f);
+        assertTrue(r.current.totalSeedPb); assertEquals(0f, r.current.totalSeedPrev, 0f);
+        r.endRun(a);
+        r.legDone(b, 1, 0, 90f); r.finish(b, 1, 1200f);                                        // seed b: a faster leg, a slower total
+        assertEquals("global leg best is the faster of the two seeds", 90f, r.bestLegs[0], 0f);
+        assertEquals("global total best stays the faster", 1000f, r.bestTotal, 0f);
+        assertEquals("seed a's bests are untouched by seed b", 100f, r.seedBests(a, 1).bestLegs[0], 0f);
+        assertEquals(1200f, r.seedBests(b, 1).bestTotal, 0f);
+        assertNull("no record on seed a under other rules", r.seedBests(a, 2));
+        assertNull("unknown rules never match", r.seedBests(a, 0));
+        r.endRun(b);
+        r.legDone(a, 1, 0, 95f); r.legDone(a, 1, 1, 210f); r.finish(a, 1, 1050f);              // second run on seed a: faster leg 1, slower leg 2 and total
+        assertTrue(r.current.legSeedPb[0]); assertEquals("compared with seed a's previous best for the leg", 100f, r.current.legSeedPrev[0], 0f);
+        assertFalse(r.current.legSeedPb[1]); assertEquals(200f, r.current.legSeedPrev[1], 0f);
+        assertFalse(r.current.totalSeedPb); assertEquals(1000f, r.current.totalSeedPrev, 0f);
+        RecordsData.SeedBests sa2 = r.seedBests(a, 1);
+        assertEquals("the best leg came from this run", 95f, sa2.bestLegs[0], 0f);
+        assertEquals("the best other leg stays from the first run", 200f, sa2.bestLegs[1], 0f);
+        assertEquals("the best full run stays the first run: best legs are never added up", 1000f, sa2.bestTotal, 0f);
+        assertEquals(2, sa2.runs);
+        assertEquals("most recently played first", a, r.seeds.get(0).seed);
+    }
+
+    @Test public void seedBestsSurviveStorageAndTheListIsBounded() {
+        RecordsData r = new RecordsData();
+        for (int i = 0; i < RecordsData.MAX_SEEDS + 5; i++) { r.legDone(5000L + i, 1, 0, 10f + i); r.endRun(5000L + i); }
+        assertEquals(RecordsData.MAX_SEEDS, r.seeds.size());
+        assertNull("the oldest seeds fell off the end", r.seedBests(5000L, 1));
+        assertNotNull(r.seedBests(5000L + RecordsData.MAX_SEEDS + 4, 1));
+        RecordsData back = RecordsData.fromJson(r.toJson());
+        assertEquals(RecordsData.VERSION, back.version);
+        assertEquals(r.seeds.size(), back.seeds.size());
+        assertEquals(10f + RecordsData.MAX_SEEDS + 4, back.seedBests(5000L + RecordsData.MAX_SEEDS + 4, 1).bestLegs[0], 0f);
+        assertEquals(RecordsData.VERSION, back.loadedVersion());
+    }
+
+    @Test public void aBuild63RecordIsUpgradedOnceWithItsRulesAndItsSeedBestsAndNothingIsInvented() {
+        // a Build 63 text: version 1, no rules, no seeds; the run in progress has two legs
+        String v1 = "{\"version\":1,\"bestLegs\":[80,90,0,0,0,0,0,0,0,0],\"bestTotal\":0,\"bestInfinity\":0,\"current\":{\"seed\":4242,\"legs\":[80,90,0,0,0,0,0,0,0,0],\"legPb\":[true,true,false,false,false,false,false,false,false,false],\"finished\":false,\"total\":0,\"totalPb\":false,\"infinity\":0,\"infinityPb\":false},\"last\":{\"seed\":99,\"legs\":[70,0,0,0,0,0,0,0,0,0],\"legPb\":[true,false,false,false,false,false,false,false,false,false],\"finished\":false,\"total\":0,\"totalPb\":false,\"infinity\":0,\"infinityPb\":false},\"hasLast\":true}";
+        RecordsData r = RecordsData.fromJson(v1);
+        assertEquals(1, r.loadedVersion());
+        assertEquals("the global bests read as before", 80f, r.bestLegs[0], 0f);
+        assertTrue(r.seeds.isEmpty());
+        r.upgradeFrom63(4242L, 1);                                           // the save says the climb is seed 4242 on Build 63 (rules 1)
+        assertEquals(1, r.current.rules);
+        RecordsData.SeedBests s = r.seedBests(4242L, 1);
+        assertNotNull("the run's legs become seed 4242's bests", s);
+        assertEquals(80f, s.bestLegs[0], 0f); assertEquals(90f, s.bestLegs[1], 0f); assertEquals("no finish, no total", 0f, s.bestTotal, 0f);
+        assertEquals("the last run's seed cannot be dated: unknown rules, not comparable", 0, r.last.rules);
+        assertNull(r.seedBests(99L, 1));
+        assertEquals(RecordsData.VERSION, r.loadedVersion());
+        r.upgradeFrom63(4242L, 1);                                           // a second call changes nothing
+        assertEquals(1, r.seeds.size()); assertEquals(1, s.runs);
+        RecordsData again = RecordsData.fromJson(r.toJson());
+        assertEquals("written as the current layout", RecordsData.VERSION, again.loadedVersion());
+        assertEquals(80f, again.seedBests(4242L, 1).bestLegs[0], 0f);
+        // a save that cannot say which rules the climb used (started before Build 63) gets no seed record
+        RecordsData r0 = RecordsData.fromJson(v1); r0.upgradeFrom63(4242L, 0);
+        assertEquals(0, r0.current.rules); assertTrue(r0.seeds.isEmpty());
+    }
+
+    @Test public void theThreeArgumentCallsRecordOnTheCurrentRules() {
+        RecordsData r = new RecordsData();
+        r.legDone(7L, 0, 50f); r.finish(7L, 600f);
+        assertEquals(com.hotatticgames.climbup.sim.CourseGenerator.RULES_VERSION, r.current.rules);
+        assertNotNull(r.seedBests(7L, com.hotatticgames.climbup.sim.CourseGenerator.RULES_VERSION));
+    }
+
     // ------------------------------------------------------------------ what the screens show
     @Test public void timesAreWrittenPlainlyAndMissingOnesAsDashes() {
         assertEquals("--:--.-", TimesScreen.time(0f));

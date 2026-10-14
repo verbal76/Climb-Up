@@ -1,14 +1,24 @@
-# Upwardly — tester checklist (Build 63)
+# Upwardly — tester checklist (Build 64 candidate; Build 63 is the published testers' build)
 
 Ten minutes per device. Note anything that feels wrong, with a screenshot or a short video if you can.
 
 ## Install
+- Build 64 packages are not published yet (the owner authorises the build); until then the links below are Build 63's. Install Build 64 **over** Build 63 without uninstalling: your players, climbs and times must still be there, and the run you had in progress must continue with its times.
 - **Android:** install `upwardly-1.1.5-build63-debug.apk` over Build 62 or 61 (no uninstall). Your players, climbs and times must still be there.
 - **Windows:** unzip `Upwardly.Build.63.EXE.zip` anywhere and run `Upwardly\Upwardly.exe` (no Java needed). Saves live in `%APPDATA%\HotAtticGames\Upwardly`. Settings → ABOUT must now say `BUILD 63`, not `DEV`.
 - **Linux / Steam Deck:** unpack `Upwardly.Build.63.Linux.tar.gz` and run `Upwardly/bin/Upwardly`.
 - Downloads: https://github.com/verbal76/Climb-Up/releases/tag/v1.1.5-build63 (APK) and https://github.com/verbal76/Climb-Up/releases/tag/build-63-desktop (Windows + Linux).
 
-## New in Build 63 (check these first)
+## New in Build 64 (check these first, once the Build 64 packages exist)
+1. Title: the line under the name reads "TEN TOWERS. ONE CLOCK." one time and "TRAMPOLINES, CRABS AND CANNONS. YOU'RE WELCOME." the next (leave to a climb and come back). Both fit the screen on your device.
+2. Start a climb: under the clocks the HUD shows `SEED XXXXX-XXXX-XXXX` (13 letters and digits, never 0, O, 1, I or L). The same code is in the pause menu and on the finish screen.
+3. Title → NEW RUN → SEEDED RUN: type a friend's code on the picker (touch, keyboard or pad), OK. The HUD shows exactly that code and the course is the same as theirs (same platforms, the same cannons and crabs in the same places). Type a wrong code (too short, a letter that is not on the picker, all Z's): it says why and starts nothing. CANCEL keeps your saved climb.
+4. Climb two castles on a code, then NEW RUN → SEEDED RUN with the same code again: the tower-by-tower times say + or - against your first run on that course (DIFF column in TIMES, the toast at each castle).
+5. MORE → TIMES: the header shows the full code and RULES 1; `<` and `>` walk through every course you have timed; a screenshot of that screen is what you send a friend.
+6. Settings → CONTROLS + DATA (phone) or GRAPHICS (PC/Deck): SHOW COURSE SEED off hides the code from the HUD only (still in the pause menu and TIMES); SHOW BEST TIMES off hides the PB marks and "vs best" lines from the HUD only (the clock still runs and TIMES still records). Both come back ON after a restart if you left them on.
+7. Your Build 63 climb and times: still there after the update; a legacy run on the LEGACY RUNS screen shows its code too.
+
+## New in Build 63
 1. Pick the hamster: it now wears the bunny's skeleton and animations. Its arms are as long as the bunny's and hang and swing the same way, the hands (balls) land on the rope and the ledge, and there are no pale stubs at its shoulders. Run, jump, climb a rope, hang under a cable, pull up onto a ledge.
 2. A side cannon stands on its own small slab just behind the path, its barrel pointing along the path, the ball leaving the muzzle. Every spiked ball you can see hurts if it touches you, including the ones that have flown on past the gap; they shrink away about 14 m past it.
 3. Late in the climb (the night world) the turret cannon turns to follow you and fires along where it points.

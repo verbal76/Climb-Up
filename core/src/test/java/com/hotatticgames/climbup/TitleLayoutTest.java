@@ -21,11 +21,13 @@ public class TitleLayoutTest {
 
     @Test public void theMenuIsOneShortColumnAndEverythingElseIsBehindMore() {
         TitleScreen.Item[] with = TitleScreen.menu(true), without = TitleScreen.menu(false);
-        assertEquals(4, with.length); assertEquals(3, without.length);          // PLAY/CONTINUE, NEW RUN, SETTINGS, MORE (NEW RUN only with a climb)
+        assertEquals(4, with.length); assertEquals(4, without.length);          // PLAY/CONTINUE, NEW RUN, SETTINGS, MORE (Build 64: NEW RUN is always there, it is where a course code is typed in)
         assertEquals(TitleScreen.Item.PLAY, with[0]); assertEquals(TitleScreen.Item.PLAY, without[0]);
         assertEquals("MORE is the last button", TitleScreen.Item.MORE, with[with.length - 1]); assertEquals(TitleScreen.Item.MORE, without[without.length - 1]);
         assertEquals("CONTINUE", TitleScreen.Item.PLAY.label(true)); assertEquals("PLAY", TitleScreen.Item.PLAY.label(false)); assertEquals("MORE", TitleScreen.Item.MORE.label(true));
-        assertFalse("NEW RUN only exists when there is a climb to replace", java.util.Arrays.asList(without).contains(TitleScreen.Item.NEW_RUN));
+        assertTrue("NEW RUN (random or seeded) is offered with or without a climb", java.util.Arrays.asList(without).contains(TitleScreen.Item.NEW_RUN));
+        assertEquals(TitleScreen.TAGLINES[0], TitleScreen.taglineFor(0)); assertEquals(TitleScreen.TAGLINES[1], TitleScreen.taglineFor(1)); assertEquals(TitleScreen.TAGLINES[0], TitleScreen.taglineFor(2));   // the two taglines alternate per visit
+        for (String tl : TitleScreen.TAGLINES) assertTrue("fits a phone screen at the title's size: " + tl, tl.length() <= 48);
         TitleScreen.More[] all = TitleScreen.more(true), noLegacy = TitleScreen.more(false);
         assertEquals(6, all.length); assertEquals(5, noLegacy.length);
         assertEquals("EXIT is the last button of the panel", TitleScreen.More.EXIT, all[all.length - 1]); assertEquals(TitleScreen.More.EXIT, noLegacy[noLegacy.length - 1]);

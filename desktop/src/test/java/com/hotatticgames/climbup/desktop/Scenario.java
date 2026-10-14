@@ -9,6 +9,9 @@ import com.badlogic.gdx.graphics.Pixmap;
 import com.badlogic.gdx.graphics.PixmapIO;
 import com.hotatticgames.climbup.ClimbGame;
 import com.hotatticgames.climbup.PlayScreen;
+import com.hotatticgames.climbup.SaveStore;
+import com.hotatticgames.climbup.SeedCode;
+import com.hotatticgames.climbup.Settings;
 import com.hotatticgames.climbup.SettingsScreen;
 import com.hotatticgames.climbup.SplashScreen;
 import com.hotatticgames.climbup.TitleScreen;
@@ -37,6 +40,9 @@ public final class Scenario implements ApplicationListener {
     private boolean collecting;
     private long seedAtPlay;
     private float playSecondsMark;
+    /** Build 64: two course codes typed on the picker (one on the pad, one on the keyboard); the climb that follows must be exactly that course. */
+    private static final long PAD_SEED = 0x5EED_C0DE_0000_0064L, KEY_SEED = 987654321987654321L;
+    private static final String PAD_CODE = SeedCode.encode(PAD_SEED), KEY_CODE = SeedCode.encode(KEY_SEED);
 
     public static void main(String[] args) {
         File data = new File(args.length > 0 ? args[0] : "build/scenario/data"), shots = new File(args.length > 1 ? args[1] : "build/scenario/shots");
@@ -67,14 +73,17 @@ public final class Scenario implements ApplicationListener {
     private Step shot(String name) { return act(() -> takeShot(name)); }
 
     /** Presses direction keys, one per few frames, until the button whose label matches (the nth such one) has the focus: what a keyboard-only player does. */
-    private Step goTo(String label, int nth) {
+    private Step goTo(String label, int nth) { return goTo(label::equals, nth, label); }
+    /** The nth settings toggle (an ON / OFF button) on the shown tab: a toggle's focus item is its value, not its name. */
+    private Step goToToggle(int nth) { return goTo(l -> l.equals("ON") || l.equals("OFF"), nth, "toggle " + nth); }
+    private Step goTo(java.util.function.Predicate<String> match, int nth, String label) {
         return new Step() {
             int pause, tries;
             public boolean tick() {
                 if (pause-- > 0) return false;
                 FocusModel fm = nav().fm;
                 int target = -1, seen = 0;
-                for (int i = 0; i < 80; i++) { FocusModel.Item it = fm.lastItem(i); if (it == null) break; if (it.label.equals(label) && seen++ == nth) { target = i; break; } }
+                for (int i = 0; i < 80; i++) { FocusModel.Item it = fm.lastItem(i); if (it == null) break; if (match.test(it.label) && seen++ == nth) { target = i; break; } }
                 if (target < 0) { if (++tries > 120) { check("goTo " + label, false, "button not found on " + screenName()); return true; } return false; }
                 if (fm.focus == target) return true;
                 if (++tries > 60) { FocusModel.Item ff = fm.focused(); check("goTo " + label, false, "could not reach on " + screenName() + " focus=" + (ff == null ? null : ff.label + "@" + ff.x + "," + ff.y) + " target=" + fm.lastItem(target).label + "@" + fm.lastItem(target).x + "," + fm.lastItem(target).y + " count=" + fm.count()); return true; }
@@ -153,7 +162,9 @@ public final class Scenario implements ApplicationListener {
         steps.add(act(() -> check("title uses the Upwardly name", dp.title().equals("Upwardly") && Gdx.graphics != null, dp.title())));
         steps.add(shot("02_title"));
         steps.add(tap(Input.Keys.S)); steps.add(wait(3));
-        steps.add(act(() -> check("down arrow moves focus to SETTINGS", nav().fm.focused() != null && nav().fm.focused().label.equals("SETTINGS"), String.valueOf(nav().fm.focused() == null ? null : nav().fm.focused().label))));
+        steps.add(act(() -> check("down arrow moves focus to NEW RUN (always on the title since build 64)", nav().fm.focused() != null && nav().fm.focused().label.equals("NEW RUN"), String.valueOf(nav().fm.focused() == null ? null : nav().fm.focused().label))));
+        steps.add(tap(Input.Keys.S)); steps.add(wait(3));
+        steps.add(act(() -> check("a second down moves focus to SETTINGS", nav().fm.focused() != null && nav().fm.focused().label.equals("SETTINGS"), String.valueOf(nav().fm.focused() == null ? null : nav().fm.focused().label))));
         steps.add(shot("03_title_focus"));
         // --- mouse: hover focuses, left click activates, right click does not (MORE opens the panel that holds PLAYERS, HERO, TIMES, CREDITS, EXIT since build 60)
         steps.add(act(() -> { FocusModel.Item it = null; for (int i = 0; i < 20; i++) { FocusModel.Item c = nav().fm.lastItem(i); if (c == null) break; if (c.label.equals("MORE")) it = c; } if (it == null) check("MORE button on the title", false, screenName()); else hover(it.x + it.w / 2, it.y + it.h / 2); }));
@@ -298,8 +309,61 @@ public final class Scenario implements ApplicationListener {
         steps.add(act(() -> check("a climb starts for the new player on the pad", playScreen() != null, screenName())));
         steps.add(padTap(Ctl.START)); steps.add(wait(30));
         steps.add(padGoTo("SAVE & EXIT")); steps.add(padIdle()); steps.add(padTap(Ctl.A)); steps.add(until(() -> screen() instanceof TitleScreen, 90, "title again on the pad")); steps.add(wait(20));
+        // --- Build 64 on the pad at 1280x800: NEW RUN asks RANDOM or SEEDED; a friend's course code typed on the picker starts exactly that course
+        steps.add(padGoTo("NEW RUN")); steps.add(padIdle()); steps.add(padTap(Ctl.A)); steps.add(wait(8));
+        steps.add(act(() -> check("NEW RUN on the pad asks RANDOM RUN or SEEDED RUN", screen() instanceof TitleScreen && hasButton("RANDOM RUN") && hasButton("SEEDED RUN") && hasButton("CANCEL"), screenName()))); steps.add(shot("32_deck_new_run_1280x800"));
+        steps.add(padGoTo("SEEDED RUN")); steps.add(padIdle()); steps.add(padTap(Ctl.A)); steps.add(wait(8));
+        steps.add(act(() -> check("SEEDED RUN opens the course code picker on the pad", screenName().equals("SeedScreen") && hasButton("OK") && hasButton("DELETE") && hasButton("CANCEL") && hasButton("2") && hasButton("Z"), screenName())));
+        for (char ch : SeedCode.bare(PAD_CODE).toCharArray()) { steps.add(padGoTo(String.valueOf(ch))); steps.add(padIdle()); steps.add(padTap(Ctl.A)); steps.add(wait(3)); }
+        steps.add(shot("33_deck_seed_1280x800"));
+        steps.add(padGoTo("OK")); steps.add(padIdle()); steps.add(padTap(Ctl.A)); steps.add(until(() -> playScreen() != null, 90, "seeded play on the pad")); steps.add(wait(60));
+        steps.add(act(() -> check("the code typed on the pad is the course being climbed", playScreen() != null && game.save.seed == PAD_SEED && SeedCode.encode(game.save.seed).equals(PAD_CODE), "seed " + game.save.seed + " code " + SeedCode.encode(game.save.seed) + " wanted " + PAD_CODE)));
+        steps.add(shot("34_deck_play_seed_1280x800"));
+        steps.add(padTap(Ctl.START)); steps.add(wait(30));
+        steps.add(act(() -> check("paused on the pad after the seeded start", playScreen() != null && hasButton("RESUME"), screenName()))); steps.add(shot("35_deck_pause_seed_1280x800"));
+        steps.add(padGoTo("SAVE & EXIT")); steps.add(padIdle()); steps.add(padTap(Ctl.A)); steps.add(until(() -> screen() instanceof TitleScreen, 90, "title after the seeded run on the pad")); steps.add(wait(20));
         steps.add(act(() -> { src.pads.clear(); })); steps.add(wait(5));
         steps.add(act(() -> Gdx.graphics.setWindowedMode(1280, 720))); steps.add(wait(20));
+        // --- Build 64 on the keyboard: the same through NEW RUN, an empty code refused, the HUD course line, the pause menu, the times table and the two HUD switches
+        steps.add(until(() -> screen() instanceof TitleScreen, 60, "title for the keyboard seeded run")); steps.add(wait(20));
+        steps.add(goTo("NEW RUN")); steps.add(tap(Input.Keys.ENTER)); steps.add(wait(5));
+        steps.add(act(() -> check("NEW RUN asks RANDOM RUN or SEEDED RUN", screen() instanceof TitleScreen && hasButton("RANDOM RUN") && hasButton("SEEDED RUN") && hasButton("CANCEL"), screenName()))); steps.add(shot("36_new_run"));
+        steps.add(goTo("SEEDED RUN")); steps.add(tap(Input.Keys.ENTER)); steps.add(wait(5));
+        steps.add(act(() -> check("SEEDED RUN opens the course code picker", screenName().equals("SeedScreen") && hasButton("OK") && hasButton("2") && hasButton("Z"), screenName())));
+        steps.add(goTo("OK")); steps.add(tap(Input.Keys.ENTER)); steps.add(wait(5));
+        steps.add(act(() -> check("OK with nothing typed is refused and stays on the picker", screenName().equals("SeedScreen"), screenName()))); steps.add(shot("37_seed_empty_refused"));
+        for (char ch : SeedCode.bare(KEY_CODE).toCharArray()) { steps.add(goTo(String.valueOf(ch))); steps.add(tap(Input.Keys.ENTER)); steps.add(wait(2)); }
+        steps.add(shot("38_seed_typed"));
+        steps.add(goTo("OK")); steps.add(tap(Input.Keys.ENTER)); steps.add(until(() -> playScreen() != null, 90, "seeded play")); steps.add(wait(60));
+        steps.add(act(() -> check("the typed code is the course being climbed", playScreen() != null && game.save.seed == KEY_SEED && SeedCode.encode(game.save.seed).equals(KEY_CODE) && game.settings.showSeed, "seed " + game.save.seed + " code " + SeedCode.encode(game.save.seed) + " wanted " + KEY_CODE)));
+        steps.add(shot("39_play_seed_hud"));
+        steps.add(tap(Input.Keys.ESCAPE)); steps.add(wait(20));
+        steps.add(act(() -> check("escape pauses the seeded run", playScreen() != null && hasButton("RESUME") && hasButton("TIMES"), screenName()))); steps.add(shot("40_pause_seed"));
+        // the times table with something on it: an earlier run on this very course (two towers) and this run's first tower, recorded through the records' own API (what the castles call)
+        steps.add(act(() -> { com.hotatticgames.climbup.RecordsData rec = game.save.records(); rec.legDone(KEY_SEED, 1, 0, 70.0f); rec.legDone(KEY_SEED, 1, 1, 81.3f); rec.endRun(KEY_SEED); rec.legDone(KEY_SEED, 1, 0, 65.2f); game.save.syncRecords();
+            check("the course keeps its own bests and this run's first tower is faster than the course best before it", rec.seedBests(KEY_SEED, 1) != null && rec.seedBests(KEY_SEED, 1).bestLegs[0] == 65.2f && rec.current != null && rec.current.legSeedPrev[0] == 70.0f && rec.current.legSeedPb[0], String.valueOf(rec.seedBests(KEY_SEED, 1))); }));
+        steps.add(goTo("TIMES")); steps.add(tap(Input.Keys.ENTER)); steps.add(wait(30));
+        steps.add(act(() -> check("TIMES opens from the pause menu with the course", screenName().equals("TimesScreen"), screenName()))); steps.add(shot("41_times_seed"));
+        steps.add(tap(Input.Keys.ESCAPE)); steps.add(wait(20));
+        steps.add(act(() -> check("escape leaves TIMES for the pause menu", playScreen() != null && hasButton("RESUME"), screenName())));
+        // SHOW COURSE SEED off: HUD only, saved to disk when settings close; then on again
+        steps.add(goTo("SETTINGS")); steps.add(tap(Input.Keys.ENTER)); steps.add(wait(40)); steps.add(goTo("GRAPHICS")); steps.add(tap(Input.Keys.ENTER)); steps.add(wait(10));
+        steps.add(act(() -> check("the GRAPHICS tab has the two HUD switches after the GPU one", screen() instanceof SettingsScreen && hasButton("GRAPHICS"), screenName()))); steps.add(shot("42_settings_graphics_hud_switches"));
+        steps.add(goToToggle(2)); steps.add(tap(Input.Keys.ENTER)); steps.add(wait(4));        // SKY EFFECTS, USE THE FASTER GPU, then SHOW COURSE SEED and SHOW BEST TIMES
+        steps.add(act(() -> check("SHOW COURSE SEED switched off, SHOW BEST TIMES untouched", !game.settings.showSeed && game.settings.showBestTimes, game.settings.showSeed + "/" + game.settings.showBestTimes)));
+        steps.add(goToToggle(3)); steps.add(tap(Input.Keys.ENTER)); steps.add(wait(4));
+        steps.add(act(() -> check("SHOW BEST TIMES switched off on its own", !game.settings.showSeed && !game.settings.showBestTimes, game.settings.showSeed + "/" + game.settings.showBestTimes)));
+        steps.add(tap(Input.Keys.ESCAPE)); steps.add(wait(40));
+        steps.add(act(() -> { Settings onDisk = new SaveStore(data).loadSettings(); check("both switches saved to settings.json on leaving settings", playScreen() != null && hasButton("RESUME") && !onDisk.showSeed && !onDisk.showBestTimes, screenName() + " " + onDisk.showSeed + "/" + onDisk.showBestTimes); }));
+        steps.add(goTo("RESUME")); steps.add(tap(Input.Keys.ENTER)); steps.add(wait(20));
+        steps.add(act(() -> check("resume keeps the seeded run with the HUD switches off", playScreen() != null && game.save.seed == KEY_SEED && !hasButton("RESUME"), "seed " + game.save.seed))); steps.add(shot("43_play_seed_hud_off"));
+        steps.add(tap(Input.Keys.ESCAPE)); steps.add(wait(20));
+        steps.add(goTo("SETTINGS")); steps.add(tap(Input.Keys.ENTER)); steps.add(wait(40)); steps.add(goTo("GRAPHICS")); steps.add(tap(Input.Keys.ENTER)); steps.add(wait(10));
+        steps.add(goToToggle(2)); steps.add(tap(Input.Keys.ENTER)); steps.add(wait(4)); steps.add(goToToggle(3)); steps.add(tap(Input.Keys.ENTER)); steps.add(wait(4));
+        steps.add(tap(Input.Keys.ESCAPE)); steps.add(wait(40));
+        steps.add(act(() -> { Settings onDisk = new SaveStore(data).loadSettings(); check("both switches back on, in memory and on disk", game.settings.showSeed && game.settings.showBestTimes && onDisk.showSeed && onDisk.showBestTimes, game.settings.showSeed + "/" + game.settings.showBestTimes + " disk " + onDisk.showSeed + "/" + onDisk.showBestTimes); }));
+        steps.add(goTo("SAVE & EXIT")); steps.add(tap(Input.Keys.ENTER)); steps.add(until(() -> screen() instanceof TitleScreen, 90, "title after the keyboard seeded run")); steps.add(wait(20));
+        steps.add(act(() -> check("the seeded climb was saved with its course", game.save.seed == KEY_SEED && game.save.climbRules > 0, "seed " + game.save.seed + " rules " + game.save.climbRules)));
         // --- exit through the menu, then a clean shutdown
         steps.add(until(() -> screen() instanceof TitleScreen, 60, "title again"));
         steps.add(act(() -> { check("progress saved", new File(data, "players.json").isFile() && new File(new File(data, "players/p1"), "save.json").isFile() && new File(data, "settings.json").isFile() && dp.configFile.isFile(), data.getAbsolutePath()); report(); Gdx.app.exit(); }));

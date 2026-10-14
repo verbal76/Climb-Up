@@ -28,6 +28,7 @@ public final class Legacy {
     /** Stamps a brand-new climb with the version/build/day it started on. */
     public static void stampNewClimb(SaveData sd, String version, int build, String today) {
         sd.climbVersion = version; sd.climbBuild = build; sd.climbDate = today; sd.climbHeight = 0f;
+        sd.climbRules = com.hotatticgames.climbup.sim.CourseGenerator.RULES_VERSION;      // Build 64: the rules its course is generated under
     }
 
     /** Sets the climb in progress aside as a legacy record and clears it. Records (best height, splits, finishes) are untouched. Returns the record. */
@@ -35,6 +36,7 @@ public final class Legacy {
         SaveData.LegacyRun r = new SaveData.LegacyRun();
         r.version = sd.climbVersion == null ? "" : sd.climbVersion; r.build = sd.climbBuild; r.date = sd.climbDate == null ? "" : sd.climbDate; r.savedDate = today;
         r.height = sd.climbHeight; r.towers = sd.towers; r.runClock = sd.runClock; r.finished = sd.finished; r.finishTime = sd.finishTime;
+        r.seed = sd.seed; r.rules = sd.climbRules > 0 ? sd.climbRules : com.hotatticgames.climbup.sim.CourseGenerator.rulesOfBuild(sd.climbBuild);   // Build 64: the course it was climbed on
         sd.legacy.add(r);
         RunRecord.forgetClimb(sd);
         return r;

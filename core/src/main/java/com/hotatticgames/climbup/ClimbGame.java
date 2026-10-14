@@ -33,6 +33,10 @@ public class ClimbGame extends Game {
     public boolean demo;
     public String shotDir;
     public boolean runFresh;                 // set by the title screen's NEW CLIMB: the next PlayScreen starts a new seed
+    public Long pendingSeed;                 // Build 64: the seed behind a typed course code for the next fresh climb (null = draw a random one as always)
+
+    /** Build 64: forgets the saved climb (if any) and arranges for the next PlayScreen to start a fresh one: random ({@code seed} null) or on a typed course code. */
+    public void beginFreshRun(Long seed) { forgetRun(); save.falls = 0; runFresh = true; pendingSeed = seed; persist(); }
 
     /** The launcher's platform services (Android: {@link Platform#MOBILE}, unchanged behaviour). */
     public final Platform platform;
@@ -66,6 +70,9 @@ public class ClimbGame extends Game {
             case "credits": setScreen(new CreditsScreen(this, new TitleScreen(this))); break;
             case "players": setScreen(new PlayersScreen(this, new TitleScreen(this))); break;      // test hooks for screenshots
             case "name": { TitleScreen t = new TitleScreen(this); setScreen(new NameScreen(this, new PlayersScreen(this, t), t)); break; }
+            case "times": setScreen(new TimesScreen(this, new TitleScreen(this))); break;          // Build 64 screenshot hooks: the times table, the legacy list and the course code picker
+            case "legacy": setScreen(new LegacyScreen(this, new TitleScreen(this))); break;
+            case "seed": setScreen(new SeedScreen(this, new TitleScreen(this))); break;
             case "play": setScreen(new PlayScreen(this, demo)); break;
             default: setScreen(new SplashScreen(this));
         }
@@ -157,7 +164,8 @@ public class ClimbGame extends Game {
             save.seed = 0;
         }
         String sd = System.getProperty("climb.seed");
-        long seed = sd != null ? Long.parseLong(sd) : (System.nanoTime() ^ (System.currentTimeMillis() * 0x9E3779B97F4A7C15L)) & 0x7fffffffL | 1L;
+        long seed = pendingSeed != null ? pendingSeed : sd != null ? Long.parseLong(sd) : (System.nanoTime() ^ (System.currentTimeMillis() * 0x9E3779B97F4A7C15L)) & 0x7fffffffL | 1L;   // Build 64: a typed course code wins; the random draw is unchanged
+        pendingSeed = null;
         r.tower = new Tower(seed, tuning); r.startIdx = 0;
         Legacy.stampNewClimb(save, VERSION, appBuild, Legacy.today());
         save.seed = seed; save.cpSlice = 0; save.cpLocal = 0;

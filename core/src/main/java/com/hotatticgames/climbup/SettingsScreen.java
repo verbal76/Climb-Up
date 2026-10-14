@@ -92,6 +92,8 @@ public final class SettingsScreen extends ScreenAdapter {
             row("HAPTICS", HAP[s.haptics], null, null, () -> s.haptics = (s.haptics + 1) % 3);
             toggle("LEFT-HANDED LAYOUT", s.leftHanded, () -> s.leftHanded = !s.leftHanded);
             toggle("HIGH-CONTRAST CONTROLS", s.highContrast, () -> s.highContrast = !s.highContrast);
+            toggle("SHOW COURSE SEED", s.showSeed, () -> s.showSeed = !s.showSeed);
+            toggle("SHOW BEST TIMES", s.showBestTimes, () -> s.showBestTimes = !s.showBestTimes);
             eraseRow();
         } else if (page == 0) {                                     // AUDIO + DISPLAY / GENERAL
             row("CHARACTER", com.hotatticgames.climbup.render.Characters.name(s.character), null, null, () -> s.character = com.hotatticgames.climbup.render.Characters.next(s.character));

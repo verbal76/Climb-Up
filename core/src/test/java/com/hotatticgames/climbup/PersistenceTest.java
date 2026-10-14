@@ -23,6 +23,40 @@ public class PersistenceTest {
         assertEquals(3, rs.music); assertTrue(rs.reducedMotion); assertEquals(2, rs.textScale); assertTrue(rs.leftHanded);
     }
 
+    /** Build 64: SHOW COURSE SEED and SHOW BEST TIMES are independent settings, default ON, saved with the rest and ON again for a settings file from before them. */
+    @Test public void theHudSeedAndBestTimeSwitchesPersistSeparatelyAndDefaultOn() throws Exception {
+        SaveStore st = new SaveStore(tmp());
+        Settings fresh = new Settings();
+        assertTrue("seed shown by default", fresh.showSeed); assertTrue("best times shown by default", fresh.showBestTimes);
+        Settings s = new Settings(); s.showSeed = false;                      // one off, the other still on
+        st.saveSettings(s);
+        Settings rs = st.loadSettings();
+        assertFalse(rs.showSeed); assertTrue("the other switch is untouched", rs.showBestTimes);
+        s.showSeed = true; s.showBestTimes = false; st.saveSettings(s);
+        rs = st.loadSettings();
+        assertTrue(rs.showSeed); assertFalse(rs.showBestTimes);
+        st.writeAtomic("settings.json", "{\"music\":2,\"reducedMotion\":true}");      // a Build 63 settings file: neither switch exists yet
+        rs = st.loadSettings();
+        assertTrue("absent = on", rs.showSeed); assertTrue("absent = on", rs.showBestTimes); assertEquals("the rest still loads", 2, rs.music); assertTrue(rs.reducedMotion);
+    }
+
+    /** Build 64: a typed course code can name any 64-bit seed (a random draw never leaves 31 bits), so the save, the records and the legacy list must keep every bit. */
+    @Test public void aCourseSeedOfAnySizeSurvivesTheSaveTheRecordsAndTheLegacyList() throws Exception {
+        for (long seed : new long[]{0x5EED_C0DE_0000_0064L, Long.MAX_VALUE, Long.MIN_VALUE + 1, -1L, 987654321987654321L}) {
+            SaveStore st = new SaveStore(tmp());
+            SaveData d = new SaveData(); d.seed = seed; d.climbRules = 1;
+            d.records().legDone(seed, 1, 0, 61.5f);
+            SaveData.LegacyRun lr = new SaveData.LegacyRun(); lr.seed = seed; lr.rules = 1; d.legacy.add(lr);
+            d.syncRecords(); st.saveGame(d);
+            SaveData r = st.loadGame();
+            assertEquals("seed " + SeedCode.encode(seed), seed, r.seed);
+            assertEquals(seed, r.legacy.get(0).seed);
+            assertNotNull("the course's bests are found again by the exact seed", r.records().seedBests(seed, 1));
+            assertEquals(61.5f, r.records().seedBests(seed, 1).bestLegs[0], 1e-4f);
+            assertEquals("the code shown is the code typed", SeedCode.encode(seed), SeedCode.encode(r.seed));
+        }
+    }
+
     @Test public void speedRunSplitsSurviveASaveAndOldSavesGetDefaults() throws Exception {
         File dir = tmp(); SaveStore st = new SaveStore(dir);
         SaveData d = new SaveData(); d.runClock = 312.4f; d.towerStartClock = 200f; d.towerStartHeight = 140f; d.towers = 2;

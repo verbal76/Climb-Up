@@ -35,6 +35,17 @@ public final class CourseGenerator {
     public StringBuilder trace = new StringBuilder();
     public int hazardsPlaced, hazardTried, failLayer, failHaz, failPlan, failWindow;
 
+    /**
+     * The generation rules version (Build 64): every slice is a pure function of the seed, the slice index, the previous slice, the tuning and this code, so two
+     * players on the same seed climb the same course only while this number matches. Bump it whenever generation, its proofs (the Sim the planner runs),
+     * the hazards' initial configuration or the bundled tuning change what a seed produces; UI and other changes leave it alone. Version 1 is the Build 63
+     * generator (the crab rules of Build 63 changed what a seed produced, so runs from earlier builds carry version 0, "old rules", and are not compared).
+     * {@code GeneratorFingerprintTest} fails when generation changes without a bump.
+     */
+    public static final int RULES_VERSION = 1;
+    /** The rules version a climb started on a given build used (0 = unknown or before the stamps: not comparable). */
+    public static int rulesOfBuild(int build) { return build >= 63 ? 1 : 0; }
+
     private CourseGenerator(long seed, Tuning t, long salt) {
         T = t; this.salt = salt; rnd = new Random(seed * 0x9E3779B97F4A7C15L + 12345 + salt * 0x632BE59BD9B4E019L); c = new Course(seed, t.circumference());
         rampH = t.courseHeight;

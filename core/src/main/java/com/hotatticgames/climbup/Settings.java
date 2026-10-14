@@ -17,6 +17,8 @@ public final class Settings {
     public boolean otaEnabled = true;         // OTA: check for signed gameplay-number updates (Settings > About)
     public boolean highContrast = false;      // HUD/control outlines for visibility
     public boolean colourblind = false;       // key / castle-gate colours from the colourblind-safe palette (shape markers are always drawn; see render/KeyColors)
+    public boolean showSeed = true;           // Build 64: the course code on the gameplay HUD (it stays in the pause menu and the times table either way)
+    public boolean showBestTimes = true;      // Build 64: personal-best times and faster/slower comparisons on the gameplay HUD (the run clock, the records and the times table are untouched)
     public int captionSize = 1;               // sound captions: 0 small, 1 normal, 2 large (on top of TEXT SIZE)
     public int captionBg = 1;                 // sound captions: 0 no background, 1 dark translucent, 2 solid black
 

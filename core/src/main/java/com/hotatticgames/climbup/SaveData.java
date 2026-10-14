@@ -22,6 +22,7 @@ public final class SaveData {
     public String climbVersion = "";
     public int climbBuild = 0;
     public String climbDate = "";
+    public int climbRules = 0;           // Build 64: the generation rules version the climb in progress was generated under (0 = unknown: started before the stamps)
     public float climbHeight = 0f;       // highest point reached in the climb in progress
     public int keysHeld = 0;             // keys carried (bit per colour) - a resumed climb only has the stored slice, so this must be saved
     public int openedUpTo = 0;           // highest castle number opened in this climb (castles open in order)
@@ -52,7 +53,11 @@ public final class SaveData {
     public String recordsJson = "";
     private transient RecordsData recordsObj;
     public RecordsData records() {
-        if (recordsObj == null) { recordsObj = RecordsData.fromJson(recordsJson); if ((recordsJson == null || recordsJson.isEmpty()) && bestFinish > 0f) recordsObj.bestTotal = bestFinish; }      // an older save only knew its best finish
+        if (recordsObj == null) {
+            recordsObj = RecordsData.fromJson(recordsJson);
+            if ((recordsJson == null || recordsJson.isEmpty()) && bestFinish > 0f) recordsObj.bestTotal = bestFinish;      // an older save only knew the best finish
+            recordsObj.upgradeFrom63(seed, climbRules > 0 ? climbRules : com.hotatticgames.climbup.sim.CourseGenerator.rulesOfBuild(climbBuild));   // Build 64: stamp the Build 63 run with its rules (a no-op for current text)
+        }
         return recordsObj;
     }
     public void syncRecords() { if (recordsObj != null) recordsJson = recordsObj.toJson(); }       // call before writing
@@ -63,6 +68,8 @@ public final class SaveData {
         public int build = 0;            // build number that started it (0 = unknown)
         public String date = "";         // day the climb was started
         public String savedDate = "";    // day it was set aside
+        public long seed = 0;            // Build 64: the course it was climbed on (0 = set aside before seeds were recorded)
+        public int rules = 0;            // Build 64: its generation rules version (0 = unknown)
         public float height = 0f;
         public int towers = 0;
         public float runClock = 0f;

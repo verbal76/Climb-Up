@@ -147,9 +147,10 @@ public final class PlayScreen extends ScreenAdapter {
         if (demo) driver[0] = new Autopilot.Driver(sim);
         Gdx.input.setInputProcessor(processors());
         Gdx.input.setCatchKey(Input.Keys.BACK, true);
+        if (gi() != null) gi().controllerLost();          // a pad unplugged on the menus before this climb began is no reason to start it paused (found by the Build 64 scenario)
         g.audio.playlist(Audio.GAME_TRACKS);
         runTime = 0; maxAbs = absNow(); milestone = (int) (maxAbs / 50f);
-        if (!demo && tower != null) g.save.records().catchUp(g.save.seed, g.save.splits, g.save.towers, g.save.finished, g.save.finishTime);          // times table: a climb begun before the records existed
+        if (!demo && tower != null) g.save.records().catchUp(g.save.seed, runRules(), g.save.splits, g.save.towers, g.save.finished, g.save.finishTime);          // times table: a climb begun before the records existed
         if (!demo) {        // seed the cross-session achievement counters from Steam's stored stats (all 0 when there is no Steam)
             com.hotatticgames.climbup.platform.Achievements a = g.platform.achievements();
             achRules = new AchievementRules(a.stat(AchievementRules.STAT_TOWER_FELL_MASK));
@@ -396,7 +397,8 @@ public final class PlayScreen extends ScreenAdapter {
         sd.splits = java.util.Arrays.copyOf(sd.splits, n + 1); sd.splits[n] = split;
         sd.towerTotals = java.util.Arrays.copyOf(sd.towerTotals, n + 1); sd.towerTotals[n] = total;
         sd.towers = n + 1;
-        if (n < RecordsData.LEGS) sd.records().legDone(sd.seed, n, split);          // times table: this leg, and whether it is a personal best
+        RecordsData.Run cur = null;
+        if (n < RecordsData.LEGS) { sd.records().legDone(sd.seed, runRules(), n, split); cur = sd.records().current; }          // times table: this leg, its global and its on-this-course bests
         boolean hadSplit = sd.bestSplit > 0f, pbSplit = !hadSplit || split < sd.bestSplit;
         if (pbSplit) sd.bestSplit = split;
         if (sd.bestTotals.length <= n) sd.bestTotals = java.util.Arrays.copyOf(sd.bestTotals, n + 1);
@@ -404,7 +406,9 @@ public final class PlayScreen extends ScreenAdapter {
         if (pbTotal) sd.bestTotals[n] = total;
         sd.towerStartClock = sd.runClock; sd.towerStartHeight = (float) Math.max(0.0, maxAbs);
         toast = keyName(sim.lastGateColor) + " CASTLE OPENED!"; toastT = 3.2f;
-        toastSub = "TOWER " + (n + 1) + "  " + fmtTime(split) + (pbSplit && hadSplit ? "  FASTEST TOWER!" : "") + "    TOTAL " + fmtTime(total) + (pbTotal && hadTotal ? "  PACE PB!" : "");
+        boolean showPb = g.settings.showBestTimes;                                   // Build 64: SHOW BEST TIMES hides every best and comparison here; the split itself and the clock stay
+        String vsSeed = showPb && cur != null && cur.seed == sd.seed && n < RecordsData.LEGS && cur.legSeedPrev[n] > 0f ? "  " + fmtDelta(split - cur.legSeedPrev[n]) + " VS COURSE BEST" : "";
+        toastSub = "TOWER " + (n + 1) + "  " + fmtTime(split) + vsSeed + (showPb && pbSplit && hadSplit ? "  FASTEST TOWER!" : "") + "    TOTAL " + fmtTime(total) + (showPb && pbTotal && hadTotal ? "  PACE PB!" : "");
         g.persist();
     }
 
@@ -422,6 +426,11 @@ public final class PlayScreen extends ScreenAdapter {
     }
 
     /** m:ss.t (h:mm:ss.t from an hour). */
+    /** Build 64: the generation rules the climb in progress was generated under (a Build 63 climb is dated from its build; older ones are unknown, 0, and never compared). */
+    private int runRules() { return g.save.climbRules > 0 ? g.save.climbRules : com.hotatticgames.climbup.sim.CourseGenerator.rulesOfBuild(g.save.climbBuild); }
+    /** A faster/slower difference with its sign always written: "-0.5" is faster, "+1:02.3" slower. */
+    /** A signed time difference to the nearest tenth: "-0:04.8" faster, "+2:03.4" slower (fmtTime truncates, so the rounding happens here). */
+    public static String fmtDelta(float d) { float a = Math.round(Math.abs(d) * 10f) / 10f; return (d < 0f && a > 0f ? "-" : "+") + fmtTime(a); }
     public static String fmtTime(float sec) {
         int t = Math.max(0, (int) (sec * 10f)), tenth = t % 10, s = (t / 10) % 60, m = (t / 600) % 60, h = t / 36000;
         return h > 0 ? String.format("%d:%02d:%02d.%d", h, m, s, tenth) : String.format("%d:%02d.%d", m, s, tenth);
@@ -515,7 +524,7 @@ public final class PlayScreen extends ScreenAdapter {
             int r = RunRecord.complete(g.save);
             if (r >= 0) {
                 finishNewBest = r == 1;
-                if (tower != null) g.save.records().finish(g.save.seed, g.save.finishTime);
+                if (tower != null) g.save.records().finish(g.save.seed, runRules(), g.save.finishTime);
                 g.audio.fallStop(); g.audio.play("win", 1f, 1f); world.particles.burst(s, y + 1.2f, 40, new Color(1f, 0.85f, 0.3f, 1f), 4f, 4f, 0.14f, 1f, 1.6f); vibrate(60, 1); say("[RUN COMPLETE]");
                 state = State.FINISHED; stickPtr = jumpPtr = -1; jumpHeldTouch = false; g.persist();
             }
@@ -642,7 +651,9 @@ public final class PlayScreen extends ScreenAdapter {
         double hZone = Math.max(0.0, hAbs);          // a fall below the very first platform (before the respawn catches it) is still the meadow, not the last world wrapped around
         int Z = Palette.ZONES; int zone = Math.min(Z - 1, (int) (((hZone / g.tuning.zoneHeight) % Z + Z) % Z)), lap = (int) (hZone / (g.tuning.zoneHeight * Z));
         String hs = (long) Math.max(0, hAbs) + " M";
-        ui.rect(m - 6, H - m - 136 * zk, 380 * zk + 12, 136 * zk + 6, new Color(0.05f, 0.07f, 0.14f, 0.55f));
+        boolean seedLine = g.settings.showSeed && !demo && g.save.seed != 0;                 // Build 64: the course code under the clocks (SHOW COURSE SEED)
+        ui.rect(m - 6, H - m - (seedLine ? 160f : 136f) * zk, 380 * zk + 12, (seedLine ? 160f : 136f) * zk + 6, new Color(0.05f, 0.07f, 0.14f, 0.55f));
+        if (seedLine) ui.text("SEED " + SeedCode.encode(g.save.seed), m, H - m - 152 * zk, 2.3f * zk, Ui.DIM);
         ui.text(hs, m, H - m - 30 * zk, 4f * zk, Ui.TEXT);
         ui.text("BEST " + (int) Math.max(g.save.bestHeight, maxAbs), m, H - m - 56 * zk, 2.6f * zk, Ui.DIM);
         // speed-run clock: distance and time on the tower being worked towards, and the total time of the climb (always shown)
@@ -819,18 +830,27 @@ public final class PlayScreen extends ScreenAdapter {
         ui.textC("FINISH TIME", W / 2, y + ph - 150, 3.4f, Ui.DIM);
         ui.textC(fmtTime(sd.finishTime), W / 2, y + ph - 216, 8f, new Color(0.45f, 1f, 0.55f, 1f));
         ui.textC(finishNewBest ? "NEW RECORD!" : "BEST " + fmtTime(sd.bestFinish), W / 2, y + ph - 270, 3.6f, finishNewBest ? new Color(1f, 0.85f, 0.3f, 1f) : Ui.DIM);
+        if (sd.seed != 0) {                                                            // Build 64: the course this time was set on, and (SHOW BEST TIMES) how it compares with the best on it; two lines, both inside the panel
+            RecordsData.Run cur = sd.records().current; boolean mine = cur != null && cur.seed == sd.seed;
+            String vs = g.settings.showBestTimes && mine && cur.totalSeedPrev > 0f ? fmtDelta(sd.finishTime - cur.totalSeedPrev) + " VS COURSE BEST " + fmtTime(cur.totalSeedPrev) : g.settings.showBestTimes && mine && cur.totalSeedPb ? "FIRST FINISH ON THIS COURSE" : "";
+            String line = "SEED " + SeedCode.encode(sd.seed);
+            ui.textC(line, W / 2, y + ph - 296, Math.min(2.8f, (pw - 40f) / (line.length() * 6f)), Ui.DIM);
+            if (!vs.isEmpty()) ui.textC(vs, W / 2, y + ph - 322, Math.min(2.8f, (pw - 40f) / (vs.length() * 6f)), Ui.DIM);
+        }
         float bw = 520, bh = 90, bx = W / 2 - bw / 2;
-        if (ui.button("END RUN AND SAVE TIME", bx, y + 240, bw, bh, true)) endRunToSummary();
-        if (ui.button("TIMES", bx, y + 140, bw, bh)) { g.audio.play("click"); g.persist(); next = new TimesScreen(g, this); disposeOnLeave = false; }
-        if (ui.button("KEEP CLIMBING FOR EVER", bx, y + 40, bw, bh)) { resumePlay(); }
+        if (ui.button("END RUN AND SAVE TIME", bx, y + 226, bw, bh, true)) endRunToSummary();
+        if (ui.button("TIMES", bx, y + 126, bw, bh)) { g.audio.play("click"); g.persist(); next = new TimesScreen(g, this); disposeOnLeave = false; }
+        if (ui.button("KEEP CLIMBING FOR EVER", bx, y + 26, bw, bh)) { resumePlay(); }
     }
 
     private void pauseMenu() {
         Ui ui = g.ui; float W = ui.w(), H = ui.h();
         boolean canEnd = g.save.finished && tower != null && !demo;          // climbing for ever after castle 10: the run can be ended here and its times saved
-        float pw = 560, bw = 440, bh = 76, bs = 90, ph = 176 + (canEnd ? 5 : 4) * bs + 36, x = W / 2 - pw / 2, y = H / 2 - ph / 2;
+        boolean seedLine = g.save.seed != 0 && !demo;                        // Build 64: the course code is always in the pause menu, whatever the HUD switch says
+        float pw = 560, bw = 440, bh = 76, bs = 90, ph = 176 + (canEnd ? 5 : 4) * bs + 36 + (seedLine ? 30 : 0), x = W / 2 - pw / 2, y = H / 2 - ph / 2;
         ui.rect(0, 0, W, H, new Color(0, 0, 0, 0.55f));
         ui.panel(x, y, pw, ph);
+        if (seedLine) ui.textC("SEED " + SeedCode.encode(g.save.seed), W / 2, y + 14, 2.6f, Ui.DIM);
         if (padLost) { String pl = "CONTROLLER DISCONNECTED"; ui.textC(pl, W / 2, y + ph - 82, Math.min(5f, (pw - 40) / (pl.length() * 6f)), Ui.ACCENT); }      // the pause was forced by the pad going away: say so where PAUSED would be
         else ui.textC("PAUSED", W / 2, y + ph - 90, 8f, Ui.TEXT);
         if (W >= pw + 2 * 450f) {                  // speed-run splits beside the menu
@@ -839,10 +859,17 @@ public final class PlayScreen extends ScreenAdapter {
             ui.textC("TOWER SPLITS", sx + sw / 2, y + sh - 56, 4.4f, Ui.ACCENT);
             ui.text("NOW   " + fmtTime(sd.runClock - sd.towerStartClock), sx + 26, y + sh - 108, 3.4f, new Color(1f, 0.82f, 0.3f, 1f));
             ui.text("TOTAL " + fmtTime(sd.runClock), sx + 26, y + sh - 146, 3.4f, Ui.TEXT);
-            int first = Math.max(0, sd.towers - 7);
-            for (int i = first; i < sd.towers; i++) ui.text((i + 1) + "  " + fmtTime(sd.splits[i]) + "  " + fmtTime(sd.towerTotals[i]), sx + 26, y + sh - 196 - (i - first) * 40, 3f, Ui.TEXT);
+            boolean showPb = g.settings.showBestTimes;                                 // Build 64: bests and faster/slower marks only with SHOW BEST TIMES; the splits themselves always
+            RecordsData.Run cur = sd.records().current; boolean curRun = cur != null && cur.seed == sd.seed;
+            int first = Math.max(0, sd.towers - 6);
+            for (int i = first; i < sd.towers; i++) {
+                String vs = showPb && curRun && i < RecordsData.LEGS && cur.legSeedPrev[i] > 0f ? "  " + fmtDelta(sd.splits[i] - cur.legSeedPrev[i]) : "";
+                ui.text((i + 1) + "  " + fmtTime(sd.splits[i]) + "  " + fmtTime(sd.towerTotals[i]) + vs, sx + 26, y + sh - 196 - (i - first) * 40, 3f, Ui.TEXT);
+            }
             if (sd.towers == 0) ui.text("NO TOWER OPENED YET", sx + 26, y + sh - 196, 3f, Ui.DIM);
-            if (sd.bestSplit > 0f) ui.text("FASTEST TOWER " + fmtTime(sd.bestSplit), sx + 26, y + 40, 3f, Ui.DIM);
+            RecordsData.SeedBests sb = showPb ? sd.records().seedBests(sd.seed, runRules()) : null;
+            if (sb != null && sb.bestTotal > 0f) ui.text("COURSE BEST " + fmtTime(sb.bestTotal), sx + 26, y + 76, 3f, Ui.DIM);
+            if (showPb && sd.bestSplit > 0f) ui.text("FASTEST TOWER " + fmtTime(sd.bestSplit), sx + 26, y + 40, 3f, Ui.DIM);
         }
         float bx = W / 2 - bw / 2, by = y + ph - 176;
         if (ui.button("RESUME", bx, by, bw, bh, true)) resumePlay();

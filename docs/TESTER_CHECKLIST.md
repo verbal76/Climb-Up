@@ -1,15 +1,14 @@
-# Upwardly — tester checklist (Build 64 candidate; Build 63 is the published testers' build)
+# Upwardly — tester checklist (Build 64)
 
 Ten minutes per device. Note anything that feels wrong, with a screenshot or a short video if you can.
 
 ## Install
-- Build 64 packages are not published yet (the owner authorises the build); until then the links below are Build 63's. Install Build 64 **over** Build 63 without uninstalling: your players, climbs and times must still be there, and the run you had in progress must continue with its times.
-- **Android:** install `upwardly-1.1.5-build63-debug.apk` over Build 62 or 61 (no uninstall). Your players, climbs and times must still be there.
-- **Windows:** unzip `Upwardly.Build.63.EXE.zip` anywhere and run `Upwardly\Upwardly.exe` (no Java needed). Saves live in `%APPDATA%\HotAtticGames\Upwardly`. Settings → ABOUT must now say `BUILD 63`, not `DEV`.
-- **Linux / Steam Deck:** unpack `Upwardly.Build.63.Linux.tar.gz` and run `Upwardly/bin/Upwardly`.
-- Downloads: https://github.com/verbal76/Climb-Up/releases/tag/v1.1.5-build63 (APK) and https://github.com/verbal76/Climb-Up/releases/tag/build-63-desktop (Windows + Linux).
+- **Android:** install `upwardly-1.1.5-build64-debug.apk` over Build 63 (no uninstall). Your players, climbs and times must still be there, and the run you had in progress continues with its times.
+- **Windows:** unzip `Upwardly.Build.64.EXE.zip` anywhere and run `Upwardly\Upwardly.exe` (no Java needed). Saves live in `%APPDATA%\HotAtticGames\Upwardly`. The title's status bar must say `BUILD 64`.
+- **Linux / Steam Deck:** unpack `Upwardly.Build.64.Linux.tar.gz` and run `Upwardly/bin/Upwardly`.
+- Downloads: https://github.com/verbal76/Climb-Up/releases/tag/v1.1.5-build64 (APK) and https://github.com/verbal76/Climb-Up/releases/tag/build-64-desktop (Windows + Linux). Build 63 stays at its own links if you need to compare.
 
-## New in Build 64 (check these first, once the Build 64 packages exist)
+## New in Build 64 (check these first)
 1. Title: the line under the name reads "TEN TOWERS. ONE CLOCK." one time and "TRAMPOLINES, CRABS AND CANNONS. YOU'RE WELCOME." the next (leave to a climb and come back). Both fit the screen on your device.
 2. Start a climb: under the clocks the HUD shows `SEED XXXXX-XXXX-XXXX` (13 letters and digits, never 0, O, 1, I or L). The same code is in the pause menu and on the finish screen.
 3. Title → NEW RUN → SEEDED RUN: type a friend's code on the picker (touch, keyboard or pad), OK. The HUD shows exactly that code and the course is the same as theirs (same platforms, the same cannons and crabs in the same places). Type a wrong code (too short, a letter that is not on the picker, all Z's): it says why and starts nothing. CANCEL keeps your saved climb.

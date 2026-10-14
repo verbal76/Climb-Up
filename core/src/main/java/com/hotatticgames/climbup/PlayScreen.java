@@ -432,12 +432,10 @@ public final class PlayScreen extends ScreenAdapter {
     /** Build 64: the generation rules the climb in progress was generated under (a Build 63 climb is dated from its build; older ones are unknown, 0, and never compared). */
     private int runRules() { return g.save.climbRules > 0 ? g.save.climbRules : com.hotatticgames.climbup.sim.CourseGenerator.rulesOfBuild(g.save.climbBuild); }
     /** A faster/slower difference with its sign always written: "-0.5" is faster, "+1:02.3" slower. */
-    /** A signed time difference to the nearest tenth: "-0:04.8" faster, "+2:03.4" slower (fmtTime truncates, so the rounding happens here). */
-    public static String fmtDelta(float d) { float a = Math.round(Math.abs(d) * 10f) / 10f; return (d < 0f && a > 0f ? "-" : "+") + fmtTime(a); }
-    public static String fmtTime(float sec) {
-        int t = Math.max(0, (int) (sec * 10f)), tenth = t % 10, s = (t / 10) % 60, m = (t / 600) % 60, h = t / 36000;
-        return h > 0 ? String.format("%d:%02d:%02d.%d", h, m, s, tenth) : String.format("%d:%02d.%d", m, s, tenth);
-    }
+    /** A signed time difference to the nearest tenth: "-0:04.8" faster, "+2:03.4" slower (fmtTime truncates, so the rounding happens there). */
+    public static String fmtDelta(float d) { return ClockText.delta(d); }
+    /** m:ss.t, h:mm:ss.t from an hour, "N DAYS hh:mm:ss.t" from a day (Build 66, for marathon sessions); see {@link ClockText}. */
+    public static String fmtTime(float sec) { return ClockText.time(sec); }
 
     private boolean fallCaptioned;
     private float windT, trailT, creakT, fallT2;

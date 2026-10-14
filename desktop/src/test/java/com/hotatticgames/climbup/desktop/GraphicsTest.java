@@ -178,6 +178,33 @@ public class GraphicsTest {
         assertArrayEquals(new int[]{1920, 1080}, DisplayManager.step(list, false, 1900, 1000, false));     // a dragged custom size moves to the nearest listed one
     }
 
+    @Test public void aWindowIsNeverOfferedASizeThatCoversTheDesktop() {          // Build 66: the picker used to step onto the monitor's own size and the window snapped back to 1280 x 720
+        List<int[]> list = DisplayManager.pickerList(modes(new int[]{1920, 1080, 60}, new int[]{1600, 900, 60}, new int[]{1280, 720, 60}));
+        List<int[]> win = DisplayManager.windowList(list, 1920, 1080);
+        assertEquals(2, win.size()); assertArrayEquals(new int[]{1600, 900, 60}, win.get(0)); assertArrayEquals(new int[]{1280, 720, 60}, win.get(1));
+        assertArrayEquals("+ past the largest window size stays there instead of wrapping", new int[]{1600, 900}, DisplayManager.step(win, false, 1600, 900, true));
+        assertArrayEquals(new int[]{1600, 900}, DisplayManager.step(win, false, 1280, 720, true));
+        assertEquals("a bigger desktop offers the monitor's list unchanged", 3, DisplayManager.windowList(list, 3840, 2160).size());
+        List<int[]> tiny = DisplayManager.windowList(DisplayManager.pickerList(modes(new int[]{1280, 720, 60})), 1280, 720);
+        assertEquals(1, tiny.size()); assertArrayEquals(new int[]{1280, 720, 60}, tiny.get(0));       // the only size covers the desktop: the default window is offered (windowSize clamps it to the desktop anyway)
+        for (int[] m : win) assertArrayEquals("every offered size is one windowSize keeps", new int[]{m[0], m[1]}, DisplayManager.windowSize(m[0], m[1], 1920, 1080));
+    }
+
+    @Test public void streamerModeIsOffByDefaultPerMachineAndDecidesTheFocusPolicy() {        // Build 66
+        File f = new File(tmp.getRoot(), "upwardly-desktop.cfg");
+        DesktopConfig c = new DesktopConfig();
+        assertFalse(c.streamerMode);
+        assertFalse("a Build 65 file without the key: off", DesktopConfig.parse("version=1\ninputMode=AUTO\n").streamerMode);
+        assertFalse("a bad value keeps the default", DesktopConfig.parse("version=1\nstreamer=maybe\n").streamerMode);
+        assertTrue(DesktopConfig.parse("version=1\nstreamer=true\n").streamerMode);
+        c.streamerMode = true; assertTrue(c.save(f));
+        assertTrue(c.serialize().contains("\nstreamer=true\n"));
+        assertTrue(DesktopConfig.load(f).streamerMode);
+        assertTrue("normally a lost focus pauses the run", DesktopLauncher.pauseOnFocusLoss(new DesktopConfig(), false));
+        assertFalse("streamer mode: the run keeps going when another window or monitor takes the focus", DesktopLauncher.pauseOnFocusLoss(c, false));
+        assertFalse("the screenshot hook never pauses", DesktopLauncher.pauseOnFocusLoss(new DesktopConfig(), true));
+    }
+
     @Test public void windowSizesAreSaneWhenLeavingFullScreen() {
         assertArrayEquals(new int[]{1280, 720}, DisplayManager.windowSize(3840, 2160, 3840, 2160));       // would cover the whole desktop
         assertArrayEquals(new int[]{1600, 900}, DisplayManager.windowSize(1600, 900, 3840, 2160));

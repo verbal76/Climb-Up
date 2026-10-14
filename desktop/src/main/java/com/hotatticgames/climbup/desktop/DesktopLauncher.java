@@ -43,7 +43,7 @@ public final class DesktopLauncher {
         c.setIdleFPS(30);
         final ClimbGame game = new ClimbGame(dir, platform);
         c.setWindowListener(new Lwjgl3WindowAdapter() {
-            @Override public void focusLost() { if (System.getProperty("climb.shots") != null) return; try { game.pause(); } catch (RuntimeException ignored) { } }      // alt-tab pauses the run (the pause menu is shown on return); the screenshot hook runs unfocused under a virtual display
+            @Override public void focusLost() { if (!pauseOnFocusLoss(cfg, System.getProperty("climb.shots") != null)) return; try { game.pause(); } catch (RuntimeException ignored) { } }      // alt-tab pauses the run (the pause menu is shown on return) unless STREAMER MODE is on; the screenshot hook runs unfocused under a virtual display
             @Override public void focusGained() { try { game.resume(); } catch (RuntimeException ignored) { } }
         });
         try {
@@ -72,6 +72,13 @@ public final class DesktopLauncher {
         if (plus < 0) return 0;
         try { return Math.max(0, Integer.parseInt(implementationVersion.substring(plus + 1).trim())); } catch (NumberFormatException e) { return 0; }
     }
+
+    /**
+     * Whether losing the window's focus pauses the game (Build 66): never under the screenshot hook (it runs unfocused under a virtual display)
+     * and never in STREAMER MODE, where the run keeps going while the player clicks another window or a second monitor and only the pause
+     * menu pauses. The window keeps rendering at its normal rate while unfocused either way (the LWJGL3 loop only slows an iconified window).
+     */
+    static boolean pauseOnFocusLoss(DesktopConfig cfg, boolean shotHook) { return !shotHook && !cfg.streamerMode; }
 
     private static void run(ClimbGame game, Lwjgl3ApplicationConfiguration c) {
         new Lwjgl3Application(game, c) {

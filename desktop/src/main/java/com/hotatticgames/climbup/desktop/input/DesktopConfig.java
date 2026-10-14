@@ -43,6 +43,8 @@ public final class DesktopConfig {
     public boolean highPerfGpu = true;
     /** True once the first-run graphics auto-detect has chosen the defaults above (it never runs again; the player's own changes are kept). */
     public boolean graphicsDecided;
+    /** STREAMER MODE (Build 66): the run is not paused when the window loses focus (a streamer clicks another window or monitor); the pause menu still pauses. Per machine, default off. */
+    public boolean streamerMode;
     public final Bindings<Integer> keyboard = Defaults.keyboard();
     /** Used for any controller without a profile of its own. */
     public final Bindings<Ctl> padDefault = Defaults.pad();
@@ -71,7 +73,7 @@ public final class DesktopConfig {
         sb.append("display=").append(display).append("\nresolution=").append(width).append('x').append(height).append('\n');
         sb.append("gfx.mode=").append(modeW).append('x').append(modeH).append("\ngfx.lastfull=").append(lastFull).append("\ngfx.aa=").append(aa).append("\ngfx.aniso=").append(anisotropy).append('\n');
         sb.append("gfx.scale=").append(renderScale).append("\ngfx.fps=").append(frameLimit).append("\ngfx.vsync=").append(vsync).append("\ngfx.sky=").append(skyEffects)
-                .append("\ngfx.gpu=").append(highPerfGpu).append("\ngfx.decided=").append(graphicsDecided).append('\n');
+                .append("\ngfx.gpu=").append(highPerfGpu).append("\ngfx.decided=").append(graphicsDecided).append("\nstreamer=").append(streamerMode).append('\n');
         for (Act a : Act.values()) sb.append("kb.").append(a).append('=').append(joinKeys(keyboard.get(a))).append('\n');
         for (Act a : Act.values()) sb.append("pad.default.").append(a).append('=').append(joinCtl(padDefault.get(a))).append('\n');
         for (Map.Entry<String, Bindings<Ctl>> e : padProfiles.entrySet())
@@ -108,6 +110,7 @@ public final class DesktopConfig {
                 else if (k.equals("gfx.sky")) c.skyEffects = bool(v);
                 else if (k.equals("gfx.gpu")) c.highPerfGpu = bool(v);
                 else if (k.equals("gfx.decided")) c.graphicsDecided = bool(v);
+                else if (k.equals("streamer")) c.streamerMode = bool(v);
                 else if (k.startsWith("kb.")) { Act a = Act.valueOf(k.substring(3)); List<Integer> l = new ArrayList<>(); for (String t : v.split(",")) { int code = KeyCodes.parse(t.trim()); if (code > 0 && !KeyCodes.reserved(code) && !l.contains(code)) l.add(code); } if (!l.isEmpty()) c.keyboard.set(a, l); }
                 else if (k.startsWith("pad.default.")) { Act a = Act.valueOf(k.substring(12)); List<Ctl> l = ctls(v); if (!l.isEmpty()) c.padDefault.set(a, l); }
                 else if (k.startsWith("pad.id.")) { String rest = k.substring(7); int dot = rest.lastIndexOf('.'); Act a = Act.valueOf(rest.substring(dot + 1)); List<Ctl> l = ctls(v); if (!l.isEmpty()) profiles.computeIfAbsent(rest.substring(0, dot), x -> new LinkedHashMap<>()).put(a, l); }

@@ -8,6 +8,13 @@ Ten minutes per device. Note anything that feels wrong, with a screenshot or a s
 - **Linux / Steam Deck:** unpack `Upwardly.Build.65.Linux.tar.gz` and run `Upwardly/bin/Upwardly`.
 - Downloads: https://github.com/verbal76/Climb-Up/releases/tag/v1.1.5-build65 (APK) and https://github.com/verbal76/Climb-Up/releases/tag/build-65-desktop (Windows + Linux). Build 64 stays at its own links if you need to compare.
 
+## New in Build 66 (streamer mode, display picker, LB + RB screenshot, days on the clock)
+1. PC: SETTINGS → DISPLAY. DISPLAY MODE now has - and + : WINDOWED → FULLSCREEN → BORDERLESS and back, nothing wraps around. In BORDERLESS the game fills the screen and the mouse can still leave to another monitor. The note under the rows changes with the mode.
+2. PC, WINDOWED: press + on RESOLUTION until it stops. It must stop at the largest size that still fits on the desktop and never jump back to 1280 X 720.
+3. PC: STREAMER MODE ON (the note explains it), start a climb, click another window or your second monitor: the run keeps going (the clock runs, the music plays). Pause with Escape or the pad's Menu button as usual. STREAMER MODE OFF: clicking away pauses as before. Quit and relaunch: the switch is remembered.
+4. Xbox pad (PC or Deck): hold LB and RB together during play: "SCREENSHOT SAVED" and one file. Keep holding: no second file. Release both, press both again: one more. SETTINGS → CONTROLS says "F9 OR LB+RB SAVES A SCREENSHOT" (L1+R1 on a PlayStation pad).
+5. Clock: a run is never 24 hours long, so check the text with a fresh eye: MORE → TIMES and the HUD print times as before ("1:02:03.4"); nothing new should look different under a day.
+
 ## New in Build 65 (screenshots)
 1. PC: press F9 during play. A "SCREENSHOT SAVED" line appears at the bottom with the folder; the PNG is in `Pictures\Upwardly\Screenshots` (or the save folder's `Screenshots`). Press F9 twice quickly: two files, different names. The picture must show the HUD and not the saved-line itself.
 2. Any device: pause → TAKE SCREENSHOT. The pause menu is still there afterwards and the run is still paused; the picture shows the game view without the menu.

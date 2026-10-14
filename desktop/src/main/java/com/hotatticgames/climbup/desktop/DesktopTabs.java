@@ -25,7 +25,7 @@ final class DesktopTabs {
     static String fps(int v) { return v == 0 ? "UNLIMITED" : v + " FPS"; }
     static String level(int v, boolean zeroIsOff) { return v <= (zeroIsOff ? 0 : 1) ? "OFF" : v + "X"; }
 
-    /** DISPLAY MODE, RESOLUTION, PICTURE SIZE, FRAME LIMIT, VSYNC. */
+    /** DISPLAY MODE, RESOLUTION, PICTURE SIZE, FRAME LIMIT, VSYNC, STREAMER MODE (Build 66). */
     static final class DisplayTab implements Platform.SettingsTab {
         private final DesktopPlatform dp;
         DisplayTab(DesktopPlatform dp) { this.dp = dp; }
@@ -33,9 +33,14 @@ final class DesktopTabs {
         @Override public void draw(ClimbGame g, SettingsScreen s) {
             DesktopConfig c = dp.cfg; GraphicsManager gm = dp.graphics;
             DesktopConfig.DisplayMode[] modes = DesktopConfig.DisplayMode.values();
-            s.row("DISPLAY MODE", c.display.label(), null, null, () -> { dp.display.setMode(c, modes[(c.display.ordinal() + 1) % modes.length]); dp.save(); });
+            int mi = c.display.ordinal();
+            s.row("DISPLAY MODE", c.display.label(),                                             // Build 66: - / + like every other row (a tap used to cycle, which read as "nothing to choose")
+                    () -> { dp.display.setMode(c, modes[Math.max(0, mi - 1)]); dp.save(); },
+                    () -> { dp.display.setMode(c, modes[Math.min(modes.length - 1, mi + 1)]); dp.save(); }, null);
             boolean win = c.display == DesktopConfig.DisplayMode.WINDOWED;
-            List<int[]> list = dp.display.available();
+            List<int[]> all = dp.display.available();
+            int[] n = all.isEmpty() ? new int[]{0, 0} : dp.display.nativeSize();
+            List<int[]> list = win ? DisplayManager.windowList(all, n[0], n[1]) : all;          // Build 66: a window is never offered a size that would cover the desktop (it used to snap back to 1280 x 720)
             String shown = win ? c.width + " X " + c.height : DisplayManager.pickLabel(c.modeW, c.modeH);
             s.row("RESOLUTION", shown,
                     () -> pick(c, DisplayManager.step(list, !win, win ? c.width : c.modeW, win ? c.height : c.modeH, false)),
@@ -48,11 +53,15 @@ final class DesktopTabs {
                     () -> { c.frameLimit = DesktopConfig.FRAME_LIMITS[Math.max(0, fi - 1)]; gm.apply(); dp.save(); },
                     () -> { c.frameLimit = DesktopConfig.FRAME_LIMITS[Math.min(DesktopConfig.FRAME_LIMITS.length - 1, fi + 1)]; gm.apply(); dp.save(); }, null);
             s.toggle("VSYNC", c.vsync, () -> { c.vsync = !c.vsync; gm.apply(); dp.save(); });
+            s.toggle("STREAMER MODE", c.streamerMode, () -> { c.streamerMode = !c.streamerMode; dp.save(); });     // Build 66: no auto-pause on focus loss (per machine; the launcher's focus policy reads it live)
             s.skip(8);
             Ui ui = g.ui;
-            int[] n = list.isEmpty() ? new int[]{0, 0} : dp.display.nativeSize();
-            note(ui, s, win ? "WINDOWED: RESOLUTION IS THE WINDOW SIZE. F11 OR ALT+ENTER SWITCHES TO FULL SCREEN." : "BORDERLESS FILLS THE SCREEN AND ALT-TABS FAST. FULLSCREEN USES THE MONITOR MODE. THE SCREEN IS " + n[0] + " X " + n[1] + ".");
-            note(ui, s, "PICTURE SIZE BELOW 100% DRAWS THE WORLD SMALLER AND STRETCHES IT. TEXT STAYS SHARP.");
+            note(ui, s, win ? "WINDOWED: RESOLUTION IS THE WINDOW SIZE. F11 OR ALT+ENTER SWITCHES TO FULL SCREEN."
+                    : c.display == DesktopConfig.DisplayMode.BORDERLESS ? "BORDERLESS: FULL SCREEN AT THE MONITOR'S " + n[0] + " X " + n[1] + ". BEST FOR SCREENSHOTS AND STREAMING."
+                    : "FULLSCREEN USES THE MONITOR MODE (" + n[0] + " X " + n[1] + ") AND MINIMISES WHEN ANOTHER WINDOW TAKES FOCUS.");
+            note(ui, s, c.streamerMode ? "STREAMER MODE: NO AUTO-PAUSE WHEN ANOTHER WINDOW OR MONITOR HAS FOCUS. PAUSE FROM THE MENU."
+                    : c.renderScale < 100 ? "PICTURE SIZE BELOW 100% DRAWS THE WORLD SMALLER AND STRETCHES IT. TEXT STAYS SHARP."
+                    : "STREAMER MODE OFF: THE RUN PAUSES ITSELF WHEN THE WINDOW LOSES FOCUS. ON: IT KEEPS GOING.");
         }
 
         private void pick(DesktopConfig c, int[] r) { dp.display.setResolution(c, r[0], r[1]); dp.save(); }
@@ -112,7 +121,8 @@ final class DesktopTabs {
             s.skip(8);
             Ui ui = g.ui;
             note(ui, s, "KEYBOARD, MOUSE AND CONTROLLER ALL WORK AT ONCE. PROMPTS FOLLOW WHAT YOU USED LAST.");
-            note(ui, s, "F9 SAVES A SCREENSHOT TO PICTURES/UPWARDLY/SCREENSHOTS. THE PAUSE MENU HAS TAKE SCREENSHOT TOO.");
+            PadFamily fam = in.family();                                                                            // Build 66: the chord is named in the active pad's own words (LB+RB, L1+R1, L+R)
+            note(ui, s, "F9 OR " + fam.label(Ctl.L1) + "+" + fam.label(Ctl.R1) + " SAVES A SCREENSHOT TO PICTURES/UPWARDLY/SCREENSHOTS. THE PAUSE MENU HAS ONE TOO.");
         }
     }
 }

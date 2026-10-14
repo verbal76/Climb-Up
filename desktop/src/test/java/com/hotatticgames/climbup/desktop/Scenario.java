@@ -90,6 +90,7 @@ public final class Scenario implements ApplicationListener {
                 FocusModel.Item f = fm.focused(), t = fm.lastItem(target);
                 float dx = t.x + t.w / 2 - (f.x + f.w / 2), dy = t.y + t.h / 2 - (f.y + f.h / 2);
                 int key = Math.abs(dy) >= Math.abs(dx) * 0.6f ? (dy > 0 ? Input.Keys.UP : Input.Keys.DOWN) : (dx > 0 ? Input.Keys.RIGHT : Input.Keys.LEFT);
+                if (isArrow(f) && (key == Input.Keys.LEFT || key == Input.Keys.RIGHT) && Math.abs(dy) > 2f) key = dy > 0 ? Input.Keys.UP : Input.Keys.DOWN;     // left/right on a - / + row adjusts its value (MenuNav): leave the row vertically first
                 if (Boolean.getBoolean("scenario.trace")) System.out.println("SCENARIO_TRACE goTo " + label + " focus=" + f.label + " key=" + Input.Keys.toString(key));
                 src.tapKey(key); pause = 2;
                 return false;
@@ -97,6 +98,8 @@ public final class Scenario implements ApplicationListener {
         };
     }
     private Step goTo(String label) { return goTo(label, 0); }
+    /** A settings row's - or + button: left/right while it has the focus presses the row's other arrow instead of moving. */
+    private static boolean isArrow(FocusModel.Item f) { return f != null && (f.label.equals("-") || f.label.equals("+")); }
 
     // ---- the same, driven only through a controller (no keyboard, no mouse): what a Steam Deck or couch player does
     private FakePad pad() { return src.pads.isEmpty() ? null : src.pads.get(0); }
@@ -119,7 +122,11 @@ public final class Scenario implements ApplicationListener {
                 FocusModel.Item f = fm.focused(), t = fm.lastItem(target);
                 Ctl c;
                 if (f == null) c = Ctl.DPAD_DOWN;
-                else { float dx = t.x + t.w / 2 - (f.x + f.w / 2), dy = t.y + t.h / 2 - (f.y + f.h / 2); c = Math.abs(dy) >= Math.abs(dx) * 0.6f ? (dy > 0 ? Ctl.DPAD_UP : Ctl.DPAD_DOWN) : (dx > 0 ? Ctl.DPAD_RIGHT : Ctl.DPAD_LEFT); }
+                else {
+                    float dx = t.x + t.w / 2 - (f.x + f.w / 2), dy = t.y + t.h / 2 - (f.y + f.h / 2);
+                    c = Math.abs(dy) >= Math.abs(dx) * 0.6f ? (dy > 0 ? Ctl.DPAD_UP : Ctl.DPAD_DOWN) : (dx > 0 ? Ctl.DPAD_RIGHT : Ctl.DPAD_LEFT);
+                    if (isArrow(f) && (c == Ctl.DPAD_LEFT || c == Ctl.DPAD_RIGHT) && Math.abs(dy) > 2f) c = dy > 0 ? Ctl.DPAD_UP : Ctl.DPAD_DOWN;      // as in goTo: a - / + row takes left/right as its own adjustment
+                }
                 p.set(c, 1f); held = c;
                 return false;
             }
@@ -198,6 +205,26 @@ public final class Scenario implements ApplicationListener {
         steps.add(act(() -> check("settings opened with the desktop tabs", screen() instanceof SettingsScreen && hasButton("CONTROLS") && hasButton("DISPLAY"), screenName())));
         steps.add(shot("05_settings_audio"));
         steps.add(goTo("DISPLAY")); steps.add(tap(Input.Keys.ENTER)); steps.add(wait(10)); steps.add(shot("06_settings_window"));
+        // --- Build 66: DISPLAY MODE has - / + (WINDOWED -> FULLSCREEN -> BORDERLESS, clamped), the windowed picker never offers the desktop-covering size, STREAMER MODE is a per-machine switch
+        steps.add(goTo("+", 0)); steps.add(tap(Input.Keys.ENTER)); steps.add(wait(30));
+        steps.add(act(() -> check("DISPLAY MODE + goes to FULLSCREEN", dp.cfg.display == DesktopConfig.DisplayMode.FULLSCREEN && Gdx.graphics.isFullscreen(), dp.cfg.display + " " + Gdx.graphics.getWidth() + "x" + Gdx.graphics.getHeight())));
+        steps.add(goTo("+", 0)); steps.add(tap(Input.Keys.ENTER)); steps.add(wait(30));
+        steps.add(act(() -> check("DISPLAY MODE + again goes to BORDERLESS (a window at the screen's size)", dp.cfg.display == DesktopConfig.DisplayMode.BORDERLESS && !Gdx.graphics.isFullscreen(), dp.cfg.display + " " + Gdx.graphics.getWidth() + "x" + Gdx.graphics.getHeight())));
+        steps.add(shot("06b_settings_borderless"));
+        steps.add(goTo("+", 0)); steps.add(tap(Input.Keys.ENTER)); steps.add(wait(10));
+        steps.add(act(() -> check("+ past BORDERLESS stays there (no wrap-around)", dp.cfg.display == DesktopConfig.DisplayMode.BORDERLESS, String.valueOf(dp.cfg.display))));
+        // the keyboard way down a - / + row: LEFT while its + has the focus presses the row's - (MenuNav's volume-style rows); twice brings the window back
+        steps.add(tap(Input.Keys.LEFT)); steps.add(wait(30));
+        steps.add(act(() -> check("LEFT on the DISPLAY MODE row steps back to FULLSCREEN", dp.cfg.display == DesktopConfig.DisplayMode.FULLSCREEN, String.valueOf(dp.cfg.display))));
+        steps.add(tap(Input.Keys.LEFT)); steps.add(wait(30));
+        steps.add(act(() -> check("LEFT again is back in the 1280x720 window", dp.cfg.display == DesktopConfig.DisplayMode.WINDOWED && !Gdx.graphics.isFullscreen() && Gdx.graphics.getWidth() == 1280 && Gdx.graphics.getHeight() == 720, dp.cfg.display + " " + Gdx.graphics.getWidth() + "x" + Gdx.graphics.getHeight())));
+        steps.add(goTo("+", 1)); steps.add(tap(Input.Keys.ENTER)); steps.add(wait(20));
+        steps.add(act(() -> check("the windowed RESOLUTION picker never offers the size that covers the desktop (this display has only that one, so the window stays 1280x720)", dp.cfg.width == 1280 && dp.cfg.height == 720 && Gdx.graphics.getWidth() == 1280 && Gdx.graphics.getHeight() == 720, dp.cfg.width + "x" + dp.cfg.height + " desktop " + dp.display.nativeSize()[0] + "x" + dp.display.nativeSize()[1])));
+        steps.add(goToToggle(1)); steps.add(tap(Input.Keys.ENTER)); steps.add(wait(6));
+        steps.add(act(() -> check("STREAMER MODE switched on and saved; a lost focus no longer pauses", dp.cfg.streamerMode && DesktopConfig.load(dp.configFile).streamerMode && !DesktopLauncher.pauseOnFocusLoss(dp.cfg, false), "memory " + dp.cfg.streamerMode + " disk " + DesktopConfig.load(dp.configFile).streamerMode)));
+        steps.add(shot("06c_settings_streamer_on"));
+        steps.add(goToToggle(1)); steps.add(tap(Input.Keys.ENTER)); steps.add(wait(6));
+        steps.add(act(() -> check("STREAMER MODE off again (the default), on disk too; a lost focus pauses as before", !dp.cfg.streamerMode && !DesktopConfig.load(dp.configFile).streamerMode && DesktopLauncher.pauseOnFocusLoss(dp.cfg, false), String.valueOf(dp.cfg.streamerMode))));
         steps.add(goTo("CONTROLS")); steps.add(tap(Input.Keys.ENTER)); steps.add(wait(10)); steps.add(shot("07_settings_controls"));
         steps.add(act(() -> check("controls tab lists the device rows", hasButton("AUTO DETECT") && hasButton("NONE DETECTED"), "input device + connected controller")));
         // --- keyboard rebinding
@@ -360,6 +387,17 @@ public final class Scenario implements ApplicationListener {
             if (pngs.length == 1) check("the pause panel is not in the picture (the centre of the frame is the bright play view, not the dark panel)", centreLuma(pngs[0]) > 90, lumaNote(pngs[0]));
             check("the pause menu is back and the run is still paused", playScreen() != null && hasButton("RESUME") && hasButton("TAKE SCREENSHOT"), screenName());
         }));
+        // Build 66: LB + RB together on the pad takes a screenshot (fixed, like F9): once per joint press, locked until both bumpers are up again
+        steps.add(act(() -> shotsBefore = countShots()));
+        steps.add(act(() -> { pad().set(Ctl.L1, 1f); pad().set(Ctl.R1, 1f); }));
+        steps.add(until(() -> countShots() >= shotsBefore + 1, 120, "LB+RB screenshot written")); steps.add(wait(20));
+        steps.add(act(() -> check("LB+RB held together wrote exactly one screenshot and holding it adds none", newShots(shotsBefore).length == 1, newShots(shotsBefore).length + " new")));
+        steps.add(act(() -> pad().set(Ctl.R1, 0f))); steps.add(wait(3)); steps.add(act(() -> pad().set(Ctl.R1, 1f))); steps.add(wait(20));
+        steps.add(act(() -> check("RB tapped again while LB stays held: still one (locked until both are up)", newShots(shotsBefore).length == 1, newShots(shotsBefore).length + " new")));
+        steps.add(act(() -> { pad().set(Ctl.L1, 0f); pad().set(Ctl.R1, 0f); })); steps.add(wait(3));
+        steps.add(act(() -> { pad().set(Ctl.L1, 1f); pad().set(Ctl.R1, 1f); }));
+        steps.add(until(() -> countShots() >= shotsBefore + 2, 120, "second LB+RB screenshot written")); steps.add(wait(5));
+        steps.add(act(() -> { pad().set(Ctl.L1, 0f); pad().set(Ctl.R1, 0f); check("both released and pressed together again: a second screenshot, the run still paused", newShots(shotsBefore).length == 2 && playScreen() != null && hasButton("RESUME"), newShots(shotsBefore).length + " new " + screenName()); }));
         steps.add(padGoTo("SAVE & EXIT")); steps.add(padIdle()); steps.add(padTap(Ctl.A)); steps.add(until(() -> screen() instanceof TitleScreen, 90, "title after the seeded run on the pad")); steps.add(wait(20));
         steps.add(act(() -> { src.pads.clear(); })); steps.add(wait(5));
         steps.add(act(() -> Gdx.graphics.setWindowedMode(1280, 720))); steps.add(wait(20));

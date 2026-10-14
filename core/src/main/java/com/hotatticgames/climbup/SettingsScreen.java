@@ -49,7 +49,8 @@ public final class SettingsScreen extends ScreenAdapter {
         float bx = x + cw * 0.56f, bw = cw * 0.44f;
         if (minus != null) {
             if (ui.button("-", bx, rowY, 86, h)) { minus.run(); g.audio.play("click"); g.audio.applyVolume(); }
-            ui.textC(value, bx + 86 + (bw - 172) / 2, rowY + h / 2 - 14, ui.fitSize(4f), Ui.ACCENT);
+            float vpx = ui.fitSize(Math.min(4f, (bw - 172 - 12) / Math.max(1f, value.length() * 6f)));      // a long value ("NATIVE (AUTO)") shrinks to stay between the arrows (Build 66)
+            ui.textC(value, bx + 86 + (bw - 172) / 2, rowY + h / 2 - 3.5f * vpx, vpx, Ui.ACCENT);
             if (ui.button("+", bx + bw - 86, rowY, 86, h)) { plus.run(); g.audio.play("click"); g.audio.applyVolume(); }
         } else if (ui.button(value, bx, rowY, bw, h)) { tap.run(); g.audio.play("click"); }
         rowY -= h + 10;

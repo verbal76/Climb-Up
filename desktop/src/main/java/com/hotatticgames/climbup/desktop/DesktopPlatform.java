@@ -34,6 +34,7 @@ public final class DesktopPlatform implements Platform {
     private final SteamManager steam = new SteamManager();     // Steam achievements (Windows); a silent no-op when Steam is not running
     final GlyphCache glyphs = new GlyphCache();                // the controller / key images behind the prompts (CC0 Input Prompts pack)
     private float hintT, saveClock;
+    private final ChordLatch shotChord = new ChordLatch();     // Build 66: LB + RB screenshot
     private InputManager.Device lastHintDevice = InputManager.Device.KEYBOARD;
     private boolean dirty;
     /** True once the game's create() reached attach(): the window and GL context exist and startup got past the point where a different graphics setup could still be tried. */
@@ -94,6 +95,8 @@ public final class DesktopPlatform implements Platform {
         input.update(Math.min(dt, 0.1f));
         if (sources.justPressed(Input.Keys.F11) || (sources.justPressed(Input.Keys.ENTER) && (sources.down(Input.Keys.ALT_LEFT) || sources.down(Input.Keys.ALT_RIGHT)))) { display.toggle(cfg); save(); }
         if (sources.justPressed(Input.Keys.F9) && g != null) g.requestScreenshot();          // Build 65: the game's own screenshot; F12 is left to Steam's overlay
+        Pad pad = input.activePad();                                                           // Build 66: both bumpers together on the active controller, once per joint press (fixed like F9, not in the bindings editor)
+        if (shotChord.update(pad != null && pad.value(Ctl.L1) >= 0.5f, pad != null && pad.value(Ctl.R1) >= 0.5f) && g != null) g.requestScreenshot();
         if (cfg.display == DesktopConfig.DisplayMode.WINDOWED && !Gdx.graphics.isFullscreen()) {
             int w = Gdx.graphics.getWidth(), h = Gdx.graphics.getHeight();
             if (w >= 640 && h >= 360 && (w != cfg.width || h != cfg.height)) { cfg.width = w; cfg.height = h; dirty = true; }

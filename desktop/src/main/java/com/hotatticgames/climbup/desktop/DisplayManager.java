@@ -77,6 +77,17 @@ public final class DisplayManager {
         return new int[]{Math.min(w, desktopW), Math.min(h, desktopH)};
     }
 
+    /**
+     * The picker list for a window (Build 66): the monitor's sizes without any that would cover the whole desktop, since {@link #windowSize}
+     * refuses those (before, the picker could step onto the monitor's own size and the window snapped back to 1280 x 720). Never empty.
+     */
+    public static List<int[]> windowList(List<int[]> list, int desktopW, int desktopH) {
+        List<int[]> out = new ArrayList<>();
+        for (int[] m : list) if (!(m[0] >= desktopW && m[1] >= desktopH)) out.add(m);
+        if (out.isEmpty()) out.add(new int[]{DEFAULT_WINDOW[0], DEFAULT_WINDOW[1], 60});
+        return out;
+    }
+
     /** Fraction of the native size the picture is drawn at in borderless mode for a picked size (1 = native or auto). */
     public static float borderlessScale(int pickW, int pickH, int nativeW, int nativeH) {
         if (pickW <= 0 || pickH <= 0 || nativeW <= 0 || nativeH <= 0) return 1f;

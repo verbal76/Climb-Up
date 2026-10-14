@@ -129,6 +129,7 @@ public final class DesktopPlatform implements Platform {
      * The control hints under the play area: each prompt is the device's own glyph (an Xbox, PlayStation or Switch button, a key cap) from the
      * CC0 Input Prompts pack, followed by what it does; a control the pack has no image for shows its name instead, so nothing ever goes blank.
      */
+    @Override public float playHintsHeight() { return hintT <= 0f ? 0f : 22f + 7f * (3.2f * 1.3f) * 1.9f + 16f + 8f; }     // the bar below (drawn at y 22, a glyph row 1.9x the text height plus 16) at its largest text size, plus a gap
     @Override public void drawPlayHints(Ui ui, boolean club, float W, float H) {
         float dt = Gdx.graphics.getDeltaTime();
         hintT = Math.max(0f, hintT - dt);

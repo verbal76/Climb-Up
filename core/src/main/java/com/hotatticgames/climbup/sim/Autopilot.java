@@ -132,10 +132,14 @@ public final class Autopilot {
     /** Waits, runs across the platform, hops over the hazard in the middle ({@code hopDist} before it), then leaves like {@link GroundPolicy}. */
     static final class MidHopPolicy implements Policy {
         final int a, b, dir; final float wait, hopDist, hx; final GroundPolicy rest; float t; int phase;
-        MidHopPolicy(int a, int b, int dir, float wait, float hopDist, float hx, float offset, int steerMode) { this(a, b, dir, wait, hopDist, hx, offset, steerMode, 1f); }
+        /** Hazard index of a crab to hop (-1: a fixed hazard at hx): a crab runs at you (Build 63), so the hop is timed off where it IS, not where its sweep was. */
+        final int crab;
+        MidHopPolicy(int a, int b, int dir, float wait, float hopDist, float hx, float offset, int steerMode) { this(a, b, dir, wait, hopDist, hx, offset, steerMode, 1f, -1); }
+        MidHopPolicy(int a, int b, int dir, float wait, float hopDist, float hx, float offset, int steerMode, int crab) { this(a, b, dir, wait, hopDist, hx, offset, steerMode, 1f, crab); }
         /** {@code restSpeed} below 1 is the walk to the take-off edge after the hazard is behind: a person eases off before a spring or pad, which launches with whatever speed is carried in. */
-        MidHopPolicy(int a, int b, int dir, float wait, float hopDist, float hx, float offset, int steerMode, float restSpeed) {
-            this.a = a; this.b = b; this.dir = dir; this.wait = wait; this.hopDist = hopDist; this.hx = hx;
+        MidHopPolicy(int a, int b, int dir, float wait, float hopDist, float hx, float offset, int steerMode, float restSpeed) { this(a, b, dir, wait, hopDist, hx, offset, steerMode, restSpeed, -1); }
+        MidHopPolicy(int a, int b, int dir, float wait, float hopDist, float hx, float offset, int steerMode, float restSpeed, int crab) {
+            this.a = a; this.b = b; this.dir = dir; this.wait = wait; this.hopDist = hopDist; this.hx = hx; this.crab = crab;
             rest = new GroundPolicy(a, b, dir, 0f, offset, 0.9f, steerMode); rest.speed = restSpeed;
         }
         public void act(Sim s, InputState in) {
@@ -146,7 +150,8 @@ public final class Autopilot {
                 else phase = 1;
             }
             if (phase == 1) {
-                float ahead = s.course.dsWrap(hx, s.s) * dir;
+                float at = crab >= 0 && crab < s.course.hazards.size() ? s.crabAt(crab, s.course.hazards.get(crab)) : hx;
+                float ahead = s.course.dsWrap(at, s.s) * dir;
                 in.moveX = dir;
                 if (ahead <= hopDist) { in.jumpPressed = true; in.jumpHeld = true; phase = 2; }
                 return;
@@ -289,14 +294,16 @@ public final class Autopilot {
             }
         }
         if (base.mode == Sim.Mode.GROUND && c.get(a).isPlatform()) {      // a hazard in the middle of this platform: hop-over moves
-            for (Element h : c.hazards) {
+            for (int hi = 0; hi < c.hazards.size(); hi++) {
+                Element h = c.hazards.get(hi);
                 if (h.anchor != anchorIdx(c, a) || !(h.type == Element.Type.SAW_H || h.type == Element.Type.SPIKE_BLOCK || h.type == Element.Type.SPIKE_TRAP || h.type == Element.Type.CRAB)) continue;
                 if (Math.abs(c.dsWrap(h.s, base.es1[a])) >= c.get(a).halfW()) continue;
                 final float hx = base.es1[a] + c.dsWrap(h.s, base.es1[a]);
+                final int crab = h.type == Element.Type.CRAB ? hi : -1;
                 float[] hops = {1.0f, 1.5f, 2.0f, 2.5f};
                 for (int w = 0; w < nWaits; w++) for (float hd : hops) for (int sm = 0; sm < 2; sm++) {
                     final float wt = w * 0.3f, fhd = hd; final int fsm = sm == 0 ? 0 : 3;
-                    cands.add(() -> new MidHopPolicy(a, b, dir, wt, fhd, hx, 0f, fsm));
+                    cands.add(() -> new MidHopPolicy(a, b, dir, wt, fhd, hx, 0f, fsm, crab));
                     group.add(16 + (int) (hd * 2f) % 8 + sm * 0);
                 }
                 break;
@@ -304,13 +311,15 @@ public final class Autopilot {
         }
         if (SLOW_APPROACH.get() && base.mode == Sim.Mode.GROUND && !pair && c.get(a).isPlatform() && !(movingNear(c, a))) {
             if (slowCands == null) slowCands = new ArrayList<>();
-            for (Element h : c.hazards) {          // hop the hazard in the middle, then ease off for the take-off
+            for (int hi = 0; hi < c.hazards.size(); hi++) {          // hop the hazard in the middle, then ease off for the take-off
+                Element h = c.hazards.get(hi);
                 if (h.anchor != anchorIdx(c, a) || !(h.type == Element.Type.SAW_H || h.type == Element.Type.SPIKE_BLOCK || h.type == Element.Type.SPIKE_TRAP || h.type == Element.Type.CRAB)) continue;
                 if (Math.abs(c.dsWrap(h.s, base.es1[a])) >= c.get(a).halfW()) continue;
                 final float hx = base.es1[a] + c.dsWrap(h.s, base.es1[a]);
+                final int crab = h.type == Element.Type.CRAB ? hi : -1;
                 for (float rs : new float[]{0.5f, 0.3f}) for (float hd : new float[]{1.0f, 1.5f, 2.0f, 2.5f}) for (int sm = 0; sm < 2; sm++) {
                     final float fhd = hd, frs = rs; final int fsm = sm == 0 ? 0 : 3;
-                    slowCands.add(() -> new MidHopPolicy(a, b, dir, 0f, fhd, hx, 0f, fsm, frs));
+                    slowCands.add(() -> new MidHopPolicy(a, b, dir, 0f, fhd, hx, 0f, fsm, frs, crab));
                 }
                 break;
             }   // a gentle approach: a person can walk up slowly and make a short, controlled hop where a full-speed run-up would overshoot or catch the wrong ledge
@@ -476,6 +485,7 @@ public final class Autopilot {
     /** Only the whole-course solver (a stand-in for a person) may use slow approaches; the generator's own proofs stay on the standard move set so difficulty is unchanged. */
     static final ThreadLocal<Boolean> SLOW_APPROACH = ThreadLocal.withInitial(() -> false);
     static Sim lastReal;       // diagnostics: the live sim of the most recent run
+    private static final boolean DBG = Boolean.getBoolean("dbg");   // diagnostics: trace the whole-course run (java -Ddbg=true)
     public static Report run(Course c, Tuning t, float maxSimSeconds) {
         SLOW_APPROACH.set(true);
         try { return runInner(c, t, maxSimSeconds); } finally { SLOW_APPROACH.set(false); }
@@ -495,6 +505,7 @@ public final class Autopilot {
         int lastA = -1, sameA = 0;
         while (!real.won && real.time < maxSimSeconds) {
             if (a == lastA) sameA++; else { lastA = a; sameA = 0; }
+            if (DBG) System.out.printf("loop a=%d same=%d mode=%s on=%d s=%.2f y=%.2f vx=%.2f vy=%.2f t=%.2f%n", a, sameA, real.mode, real.onElem, real.s, real.y, real.vx, real.vy, real.time);
             if (sameA > 30) { rep.failedLink = a; rep.simTime = real.time; rep.failInfo = "stuck at one link: knocked back again and again"; return rep; }
             if (endless && a >= c.goalIndex()) { rep.completed = true; rep.simTime = real.time; return rep; }
             for (int[] kr : c.keyRooms) {
@@ -508,7 +519,9 @@ public final class Autopilot {
             }
             if (real.mode == Sim.Mode.AIR && !(real.lastPad == a && (c.get(a).type == Element.Type.PAD || c.get(a).type == Element.Type.SPRING))) {      // shoved into the air by a bee or crab: settle first
                 if (!recover(real, a, in)) { rep.failedLink = a; rep.simTime = real.time; rep.failInfo = "recover " + String.format("mode=%s s=%.2f y=%.2f", real.mode, real.s, real.y); return rep; }
-                a = real.onElem; settle(real, a, in); continue;
+                a = real.onElem;
+                if (!hasMidHazard(c, a)) settle(real, a, in);     // a hazard in the middle (a crab that comes after you): no walking to the centre to settle, size the next move up from where we landed
+                continue;
             }
             Result r = plan(real, a, false, true);
             if (!r.ok) r = plan(real, a, false, false);        // no move leaves a state that suits the next link: take any that works and sort the next link out from there
@@ -566,7 +579,7 @@ public final class Autopilot {
                 }
             }
             if (!r.ok && real.mode == Sim.Mode.AIR && !(real.lastPad == a && (c.get(a).type == Element.Type.PAD || c.get(a).type == Element.Type.SPRING))) {     // bumped while lining up: land, then size the move up again
-                if (recover(real, a, in)) { a = real.onElem; settle(real, a, in); continue; }
+                if (recover(real, a, in)) { a = real.onElem; if (!hasMidHazard(c, a)) settle(real, a, in); continue; }
             }
             if (!r.ok && real.mode == Sim.Mode.AIR && real.lastPad == a && (c.get(a).type == Element.Type.PAD || c.get(a).type == Element.Type.SPRING)) {
                 // like a person: just launched sideways off a pad, so let it carry you a moment (no input) before steering for the next one
@@ -581,6 +594,7 @@ public final class Autopilot {
             int fallsBefore = real.setbacks();
             real.act = null;
             int guard = (int) (20f / Sim.DT);
+            if (DBG) System.out.printf("  policy %s from mode=%s s=%.2f y=%.2f t=%.2f%n", p.getClass().getSimpleName(), real.mode, real.s, real.y, real.time);
             while (guard-- > 0 && !succeeded(real, a)) {
                 in.clear(); p.act(real, in); real.step(in);
                 if (real.setbacks() != fallsBefore) { rep.failedLink = a; rep.simTime = real.time; rep.failInfo = String.format("setback while executing the move: hits=%d falls=%d mode=%s s=%.2f y=%.2f", real.hits, real.falls, real.mode, real.s, real.y) + (real.hitBy != null ? " lastHazard=" + real.hitBy.type + String.format(" s=%.2f y=%.2f anchor=%d", real.hitBy.s, real.hitBy.y, real.hitBy.anchor) : ""); return rep; }

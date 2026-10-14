@@ -60,7 +60,9 @@ public final class PlayScreen extends ScreenAdapter {
     private String toast = "", tip = "", caption = ""; private float captionT;
     private int lastZone = -1, shots;
     private boolean confirmRestart, confirmEnd;
-    private static final class Pop { final String t; final Color c; float age; Pop(String t, Color c) { this.t = t; this.c = c; } }
+    /** A word that pops over the hero's head and floats up. {@code lift} is how many newer pops have arrived under it: each one bumps the older ones up a line, so two never print over each other (Build 63, owner). */
+    private static final class Pop { final String t; final Color c; float age, lift, liftShown; Pop(String t, Color c) { this.t = t; this.c = c; } }
+    private static final float POP_LINE = 64f;    // screen pixels between stacked pops: clear of a fresh pop's 1.7x pop-in size
     private final java.util.ArrayList<Pop> pops = new java.util.ArrayList<>();
     private float hitstop, confettiT, gruntT; private int milestone, gruntN;
     private static final String[] STRAIN = {"UNGH!", "HNNG!", "AGH!", "NOPE NOPE NOPE!", "HOLD ON!", "NOT TODAY!"};
@@ -70,7 +72,11 @@ public final class PlayScreen extends ScreenAdapter {
     private float[] keyRgb(int c) { return com.hotatticgames.climbup.render.KeyColors.rgb(c, g.settings.colourblind); }
     private float lockedT;
 
-    private void pop(String t, Color c) { if (pops.size() > 3) pops.remove(0); pops.add(new Pop(t, c)); }
+    private void pop(String t, Color c) {
+        for (Pop p : pops) p.lift += 1f;                         // the ones still showing move up a line: the new word prints under them, never over them
+        if (pops.size() > 3) pops.remove(0);
+        pops.add(new Pop(t, c));
+    }
     private void freeze(float s) { if (!g.settings.reducedMotion) hitstop = Math.max(hitstop, s); }
     private com.badlogic.gdx.Screen next; private boolean disposeOnLeave;   // applied at the end of render(), after the batch is closed
     // Steam achievements (Windows only; a no-op sink elsewhere). Pure telemetry fed from events the game already fires.
@@ -309,7 +315,7 @@ public final class PlayScreen extends ScreenAdapter {
             if (g.save.finished && tower != null && !demo) g.save.records().infinity(g.save.seed, infinityMetres());
             int ms = (int) (maxAbs / 50f);
             if (ms > milestone) { milestone = ms; toast = ms * 50 + " M!"; toastT = 1.6f; g.audio.play("checkpoint", 0.55f, 1.35f); world.particles.burst(sim.s, sim.y + 1f, 12, gold, 2.6f, 3.2f, 0.1f, -0.5f, 1f); }
-            for (int pi = pops.size() - 1; pi >= 0; pi--) { Pop pp = pops.get(pi); pp.age += dt; if (pp.age > 1.1f) pops.remove(pi); }
+            for (int pi = pops.size() - 1; pi >= 0; pi--) { Pop pp = pops.get(pi); pp.age += dt; pp.liftShown += (pp.lift - pp.liftShown) * Math.min(1f, dt * 14f); if (pp.age > 1.1f) pops.remove(pi); }
             autosaveT += dt; if (autosaveT > 8f) { autosaveT = 0; g.persist(); saveRun(); }
             ambientSounds(dt);
             juice(dt);
@@ -700,14 +706,17 @@ public final class PlayScreen extends ScreenAdapter {
         }
         if (captionT > 0 && g.settings.captions) {           // sound caption: CAPTION SIZE scales it on top of TEXT SIZE; CAPTION BACKGROUND is none, dark or solid
             float cpx = 4f * tm * g.settings.captionMul(), cw = ui.font.width(caption, cpx), chh = ui.font.height(cpx);
-            if (g.settings.captionBg > 0) ui.rect(W / 2 - cw / 2 - 14, 28, cw + 28, chh + 24, g.settings.captionBg == 2 ? Color.BLACK : new Color(0, 0, 0, 0.6f));
-            ui.text(caption, W / 2 - cw / 2, 40, cpx, Ui.TEXT);
+            float cy = 40f + (state == State.PLAYING && !g.platform.touchControls() ? g.platform.playHintsHeight() : 0f);   // above the desktop play-hint bar while it shows, never on it
+            if (g.settings.captionBg > 0) ui.rect(W / 2 - cw / 2 - 14, cy - 12, cw + 28, chh + 24, g.settings.captionBg == 2 ? Color.BLACK : new Color(0, 0, 0, 0.6f));
+            ui.text(caption, W / 2 - cw / 2, cy, cpx, Ui.TEXT);
         }
+        tipBottom = -1f;
         if (!tip.isEmpty() && state == State.PLAYING) {
             float px2 = 3.4f * tm; float maxW = W * 0.5f;
             String[] lines = wrap(tip, px2, maxW);
             float bh = lines.length * (PixelFont_H * px2 + 10) + 24;
             float by = H - 150f - bh;          // top of the screen, under the HUD row, clear of the action
+            tipBottom = by;
             ui.panel(W / 2 - maxW / 2 - 20, by, maxW + 40, bh);
             for (int i = 0; i < lines.length; i++) ui.textC(lines[i], W / 2, by + bh - 24 - (i + 1) * (PixelFont_H * px2 + 10) + 10, px2, Ui.TEXT);
         }
@@ -721,14 +730,24 @@ public final class PlayScreen extends ScreenAdapter {
     }
     private static final float PixelFont_H = 7f;
     private final float[] headPos = new float[2];
+    private float tipBottom = -1f;       // the tip box's lower edge this frame (-1: no tip): the pops never rise into it
 
     private void drawPops() {
         if (pops.isEmpty() || state != State.PLAYING) return;
         world.heroHeadScreen(g.ui.w(), g.ui.h(), headPos);
+        float base = 52f + (world.heroBubble() != null ? g.ui.bubbleHeight() + 6f : 0f);   // while he is saying something, the words pop above his speech bubble, not through it
+        // the column's ceiling: under the tip box, the toast / zone banner band, or the top edge - when the hero hangs high on screen the whole
+        // column drops below it instead of rising into the text there (keeping its own spacing, so the words still never print over each other)
+        float H = g.ui.h(), cap = H - 40f;
+        if (tipBottom >= 0f) cap = Math.min(cap, tipBottom - 8f);
+        if (toastT > 0 || zoneT > 0) cap = Math.min(cap, H - 180f);
+        float top = -1e9f;
+        for (Pop p : pops) { float grow = 1f + Math.max(0f, 1f - p.age * 7f) * 0.7f; top = Math.max(top, headPos[1] + base + p.age * 55f + p.liftShown * POP_LINE + PixelFont_H * 5.5f * grow); }
+        float drop = Math.max(0f, top - cap);
         for (Pop p : pops) {
             float k = p.age / 1.1f, grow = 1f + Math.max(0f, 1f - p.age * 7f) * 0.7f;
-            float a = Math.min(1f, (1f - k) * 3f);
-            g.ui.textC(p.t, headPos[0], headPos[1] + 52f + p.age * 55f, 5.5f * grow, new Color(p.c.r, p.c.g, p.c.b, a));
+            float a = Math.min(1f, (1f - k) * 3f) * Math.min(1f, p.age * 10f);     // a short fade-in covers the moment the older words move up out of its way
+            g.ui.textC(p.t, headPos[0], headPos[1] + base + p.age * 55f + p.liftShown * POP_LINE - drop, 5.5f * grow, new Color(p.c.r, p.c.g, p.c.b, a));
         }
     }
 

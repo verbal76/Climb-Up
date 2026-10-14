@@ -141,7 +141,7 @@ public final class RigShot {
                 // frame the character
                 float cy = y + 1.2f;
                 // ledge/cable turn the hero; pull the camera to a slight 3/4 so arms read
-                float camAng = label.startsWith("ledge") ? 0.9f : 0.25f, dist = 9.0f;
+                float camAng = label.startsWith("ledge") ? 0.9f : Float.parseFloat(System.getProperty("climb.rigAng", "0.25")), dist = Float.parseFloat(System.getProperty("climb.rigDist", "9.0"));   // climb.rigAng / climb.rigDist: a closer or more side-on look for inspecting a pose
                 cam.position.set((float) Math.sin(camAng) * dist, cy + 0.6f, (float) Math.cos(camAng) * dist);
                 cam.up.set(0, 1, 0); cam.lookAt(0, cy, 0); cam.update();
 

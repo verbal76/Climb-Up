@@ -25,6 +25,8 @@ public final class DesktopLauncher {
         assetRoot = assetRoot();
         File dir = DataDirs.dataDir();
         DesktopLog.start(dir);
+        ClimbGame.appBuild = buildNumber(DesktopLauncher.class.getPackage() == null ? null : DesktopLauncher.class.getPackage().getImplementationVersion(), System.getProperty("climb.build"));
+        DesktopLog.append("version " + ClimbGame.VERSION + (ClimbGame.appBuild > 0 ? " build " + ClimbGame.appBuild : " (dev run)"));
         DesktopPlatform platform = new DesktopPlatform(dir);
         DesktopConfig cfg = platform.cfg;
         if (!cfg.graphicsDecided) {          // first run: a large display (a TV) starts full screen, a small one in a window; the rest of the defaults follow once the graphics chip is known
@@ -55,6 +57,20 @@ public final class DesktopLauncher {
             }
             DesktopLog.error("the game stopped with an error", t); t.printStackTrace(); System.exit(1);       // never leave a half-started process behind
         }
+    }
+
+    /**
+     * The build number the title screen and the About line show as "BUILD NN" (Build 63; the desktop builds used to say DEV):
+     * the climb.build property when set (tests), else the NN of the packaged jar's Implementation-Version "1.1.5+NN", which
+     * tools/windows/package.ps1 and tools/linux/package.sh stamp from the workflow's build number. 0 = unknown, shown as DEV
+     * (a run from class files, or a jar packaged without a number).
+     */
+    static int buildNumber(String implementationVersion, String override) {
+        if (override != null) { try { return Math.max(0, Integer.parseInt(override.trim())); } catch (NumberFormatException ignored) { } }
+        if (implementationVersion == null) return 0;
+        int plus = implementationVersion.indexOf('+');
+        if (plus < 0) return 0;
+        try { return Math.max(0, Integer.parseInt(implementationVersion.substring(plus + 1).trim())); } catch (NumberFormatException e) { return 0; }
     }
 
     private static void run(ClimbGame game, Lwjgl3ApplicationConfiguration c) {

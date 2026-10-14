@@ -705,11 +705,21 @@ public final class WorldRenderer implements Disposable {
 
     private static final float PK = 0.37f;                    // pack units -> game units (same scale as the hero)
     private final java.util.HashMap<String, ModelInstance> packInst = new java.util.HashMap<>();
-    private static final float CANNON_YAW = -90f;
-    /** Pedestal height: the barrel (model axis through its origin, 1.66 pack units long each way) sits with its axis 2.35 above the platform, the height the ball flies at. */
-    public static final float CANNON_LIFT = 1.94f;      // 2.35 (axis) - 0.35 (barrel radius) - 0.16 (cap) + 0.10 (the barrel rests in the cap)
-    /** How far BEHIND the walking lane an aimed cannon's pillar stands (owner: "a separate platform behind that... land on the grass and it's just behind it"), so the player never walks through it and lands on clear grass; the ball still crosses the lane in the play plane. */
+    /**
+     * The cannon pack model (Quaternius): its barrel runs along its own +X, muzzle at +X 2.26 units from the axle and the lit fuse at -X; the wheels
+     * (node n1) sit on an axle along Z and the barrel with its cradle and fuse are node n0; the barrel's axis is 1.02 units above the axle. Build 63:
+     * the old drawing assumed the barrel ran along Z, so the side cannon faced the camera, the turret spun about its own barrel instead of turning, and
+     * the mortar lay on its side (owner's PC report).
+     */
+    static final float CANNON_AXIS_UP = 1.02f * PK, CANNON_WHEEL_R = 0.94f * PK, CANNON_MUZZLE = 2.26f * PK;
+    /** Pedestal height under a side cannon: its barrel axis flies the ball 2.35 above the slab, the wheels stand on the 0.16 cap sunk 0.04 into it. */
+    public static final float CANNON_LIFT = 2.35f - CANNON_AXIS_UP - CANNON_WHEEL_R - 0.16f + 0.04f;
+    /** The same under an aimed turret, whose axis sits 2.0 above its slab. */
+    public static final float AIM_LIFT = 2.0f - CANNON_AXIS_UP - CANNON_WHEEL_R - 0.16f + 0.04f;
+    /** How far BEHIND the walking lane every cannon's own slab stands (owner: "a separate platform behind that... land on the grass and it's just behind it"), so the player never walks through it and lands on clear grass; the ball leaves the muzzle there and swoops into the play plane. */
     public static final float AIM_DEPTH = Float.parseFloat(System.getProperty("climb.aimDepth", "1.7"));
+    /** Over this much of its flight a ball drawn from a cannon behind the lane glides forward into the play plane (where it is simulated). */
+    private static final float BALL_SWOOP = 1.6f;
 
     private ModelInstance pack(String name) {
         ModelInstance m = packInst.get(name);
@@ -722,11 +732,39 @@ public final class WorldRenderer implements Disposable {
     }
 
     /** A pack model stood on end (its barrel axis, model z, pointing up), centred at (arc, y). */
-    private void drawPackUp(String name, float arc, float y, float camS, float sc) {
-        ModelInstance m = pack(name);
-        float phi = wrapDiff(arc, camS) / T.radius, r = T.radius;
+    /**
+     * The cannon, axle at (arc, y, dz) with its wheels level: turned {@code yaw} degrees about the vertical (0 = muzzle toward +s, 180 = toward -s)
+     * and its cradle (barrel, carriage and fuse, node n0) tilted {@code tilt} degrees about the axle, muzzle up for positive. See CANNON_AXIS_UP.
+     */
+    private void drawCannon(float arc, float y, float dz, float camS, float yaw, float tilt) {
+        ModelInstance m = pack("cannon");
+        com.badlogic.gdx.graphics.g3d.model.Node cradle = m.getNode("n0");
+        if (cradle != null) { cradle.rotation.setFromAxis(0f, 0f, 1f, tilt); m.calculateTransforms(); }
+        float phi = wrapDiff(arc, camS) / T.radius, r = T.radius - dz;
         m.transform.idt().translate(r * MathUtils.sin(phi), y, -T.radius + r * MathUtils.cos(phi))
-                .rotate(0, 1, 0, phi * MathUtils.radiansToDegrees).rotate(1, 0, 0, 90f).scale(sc, sc, sc);
+                .rotate(0, 1, 0, phi * MathUtils.radiansToDegrees + yaw).scale(PK, PK, PK);
+        batch.render(m, env);
+    }
+
+    private final java.util.HashMap<String, ModelInstance> slabInst = new java.util.HashMap<>();
+    private final java.util.HashMap<String, ColorAttribute> slabTint = new java.util.HashMap<>();
+    /** A cannon's own small platform (owner, Build 63): a two-unit piece in the lane's style - grass, snow, or a metal deck in deep space - with its top at {@code top}, set {@code dz} behind the lane. */
+    private void drawSlab(float arc, float top, float dz, float camS, int zone) {
+        if (zone == Palette.SPACE) {
+            drawBox(arc, top - 0.5f, dz, camS, 2.6f, 0.5f, 1.5f, 0.30f, 0.32f, 0.40f);
+            drawBox(arc, top - 0.02f, dz, camS, 2.5f, 0.04f, 1.4f, 0.30f, 0.85f, 1f);
+            return;
+        }
+        boolean snow = zone == 1 || zone == 3;
+        String name = (snow ? "block-snow" : "block-grass") + "-low-long";
+        ModelInstance m = slabInst.get(name);
+        if (m == null) {
+            m = new ModelInstance(models.obj(name)); ColorAttribute ca = ColorAttribute.createDiffuse(1f, 1f, 1f, 1f);
+            for (com.badlogic.gdx.graphics.g3d.Material mat : m.materials) mat.set(ca);
+            slabInst.put(name, m); slabTint.put(name, ca);
+        }
+        slabTint.get(name).color.set(tint);
+        place(m, arc, top - 0.5f, dz, camS, 1.3f, 1f, 1.5f, 0f, 0f);       // 2.6 wide, 1.5 deep: it shows on both sides of the 1.25 pedestal and under all of it
         batch.render(m, env);
     }
 
@@ -871,19 +909,10 @@ public final class WorldRenderer implements Disposable {
      */
     public static final float SPIKE_MAT_BOTTOM = -0.04f, SPIKE_MAT_TOP = 0.06f, SHADOW_LIFT = 0.03f, SHADOW_THICK = 0.02f;
 
-    /** A cannonball that has left the screen is dropped: further than the widest view (21:9) reaches, and how many past launches are followed. */
-    private static final float CANNON_OFFSCREEN = 14f; private static final int CANNON_TRAIL = 4;
+    /** A cannonball that has left the screen is not drawn: further than the widest view (21:9) reaches. (How many launches fly at once: Element.CANNON_TRAIL, shared with the simulation, which tests every one of them.) */
+    private static final float CANNON_OFFSCREEN = 14f;
 
-    private Sim rsim; private int rhz;            // the simulation and hazard index being drawn (aimed cannons draw the sim's own aim)
-
-    /** A pack model aimed in the play plane: barrel along +s at angle 0, turned counter-clockwise by {@code deg}, centred at (arc, y). */
-    private void drawPackAimed(String name, float arc, float y, float dz, float camS, float deg, float sc) {
-        ModelInstance m = pack(name);
-        float phi = wrapDiff(arc, camS) / T.radius, r = T.radius - dz;
-        m.transform.idt().translate(r * MathUtils.sin(phi), y, -T.radius + r * MathUtils.cos(phi))
-                .rotate(0, 1, 0, phi * MathUtils.radiansToDegrees).rotate(0, 0, 1, deg).rotate(0, 1, 0, CANNON_YAW).scale(sc, sc, sc);
-        batch.render(m, env);
-    }
+    private Sim rsim; private int rhz;            // the simulation and hazard index being drawn (aimed cannons draw the sim's own aim, crabs where the sim has them)
 
     private void drawHazard(Element h, float t, float camS, float time, boolean done) {
         float cs = h.type == Element.Type.CANNON ? h.s + h.dir * h.len * 0.5f : h.s;
@@ -902,42 +931,56 @@ public final class WorldRenderer implements Disposable {
                 break;
             }
             case CANNON: {
-                float base = h.y - 2.35f;
-                // the barrel's axis is at the ball's height (h.y): the ball is launched from inside it and leaves at its tip (CANNON_TIP ahead of the launch point)
-                drawBox(h.s, base, 0f, camS, 1.25f, CANNON_LIFT, 1.25f, 0.42f, 0.38f, 0.5f);
-                drawBox(h.s, base + CANNON_LIFT, 0f, camS, 1.45f, 0.16f, 1.45f, 0.3f, 0.27f, 0.36f);
-                drawPack("cannon", h.s, h.y, 0f, camS, PK, PK, PK, h.dir > 0 ? CANNON_YAW : -CANNON_YAW, 0f);
-                for (int back = 0; back < CANNON_TRAIL; back++) {          // the lethal ball, then earlier launches still flying: a ball leaves the screen, it never pops out of it
-                    float bs = h.cannonBallS(t, back);
+                // a side cannon on its own slab, level with its platform and set behind the lane (owner, Build 63); its barrel's axis is at the
+                // ball's height (h.y), muzzle down the lane; every ball on its way is drawn - this cycle's and the earlier launches flying on -
+                // and every one of them hits (Element.CANNON_TRAIL). A ball leaves the muzzle behind the lane and glides into the play plane.
+                float deck = h.y - 2.35f, dz = AIM_DEPTH;
+                drawSlab(h.s, deck, dz, camS, h.zone);
+                drawBox(h.s, deck, dz, camS, 1.25f, CANNON_LIFT, 1.25f, 0.42f, 0.38f, 0.5f);
+                drawBox(h.s, deck + CANNON_LIFT, dz, camS, 1.45f, 0.16f, 1.45f, 0.3f, 0.27f, 0.36f);
+                drawCannon(h.s, h.y - CANNON_AXIS_UP, dz, camS, h.dir > 0 ? 0f : 180f, 0f);
+                for (int back = 0; back < Element.CANNON_TRAIL; back++) {
+                    if (!h.cannonBallAlive(t, back)) continue;                    // exactly the balls the simulation tests
+                    float bs = h.cannonBallS(t, back), flown = h.cannonFlown(t, back);
                     if (Math.abs(course.dsWrap(bs, camS)) > CANNON_OFFSCREEN) continue;
-                    drawPack("spikyball", bs, h.yAt(t), 0f, camS, 0.55f, 0.55f, 0.55f, 0f, -bs * 160f);
+                    float fizzle = Math.min(1f, (h.cannonReach() - flown) / 1.5f);   // it shrinks away over its last metre and a half instead of popping out
+                    float sc = 0.55f * Math.max(0.05f, fizzle);
+                    drawPack("spikyball", bs, h.yAt(t), dz * Math.max(0f, 1f - flown / BALL_SWOOP), camS, sc, sc, sc, 0f, -bs * 160f);
                 }
                 break;
             }
             case AIMED: {
-                // a turret on its own pillar set BEHIND the walking lane (owner: land on the grass, cannon just behind it);
-                // its barrel is turned by the SIMULATION's own aim, so the picture is where the ball goes. Locked = a red
-                // glow at the muzzle that pulses faster; the ball then crosses the lane in the play plane in front.
-                float ped = AIM_DEPTH, pedTop = h.y - 0.16f, pedBot = h.y - 4.2f;
+                // a turret on its own slab set BEHIND the walking lane (owner: land on the grass, cannon just behind it); its cradle is tilted by
+                // the SIMULATION's own aim, so the picture is where the ball goes, and it faces down the lane or back up it rather than ever
+                // turning upside down. Locked = a red glow at the muzzle that pulses faster; the ball then glides into the play plane in front.
+                float dz = AIM_DEPTH, deck = h.y - 2.0f;
                 float ang = rsim != null && rhz < rsim.aimAng.length ? rsim.aimAng[rhz] : (float) Math.PI * 0.5f;
-                drawBox(h.s, pedBot, ped, camS, 1.25f, pedTop - pedBot, 1.25f, 0.34f, 0.31f, 0.40f);        // the pillar, behind the grass
-                drawBox(h.s, pedTop, ped, camS, 1.45f, 0.16f, 1.45f, 0.3f, 0.27f, 0.36f);                   // cap the barrel rests in
-                drawPackAimed("cannon", h.s, h.y, ped, camS, ang * MathUtils.radiansToDegrees, PK);
+                float deg = ang * MathUtils.radiansToDegrees;
+                boolean left = Math.cos(ang) < 0f;
+                float tilt = left ? 180f - deg : deg; tilt = ((tilt + 180f) % 360f + 360f) % 360f - 180f;
+                drawSlab(h.s, deck, dz, camS, h.zone);
+                drawBox(h.s, deck, dz, camS, 1.25f, AIM_LIFT, 1.25f, 0.34f, 0.31f, 0.40f);
+                drawBox(h.s, deck + AIM_LIFT, dz, camS, 1.45f, 0.16f, 1.45f, 0.3f, 0.27f, 0.36f);
+                drawCannon(h.s, h.y - CANNON_AXIS_UP, dz, camS, left ? 180f : 0f, tilt);
                 float c = h.cyc(t);
                 if (c >= Element.AIM_LOCK && c < Element.AIM_FIRE) {
                     float k = (c - Element.AIM_LOCK) / (Element.AIM_FIRE - Element.AIM_LOCK), pulse = reducedMotion ? 1f : 0.7f + 0.3f * MathUtils.sin(time * (18f + 30f * k));
                     float sz = (0.16f + 0.2f * k) * pulse, tip = Element.AIM_MUZZLE;
-                    drawBox(h.s + (float) Math.cos(ang) * tip - sz * 0.5f, h.y + (float) Math.sin(ang) * tip - sz * 0.5f, ped - 0.2f, camS, sz, sz, sz, 1f, 0.2f, 0.12f);   // muzzle flash at the barrel mouth
+                    drawBox(h.s + (float) Math.cos(ang) * tip - sz * 0.5f, h.y + (float) Math.sin(ang) * tip - sz * 0.5f, dz - 0.2f, camS, sz, sz, sz, 1f, 0.2f, 0.12f);   // muzzle flash at the barrel mouth
                 }
                 float[] b = rsim != null ? rsim.aimedBall(rhz, h) : null;
-                if (b != null) drawPack("spikyball", b[0], b[1], 0f, camS, 0.5f, 0.5f, 0.5f, 0f, -b[0] * 160f);   // the ball crosses the lane in the play plane
+                if (b != null) {
+                    float flown = Math.max(0f, (float) Math.hypot(course.dsWrap(b[0], h.s), b[1] - h.y) - Element.AIM_MUZZLE);
+                    drawPack("spikyball", b[0], b[1], dz * Math.max(0f, 1f - flown / BALL_SWOOP), camS, 0.5f, 0.5f, 0.5f, 0f, -b[0] * 160f);   // from the muzzle behind the lane into the play plane
+                }
                 break;
             }
             case MORTAR: {
-                // a cannon standing in the ground below the path, pointing straight up; its tip is the muzzle (h.y) the ball leaves from and falls back into
-                drawBox(h.s, h.y - 2.6f, 0f, camS, 1.5f, 2.0f, 1.3f, 0.34f, 0.31f, 0.40f);
-                drawBox(h.s, h.y - 0.7f, 0f, camS, 1.7f, 0.18f, 1.5f, 0.30f, 0.27f, 0.36f);
-                drawPackUp("cannon", h.s, h.y - 0.61f, camS, PK);
+                // a cannon sunk in the ground below the path with its cradle tipped straight up on its wheels; the muzzle tip is where the ball (h.y) leaves from and falls back into
+                float axle = h.y - CANNON_MUZZLE, capBot = axle - CANNON_WHEEL_R - 0.14f;
+                drawBox(h.s, capBot - 2.0f, 0f, camS, 1.5f, 2.0f, 1.3f, 0.34f, 0.31f, 0.40f);
+                drawBox(h.s, capBot, 0f, camS, 1.7f, 0.18f, 1.5f, 0.30f, 0.27f, 0.36f);
+                drawCannon(h.s + CANNON_AXIS_UP, axle, 0f, camS, 0f, 90f);         // tipped up, the barrel's axis (1.02 model units off the axle) stands over h.s
                 float charge = h.mortarCharge(t);           // the reload pause: the muzzle glows brighter and brighter, then the ball bursts out (warning for the timing)
                 if (charge > 0f) { float pulse = reducedMotion ? 1f : 0.75f + 0.25f * MathUtils.sin(time * 28f); float k = (0.12f + 0.28f * charge) * pulse; drawBox(h.s - k * 0.5f, h.y - k * 0.5f, 0f, camS, k, k, k, 1f, 0.55f + 0.3f * charge, 0.15f); }
                 if (h.lethalAt(t)) drawPack("spikyball", h.s, h.yAt(t), 0f, camS, 0.55f, 0.55f, 0.55f, 0f, -h.yAt(t) * 160f);
@@ -984,8 +1027,11 @@ public final class WorldRenderer implements Disposable {
             }
             case CRAB: {
                 if (done) break;
-                float crabX = h.sAt(t), vel = h.amp * (float) Math.cos(2 * Math.PI * t / h.period + h.phase);
-                drawRig(rig(h, "crab_anim", "Walk"), crabX, h.y, 0f, camS, 0.34f, vel >= 0 ? 90f : -90f, 0f, 1.6f);
+                // where the simulation has it: on its sweep, or running at the player / back to the sweep (Build 63); it scuttles faster on the chase
+                float crabX = rsim != null ? rsim.crabAt(rhz, h) : h.sAt(t);
+                float face = rsim != null ? rsim.crabFacing(rhz, h) : (h.amp * (float) Math.cos(2 * Math.PI * t / h.period + h.phase) >= 0f ? 1f : -1f);
+                boolean chasing = rsim != null && rsim.crabChasing(rhz);
+                drawRig(rig(h, "crab_anim", "Walk"), crabX, h.y, 0f, camS, 0.34f, face >= 0f ? 90f : -90f, 0f, chasing ? 2.4f : 1.6f);
                 break;
             }
             case BEE: {

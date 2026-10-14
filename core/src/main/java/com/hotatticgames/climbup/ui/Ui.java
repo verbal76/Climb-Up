@@ -115,6 +115,8 @@ public final class Ui extends InputAdapter implements Disposable {
         font.drawShadow(batch, s, x, y, px, c, SHADOW);
     }
     /** Comic speech bubble centred above (cx, y). */
+    /** The height a speech bubble takes above its anchor y (box plus its edge), so other text can be kept clear of it. */
+    public float bubbleHeight() { return font.height(3.2f * tm()) + 28 + 8; }
     public void bubble(String s, float cx, float y, float alpha) {
         float px = 3.2f * tm(); float w = font.width(s, px) + 36, h = font.height(px) + 28;
         float x = Math.max(16, Math.min(w() - w - 16, cx - w / 2));

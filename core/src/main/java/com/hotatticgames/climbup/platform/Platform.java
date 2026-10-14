@@ -32,6 +32,8 @@ public interface Platform {
     String tip(String text);
     /** Draws the unobtrusive control hints during play (desktop only). */
     void drawPlayHints(Ui ui, boolean carryingClub, float width, float height);
+    /** Screen pixels the play-hint bar occupies from the bottom edge while it shows (0 when it does not), so bottom text keeps clear of it. */
+    default float playHintsHeight() { return 0f; }
     /** Draws the pause control in the HUD corner; returns false to let the shared code draw the original touch pause icon. */
     boolean drawPauseButton(Ui ui, float x, float y, float size);
     /** Extra Settings tabs (display, controls). Empty on mobile. */

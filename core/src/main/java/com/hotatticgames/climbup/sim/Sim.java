@@ -62,6 +62,11 @@ public final class Sim {
     public boolean[] featDone = new boolean[0];   // per feature (Course.hazards index): key taken / gate opened
     public float[] aimAng = new float[0], aimFireT = new float[0];   // aimed cannons (Course.hazards index): barrel angle (0 = along +s, counter-clockwise), time the last ball was fired
     private boolean[] aimArmed = new boolean[0];                      // this cycle's shot was locked while the player was in range
+    public float[] crabPos = new float[0], crabVel = new float[0];   // crabs (Course.hazards index): live arc, and the arc it moved this step (its facing), once it has left its sweep (Build 63, owner: "once they see you, they should chase you")
+    private byte[] crabMode = new byte[0];                            // 0 on its sweep (the patrol, a pure function of time), 1 chasing, 2 walking back to the sweep
+    private float[] crabStuck = new float[0], crabCool = new float[0];   // seconds it has been held at its edge with you out of reach; seconds left before it may chase again
+    private float[] crabTurn = new float[0];                              // seconds left standing still to turn round (it faces the new way at once)
+    private float[] crabSeen = new float[0];                              // seconds it has had you in sight (it reacts after CRAB_NOTICE)
     public int lastKeyColor, lastGateColor, lastGateNo;
     public boolean finishedRun;         // the finishCastle's door has been walked through (the timed run is over)
     public float clubTime, swingT, shoveCd;       // spiked club carried (seconds left), swing animation clock, grace between shoves
@@ -132,6 +137,8 @@ public final class Sim {
         int o = aimAng.length;
         aimAng = java.util.Arrays.copyOf(aimAng, n); aimFireT = java.util.Arrays.copyOf(aimFireT, n); aimArmed = java.util.Arrays.copyOf(aimArmed, n);
         java.util.Arrays.fill(aimFireT, o, n, -1e9f);
+        crabPos = java.util.Arrays.copyOf(crabPos, n); crabVel = java.util.Arrays.copyOf(crabVel, n); crabMode = java.util.Arrays.copyOf(crabMode, n);
+        crabStuck = java.util.Arrays.copyOf(crabStuck, n); crabCool = java.util.Arrays.copyOf(crabCool, n); crabTurn = java.util.Arrays.copyOf(crabTurn, n); crabSeen = java.util.Arrays.copyOf(crabSeen, n);
     }
 
     /** The course grew (endless mode): extend the per-element state arrays. */
@@ -169,7 +176,7 @@ public final class Sim {
         landSpeed = o.landSpeed; events = o.events; assistForgive = o.assistForgive; ps0 = o.ps0; py0 = o.py0; teleported = o.teleported;
         es0 = o.es0.clone(); ey0 = o.ey0.clone(); es1 = o.es1.clone(); ey1 = o.ey1.clone();
         crumbleT = o.crumbleT.clone(); gone = o.gone.clone(); goneT = o.goneT.clone(); padSquash = o.padSquash.clone(); tilt = o.tilt.clone(); onT = o.onT.clone();
-        clubTime = o.clubTime; swingT = o.swingT; shoveCd = o.shoveCd; crabS = o.crabS; crabY = o.crabY; keys = o.keys; keysFree = o.keysFree; featDone = o.featDone.clone(); aimAng = o.aimAng.clone(); aimFireT = o.aimFireT.clone(); aimArmed = o.aimArmed.clone(); finishedRun = o.finishedRun; lastGateNo = o.lastGateNo; lastKeyColor = o.lastKeyColor; lastGateColor = o.lastGateColor;
+        clubTime = o.clubTime; swingT = o.swingT; shoveCd = o.shoveCd; crabS = o.crabS; crabY = o.crabY; keys = o.keys; keysFree = o.keysFree; featDone = o.featDone.clone(); aimAng = o.aimAng.clone(); aimFireT = o.aimFireT.clone(); aimArmed = o.aimArmed.clone(); crabPos = o.crabPos.clone(); crabVel = o.crabVel.clone(); crabMode = o.crabMode.clone(); crabStuck = o.crabStuck.clone(); crabCool = o.crabCool.clone(); crabTurn = o.crabTurn.clone(); crabSeen = o.crabSeen.clone(); finishedRun = o.finishedRun; lastGateNo = o.lastGateNo; lastKeyColor = o.lastKeyColor; lastGateColor = o.lastGateColor;
         act = o.act; hz = o.hz; winLo = o.winLo; winHi = o.winHi; invuln = o.invuln; hits = o.hits; hitS = o.hitS; hitY = o.hitY;
     }
 
@@ -300,6 +307,9 @@ public final class Sim {
         float[] na = new float[nf.length], nft = new float[nf.length]; boolean[] nar = new boolean[nf.length]; java.util.Arrays.fill(nft, -1e9f);
         for (int i = 0; i < m.haz.length && i < aimAng.length; i++) { int j = m.haz[i]; if (j >= 0 && j < na.length) { na[j] = aimAng[i]; nft[j] = aimFireT[i]; nar[j] = aimArmed[i]; } }
         aimAng = na; aimFireT = nft; aimArmed = nar;
+        float[] ncp = new float[nf.length], ncv = new float[nf.length], ncs = new float[nf.length], ncc = new float[nf.length], nct = new float[nf.length], ncn = new float[nf.length]; byte[] ncm = new byte[nf.length];
+        for (int i = 0; i < m.haz.length && i < crabPos.length; i++) { int j = m.haz[i]; if (j >= 0 && j < ncp.length) { ncp[j] = crabPos[i]; ncv[j] = crabVel[i]; ncm[j] = crabMode[i]; ncs[j] = crabStuck[i]; ncc[j] = crabCool[i]; nct[j] = crabTurn[i]; ncn[j] = crabSeen[i]; } }
+        crabPos = ncp; crabVel = ncv; crabMode = ncm; crabStuck = ncs; crabCool = ncc; crabTurn = nct; crabSeen = ncn;
         onElem = onElem >= 0 && onElem < m.elem.length ? m.elem[onElem] : onElem;
         lastPad = lastPad >= 0 && lastPad < m.elem.length ? m.elem[lastPad] : lastPad;
         onSlab = onSlab >= 0 && onSlab < m.haz.length ? m.haz[onSlab] : -1;
@@ -404,7 +414,7 @@ public final class Sim {
             return;
         }
         if (e.type == Element.Type.BEE) { stepBee(e, idx, hw); return; }
-        float cs = e.sAt(time), dx = course.dsWrap(s, cs);
+        float cs = stepCrab(e, idx), dx = course.dsWrap(s, cs);
         if (swingT > 0.06f && swingT < 0.28f) {                       // the club is on its way through: anything in front of you and within reach goes flying
             float ahead = -dx * facing;
             if (ahead > -0.3f && ahead < 2.2f && Math.abs(e.y - y) < 1.5f) { featDone[idx] = true; crabS = cs; crabY = e.y; knockedBee = false; events |= EV_CRAB_OFF; return; }
@@ -427,6 +437,77 @@ public final class Sim {
         }
     }
     public static final float CLUB_SECONDS = 18f;
+
+    // ---------------------------------------------------------------- crabs (Build 63, owner: "once they see you, they should chase you")
+    /** How far along its platform a crab sees you, and the height band above its deck it looks in (standing on its platform, or hopping over it). */
+    public static final float CRAB_SIGHT = 4.0f, CRAB_SIGHT_LO = -0.3f, CRAB_SIGHT_HI = 2.2f;
+    /** It only watches its own deck: you are seen while over its platform (this much past either edge), never while you line up the jump from the platform before it, so it cannot camp the edge you have to land on. */
+    public static final float CRAB_SIGHT_OVER = 0.5f;
+    /** Seconds a chasing crab stands still to turn round when you get past it (it faces the new way at once): a hop over it is a real escape, as it is for any crab. */
+    public static final float CRAB_TURN = 0.35f;
+    /** Seconds it must have you in sight before it reacts (it keeps to its sweep meanwhile): landing on its platform is never an instant shove, you get a moment to hop it or run. */
+    public static final float CRAB_NOTICE = 0.35f;
+    /** Its chase speed as a multiple of its peak patrol speed (2 pi amp / period): quicker than the sweep, slower than you running. */
+    public static final float CRAB_CHASE = 1.5f;
+    /** A crab keeps this far inside its platform's edge: it never runs off its own deck (owner), so it cannot be baited off. */
+    public static final float CRAB_EDGE = 0.45f;
+    /** Held at its edge with you out of reach for CRAB_STUCK seconds, it gives up (walks back to its sweep) and will not chase again for CRAB_COOL seconds: it never camps an edge you need to land on. */
+    public static final float CRAB_STUCK = 0.6f, CRAB_COOL = 2.5f;
+
+    /**
+     * Advances crab {@code e} (hazard index {@code idx}) one step and returns its arc. On its sweep it follows the patrol exactly (as before Build 63,
+     * a pure function of time); the moment it sees you over its own deck it runs at you at CRAB_CHASE times its peak patrol speed (stopping for
+     * CRAB_TURN seconds to turn round when you are behind it), kept on its own platform; when it loses you it walks back onto the sweep and resumes it.
+     * Driven by sim state alone, so it is deterministic and the generator's proofs and the autopilot (which hops it where it actually is) include the chase.
+     */
+    private float stepCrab(Element e, int idx) {
+        float patrol = e.sAt(time);
+        if (idx >= crabPos.length) return patrol;
+        float cs = crabMode[idx] == 0 ? patrol : crabPos[idx];
+        float dx = course.dsWrap(s, cs), dy = y - e.y;
+        Element deck = e.anchor >= 0 && e.anchor < course.size() && course.get(e.anchor).isPlatform() ? course.get(e.anchor) : null;
+        boolean over = deck == null || Math.abs(course.dsWrap(s, deck.s)) <= deck.halfW() + CRAB_SIGHT_OVER;     // it watches its own deck only
+        boolean sees = over && Math.abs(dx) <= CRAB_SIGHT && dy >= CRAB_SIGHT_LO && dy <= CRAB_SIGHT_HI && (mode == Mode.GROUND || mode == Mode.AIR);
+        if (crabCool[idx] > 0f) { crabCool[idx] = Math.max(0f, crabCool[idx] - DT); sees = false; }
+        if (!sees) crabSeen[idx] = 0f;
+        else if (crabMode[idx] != 1) { crabSeen[idx] += DT; if (crabSeen[idx] < CRAB_NOTICE) sees = false; }   // a moment's notice before it reacts; once chasing it keeps you in sight
+        float stepLen = CRAB_CHASE * 2f * (float) Math.PI * Math.abs(e.amp) / Math.max(0.1f, e.period) * DT;
+        float ns = cs;
+        // the way it faces: along its sweep, else the way it last moved (or was turned)
+        float face = crabMode[idx] == 0 ? (e.amp * (float) Math.cos(2 * Math.PI * time / e.period + e.phase) >= 0f ? 1f : -1f) : (crabVel[idx] >= 0f ? 1f : -1f);
+        boolean turning = false;
+        if (sees) {
+            float want = dx > 0f ? 1f : dx < 0f ? -1f : face;
+            if (want != face) { crabTurn[idx] = CRAB_TURN; face = want; }                  // you are behind it: it stops and turns round before it comes on
+            crabMode[idx] = 1;
+            if (crabTurn[idx] > 0f) { crabTurn[idx] = Math.max(0f, crabTurn[idx] - DT); turning = true; }
+            else ns = cs + want * Math.min(stepLen, Math.abs(dx));
+        } else {
+            crabTurn[idx] = 0f;
+            if (crabMode[idx] != 0) {
+                float back = course.dsWrap(patrol, cs);
+                if (Math.abs(back) <= stepLen) { ns = patrol; crabMode[idx] = 0; } else { crabMode[idx] = 2; ns = cs + Math.signum(back) * stepLen; }
+            }
+        }
+        if (deck != null) { float lim = Math.max(0f, deck.halfW() - CRAB_EDGE), off = course.dsWrap(ns, deck.s); if (off > lim) ns = deck.s + lim; else if (off < -lim) ns = deck.s - lim; }   // never off its own platform
+        ns = course.wrap(ns);
+        float moved = course.dsWrap(ns, cs);
+        if (crabMode[idx] == 1 && !turning) {                                               // held at its edge with you beyond it: it soon loses interest, and does not camp there
+            if (Math.abs(moved) < 1e-4f && Math.abs(dx) > 0.6f) { crabStuck[idx] += DT; if (crabStuck[idx] >= CRAB_STUCK) { crabMode[idx] = 2; crabCool[idx] = CRAB_COOL; crabStuck[idx] = 0f; } }
+            else crabStuck[idx] = 0f;
+        } else crabStuck[idx] = 0f;
+        crabVel[idx] = Math.abs(moved) > 1e-5f ? moved : (crabMode[idx] == 1 ? face * 1e-3f : 0f);   // faces the way it moves; standing (turning, or held at its edge) it faces you
+        crabPos[idx] = ns;
+        return ns;
+    }
+    /** The crab's live arc (hazard index), for the renderer: where it really is while chasing or returning, else its sweep. */
+    public float crabAt(int hi, Element e) { return hi < crabPos.length && crabMode[hi] != 0 ? crabPos[hi] : e.sAt(time); }
+    /** The way the crab faces: the arc it moved this step while off its sweep, else the sweep's own direction. */
+    public float crabFacing(int hi, Element e) {
+        if (hi < crabVel.length && crabMode[hi] != 0) return crabVel[hi] >= 0f ? 1f : -1f;
+        return e.amp * (float) Math.cos(2 * Math.PI * time / e.period + e.phase) >= 0f ? 1f : -1f;
+    }
+    public boolean crabChasing(int hi) { return hi < crabMode.length && crabMode[hi] == 1; }
 
     /** Keys are picked up by touching them; a closed castle gate is a wall until you carry its colour. */
     private void stepFeatures() {
@@ -539,6 +620,17 @@ public final class Sim {
             Element e = course.hazards.get(hz == null ? k : hz[k]);
             hitBy = e;
             if (e.type == Element.Type.AIMED) { if (aimedBallHits(hz == null ? k : hz[k], e, hw, lo, hi)) return true; continue; }
+            if (e.type == Element.Type.CANNON) {                       // every ball on its way - this cycle's and the earlier launches flying on past the lane, exactly the set that is drawn - hits (Build 63)
+                float cs = carryS(e, time), cy = e.y + carryY(e, time), r = Element.SHOT_R;
+                float ddy = cy < lo ? lo - cy : (cy > hi ? cy - hi : 0f);
+                if (ddy >= r) continue;
+                for (int back = 0; back < Element.CANNON_TRAIL; back++) {
+                    if (!e.cannonBallAlive(time, back)) continue;
+                    float dx = Math.abs(course.dsWrap(e.cannonBallS(time, back) + cs, s)), ddx = Math.max(0f, dx - hw);
+                    if (ddx * ddx + ddy * ddy < r * r) return true;
+                }
+                continue;
+            }
             if (!e.lethalAt(time)) continue;
             float cs = carryS(e, time), cyOff = carryY(e, time);      // ride the platform this hazard sits on (both are 0 unless the platform is a mover)
             float dx = Math.abs(course.dsWrap(e.sAt(time) + cs, s));

@@ -72,23 +72,38 @@ public final class Element {
         switch (type) { case MOVE_H: case MOVE_V: case MOVE_Z: case SWING: case SAW_H: case SAW_V: case PENDULUM: case CANNON: case SPIKE_TRAP: case SPIKE_DROP: case CRAB: case BEE: case MORTAR: case AIMED: return true; default: return false; }
     }
 
-    public static final float CANNON_FLIGHT = 0.7f;      // fraction of the cycle a ball is in the air
-    public static final float SAW_R = 0.55f, BALL_R = 0.5f, SHOT_R = 0.3f;
+    public static final float CANNON_FLIGHT = 0.7f;      // fraction of the cycle the cycle's ball takes to cross the lane (its launch speed)
+    /**
+     * Side cannon balls (Build 63, owner: "the cannon balls have no collision" - the balls that flew on past the lane used to be drawn only): a ball
+     * flies on past the end of its lane for another CANNON_BEYOND units and then fizzles out, and every ball in the air hits. CANNON_TRAIL is how
+     * many launches can be in the air at once (the renderer draws exactly the alive ones, the simulation tests exactly the same set).
+     */
+    public static final int CANNON_TRAIL = 4;
+    public static final float CANNON_BEYOND = 14f;
+    /** How far the ball of the launch {@code back} cycles ago has flown from the muzzle at time t. */
+    public float cannonFlown(float t, int back) { return len / CANNON_FLIGHT * (cyc(t) + back); }
+    /** Whether that ball is still in the air: within CANNON_BEYOND past the end of the lane. */
+    public boolean cannonBallAlive(float t, int back) { return cannonFlown(t, back) <= len + CANNON_BEYOND; }
+    /** The arc every ball of this cannon can reach: its lane plus CANNON_BEYOND (the simulation keeps a cannon live while the player is within it). */
+    public float cannonReach() { return len + CANNON_BEYOND; }
+    /** Lethal disc radii, sized to the drawn balls: the spiky ball model is 0.60 pack units to its body and 0.83 to its spike tips, drawn at 0.55 (side cannon, mortar) and 0.50 (turret). */
+    public static final float SAW_R = 0.55f, BALL_R = 0.5f, SHOT_R = 0.42f;
 
     /** Position in the repeating cycle, 0..1. */
     public float cyc(float t) { float c = t / period + phase / (2f * (float) Math.PI); return c - (float) Math.floor(c); }
 
     /**
-     * Where the ball of the launch {@code back} cycles ago is at time t, if it simply kept flying at the speed it was fired with. For back = 0 during the flight this is exactly {@link #sAt}
-     * (the lethal ball); beyond the flight, and for earlier launches, it is the continued straight path, which the renderer draws until the ball is off screen. Never used for hits.
+     * Where the ball of the launch {@code back} cycles ago is at time t, flying on at the speed it was fired with. For back = 0 during the flight this is exactly {@link #sAt}
+     * (the cycle's ball crossing the lane); beyond the flight, and for earlier launches, it is the continued straight path. The renderer draws the {@link #CANNON_TRAIL} balls
+     * (until off screen) and {@link Sim} tests every one of them for a hit, so what you see is what hits you.
      */
     public float cannonBallS(float t, int back) { return s + dir * len / (CANNON_FLIGHT * period) * (cyc(t) + back) * period; }
 
-    public static final float MORTAR_FLIGHT = 0.82f, MORTAR_R = 0.4f;
+    public static final float MORTAR_FLIGHT = 0.82f, MORTAR_R = 0.42f;
     /** Aimed cannon timing, as fractions of its period: tracks the player until LOCK, holds (warning) until FIRE, fires; the ball flies AIM_LIFE seconds at AIM_SPEED; it only wakes when the player is within AIM_RANGE. */
-    public static final float AIM_LOCK = 0.55f, AIM_FIRE = 0.70f, AIM_SPEED = 9f, AIM_LIFE = 1.6f, AIM_R = 0.35f, AIM_RANGE = 15f, AIM_TURN = 2.4f;
-    /** The ball leaves the muzzle TIP, not the barrel's centre: the barrel's model axis is 1.66 units long each way at PK=0.37 scale, so its mouth is ~0.6 world units ahead of (s,y). Without this the ball erupts from the middle of the cannon. */
-    public static final float AIM_MUZZLE = 0.62f;
+    public static final float AIM_LOCK = 0.55f, AIM_FIRE = 0.70f, AIM_SPEED = 9f, AIM_LIFE = 1.6f, AIM_R = 0.40f, AIM_RANGE = 15f, AIM_TURN = 2.4f;
+    /** The ball leaves the muzzle TIP, not the barrel's centre: the cannon model's barrel runs 2.26 units from its axle to its mouth along the model's +X (PK = 0.37 scale), so the mouth is 0.84 world units ahead of (s,y). Without this the ball erupts from the middle of the cannon. */
+    public static final float AIM_MUZZLE = 0.84f;
     /** How far an aimed cannon leads a moving player (fraction of the full "where will they be when the ball lands" prediction): it tries to put the shot in front of you, but partially, so a committed move still slips past. A plain CANNON stays a fixed straight-line shot for the "measure the gap" variety. */
     public static final float AIM_LEAD = 0.5f;
     /** Mortar ball height at time t: a parabola from the muzzle (y) to y + amp and back during the first MORTAR_FLIGHT of the cycle, then it sits in the barrel while the mortar reloads. */

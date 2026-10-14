@@ -1,12 +1,19 @@
-# Upwardly — tester checklist (Build 62)
+# Upwardly — tester checklist (Build 63)
 
 Ten minutes per device. Note anything that feels wrong, with a screenshot or a short video if you can.
 
 ## Install
-- **Android:** install `upwardly-1.1.5-build62-debug.apk` over Build 61 (no uninstall). Your players, climbs and times must still be there.
-- **Windows:** unzip `Upwardly.Build.62.EXE.zip` anywhere and run `Upwardly\Upwardly.exe` (no Java needed). Saves live in `%APPDATA%\HotAtticGames\Upwardly`.
-- **Linux / Steam Deck:** unpack `Upwardly.Build.62.Linux.tar.gz` and run `Upwardly/bin/Upwardly`.
-- Downloads: https://github.com/verbal76/Climb-Up/releases/tag/v1.1.5-build62 (APK) and https://github.com/verbal76/Climb-Up/releases/tag/build-62-desktop (Windows + Linux). All three come from commit `52c2008`.
+- **Android:** install `upwardly-1.1.5-build63-debug.apk` over Build 62 or 61 (no uninstall). Your players, climbs and times must still be there.
+- **Windows:** unzip `Upwardly.Build.63.EXE.zip` anywhere and run `Upwardly\Upwardly.exe` (no Java needed). Saves live in `%APPDATA%\HotAtticGames\Upwardly`. Settings → ABOUT must now say `BUILD 63`, not `DEV`.
+- **Linux / Steam Deck:** unpack `Upwardly.Build.63.Linux.tar.gz` and run `Upwardly/bin/Upwardly`.
+- Downloads: https://github.com/verbal76/Climb-Up/releases/tag/v1.1.5-build63 (APK) and https://github.com/verbal76/Climb-Up/releases/tag/build-63-desktop (Windows + Linux).
+
+## New in Build 63 (check these first)
+1. Pick the hamster: it now wears the bunny's skeleton and animations. Its arms are as long as the bunny's and hang and swing the same way, the hands (balls) land on the rope and the ledge, and there are no pale stubs at its shoulders. Run, jump, climb a rope, hang under a cable, pull up onto a ledge.
+2. A side cannon stands on its own small slab just behind the path, its barrel pointing along the path, the ball leaving the muzzle. Every spiked ball you can see hurts if it touches you, including the ones that have flown on past the gap; they shrink away about 14 m past it.
+3. Late in the climb (the night world) the turret cannon turns to follow you and fires along where it points.
+4. A crab that sees you on its platform runs at you a moment after it spots you; it never leaves its platform, it stops to turn round when you hop over it, and if you stand just past its edge it gives up after a moment and goes back to its patrol. It does not see you while you line up the jump from the platform before.
+5. Catch a ledge and pull up straight away, or land a close one: the words over the hero's head ("HUP!", "NICE CATCH!", "JUST MADE IT!") stack one above the other instead of printing over each other.
 
 ## Play (all devices)
 1. Title: PLAY or CONTINUE, then MORE → PLAYERS, HERO, TIMES, CREDITS, BACK. Everything readable, nothing cut off.

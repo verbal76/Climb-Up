@@ -83,7 +83,8 @@ public final class GripProbe {
                         if (!ok) failures[0]++;
                         System.out.println("GRIP_PROBE char=" + ch + " minLimbScale=" + String.format("%.4f", min)
                                 + " maxHandScale=" + String.format("%.2f", maxHand)
-                                + " worstSlice=" + worstSlice + " " + (ok ? "OK" : (min <= HEALTHY ? "SHRUNK" : "BALLOONED")) + " anim=" + tally);
+                                + " worstSlice=" + worstSlice + " " + (ok ? "OK" : (min <= HEALTHY ? "SHRUNK" : "BALLOONED"))
+                                + (rig.armRoots().isEmpty() ? "" : " armRoot=[" + rig.armRoots() + "]") + " anim=" + tally);
                         rig.dispose();
                     }
                 } catch (Throwable e) {

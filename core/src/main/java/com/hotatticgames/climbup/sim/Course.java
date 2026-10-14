@@ -53,11 +53,20 @@ public final class Course {
     public final List<int[]> keyRooms = new ArrayList<>();
 
     /** Indices of hazards anchored to route/decoy elements aLo..aHi (inclusive). */
+    /** The hazards anchored to elements aLo..aHi, plus any side cannon further back whose balls fly on into that stretch (Build 63: a ball flies CANNON_BEYOND past its lane and hits there, so the cannon stays live while the player is within its reach). */
     public int[] hazardsFor(int aLo, int aHi) {
-        int n = 0;
-        for (Element h : hazards) if (h.anchor >= aLo && h.anchor <= aHi) n++;
+        boolean[] in = new boolean[hazards.size()]; int n = 0;
+        for (int i = 0; i < hazards.size(); i++) {
+            Element h = hazards.get(i);
+            boolean take = h.anchor >= aLo && h.anchor <= aHi;
+            if (!take && h.type == Element.Type.CANNON && h.anchor < aLo) {
+                float reach = h.cannonReach() + 2f;
+                for (int j = Math.max(0, aLo); j <= aHi && j < elements.size() && !take; j++) { float ahead = h.dir * dsWrap(elements.get(j).s, h.s); if (ahead >= -2f && ahead <= reach) take = true; }
+            }
+            if (take) { in[i] = true; n++; }
+        }
         int[] r = new int[n]; int k = 0;
-        for (int i = 0; i < hazards.size(); i++) { int a = hazards.get(i).anchor; if (a >= aLo && a <= aHi) r[k++] = i; }
+        for (int i = 0; i < hazards.size(); i++) if (in[i]) r[k++] = i;
         return r;
     }
 

@@ -38,6 +38,17 @@ public class PlatformMiscTest {
         for (PadFamily f : PadFamily.values()) for (Ctl c : Ctl.values()) assertFalse(f + " " + c, f.label(c).isEmpty());
     }
 
+    @Test public void theDesktopBuildNumberComesFromThePackagedJarOrTheOverride() {
+        assertEquals(63, DesktopLauncher.buildNumber("1.1.5+63", null));         // the packaged EXE / Linux jar: Implementation-Version "version+build"
+        assertEquals(0, DesktopLauncher.buildNumber("1.1.5", null));             // a jar built without a build number
+        assertEquals(0, DesktopLauncher.buildNumber(null, null));                // a run from class files
+        assertEquals(0, DesktopLauncher.buildNumber("1.1.5+rc", null));          // garbage after the plus is not a build
+        assertEquals(7, DesktopLauncher.buildNumber("1.1.5+63", "7"));           // the climb.build property wins (tests, screenshots)
+        assertEquals(63, DesktopLauncher.buildNumber("1.1.5+63", "x"));          // an unreadable override falls through to the jar
+        assertEquals("V1.1.5  BUILD 63", com.hotatticgames.climbup.Legacy.versionLine("1.1.5", DesktopLauncher.buildNumber("1.1.5+63", null)));
+        assertEquals("V1.1.5  DEV", com.hotatticgames.climbup.Legacy.versionLine("1.1.5", DesktopLauncher.buildNumber(null, null)));
+    }
+
     @Test public void touchWordingBecomesDesktopPrompts() {
         String t = Prompts.rewrite("HOLD JUMP FOR A HIGHER LEAP. THE STICK STEERS IN THE AIR.", "SPACE", "X", "A/D", "W", "S", "A", "D");
         assertEquals("HOLD SPACE FOR A HIGHER LEAP. A/D STEERS IN THE AIR.", t);

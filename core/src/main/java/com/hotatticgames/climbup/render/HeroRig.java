@@ -11,8 +11,11 @@ import com.badlogic.gdx.graphics.g3d.utils.AnimationController;
 import com.badlogic.gdx.graphics.g3d.utils.ModelBuilder;
 import com.badlogic.gdx.graphics.g3d.Material;
 import com.badlogic.gdx.graphics.Color;
+import com.badlogic.gdx.graphics.Mesh;
+import com.badlogic.gdx.graphics.VertexAttribute;
 import com.badlogic.gdx.graphics.VertexAttributes;
 import com.badlogic.gdx.graphics.g3d.model.Node;
+import com.badlogic.gdx.graphics.g3d.model.NodePart;
 import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.math.Matrix4;
 import com.badlogic.gdx.math.Quaternion;
@@ -33,6 +36,12 @@ public final class HeroRig implements Disposable {
     private final ModelInstance inst;
     private final AnimationController ac;
     private final boolean ham;                       // the chibi hamster: same skeleton and clips as the bunny, textured instead of vertex-coloured
+    /**
+     * A hamster whose arms are the old stubs (the rig shipped up to Build 62: upper + lower arm under 0.7 bone units, the bunny's are 0.95): only that
+     * rig takes the stretch, tuck, root-pivot and hamster grip-height paths below. Build 63 re-rigged the hamster onto the bunny's skeleton
+     * (tools/hamster/retarget_to_bunny.py), so it poses exactly like the bunny and this is false; measured, not assumed, so either asset works.
+     */
+    private final boolean stubArms;
     private final boolean astro;                     // an astronaut (index >= 2): a much deeper, larger helmet than the bunny's head, so it sits back further off the rope
     // Ball hands: the astronauts' finger-gloves splay out and never curl (no finger articulation), and the hamster's paws
     // read messy. Replace each hand with a simple coloured ball, proportioned from the bunny, matching the hand's colour.
@@ -100,6 +109,16 @@ public final class HeroRig implements Disposable {
     private final Quaternion arc = new Quaternion(), part = new Quaternion(), ident = new Quaternion(), rcR = new Quaternion();
     private final Matrix4 rot = new Matrix4(), wNew = new Matrix4(), parInv = new Matrix4(), cand = new Matrix4();
     private final java.util.IdentityHashMap<Node, Vector3> bindScale = new java.util.IdentityHashMap<>();   // each limb bone's rest scale, captured before any animation runs
+    private final java.util.IdentityHashMap<Node, Vector3> bindT = new java.util.IdentityHashMap<>();       // each limb bone's rest translation (the clips' constant translation tracks repeat it every frame)
+    /**
+     * How far each arm bone's own mesh reaches BEHIND its joint along the bone (bone-local units; absent or 0 = nothing).
+     * Measured from the skin weights at load, hamster only. Its stub arms are modelled as capsules around the joint, so the
+     * rope stretch, which scaled them about the joint, pushed the inner half of each stub out through the shoulder: the pale
+     * "hands" at both shoulders in the owner's Build 62 report. The stretch and the upper-arm aim pivot at this root instead,
+     * so the arm only ever lengthens and swings toward the line. Empty when nothing could be measured: the joint stays the pivot.
+     */
+    private final java.util.IdentityHashMap<Node, Float> armRoot = new java.util.IdentityHashMap<>();
+    private final Vector3 pivotV = new Vector3(), rootP = new Vector3();
 
     private void findNodes() {
         for (Node n : inst.nodes) collect(n);
@@ -110,8 +129,55 @@ public final class HeroRig implements Disposable {
     private void captureBind() {
         for (Node n : limbs) {
             if (n != null && !bindScale.containsKey(n)) { Vector3 v = new Vector3(); n.localTransform.getScale(v); bindScale.put(n, v); }
+            if (n != null && !bindT.containsKey(n)) { Vector3 t = new Vector3(); n.localTransform.getTranslation(t); bindT.put(n, t); }
         }
         footLocalL = footInShin(llL, ftL); footLocalR = footInShin(llR, ftR);   // where the foot mesh sits inside the lower leg, captured in bind pose
+    }
+
+    /** Measures armRoot (see there) from the skinned mesh in its bind pose; any mesh layout this does not understand leaves it empty. */
+    private void measureArmRoots() {
+        if (upL == null || upR == null) return;
+        Node[] arms = {upL, upR, loL, loR};
+        try { for (Node n : inst.nodes) measureArmRoots(n, arms); } catch (RuntimeException e) { armRoot.clear(); }
+    }
+
+    private void measureArmRoots(Node node, Node[] arms) {
+        for (NodePart np : node.parts) {
+            if (np.invBoneBindTransforms == null || np.meshPart == null || np.meshPart.mesh == null) continue;
+            Mesh mesh = np.meshPart.mesh;
+            VertexAttributes attrs = mesh.getVertexAttributes();
+            VertexAttribute pos = attrs.findByUsage(VertexAttributes.Usage.Position);
+            if (pos == null) continue;
+            int[] bw = new int[8]; int nbw = 0;                                   // the (bone index, weight) pairs of each vertex
+            for (VertexAttribute a : attrs) if (a.usage == VertexAttributes.Usage.BoneWeight && nbw < bw.length) bw[nbw++] = a.offset / 4;
+            if (nbw == 0) continue;
+            int stride = mesh.getVertexSize() / 4, nv = mesh.getNumVertices(), po = pos.offset / 4, nb = np.invBoneBindTransforms.size;
+            float[] v = new float[nv * stride]; mesh.getVertices(v);
+            for (int i = 0; i < nv; i++) {
+                int base = i * stride, best = -1; float bestW = 0f;
+                for (int k = 0; k < nbw; k++) { int bi = (int) v[base + bw[k]]; float w = v[base + bw[k] + 1]; if (w > bestW && bi >= 0 && bi < nb) { bestW = w; best = bi; } }
+                if (best < 0) continue;
+                Node b = np.invBoneBindTransforms.keys[best];                 // the bone this vertex mostly follows
+                boolean arm = false; for (Node a : arms) if (a == b) arm = true;
+                if (!arm) continue;
+                rootP.set(v[base + po], v[base + po + 1], v[base + po + 2]).mul(np.invBoneBindTransforms.values[best]);   // mesh (bind) -> this bone's own frame
+                float behind = -rootP.y;                                      // the bone runs along its local +y (its child sits at (0, length, 0))
+                Float cur = armRoot.get(b);
+                if (cur == null || behind > cur) armRoot.put(b, behind);
+            }
+        }
+        for (Node c : node.getChildren()) measureArmRoots(c, arms);
+    }
+
+    /** The pivot of this bone's stretch and aim: its mesh root behind the joint (the hamster's arms), else 0 = the joint itself. */
+    private float rootDepth(Node n) { Float r = armRoot.get(n); return r == null || !(r > 0f) ? 0f : r; }
+    /** Upper + lower arm length in bone units, from the rest pose (the bunny's is 0.95; the stub-armed hamster rig's was 0.45). */
+    float armLength() { return upL == null || loL == null || fiL == null ? 0f : loL.translation.len() + fiL.translation.len(); }
+
+    /** Test hook: the measured arm roots, "up L/R lo L/R" in bone units, or "" when the joint is the pivot (every character but the hamster). */
+    public String armRoots() {
+        if (armRoot.isEmpty() || upL == null) return "";
+        return String.format(java.util.Locale.ROOT, "up %.2f/%.2f lo %.2f/%.2f", rootDepth(upL), rootDepth(upR), loL == null ? 0f : rootDepth(loL), loR == null ? 0f : rootDepth(loR));
     }
 
     /** The foot node's bind position expressed in its lower-leg bone's local space, so the foot mesh (skinned to the lower
@@ -145,7 +211,8 @@ public final class HeroRig implements Disposable {
             Vector3 bind = bindScale.get(n);
             if (bind == null) continue;
             n.localTransform.getTranslation(rcT); n.localTransform.getRotation(rcR, true);
-            n.localTransform.set(rcT, rcR, bind);
+            Vector3 bt = armRoot.containsKey(n) ? bindT.get(n) : null;      // a root-pivoted arm: the joint shift its pivot makes within a frame is never carried into the next (the clips' constant translation track says the same)
+            n.localTransform.set(bt != null ? bt : rcT, rcR, bind);
             n.scale.set(bind);
         }
         inst.calculateTransforms();
@@ -216,6 +283,23 @@ public final class HeroRig implements Disposable {
         commitBone(bone);
     }
 
+    /** aim(), but rotating about the bone's mesh root (rootBehind along the bone behind the joint) instead of the joint: the root
+     *  stays put and the joint swings with the arm. The root is a fixed point of the root-pivoted stretch, so reading it off the
+     *  stretched global transform gives the same model-space point the stretch kept still. */
+    private void aimAbout(Node bone, Node child, Vector3 target, float weight, float rootBehind) {
+        if (target.isZero(1e-5f)) return;
+        bone.globalTransform.getTranslation(pB); child.globalTransform.getTranslation(pC);
+        dir.set(pC).sub(pB);
+        if (dir.isZero(1e-5f)) return;
+        dir.nor();
+        arc.setFromCross(dir, target);
+        part.set(ident).slerp(arc, weight);
+        pivotV.set(0f, -rootBehind, 0f).mul(bone.globalTransform);
+        rot.setToTranslation(pivotV).rotate(part).translate(-pivotV.x, -pivotV.y, -pivotV.z);
+        wNew.set(rot).mul(bone.globalTransform);
+        commitBone(bone);
+    }
+
     /** Like aim(), but the child reference is an explicit world (model-space) position instead of a child node - used to aim
      *  the lower leg at the foot mesh, whose position we estimate (the Foot node is a static helper, not under the leg). */
     private void aimTo(Node bone, Vector3 childWorld, Vector3 target, float weight) {
@@ -271,7 +355,7 @@ public final class HeroRig implements Disposable {
         for (int side = 0; side < 2; side++) {
             Node up = side == 0 ? upL : upR, lo = side == 0 ? loL : loR, fi = side == 0 ? fiL : fiR;
             up.globalTransform.getTranslation(pB);
-            float out = Math.signum(pB.x) * (ham ? -0.30f : 0.45f);   // the hamster's shoulders are wide: its paws angle in to meet the rope
+            float out = Math.signum(pB.x) * (stubArms ? -0.30f : 0.45f);   // the stub-armed hamster's shoulders are wide: its paws angle in to meet the rope
             tgt.set(out * (0.45f + 0.35f * (1f - forward)), 0.85f + 0.15f * (1f - forward), forward).nor();   // ledge: forward + up; rope/cable: straight up, a little apart
             aim(up, lo, tgt, weight);
             aim(lo, fi, tgt, weight);
@@ -301,6 +385,8 @@ public final class HeroRig implements Disposable {
         inst = new ModelInstance(model);
         if (Characters.astronaut(character)) { Node gun = inst.getNode("n22_Pistol", true, true); if (gun != null) gun.parts.clear(); }
         findNodes(); captureBind();                 // record the limbs' rest scale now, while the skeleton is still in its bind pose
+        stubArms = ham && armLength() < 0.7f;
+        if (stubArms) measureArmRoots();            // where the hamster's stub arms root inside its shoulders (the stretch and grip pivot there)
         handBall = ham || astro;                    // the bunny keeps its own tidy paws; the astronauts and hamster get ball hands
         if (handBall) {
             ballRad = (astro ? BALL_ASTRO : BALL_RATIO) * SCALE / Characters.scale(0);   // astronauts smaller (small hands, big body); hamster covers its wrist
@@ -448,15 +534,15 @@ public final class HeroRig implements Disposable {
         if (grip > 0.01f && !NO_POSE) {
             boolean line = anim == Anim.CLIMB || anim == Anim.SHIMMY || (anim == Anim.HANG && (sim.mode == Sim.Mode.ROPE || sim.mode == Sim.Mode.CABLE));
             boolean cable = anim == Anim.SHIMMY || sim.mode == Sim.Mode.CABLE;
-            if (ham) stretchArmsBy(grip, 0.7f, cable ? HAM_CABLE_REACH : HAM_REACH);   // on the overhead cable the hamster stretches further, so it hangs with its head below the line (not above it)
+            if (stubArms) stretchArmsBy(grip, HAM_WIDEN, cable ? HAM_CABLE_REACH : HAM_REACH);   // on the overhead cable the stub-armed hamster stretches further, so it hangs with its head below the line (not above it)
             else if (astro && line && !cable) stretchArmsBy(grip, 0.08f, ASTRO_STRETCH);   // lengthen the astronauts' arms so the hands reach the rope that sits forward of the deep helmet
             else if (!astro && line && cable) stretchArmsBy(grip, BUN_STRETCH, BUN_STRETCH);   // bunny: a UNIFORM stretch (X==Y==Z, or the fist counter-scale distorts its real paws) so its short arms reach up and grip the overhead cable instead of hanging below it with no visible arms
             if (line) {                // rope or cable: both hands on the line, alternating hand over hand while moving; knees draw up alternately
                 float moving = MathUtils.clamp(lineMove, 0f, 1f);
                 gripLine(climbPhase, moving, cable);
-                if (!cable && (astro || ham)) {   // vertical rope: close the feet on the line, and clasp the ball hands in front of it (astro + hamster)
+                if (!cable && handBall) ballFront = BALL_FRONT * grip;   // vertical rope: clasp the ball hands in front of the line (pushed toward the camera)
+                if (!cable && (astro || stubArms)) {   // vertical rope: close the feet on the line (astro + the stub-armed hamster; the re-rigged hamster climbs like the bunny)
                     feetToLine(climbPhase, moving);
-                    ballFront = BALL_FRONT * grip;                      // push the ball toward the camera, in front of the line
                     if (astro) ballPullX = ROPE_BALL_X;                 // astronauts: draw the ball in onto the rope's line (their fist sits there). The hamster's own fist already lands beside the line, so its ball stays on its paw (ballPullX stays 1) and only pushes forward - pulling it in was what detached it from the arm.
                 }
                 else climbLegs(climbPhase, moving);                                                               // the overhead cable, and the bunny on a rope, keep the dangling knee draw-up
@@ -467,7 +553,7 @@ public final class HeroRig implements Disposable {
             if (fiL != null && fiR != null) {
                 float handWorld = wy + handModelY() * sy;
                 float shift = (sim.y + sim.T.handHeight) - handWorld;
-                if (ham && cable) { shift -= HAM_CABLE_DROP * grip; ballLift = HAM_CABLE_DROP * grip; }   // hang lower under the cable; the balls stay on the line
+                if (stubArms && cable) { shift -= HAM_CABLE_DROP * grip; ballLift = HAM_CABLE_DROP * grip; }   // hang lower under the cable; the balls stay on the line
                 float tremble = sim.mode == Sim.Mode.LEDGE && !reduced ? MathUtils.sin(time * 22f) * (0.4f + Math.min(0.8f, hangT * 0.3f)) : 0f;
                 float behind = line ? (cable ? ROPE_FRONT : lineBack()) * grip : 0f;   // the vertical rope sits in front of the face (bigger for the astronauts' helmets); the overhead cable keeps its tuned offset
                 // cable shimmy: the whole body swings side to side under the hands with each hand-over-hand, like a playful monkey swing (not with reduced motion)
@@ -543,7 +629,16 @@ public final class HeroRig implements Disposable {
     }
 
     /** The hamster's arms are tiny stubs: while gripping they stretch (cartoon rubber arms) so the paws can reach the rope or ledge above the head. */
-    private void stretchArms(float grip) { stretchArmsBy(grip, 0.7f, HAM_REACH); }
+    private void stretchArms(float grip) { stretchArmsBy(grip, HAM_WIDEN, HAM_REACH); }
+    /** How much the hamster's arms thicken while they stretch (0 = natural thickness, cartoon rubber arms above). */
+    private static final float HAM_WIDEN = Float.parseFloat(System.getProperty("climb.hamWiden", "0.7"));
+    /**
+     * How far (model units) each of the hamster's shoulder joints is drawn in toward the chest while it grips. Its upper-arm joints sit at
+     * the very edge of its wide body, so an arm turned toward a line in front still showed its root as a pale stub outside either shoulder
+     * (the owner's Build 62 report) whatever the stretch did; moved in, the root turns and lengthens inside the body. The clips' constant
+     * translation tracks (and reclampLimbScales) put the joint back every frame.
+     */
+    private static final float HAM_TUCK = Float.parseFloat(System.getProperty("climb.hamTuck", "0.30"));
     /**
      * Lengthen (k) and widen (w) the arm bones so the hands reach a line that sits forward of the body - the hamster's big
      * rubber stretch, and a small astronaut stretch so their normal-length arms can still reach the rope that sits well
@@ -557,8 +652,19 @@ public final class HeroRig implements Disposable {
         if (fiL != null) fiL.globalTransform.getScale(fistNatL);
         if (fiR != null) fiR.globalTransform.getScale(fistNatR);
         fistStretched = fiL != null || fiR != null;
+        if (stubArms && HAM_TUCK > 0f) {            // tuck the shoulder joints in toward the chest first: the arm roots then turn and stretch inside the body instead of poking out of its sides (Build 63)
+            for (Node up : new Node[]{upL, upR}) {
+                up.globalTransform.getTranslation(pB);
+                wNew.setToTranslation(-Math.signum(pB.x) * HAM_TUCK * grip, 0f, 0f).mul(up.globalTransform);
+                commitBone(up);
+            }
+        }
         float a = 1f + w * grip, k = 1f + lengthen * grip;
-        for (Node n : new Node[]{upL, upR, loL, loR}) if (n != null) n.localTransform.scale(a, k, a);
+        for (Node n : new Node[]{upL, upR, loL, loR}) if (n != null) {
+            float r = rootDepth(n);
+            if (r > 0f) n.localTransform.translate(0f, -r, 0f).scale(a, k, a).translate(0f, r, 0f);   // about the mesh root: the stub's inner end stays inside the shoulder and the arm lengthens toward the paw only (hamster)
+            else n.localTransform.scale(a, k, a);
+        }
         inst.calculateTransforms();
     }
     private final Vector3 fistNatL = new Vector3(), fistNatR = new Vector3(), fistT = new Vector3();
@@ -664,13 +770,15 @@ public final class HeroRig implements Disposable {
                 tx = 0f;                                               // onto the rope's lateral line (he is centred under it)
                 // grip around chest height (NOT reaching overhead): reaching up tucks the head down between the arms and hides
                 // the face. The astronauts' heights sit below the shoulder line so the balls clear the helmet (ASTRO_GRIP_*).
-                float gHi = astro ? ASTRO_GRIP_HI : ham ? HAM_GRIP_HI : GRIP_HI, gLo = astro ? ASTRO_GRIP_LO : ham ? HAM_GRIP_LO : GRIP_LO;
+                float gHi = astro ? ASTRO_GRIP_HI : stubArms ? HAM_GRIP_HI : GRIP_HI, gLo = astro ? ASTRO_GRIP_LO : stubArms ? HAM_GRIP_LO : GRIP_LO;
                 float h = MathUtils.lerp(side == 0 ? gHi : gLo, gLo + (gHi - gLo) * lead, m);
                 ty = pB.y + len * h;                                   // one hand a little higher, one a little lower; alternate while climbing
                 tz = lineBack() / SCALE;                               // the rope's depth in bone space: gripLine poses before the body is pushed back, so aiming at where the line will be lands the hand on it once the body slides back
             }
             tgt.set(tx - pB.x, ty - pB.y, tz - pB.z).nor();            // (aim() reuses 'dir' internally, so the target lives in its own vector)
-            aim(up, lo, tgt, 1f); aim(lo, fi, tgt, 1f);
+            float root = rootDepth(up);
+            if (root > 0f) aimAbout(up, lo, tgt, 1f, root); else aim(up, lo, tgt, 1f);   // the hamster's upper arm swings about its mesh root, so the root stays inside the shoulder
+            aim(lo, fi, tgt, 1f);
         }
     }
 

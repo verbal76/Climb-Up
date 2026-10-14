@@ -1,12 +1,12 @@
-# Upwardly — tester checklist (Build 65)
+# Upwardly — tester checklist (Build 66)
 
 Ten minutes per device. Note anything that feels wrong, with a screenshot or a short video if you can.
 
 ## Install
-- **Android:** install `upwardly-1.1.5-build65-debug.apk` over Build 64 (no uninstall). Your players, climbs and times must still be there, and the run you had in progress continues with its times.
-- **Windows:** unzip `Upwardly.Build.65.EXE.zip` anywhere and run `Upwardly\Upwardly.exe` (no Java needed). Saves live in `%APPDATA%\HotAtticGames\Upwardly`. The title's status bar must say `BUILD 65`.
-- **Linux / Steam Deck:** unpack `Upwardly.Build.65.Linux.tar.gz` and run `Upwardly/bin/Upwardly`.
-- Downloads: https://github.com/verbal76/Climb-Up/releases/tag/v1.1.5-build65 (APK) and https://github.com/verbal76/Climb-Up/releases/tag/build-65-desktop (Windows + Linux). Build 64 stays at its own links if you need to compare.
+- **Android:** install `upwardly-1.1.5-build66-debug.apk` over Build 65 (no uninstall). Your players, climbs and times must still be there, and the run you had in progress continues with its times.
+- **Windows:** unzip `Upwardly.Build.66.EXE.zip` anywhere and run `Upwardly\Upwardly.exe` (no Java needed). Saves live in `%APPDATA%\HotAtticGames\Upwardly`. The title's status bar must say `BUILD 66`.
+- **Linux / Steam Deck:** unpack `Upwardly.Build.66.Linux.tar.gz` and run `Upwardly/bin/Upwardly`.
+- Downloads: https://github.com/verbal76/Climb-Up/releases/tag/v1.1.5-build66 (APK) and https://github.com/verbal76/Climb-Up/releases/tag/build-66-desktop (Windows + Linux). Build 65 stays at its own links if you need to compare.
 
 ## New in Build 66 (streamer mode, display picker, LB + RB screenshot, days on the clock)
 1. PC: SETTINGS → DISPLAY. DISPLAY MODE now has - and + : WINDOWED → FULLSCREEN → BORDERLESS and back, nothing wraps around. In BORDERLESS the game fills the screen and the mouse can still leave to another monitor. The note under the rows changes with the mode.

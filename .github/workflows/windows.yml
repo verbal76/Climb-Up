@@ -10,6 +10,10 @@ on:
         description: "Build number for the package names, tag and release title (blank = this run's number). Set it to the Android build's number so all three artifacts of one commit share it."
         type: string
         default: ""
+      skip_tests:
+        description: "Skip the test job (core, desktop, scenario, limb guard) for an art-only rebuild whose commit already passed them elsewhere. The Windows EXE and Linux launcher smoke checks still run. Default off."
+        type: boolean
+        default: false
 permissions:
   contents: read
   actions: read
@@ -19,7 +23,7 @@ env:
 
 jobs:
   tests:
-    if: github.ref == 'refs/heads/ccr-cb458cd1-w4dh5c'
+    if: github.ref == 'refs/heads/ccr-cb458cd1-w4dh5c' && !inputs.skip_tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -60,7 +64,7 @@ jobs:
           retention-days: 7
 
   windows:
-    if: github.ref == 'refs/heads/ccr-cb458cd1-w4dh5c'
+    if: always() && github.ref == 'refs/heads/ccr-cb458cd1-w4dh5c' && (needs.tests.result == 'success' || (inputs.skip_tests && needs.tests.result == 'skipped'))
     needs: tests
     runs-on: windows-latest
     steps:
@@ -129,7 +133,7 @@ jobs:
           retention-days: 14
 
   linux:
-    if: github.ref == 'refs/heads/ccr-cb458cd1-w4dh5c'
+    if: always() && github.ref == 'refs/heads/ccr-cb458cd1-w4dh5c' && (needs.tests.result == 'success' || (inputs.skip_tests && needs.tests.result == 'skipped'))
     needs: tests
     runs-on: ubuntu-latest
     steps:
@@ -155,7 +159,7 @@ jobs:
           retention-days: 14
 
   release:
-    if: github.ref == 'refs/heads/ccr-cb458cd1-w4dh5c'
+    if: always() && github.ref == 'refs/heads/ccr-cb458cd1-w4dh5c' && needs.windows.result == 'success' && needs.linux.result == 'success'
     needs: [windows, linux]
     runs-on: ubuntu-latest
     permissions:

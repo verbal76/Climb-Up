@@ -1,12 +1,12 @@
-# Upwardly — tester checklist (Build 66)
+# Upwardly — tester checklist (Build 67)
 
 Ten minutes per device. Note anything that feels wrong, with a screenshot or a short video if you can.
 
 ## Install
-- **Android:** install `upwardly-1.1.5-build66-debug.apk` over Build 65 (no uninstall). Your players, climbs and times must still be there, and the run you had in progress continues with its times.
-- **Windows:** unzip `Upwardly.Build.66.EXE.zip` anywhere and run `Upwardly\Upwardly.exe` (no Java needed). Saves live in `%APPDATA%\HotAtticGames\Upwardly`. The title's status bar must say `BUILD 66`.
-- **Linux / Steam Deck:** unpack `Upwardly.Build.66.Linux.tar.gz` and run `Upwardly/bin/Upwardly`.
-- Downloads: https://github.com/verbal76/Climb-Up/releases/tag/v1.1.5-build66 (APK) and https://github.com/verbal76/Climb-Up/releases/tag/build-66-desktop (Windows + Linux). Build 65 stays at its own links if you need to compare.
+- **Android:** install `upwardly-1.1.5-build67-debug.apk` over Build 66 (no uninstall). Your players, climbs and times must still be there, and the run you had in progress continues with its times.
+- **Windows:** unzip `Upwardly.Build.67.EXE.zip` anywhere and run `Upwardly\Upwardly.exe` (no Java needed). Saves live in `%APPDATA%\HotAtticGames\Upwardly`. The title's status bar must say `BUILD 67`.
+- **Linux / Steam Deck:** unpack `Upwardly.Build.67.Linux.tar.gz` and run `Upwardly/bin/Upwardly`.
+- Downloads: https://github.com/verbal76/Climb-Up/releases/tag/v1.1.5-build67 (APK) and https://github.com/verbal76/Climb-Up/releases/tag/build-67-desktop (Windows + Linux). Build 66 stays at its own links if you need to compare.
 
 ## New in Build 67 (cannons, title EXIT, reduced HUD, no desktop pause plate, hero portrait, cable eyes, times tags)
 1. Side cannon (first castle world): the spiked ball comes out of the centre of the cannon's mouth with a small puff, then curves onto its path. It no longer appears beside the carriage. Mortar: the charge glow is centred on the mouth and the ball rises straight out of it.

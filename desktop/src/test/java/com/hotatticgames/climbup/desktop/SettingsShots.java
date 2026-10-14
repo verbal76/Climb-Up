@@ -35,8 +35,8 @@ public final class SettingsShots implements ApplicationListener {
     private final List<Job> jobs = new ArrayList<>();
     private int cur, local, lastW, lastH;
 
-    // Settings page indices: 0 GENERAL, 1 ACCESS, 2 ABOUT, 3 DISPLAY, 4 GRAPHICS, 5 CONTROLS (desktop adds the last three).
-    private static final int GENERAL = 0, DISPLAY = 3, GRAPHICS = 4, CONTROLS = 5;
+    // Settings page indices: 0 GENERAL, 1 ACCESS, 2 ABOUT, 3 DISPLAY, 4 HUD, 5 GRAPHICS, 6 CONTROLS (desktop adds the last four; HUD since Build 67).
+    private static final int GENERAL = 0, DISPLAY = 3, HUD = 4, GRAPHICS = 5, CONTROLS = 6;
 
     public static void main(String[] args) {
         File data = new File(args.length > 0 ? args[0] : "build/settingsshots/data"), shots = new File(args.length > 1 ? args[1] : "build/settingsshots/shots");
@@ -59,7 +59,7 @@ public final class SettingsShots implements ApplicationListener {
         // A controller plugged in so the CONTROLS tab shows its longest realistic content (name, two EDITs, dead zone).
         src.pads.add(new FakePad("shots-pad", "XInput Controller"));
 
-        // Sizes span 4:3 -> 16:9 -> 21:9 -> 32:9, plus a 4K TV and small windows. The three desktop tabs are shot at each.
+        // Sizes span 4:3 -> 16:9 -> 21:9 -> 32:9, plus a 4K TV and small windows. The four desktop tabs are shot at each.
         int[][] sizes = {
             {1280, 720},   // 16:9 baseline
             {1920, 1080},  // 16:9, 1080p (deviceScale 1.5)
@@ -73,6 +73,7 @@ public final class SettingsShots implements ApplicationListener {
         for (int[] s : sizes) {
             String sz = s[0] + "x" + s[1];
             jobs.add(new Job(s[0], s[1], DISPLAY, -1, "display_" + sz));
+            jobs.add(new Job(s[0], s[1], HUD, -1, "hud_" + sz));
             jobs.add(new Job(s[0], s[1], GRAPHICS, -1, "graphics_" + sz));
             jobs.add(new Job(s[0], s[1], CONTROLS, -1, "controls_" + sz));
             jobs.add(new Job(s[0], s[1], GENERAL, -1, "general_" + sz));

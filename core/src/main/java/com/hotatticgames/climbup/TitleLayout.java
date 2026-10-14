@@ -9,8 +9,9 @@ package com.hotatticgames.climbup;
  *   [ status bar: player name (hero), best height, best finish        version ]
  * </pre>
  *
- * The menu is ONE column on the left (the owner's declutter): a wide primary button (PLAY or CONTINUE), then NEW RUN (only while a climb can be replaced), SETTINGS and MORE. Everything else
- * (PLAYERS, the hero picker, TIMES, LEGACY RUNS, CREDITS, EXIT) lives behind MORE, in a centred panel ({@link #more}), so the tower and the hero on the right are never walled off by buttons.
+ * The menu is ONE column on the left (the owner's declutter): a wide primary button (PLAY or CONTINUE), then NEW RUN, SETTINGS, and MORE beside EXIT on the last row (Build 67: the owner wants
+ * EXIT on the title itself). Everything else (PLAYERS, the hero picker, TIMES, LEGACY RUNS, CREDITS) lives behind MORE, in a centred panel ({@link #more}), so the tower and the hero on the right
+ * are never walled off by buttons.
  * Up to 4 rows fit under the title on a small landscape phone with every button at least 48dp tall (the primary one 56dp when there is room). The button height is worked out from the
  * screen's real density ({@code unitsPerDp}): a big TV or monitor keeps the normal size, a small phone gets taller buttons, and if even that cannot fit, rows shrink to what fits rather than overlap.
  * Everything is laid out inside a 1200-unit wide area centred on the screen, so a wider screen only adds scenery at the sides.
@@ -59,19 +60,26 @@ public final class TitleLayout {
 
     /**
      * @param W,H         the virtual screen size (W at least 1280, H at least 720)
-     * @param n           how many menu buttons (3 or 4 are expected: PLAY/CONTINUE, [NEW RUN], SETTINGS, MORE)
+     * @param n           how many menu buttons (PLAY/CONTINUE, NEW RUN, SETTINGS, MORE, and EXIT since Build 67)
      * @param unitsPerDp  virtual units per Android dp (0 if unknown): the viewport's world height per screen pixel times the screen density
      * @param headY       the virtual height of the top of the hero's head on screen (the speech bubble sits just above it); {@link #typicalHeadY} is where it is on every screen shape
      */
-    public static TitleLayout of(float W, float H, int n, float unitsPerDp, float headY) {
+    public static TitleLayout of(float W, float H, int n, float unitsPerDp, float headY) { return of(W, H, n, unitsPerDp, headY, false); }
+
+    /**
+     * @param pairLast    Build 67 (owner: EXIT on the title, not under MORE): the last two buttons share the bottom row, side by side, so the column keeps its four rows and every
+     *                    button its 48dp; needs at least three buttons (the primary one is never paired)
+     */
+    public static TitleLayout of(float W, float H, int n, float unitsPerDp, float headY, boolean pairLast) {
         n = Math.max(1, n);
+        boolean pair = pairLast && n >= 3;
         float upd = unitsPerDp > 0f && unitsPerDp < 10f ? unitsPerDp : 0f;
         float cx = W / 2f;
         float ax0 = Math.max(EDGE, cx - 600f);
         float leftX1 = cx - HERO_HALF_W - ZONE_GAP;
         float leftW = Math.min(COLUMN_W, Math.max(120f, leftX1 - ax0));
         float top = H - ART_BOTTOM - ART_TO_MENU, band = top - FLOOR;
-        int rows = n, sec = rows - 1;
+        int rows = pair ? n - 1 : n, sec = rows - 1;
 
         float s = secondaryFor(upd);
         float p = Math.min(MAX_PRIMARY, Math.max(Math.max(DEF_PRIMARY, PRIMARY_DP * upd), s));
@@ -86,7 +94,8 @@ public final class TitleLayout {
         Rect[] menu = new Rect[n];
         float y = top;
         menu[0] = new Rect(ax0, y - p, leftW, p); y -= p + gap;
-        for (int i = 1; i < n; i++) { menu[i] = new Rect(ax0, y - s, leftW, s); y -= s + gap; }
+        for (int i = 1; i < (pair ? n - 2 : n); i++) { menu[i] = new Rect(ax0, y - s, leftW, s); y -= s + gap; }
+        if (pair) { float hw = (leftW - gap) / 2f; menu[n - 2] = new Rect(ax0, y - s, hw, s); menu[n - 1] = new Rect(ax0 + hw + gap, y - s, hw, s); }
 
         float bubbleBottom = headY - 10f;                              // the bubble's tail reaches 14 below its body, which starts 6 above the head
         Rect art = new Rect(cx - 490f, H - ART_BOTTOM, 980f, ART_BOTTOM);
@@ -117,7 +126,7 @@ public final class TitleLayout {
     }
 
     /**
-     * @param n           how many buttons the panel holds (5 or 6: PLAYERS, HERO, TIMES, [LEGACY RUNS], CREDITS, EXIT)
+     * @param n           how many buttons the panel holds (4 or 5: PLAYERS, HERO, TIMES, [LEGACY RUNS], CREDITS)
      * @param unitsPerDp  as for {@link #of}
      */
     public static More more(float W, float H, int n, float unitsPerDp) {

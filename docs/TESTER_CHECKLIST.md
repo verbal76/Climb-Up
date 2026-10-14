@@ -8,6 +8,15 @@ Ten minutes per device. Note anything that feels wrong, with a screenshot or a s
 - **Linux / Steam Deck:** unpack `Upwardly.Build.66.Linux.tar.gz` and run `Upwardly/bin/Upwardly`.
 - Downloads: https://github.com/verbal76/Climb-Up/releases/tag/v1.1.5-build66 (APK) and https://github.com/verbal76/Climb-Up/releases/tag/build-66-desktop (Windows + Linux). Build 65 stays at its own links if you need to compare.
 
+## New in Build 67 (cannons, title EXIT, reduced HUD, no desktop pause plate, hero portrait, cable eyes, times tags)
+1. Side cannon (first castle world): the spiked ball comes out of the centre of the cannon's mouth with a small puff, then curves onto its path. It no longer appears beside the carriage. Mortar: the charge glow is centred on the mouth and the ball rises straight out of it.
+2. Title: EXIT sits beside MORE on the bottom row (MORE no longer holds EXIT). Pad: from SETTINGS press down then right to reach EXIT.
+3. PC: SETTINGS → HUD (a new tab beside DISPLAY): REDUCED HUD, SHOW COURSE SEED, SHOW BEST TIMES. Phone: REDUCED HUD is on CONTROLS + DATA. REDUCED HUD on: the big top-left box is gone; you see only the height, the ten-tower bar and a key you carry. Take a screenshot (F9, LB + RB, or TAKE SCREENSHOT in the pause menu) with it on: the picture has no HUD at all. Off again: the full box is back.
+4. PC: the PAUSE plate in the top-right corner is gone; Esc, P or the pad's Menu button pause as before. Phone: the touch pause button stays.
+5. SETTINGS → GENERAL (phone: AUDIO + DISPLAY): a small portrait of the chosen hero sits left of the CHARACTER box and changes as you tap through the heroes.
+6. Bunny on an overhead cable: the eyes stay visible through the arms while it hangs and shimmies; nothing else about the pose changed.
+7. MORE → TIMES: the NEW and PB tags sit clear of the numbers (smaller, with a gap).
+
 ## New in Build 66 (streamer mode, display picker, LB + RB screenshot, days on the clock)
 1. PC: SETTINGS → DISPLAY. DISPLAY MODE now has - and + : WINDOWED → FULLSCREEN → BORDERLESS and back, nothing wraps around. In BORDERLESS the game fills the screen and the mouse can still leave to another monitor. The note under the rows changes with the mode.
 2. PC, WINDOWED: press + on RESOLUTION until it stops. It must stop at the largest size that still fits on the desktop and never jump back to 1280 X 720.

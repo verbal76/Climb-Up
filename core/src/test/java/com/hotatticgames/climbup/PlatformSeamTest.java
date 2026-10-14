@@ -15,7 +15,6 @@ public class PlatformSeamTest {
         assertEquals("UPWARDLY", p.title());
         assertNull("no desktop input source: the original touch/keyboard path is used", p.gameInput());
         assertTrue(p.settingsTabs().isEmpty());
-        assertFalse("the shared touch pause icon is drawn", p.drawPauseButton(null, 0, 0, 0));
         String tip = "TAP AGAIN: NEW CLIMB. HOLD JUMP, STICK UP/DOWN CLIMBS";
         assertSame("tip text is untouched", tip, p.tip(tip));
     }

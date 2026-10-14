@@ -8,7 +8,7 @@ import com.hotatticgames.climbup.ui.Ui;
 import java.util.List;
 import java.util.Locale;
 
-/** The two extra Settings tabs of the desktop build, drawn with the game's own rows. */
+/** The extra Settings tabs of the desktop build (DISPLAY, HUD, GRAPHICS, CONTROLS), drawn with the game's own rows. */
 final class DesktopTabs {
     private DesktopTabs() { }
 
@@ -67,7 +67,25 @@ final class DesktopTabs {
         private void pick(DesktopConfig c, int[] r) { dp.display.setResolution(c, r[0], r[1]); dp.save(); }
     }
 
-    /** ANTI-ALIASING, TEXTURE SHARPNESS, SKY EFFECTS, USE THE FASTER GPU, and the two HUD switches (SHOW COURSE SEED, SHOW BEST TIMES): the DISPLAY tab's notes need its last rows. */
+    /**
+     * REDUCED HUD (Build 67, owner: the height plate is too bulky), SHOW COURSE SEED and SHOW BEST TIMES (Build 64), with a line on each: the HUD switches used to sit at the end of
+     * GRAPHICS because no tab had a row to spare, and the owner looks for them next to DISPLAY. The settings themselves are the shared ones (settings.json), as on the phone.
+     */
+    static final class HudTab implements Platform.SettingsTab {
+        @Override public String name() { return "HUD"; }
+        @Override public void draw(ClimbGame g, SettingsScreen s) {
+            s.toggle("REDUCED HUD", g.settings.reducedHud, () -> g.settings.reducedHud = !g.settings.reducedHud);
+            s.toggle("SHOW COURSE SEED", g.settings.showSeed, () -> g.settings.showSeed = !g.settings.showSeed);           // HUD only; the code stays in the pause menu and the times table
+            s.toggle("SHOW BEST TIMES", g.settings.showBestTimes, () -> g.settings.showBestTimes = !g.settings.showBestTimes);   // HUD only; the clock, the records and the times table are untouched
+            s.skip(8);
+            Ui ui = g.ui;
+            note(ui, s, g.settings.reducedHud ? "REDUCED HUD: JUST THE HEIGHT, THE TOWER BAR AND A KEY YOU CARRY. SCREENSHOTS SHOW NO HUD."
+                    : "REDUCED HUD DROPS THE HEIGHT PLATE: HEIGHT, TOWER BAR AND A CARRIED KEY ONLY. CLEAN SCREENSHOTS.");
+            note(ui, s, "THE COURSE CODE AND YOUR BEST TIMES STAY IN THE PAUSE MENU AND THE TIMES TABLE EITHER WAY.");
+        }
+    }
+
+    /** ANTI-ALIASING, TEXTURE SHARPNESS, SKY EFFECTS, USE THE FASTER GPU. */
     static final class GraphicsTab implements Platform.SettingsTab {
         private final DesktopPlatform dp;
         GraphicsTab(DesktopPlatform dp) { this.dp = dp; }
@@ -83,8 +101,6 @@ final class DesktopTabs {
                     () -> { c.anisotropy = DesktopConfig.SHARPNESS[Math.min(DesktopConfig.SHARPNESS.length - 1, ti + 1)]; gm.apply(); dp.save(); }, null);
             s.toggle("SKY EFFECTS", c.skyEffects, () -> { c.skyEffects = !c.skyEffects; gm.apply(); dp.save(); });
             s.toggle("USE THE FASTER GPU", c.highPerfGpu, () -> { c.highPerfGpu = !c.highPerfGpu; dp.save(); gm.applyGpuPreference(true); });
-            s.toggle("SHOW COURSE SEED", g.settings.showSeed, () -> g.settings.showSeed = !g.settings.showSeed);           // Build 64: HUD only; the code stays in the pause menu and the times table
-            s.toggle("SHOW BEST TIMES", g.settings.showBestTimes, () -> g.settings.showBestTimes = !g.settings.showBestTimes);   // Build 64: HUD only; the clock, the records and the times table are untouched
             s.skip(8);
             Ui ui = g.ui;
             if (gm.restartNeeded) note(ui, s, "CLOSE AND START THE GAME AGAIN FOR THE GPU CHOICE TO TAKE EFFECT.");

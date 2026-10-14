@@ -40,7 +40,6 @@ final class AndroidPlatform implements Platform {
     @Override public void screenChanged() { MOBILE.screenChanged(); }
     @Override public String tip(String text) { return MOBILE.tip(text); }
     @Override public void drawPlayHints(Ui ui, boolean carryingClub, float width, float height) { MOBILE.drawPlayHints(ui, carryingClub, width, height); }
-    @Override public boolean drawPauseButton(Ui ui, float x, float y, float size) { return MOBILE.drawPauseButton(ui, x, y, size); }
     @Override public List<SettingsTab> settingsTabs() { return MOBILE.settingsTabs(); }
     @Override public void dispose() { MOBILE.dispose(); }
 

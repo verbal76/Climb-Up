@@ -711,7 +711,7 @@ public final class WorldRenderer implements Disposable {
      * the old drawing assumed the barrel ran along Z, so the side cannon faced the camera, the turret spun about its own barrel instead of turning, and
      * the mortar lay on its side (owner's PC report).
      */
-    static final float CANNON_AXIS_UP = 1.02f * PK, CANNON_WHEEL_R = 0.94f * PK, CANNON_MUZZLE = 2.26f * PK;
+    public static final float CANNON_AXIS_UP = 1.02f * PK, CANNON_WHEEL_R = 0.94f * PK;
     /** Pedestal height under a side cannon: its barrel axis flies the ball 2.35 above the slab, the wheels stand on the 0.16 cap sunk 0.04 into it. */
     public static final float CANNON_LIFT = 2.35f - CANNON_AXIS_UP - CANNON_WHEEL_R - 0.16f + 0.04f;
     /** The same under an aimed turret, whose axis sits 2.0 above its slab. */
@@ -720,6 +720,29 @@ public final class WorldRenderer implements Disposable {
     public static final float AIM_DEPTH = Float.parseFloat(System.getProperty("climb.aimDepth", "1.7"));
     /** Over this much of its flight a ball drawn from a cannon behind the lane glides forward into the play plane (where it is simulated). */
     private static final float BALL_SWOOP = 1.6f;
+    /** Fraction of a side cannon's cycle its launch puff lasts (Build 67). */
+    private static final float CANNON_PUFF = 0.05f;
+    /** The cannon model's muzzle ring centre, in model units from the axle: the barrel runs along +X and its axis is 1.018 above the axle (the g3dj's ring vertices, x 2.258, y 0.026..2.011). */
+    public static final float MOUTH_X = 2.258f, MOUTH_Y = 1.018f;
+    /**
+     * Where the drawn mouth is relative to the axle, in the cannon's own frame (x along the lane toward +s, y up, world metres) once the cradle is tilted
+     * {@code tilt} degrees about the axle and the whole cannon is turned {@code yaw} (0 = muzzle toward +s, 180 = toward -s): the same rotations
+     * {@link #drawCannon} applies, so a cannon placed with this lands its mouth exactly where the simulation launches its ball (Build 67, owner:
+     * "they need to spawn from the center of the mouth of the cannon"). Pure, for the fit test.
+     */
+    public static float[] mouthFromAxle(float yaw, float tilt, float[] out) {
+        double t = Math.toRadians(tilt), c = Math.cos(t), s = Math.sin(t);
+        float x = (float) ((MOUTH_X * c - MOUTH_Y * s) * PK), y = (float) ((MOUTH_X * s + MOUTH_Y * c) * PK);
+        if (Math.abs(((yaw % 360f) + 360f) % 360f - 180f) < 1f) x = -x;
+        out[0] = x; out[1] = y; return out;
+    }
+    /** Lane units (s) that a rigid length of {@code metres} along the lane covers at depth {@code dz} behind it: the ring there is drawn at radius - dz, so the same metres span more arc. */
+    public static float laneUnits(float metres, float dz, float radius) { return metres * radius / (radius - dz); }
+    private final float[] mouthTmp = new float[2];
+    /** Dev hook (-Dclimb.hazMarks=true): small boxes at the simulation's own positions of cannon balls and mouths, to check the drawing against the rules. */
+    private static final boolean HAZ_MARKS = Boolean.getBoolean("climb.hazMarks");
+    /** Dev hook (-Dclimb.hazNoBody=true): leaves the cannon model out so the markers are not hidden by it. */
+    private static final boolean HAZ_NO_BODY = Boolean.getBoolean("climb.hazNoBody");
 
     private ModelInstance pack(String name) {
         ModelInstance m = packInst.get(name);
@@ -744,6 +767,31 @@ public final class WorldRenderer implements Disposable {
         m.transform.idt().translate(r * MathUtils.sin(phi), y, -T.radius + r * MathUtils.cos(phi))
                 .rotate(0, 1, 0, phi * MathUtils.radiansToDegrees + yaw).scale(PK, PK, PK);
         batch.render(m, env);
+        if (HAZ_MARKS && cradle != null) {          // dev: a magenta cube at the muzzle ring's centre and a cyan one at the axle, from the engine's own matrices
+            com.badlogic.gdx.math.Vector3 muz = new com.badlogic.gdx.math.Vector3(2.258f, 1.018f, 0f).mul(cradle.globalTransform).mul(m.transform);
+            com.badlogic.gdx.math.Vector3 ax = new com.badlogic.gdx.math.Vector3(0f, 0f, 0f).mul(m.transform);
+            drawMarkCube(muz, 0.2f, 1f, 0f, 1f); drawMarkCube(ax, 0.12f, 0f, 1f, 1f);
+            markLog("muzzle arc=" + arc + " y=" + y + " dz=" + dz + " yaw=" + yaw + " tilt=" + tilt, muz); markLog("axle", ax);
+        }
+    }
+    private void drawMarkCube(com.badlogic.gdx.math.Vector3 at, float size, float cr, float cg, float cb) {
+        int key = ((int) (cr * 255) << 16) | ((int) (cg * 255) << 8) | (int) (cb * 255);
+        ModelInstance st = boxByColour.get(key);
+        if (st == null) { st = new ModelInstance(models.box); st.materials.get(0).set(ColorAttribute.createDiffuse(cr, cg, cb, 1f)); boxByColour.put(key, st); }
+        st.transform.idt().translate(at.x, at.y, at.z).scale(size, size, size);
+        batch.render(st, env);
+    }
+    private final com.badlogic.gdx.math.Vector3 markTmp = new com.badlogic.gdx.math.Vector3();
+    /** Dev (HAZ_MARKS): the world point of (arc, y, dz) in the camera's frame, as place() computes it. */
+    private com.badlogic.gdx.math.Vector3 worldAt(float arc, float y, float dz, float camS, com.badlogic.gdx.math.Vector3 out) {
+        float phi = wrapDiff(arc, camS) / T.radius, r = T.radius - dz;
+        return out.set(r * MathUtils.sin(phi), y, -T.radius + r * MathUtils.cos(phi));
+    }
+    /** Dev (HAZ_MARKS): prints a world point and where the camera puts it on the back buffer (x right, y down). */
+    private void markLog(String label, com.badlogic.gdx.math.Vector3 w) {
+        float wx = w.x, wy = w.y, wz = w.z;
+        markTmp.set(w); cam.project(markTmp, 0, 0, Gdx.graphics.getBackBufferWidth(), Gdx.graphics.getBackBufferHeight());
+        System.out.printf(java.util.Locale.ROOT, "MARK %s world=(%.3f,%.3f,%.3f) screen=(%.1f,%.1f)%n", label, wx, wy, wz, markTmp.x, Gdx.graphics.getBackBufferHeight() - markTmp.y);
     }
 
     private final java.util.HashMap<String, ModelInstance> slabInst = new java.util.HashMap<>();
@@ -934,11 +982,22 @@ public final class WorldRenderer implements Disposable {
                 // a side cannon on its own slab, level with its platform and set behind the lane (owner, Build 63); its barrel's axis is at the
                 // ball's height (h.y), muzzle down the lane; every ball on its way is drawn - this cycle's and the earlier launches flying on -
                 // and every one of them hits (Element.CANNON_TRAIL). A ball leaves the muzzle behind the lane and glides into the play plane.
+                // Build 67 (owner: the ball must come out of the centre of the mouth): the simulation launches at h.s, so the cannon, its pedestal
+                // and its slab stand a barrel's length behind that point (in lane units at this depth, mouthFromAxle / laneUnits) and the mouth
+                // sits exactly on it; before, the axle stood on h.s and the ball erupted out of the carriage. The simulation, the lane and the
+                // hit discs are untouched.
                 float deck = h.y - 2.35f, dz = AIM_DEPTH;
-                drawSlab(h.s, deck, dz, camS, h.zone);
-                drawBox(h.s, deck, dz, camS, 1.25f, CANNON_LIFT, 1.25f, 0.42f, 0.38f, 0.5f);
-                drawBox(h.s, deck + CANNON_LIFT, dz, camS, 1.45f, 0.16f, 1.45f, 0.3f, 0.27f, 0.36f);
-                drawCannon(h.s, h.y - CANNON_AXIS_UP, dz, camS, h.dir > 0 ? 0f : 180f, 0f);
+                float[] mz = mouthFromAxle(h.dir > 0 ? 0f : 180f, 0f, mouthTmp);
+                float body = h.s - laneUnits(mz[0], dz, T.radius);
+                drawSlab(body, deck, dz, camS, h.zone);
+                drawBox(body, deck, dz, camS, 1.25f, CANNON_LIFT, 1.25f, 0.42f, 0.38f, 0.5f);
+                drawBox(body, deck + CANNON_LIFT, dz, camS, 1.45f, 0.16f, 1.45f, 0.3f, 0.27f, 0.36f);
+                drawCannon(body, h.y - CANNON_AXIS_UP, dz, camS, h.dir > 0 ? 0f : 180f, 0f);
+                float c0 = h.cyc(t);
+                if (c0 < CANNON_PUFF && !reducedMotion) {          // the shot: a warm puff that grows and fades just outside the mouth as the ball leaves it
+                    float k = c0 / CANNON_PUFF, sz = 0.24f + 0.36f * k;
+                    drawBox(h.s + h.dir * (0.2f + 0.35f * k), h.y - sz * 0.5f, dz - 0.25f, camS, sz, sz, sz, 1f, 0.62f - 0.3f * k, 0.3f - 0.15f * k);
+                }
                 for (int back = 0; back < Element.CANNON_TRAIL; back++) {
                     if (!h.cannonBallAlive(t, back)) continue;                    // exactly the balls the simulation tests
                     float bs = h.cannonBallS(t, back), flown = h.cannonFlown(t, back);
@@ -946,6 +1005,10 @@ public final class WorldRenderer implements Disposable {
                     float fizzle = Math.min(1f, (h.cannonReach() - flown) / 1.5f);   // it shrinks away over its last metre and a half instead of popping out
                     float sc = 0.55f * Math.max(0.05f, fizzle);
                     drawPack("spikyball", bs, h.yAt(t), dz * Math.max(0f, 1f - flown / BALL_SWOOP), camS, sc, sc, sc, 0f, -bs * 160f);
+                }
+                if (HAZ_MARKS) {           // dev: a thin green pole on the launch arc at the cannon's depth, and the numbers
+                    drawBox(h.s, h.y - 2.5f, dz, camS, 0.06f, 5f, 0.06f, 0.1f, 1f, 0.2f);
+                    markLog("cannon mouth s=" + h.s + " y=" + h.y + " dir=" + h.dir, worldAt(h.s, h.y, dz, camS, markTmp));
                 }
                 break;
             }
@@ -962,28 +1025,46 @@ public final class WorldRenderer implements Disposable {
                 drawBox(h.s, deck, dz, camS, 1.25f, AIM_LIFT, 1.25f, 0.34f, 0.31f, 0.40f);
                 drawBox(h.s, deck + AIM_LIFT, dz, camS, 1.45f, 0.16f, 1.45f, 0.3f, 0.27f, 0.36f);
                 drawCannon(h.s, h.y - CANNON_AXIS_UP, dz, camS, left ? 180f : 0f, tilt);
+                // Build 67 (owner: the ball must leave the centre of the mouth): the cradle turns about its axle, so the drawn mouth wanders
+                // up to half a metre from the simulation's launch point (AIM_MUZZLE along the aim from the barrel's resting axis) as it aims;
+                // the turret stays put and the ball is drawn from the mouth instead, gliding onto its simulated path over the same BALL_SWOOP
+                // it already glides from the slab's depth into the play plane. The flash sits on the drawn mouth too. The simulation is untouched.
+                float[] mz = mouthFromAxle(left ? 180f : 0f, tilt, mouthTmp);
+                float mouthS = h.s + laneUnits(mz[0], dz, T.radius), mouthY = h.y - CANNON_AXIS_UP + mz[1];
+                float offS = mouthS - (h.s + (float) Math.cos(ang) * Element.AIM_MUZZLE), offY = mouthY - (h.y + (float) Math.sin(ang) * Element.AIM_MUZZLE);
                 float c = h.cyc(t);
                 if (c >= Element.AIM_LOCK && c < Element.AIM_FIRE) {
                     float k = (c - Element.AIM_LOCK) / (Element.AIM_FIRE - Element.AIM_LOCK), pulse = reducedMotion ? 1f : 0.7f + 0.3f * MathUtils.sin(time * (18f + 30f * k));
-                    float sz = (0.16f + 0.2f * k) * pulse, tip = Element.AIM_MUZZLE;
-                    drawBox(h.s + (float) Math.cos(ang) * tip - sz * 0.5f, h.y + (float) Math.sin(ang) * tip - sz * 0.5f, dz - 0.2f, camS, sz, sz, sz, 1f, 0.2f, 0.12f);   // muzzle flash at the barrel mouth
+                    float sz = (0.16f + 0.2f * k) * pulse;
+                    drawBox(mouthS, mouthY - sz * 0.5f, dz - 0.2f, camS, sz, sz, sz, 1f, 0.2f, 0.12f);   // muzzle flash centred on the barrel mouth
                 }
                 float[] b = rsim != null ? rsim.aimedBall(rhz, h) : null;
                 if (b != null) {
                     float flown = Math.max(0f, (float) Math.hypot(course.dsWrap(b[0], h.s), b[1] - h.y) - Element.AIM_MUZZLE);
-                    drawPack("spikyball", b[0], b[1], dz * Math.max(0f, 1f - flown / BALL_SWOOP), camS, 0.5f, 0.5f, 0.5f, 0f, -b[0] * 160f);   // from the muzzle behind the lane into the play plane
+                    float w = Math.max(0f, 1f - flown / BALL_SWOOP);
+                    drawPack("spikyball", b[0] + offS * w, b[1] + offY * w, dz * w, camS, 0.5f, 0.5f, 0.5f, 0f, -b[0] * 160f);   // from the mouth behind the lane onto its path in the play plane
+                }
+                if (HAZ_MARKS) {           // dev: the numbers - the mouth the formula places against the engine's own (drawCannon's magenta cube)
+                    markLog("turret mouth formula ang=" + ang + " offS=" + offS + " offY=" + offY, worldAt(mouthS, mouthY, dz, camS, markTmp));
+                    markLog("turret launch", worldAt(h.s + (float) Math.cos(ang) * Element.AIM_MUZZLE, h.y + (float) Math.sin(ang) * Element.AIM_MUZZLE, dz, camS, markTmp));
                 }
                 break;
             }
             case MORTAR: {
                 // a cannon sunk in the ground below the path with its cradle tipped straight up on its wheels; the muzzle tip is where the ball (h.y) leaves from and falls back into
-                float axle = h.y - CANNON_MUZZLE, capBot = axle - CANNON_WHEEL_R - 0.14f;
+                float[] mz = mouthFromAxle(0f, 90f, mouthTmp);                                       // tipped up: the mouth is a barrel's length above the axle and a barrel-axis height to its left
+                float axle = h.y - mz[1], capBot = axle - CANNON_WHEEL_R - 0.14f;
                 drawBox(h.s, capBot - 2.0f, 0f, camS, 1.5f, 2.0f, 1.3f, 0.34f, 0.31f, 0.40f);
                 drawBox(h.s, capBot, 0f, camS, 1.7f, 0.18f, 1.5f, 0.30f, 0.27f, 0.36f);
-                drawCannon(h.s + CANNON_AXIS_UP, axle, 0f, camS, 0f, 90f);         // tipped up, the barrel's axis (1.02 model units off the axle) stands over h.s
+                if (!HAZ_NO_BODY) drawCannon(h.s - mz[0], axle, 0f, camS, 0f, 90f);                 // so the axle stands to the right of h.s and the mouth exactly on it
                 float charge = h.mortarCharge(t);           // the reload pause: the muzzle glows brighter and brighter, then the ball bursts out (warning for the timing)
-                if (charge > 0f) { float pulse = reducedMotion ? 1f : 0.75f + 0.25f * MathUtils.sin(time * 28f); float k = (0.12f + 0.28f * charge) * pulse; drawBox(h.s - k * 0.5f, h.y - k * 0.5f, 0f, camS, k, k, k, 1f, 0.55f + 0.3f * charge, 0.15f); }
+                if (charge > 0f) { float pulse = reducedMotion ? 1f : 0.75f + 0.25f * MathUtils.sin(time * 28f); float k = (0.12f + 0.28f * charge) * pulse; drawBox(h.s, h.y - k * 0.5f, 0f, camS, k, k, k, 1f, 0.55f + 0.3f * charge, 0.15f); }   // Build 67: centred on the mouth (it sat half its width to the left)
                 if (h.lethalAt(t)) drawPack("spikyball", h.s, h.yAt(t), 0f, camS, 0.55f, 0.55f, 0.55f, 0f, -h.yAt(t) * 160f);
+                if (HAZ_MARKS) {           // dev: an orange pole on the ball's simulated arc at the cannon's depth, an orange cube at the mouth point, and the numbers
+                    drawBox(h.s, h.y - 1.5f, 0f, camS, 0.06f, 5f, 0.06f, 1f, 0.5f, 0f); drawBox(h.s, h.y - 0.08f, 0f, camS, 0.16f, 0.16f, 0.16f, 1f, 0.5f, 0f);
+                    markLog("mortar mouth s=" + h.s + " y=" + h.y, worldAt(h.s, h.y, 0f, camS, markTmp));
+                    if (h.lethalAt(t)) markLog("mortar ball", worldAt(h.s, h.yAt(t), 0f, camS, markTmp));
+                }
                 break;
             }
             case SPIKE_TRAP: {

@@ -166,22 +166,12 @@ public final class DesktopPlatform implements Platform {
         return w;
     }
 
-    @Override public boolean drawPauseButton(Ui ui, float x, float y, float size) {
-        String k = input.prompt(Act.PAUSE), gp = input.promptGlyph(Act.PAUSE);
-        ui.rect(x - 3, y - 3, size + 6, size + 6, Ui.EDGE); ui.rect(x, y, size, size, Ui.PANEL);
-        com.badlogic.gdx.graphics.g2d.TextureRegion g = glyphs.get(gp);
-        if (g != null) { float gs = size * 0.62f; ui.image(g, x + size / 2 - gs / 2, y + size - 6 - gs, gs, gs, 1f); }    // the device's own button image
-        else { float px = Math.max(2f, Math.min(4.4f, (size - 14) / Math.max(1, k.length() * 6f))); ui.textC(k, x + size / 2, y + size / 2 + 4, px, Ui.TEXT); }
-        ui.textC("PAUSE", x + size / 2, y + 14, 2.4f, Ui.DIM);
-        return true;
-    }
-
     /** The glyph image for a physical control of the active pad (or null), for the bindings editor. */
     com.badlogic.gdx.graphics.g2d.TextureRegion padGlyph(Ctl c) { return glyphs.get(Glyphs.pad(input.family(), c)); }
     /** The glyph image for a key or mouse button (or null), for the bindings editor. */
     com.badlogic.gdx.graphics.g2d.TextureRegion keyGlyph(int code) { return glyphs.get(Glyphs.key(code)); }
 
-    @Override public List<SettingsTab> settingsTabs() { return Arrays.<SettingsTab>asList(new DesktopTabs.DisplayTab(this), new DesktopTabs.GraphicsTab(this), new DesktopTabs.ControlsTab(this)); }
+    @Override public List<SettingsTab> settingsTabs() { return Arrays.<SettingsTab>asList(new DesktopTabs.DisplayTab(this), new DesktopTabs.HudTab(), new DesktopTabs.GraphicsTab(this), new DesktopTabs.ControlsTab(this)); }
 
     @Override public com.hotatticgames.climbup.platform.Achievements achievements() { return steam.achievements(); }
 

@@ -331,7 +331,7 @@ public final class Scenario implements ApplicationListener {
         steps.add(act(() -> check("B backs out of TIMES to the pause menu", playScreen() != null && hasButton("RESUME"), screenName())));
         steps.add(padGoTo("SETTINGS")); steps.add(padIdle()); steps.add(padTap(Ctl.A)); steps.add(wait(30));
         steps.add(act(() -> check("SETTINGS opens on the pad", screen() instanceof SettingsScreen, screenName())));
-        for (String tab : new String[]{"ACCESS", "ABOUT", "DISPLAY", "GRAPHICS", "CONTROLS", "GENERAL"}) {
+        for (String tab : new String[]{"ACCESS", "ABOUT", "DISPLAY", "HUD", "GRAPHICS", "CONTROLS", "GENERAL"}) {
             steps.add(padGoTo(tab)); steps.add(padIdle()); steps.add(padTap(Ctl.A)); steps.add(wait(12));
             steps.add(act(() -> check("settings tab " + tab + " reachable on the pad", screen() instanceof SettingsScreen && hasButton(tab), screenName())));
             steps.add(shot("26_deck_settings_" + tab.toLowerCase(java.util.Locale.ROOT) + "_1280x800"));
@@ -423,22 +423,38 @@ public final class Scenario implements ApplicationListener {
         steps.add(act(() -> check("TIMES opens from the pause menu with the course", screenName().equals("TimesScreen"), screenName()))); steps.add(shot("41_times_seed"));
         steps.add(tap(Input.Keys.ESCAPE)); steps.add(wait(20));
         steps.add(act(() -> check("escape leaves TIMES for the pause menu", playScreen() != null && hasButton("RESUME"), screenName())));
-        // SHOW COURSE SEED off: HUD only, saved to disk when settings close; then on again
-        steps.add(goTo("SETTINGS")); steps.add(tap(Input.Keys.ENTER)); steps.add(wait(40)); steps.add(goTo("GRAPHICS")); steps.add(tap(Input.Keys.ENTER)); steps.add(wait(10));
-        steps.add(act(() -> check("the GRAPHICS tab has the two HUD switches after the GPU one", screen() instanceof SettingsScreen && hasButton("GRAPHICS"), screenName()))); steps.add(shot("42_settings_graphics_hud_switches"));
-        steps.add(goToToggle(2)); steps.add(tap(Input.Keys.ENTER)); steps.add(wait(4));        // SKY EFFECTS, USE THE FASTER GPU, then SHOW COURSE SEED and SHOW BEST TIMES
-        steps.add(act(() -> check("SHOW COURSE SEED switched off, SHOW BEST TIMES untouched", !game.settings.showSeed && game.settings.showBestTimes, game.settings.showSeed + "/" + game.settings.showBestTimes)));
-        steps.add(goToToggle(3)); steps.add(tap(Input.Keys.ENTER)); steps.add(wait(4));
+        // SHOW COURSE SEED off: HUD only, saved to disk when settings close; then on again. Build 67: the HUD switches have their own HUD tab (REDUCED HUD, SHOW COURSE SEED, SHOW BEST TIMES)
+        steps.add(goTo("SETTINGS")); steps.add(tap(Input.Keys.ENTER)); steps.add(wait(40)); steps.add(goTo("HUD")); steps.add(tap(Input.Keys.ENTER)); steps.add(wait(10));
+        steps.add(act(() -> check("the HUD tab opens with the three HUD switches", screen() instanceof SettingsScreen && hasButton("HUD") && !hasButton("ANTI-ALIASING"), screenName()))); steps.add(shot("42_settings_hud_switches"));
+        steps.add(goToToggle(1)); steps.add(tap(Input.Keys.ENTER)); steps.add(wait(4));        // REDUCED HUD, then SHOW COURSE SEED and SHOW BEST TIMES
+        steps.add(act(() -> check("SHOW COURSE SEED switched off, SHOW BEST TIMES and REDUCED HUD untouched", !game.settings.showSeed && game.settings.showBestTimes && !game.settings.reducedHud, game.settings.showSeed + "/" + game.settings.showBestTimes + "/" + game.settings.reducedHud)));
+        steps.add(goToToggle(2)); steps.add(tap(Input.Keys.ENTER)); steps.add(wait(4));
         steps.add(act(() -> check("SHOW BEST TIMES switched off on its own", !game.settings.showSeed && !game.settings.showBestTimes, game.settings.showSeed + "/" + game.settings.showBestTimes)));
         steps.add(tap(Input.Keys.ESCAPE)); steps.add(wait(40));
         steps.add(act(() -> { Settings onDisk = new SaveStore(data).loadSettings(); check("both switches saved to settings.json on leaving settings", playScreen() != null && hasButton("RESUME") && !onDisk.showSeed && !onDisk.showBestTimes, screenName() + " " + onDisk.showSeed + "/" + onDisk.showBestTimes); }));
         steps.add(goTo("RESUME")); steps.add(tap(Input.Keys.ENTER)); steps.add(wait(20));
         steps.add(act(() -> check("resume keeps the seeded run with the HUD switches off", playScreen() != null && game.save.seed == KEY_SEED && !hasButton("RESUME"), "seed " + game.save.seed))); steps.add(shot("43_play_seed_hud_off"));
+        // Build 67: REDUCED HUD on - the height plate goes (height, tower bar, keys only); a screenshot taken then shows no HUD at all (the top-left corner of the PNG is sky, not the plate)
         steps.add(tap(Input.Keys.ESCAPE)); steps.add(wait(20));
-        steps.add(goTo("SETTINGS")); steps.add(tap(Input.Keys.ENTER)); steps.add(wait(40)); steps.add(goTo("GRAPHICS")); steps.add(tap(Input.Keys.ENTER)); steps.add(wait(10));
-        steps.add(goToToggle(2)); steps.add(tap(Input.Keys.ENTER)); steps.add(wait(4)); steps.add(goToToggle(3)); steps.add(tap(Input.Keys.ENTER)); steps.add(wait(4));
+        steps.add(goTo("SETTINGS")); steps.add(tap(Input.Keys.ENTER)); steps.add(wait(40)); steps.add(goTo("HUD")); steps.add(tap(Input.Keys.ENTER)); steps.add(wait(10));
+        steps.add(goToToggle(0)); steps.add(tap(Input.Keys.ENTER)); steps.add(wait(4));
+        steps.add(act(() -> check("REDUCED HUD switched on, the other two untouched", game.settings.reducedHud && !game.settings.showSeed && !game.settings.showBestTimes, game.settings.reducedHud + "/" + game.settings.showSeed + "/" + game.settings.showBestTimes)));
         steps.add(tap(Input.Keys.ESCAPE)); steps.add(wait(40));
-        steps.add(act(() -> { Settings onDisk = new SaveStore(data).loadSettings(); check("both switches back on, in memory and on disk", game.settings.showSeed && game.settings.showBestTimes && onDisk.showSeed && onDisk.showBestTimes, game.settings.showSeed + "/" + game.settings.showBestTimes + " disk " + onDisk.showSeed + "/" + onDisk.showBestTimes); }));
+        steps.add(act(() -> check("REDUCED HUD saved to settings.json on leaving settings", new SaveStore(data).loadSettings().reducedHud, screenName())));
+        steps.add(goTo("RESUME")); steps.add(tap(Input.Keys.ENTER)); steps.add(wait(20)); steps.add(shot("43b_play_reduced_hud"));
+        steps.add(act(() -> shotsBefore = countShots()));
+        steps.add(tap(Input.Keys.F9));
+        steps.add(until(() -> countShots() >= shotsBefore + 1, 120, "reduced-HUD screenshot written")); steps.add(wait(5));
+        steps.add(act(() -> {
+            File[] pngs = newShots(shotsBefore);
+            check("F9 with REDUCED HUD wrote a screenshot", pngs.length == 1, pngs.length + " new in " + game.screenshotDir());
+            if (pngs.length == 1) check("the reduced-HUD screenshot has nothing drawn in its top-left corner (smooth sky: luminance spread under 24; the height and bar read 38, the full plate 56)", cornerSpread(pngs[0]) < 24, "spread " + cornerSpread(pngs[0]) + " mean " + cornerLuminance(pngs[0]));
+        }));
+        steps.add(tap(Input.Keys.ESCAPE)); steps.add(wait(20));
+        steps.add(goTo("SETTINGS")); steps.add(tap(Input.Keys.ENTER)); steps.add(wait(40)); steps.add(goTo("HUD")); steps.add(tap(Input.Keys.ENTER)); steps.add(wait(10));
+        steps.add(goToToggle(0)); steps.add(tap(Input.Keys.ENTER)); steps.add(wait(4)); steps.add(goToToggle(1)); steps.add(tap(Input.Keys.ENTER)); steps.add(wait(4)); steps.add(goToToggle(2)); steps.add(tap(Input.Keys.ENTER)); steps.add(wait(4));
+        steps.add(tap(Input.Keys.ESCAPE)); steps.add(wait(40));
+        steps.add(act(() -> { Settings onDisk = new SaveStore(data).loadSettings(); check("both switches back on and REDUCED HUD off, in memory and on disk", game.settings.showSeed && game.settings.showBestTimes && !game.settings.reducedHud && onDisk.showSeed && onDisk.showBestTimes && !onDisk.reducedHud, game.settings.showSeed + "/" + game.settings.showBestTimes + "/" + game.settings.reducedHud + " disk " + onDisk.showSeed + "/" + onDisk.showBestTimes + "/" + onDisk.reducedHud); }));
         steps.add(goTo("SAVE & EXIT")); steps.add(tap(Input.Keys.ENTER)); steps.add(until(() -> screen() instanceof TitleScreen, 90, "title after the keyboard seeded run")); steps.add(wait(20));
         steps.add(act(() -> check("the seeded climb was saved with its course", game.save.seed == KEY_SEED && game.save.climbRules > 0, "seed " + game.save.seed + " rules " + game.save.climbRules)));
         // --- exit through the menu, then a clean shutdown
@@ -462,6 +478,22 @@ public final class Scenario implements ApplicationListener {
     private static boolean logoUpright(File f) { java.awt.image.BufferedImage i = readPng(f); return i != null && orangeOnRow(i, (int) (i.getHeight() * 0.18f)) > 20 && orangeOnRow(i, (int) (i.getHeight() * 0.82f)) < 5; }
     private static String orangeNote(File f) { java.awt.image.BufferedImage i = readPng(f); return i == null ? "unreadable" : "orange at 18%: " + orangeOnRow(i, (int) (i.getHeight() * 0.18f)) + ", at 82%: " + orangeOnRow(i, (int) (i.getHeight() * 0.82f)); }
     private static int centreLuma(File f) { java.awt.image.BufferedImage i = readPng(f); return i == null ? -1 : luma(i, i.getWidth() / 2, i.getHeight() / 2); }
+    /** Mean luminance of the top-left corner where the height plate sits (x 30..300, y 30..140 of a 1280-wide picture, scaled with it); the vignette makes bare sky read about 135 there, the plate about 90. */
+    private static int cornerLuminance(File f) {
+        java.awt.image.BufferedImage i = readPng(f); if (i == null) return -1;
+        float k = i.getWidth() / 1280f; long sum = 0; int n = 0;
+        for (int y = (int) (30 * k); y < (int) (140 * k); y += 2) for (int x = (int) (30 * k); x < (int) (300 * k); x += 2) { sum += luma(i, x, y); n++; }
+        return n == 0 ? -1 : (int) (sum / n);
+    }
+    /** Spread (standard deviation) of the luminance in that corner: a smooth sky gradient is about 15, the reduced HUD's height and bar about 38, the full plate with its text about 56. */
+    private static int cornerSpread(File f) {
+        java.awt.image.BufferedImage i = readPng(f); if (i == null) return -1;
+        float k = i.getWidth() / 1280f; double sum = 0, sq = 0; int n = 0;
+        for (int y = (int) (30 * k); y < (int) (140 * k); y += 2) for (int x = (int) (30 * k); x < (int) (300 * k); x += 2) { int l = luma(i, x, y); sum += l; sq += (double) l * l; n++; }
+        if (n == 0) return -1;
+        double mean = sum / n;
+        return (int) Math.round(Math.sqrt(Math.max(0, sq / n - mean * mean)));
+    }
     private static String lumaNote(File f) { java.awt.image.BufferedImage i = readPng(f); return i == null ? "unreadable" : "top-left " + luma(i, 40, 40) + " bottom-left " + luma(i, 40, i.getHeight() - 40) + " centre " + luma(i, i.getWidth() / 2, i.getHeight() / 2); }
 
     private void hover(float vx, float vy) {

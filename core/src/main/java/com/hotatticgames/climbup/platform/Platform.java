@@ -34,9 +34,7 @@ public interface Platform {
     void drawPlayHints(Ui ui, boolean carryingClub, float width, float height);
     /** Screen pixels the play-hint bar occupies from the bottom edge while it shows (0 when it does not), so bottom text keeps clear of it. */
     default float playHintsHeight() { return 0f; }
-    /** Draws the pause control in the HUD corner; returns false to let the shared code draw the original touch pause icon. */
-    boolean drawPauseButton(Ui ui, float x, float y, float size);
-    /** Extra Settings tabs (display, controls). Empty on mobile. */
+    /** Extra Settings tabs (display, HUD, graphics, controls). Empty on mobile. */
     List<SettingsTab> settingsTabs();
     /** The achievements/stats sink for this launcher. Default: a no-op (Android, headless). The Windows launcher returns a Steam-backed one. */
     default Achievements achievements() { return Achievements.NONE; }
@@ -68,7 +66,6 @@ public interface Platform {
         @Override public void screenChanged() { }
         @Override public String tip(String text) { return text; }
         @Override public void drawPlayHints(Ui ui, boolean carryingClub, float width, float height) { }
-        @Override public boolean drawPauseButton(Ui ui, float x, float y, float size) { return false; }
         @Override public List<SettingsTab> settingsTabs() { return Collections.emptyList(); }
         @Override public void dispose() { }
     };

@@ -41,7 +41,7 @@ Keyboard, mouse and one active controller are always live together. The "device"
 `save.json`, `settings.json`, `history.bin` (shared formats, identical to Android's), `upwardly-desktop.cfg` (+ `.bak`), `desktop.log`. Never the working directory.
 
 ## What is deliberately absent
-No OTA/network code runs (`Platform.networkAllowed()` is false: no check, no staged-content read), no Steamworks API, no achievements/cloud/leaderboards.
+No OTA/network code runs (`Platform.networkAllowed()` is false: no check, no staged-content read). Steam: the steamworks4j bridge (`SteamManager`, `SteamAchievements`) is in the desktop module and does nothing when Steam is not running; the 27 achievements and 4 stats are defined in code (`AchievementRules`, `docs/windows/STEAM_ACHIEVEMENTS.md`) but not yet created on the Steamworks partner site; no cloud code (Auto-Cloud, `docs/STEAMWORKS_SETUP.md`), no leaderboards.
 
 ## Graphics (Windows only)
 

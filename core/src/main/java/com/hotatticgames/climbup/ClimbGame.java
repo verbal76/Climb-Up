@@ -103,6 +103,8 @@ public class ClimbGame extends Game {
     private final java.util.concurrent.ExecutorService shotWriter = java.util.concurrent.Executors.newSingleThreadExecutor(r -> { Thread t = new Thread(r, "screenshot-writer"); t.setDaemon(true); return t; });
     /** Captures this frame once the active screen has finished drawing it. */
     public void requestScreenshot() { shotRequested = true; }
+    /** True while the frame being drawn is the one that will be captured (a screen can leave its HUD out of the picture). */
+    public boolean screenshotPending() { return shotRequested; }
     /** The confirmation line showing now ("" when none): "SCREENSHOT SAVED" or "SCREENSHOT FAILED: ...". */
     public String screenshotMessage() { return shotMsgT > 0f ? shotMsg : ""; }
     /** Where a player's screenshots go when the platform does not store them itself: its folder (desktop: Pictures/Upwardly/Screenshots), else the data folder's Screenshots. */
@@ -323,6 +325,6 @@ public class ClimbGame extends Game {
     @Override public void dispose() {
         persist();
         if (getScreen() != null) getScreen().dispose();
-        audio.dispose(); models.dispose(); ui.dispose(); platform.dispose();
+        audio.dispose(); models.dispose(); com.hotatticgames.climbup.render.Portraits.dispose(); ui.dispose(); platform.dispose();
     }
 }

@@ -78,7 +78,7 @@ public final class TitleScreen extends ScreenAdapter {
         world.heroHeadScreen(W, H, headPos);       // where his head is: the speech bubble sits above it, and the buttons stay out of its way
         float headY = headPos[1] > 0f && headPos[1] < H ? headPos[1] : TitleLayout.typicalHeadY(H);
         Item[] items = menu(has);
-        TitleLayout lay = layoutFor(ui, W, H, items.length, headY);
+        TitleLayout lay = layoutFor(ui, W, H, items.length, headY);       // MORE and EXIT share the last row (TitleLayout pairLast)
         if (bub != null) drawBubble(ui, bub, headPos[0], headPos[1] + 6, world.heroBubbleAlpha(), lay.bubbleMinX);
         boolean notice = g.save.noticeOldClimb;        // the one-time notice that an old climb could not carry over comes first
         boolean prompt = notice || confirmNew || showMore;   // a dialog or the MORE panel hides the menu behind it
@@ -101,36 +101,36 @@ public final class TitleScreen extends ScreenAdapter {
         if (next != null) { Screen n = next; next = null; g.setScreen(n); }
     }
 
-    /** The main menu: one column, top first. The first one is the big accent button; MORE is always last and opens the panel with everything else. */
+    /** The main menu: one column, top first. The first one is the big accent button; MORE opens the panel with everything else, and EXIT (Build 67, owner: not hidden under MORE) sits beside it on the last row. */
     enum Item {
-        PLAY, NEW_RUN, SETTINGS, MORE;
+        PLAY, NEW_RUN, SETTINGS, MORE, EXIT;
         String label(boolean hasClimb) {
             switch (this) {
                 case PLAY: return hasClimb ? "CONTINUE" : "PLAY";
                 case NEW_RUN: return "NEW RUN";
                 case SETTINGS: return "SETTINGS";
-                default: return "MORE";
+                case MORE: return "MORE";
+                default: return "EXIT";
             }
         }
     }
     private static final Item[] WITH_CLIMB = Item.values(), NO_CLIMB = Item.values();
     static Item[] menu(boolean hasClimb) { return hasClimb ? WITH_CLIMB : NO_CLIMB; }      // Build 64: NEW RUN is always there (RANDOM RUN or a typed course code); PLAY alone starts a random climb when there is none
 
-    /** The MORE panel's buttons in reading order (two columns); EXIT is always last. The hero picker cycles in place; LEGACY RUNS only exists when there are old climbs. */
+    /** The MORE panel's buttons in reading order (two columns). The hero picker cycles in place; LEGACY RUNS only exists when there are old climbs. EXIT left for the title in Build 67. */
     enum More {
-        PLAYERS, HERO, TIMES, LEGACY, CREDITS, EXIT;
+        PLAYERS, HERO, TIMES, LEGACY, CREDITS;
         String label(int character, int legacyRuns) {
             switch (this) {
                 case PLAYERS: return "PLAYERS";
                 case HERO: return "HERO: " + com.hotatticgames.climbup.render.Characters.name(character);
                 case TIMES: return "TIMES";
                 case LEGACY: return "LEGACY RUNS (" + legacyRuns + ")";
-                case CREDITS: return "CREDITS";
-                default: return "EXIT";
+                default: return "CREDITS";
             }
         }
     }
-    private static final More[] MORE_ALL = More.values(), MORE_NO_LEGACY = {More.PLAYERS, More.HERO, More.TIMES, More.CREDITS, More.EXIT};
+    private static final More[] MORE_ALL = More.values(), MORE_NO_LEGACY = {More.PLAYERS, More.HERO, More.TIMES, More.CREDITS};
     static More[] more(boolean hasLegacy) { return hasLegacy ? MORE_ALL : MORE_NO_LEGACY; }
 
     private boolean exitRequested, showMore;
@@ -139,7 +139,8 @@ public final class TitleScreen extends ScreenAdapter {
             case PLAY: next = new PlayScreen(g, false); break;
             case NEW_RUN: confirmNew = true; break;                 // replaces the saved climb: asks first
             case SETTINGS: next = new SettingsScreen(g, this); break;
-            default: showMore = true;
+            case MORE: showMore = true; break;
+            default: exitRequested = true;                          // EXIT: the game saves once more and closes (render() does it after the batch has ended)
         }
     }
     private void chooseMore(More it) {
@@ -150,12 +151,11 @@ public final class TitleScreen extends ScreenAdapter {
                 world.setCharacter(g.settings.character); g.persist(); break;
             case TIMES: showMore = false; next = new TimesScreen(g, this); break;          // the speed-run times table (from the records feature)
             case LEGACY: showMore = false; next = new LegacyScreen(g, this); break;
-            case CREDITS: showMore = false; next = new CreditsScreen(g, this); break;
-            default: exitRequested = true;
+            default: showMore = false; next = new CreditsScreen(g, this); break;
         }
     }
 
-    /** The MORE panel over the dimmed title: PLAYERS, the hero picker, TIMES, LEGACY RUNS (when there are any), CREDITS and EXIT, with BACK (the pad's back button, Esc) closing it. */
+    /** The MORE panel over the dimmed title: PLAYERS, the hero picker, TIMES, LEGACY RUNS (when there are any) and CREDITS, with BACK (the pad's back button, Esc) closing it. */
     private void morePanel(Ui ui, float W, float H) {
         ui.rect(0, 0, W, H, new Color(0f, 0f, 0.05f, 0.72f));
         More[] items = more(!g.save.legacy.isEmpty());
@@ -176,7 +176,7 @@ public final class TitleScreen extends ScreenAdapter {
     private TitleLayout layoutFor(Ui ui, float W, float H, int n, float headY) {
         float upd = Dp.unitsPerDp(ui);
         if (lay == null || W != layW || H != layH || n != layN || upd != layUpd || Math.abs(headY - layHead) > 0.5f) {
-            lay = TitleLayout.of(W, H, n, upd, headY); layW = W; layH = H; layN = n; layUpd = upd; layHead = headY;
+            lay = TitleLayout.of(W, H, n, upd, headY, true); layW = W; layH = H; layN = n; layUpd = upd; layHead = headY;
         }
         return lay;
     }

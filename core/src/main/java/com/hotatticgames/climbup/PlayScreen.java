@@ -51,6 +51,8 @@ public final class PlayScreen extends ScreenAdapter {
     private final InputState in = new InputState();
     private final ShapeRenderer shapes = new ShapeRenderer();
     private final Autopilot.Driver[] driver = new Autopilot.Driver[1];
+    /** Test hook (-Dclimb.autopilot=true): the solver's driver plays the real climb (with -Dclimb.hazard=CABLE it jumps for the cable, for pictures of the hang). */
+    private static final boolean AUTOPILOT = Boolean.getBoolean("climb.autopilot");
     private State state = State.PLAYING;
     private boolean clockLive;           // the speed-run clock starts on the first input of a session
     private String toastSub = "";
@@ -134,6 +136,7 @@ public final class PlayScreen extends ScreenAdapter {
             if (!fromSnapshot) {
                 sim = Sim.startOn(course, g.tuning, run.startIdx);
                 sim.checkpoint = run.startIdx; sim.keysFree = false; sim.keys = 0;
+                if (hzType != null) sim.s += Float.parseFloat(System.getProperty("climb.startDs", "0"));     // test hook: stand this much further along the start platform (camera angle on the hazard)
                 if (run.resumed) { sim.deferRespawn = true; sim.setRange(0, course.size() - 1); ResumeState.restore(g.save, sim, tower); }
             }
             if (hStart > 0) { int i = 0; while (i < course.size() - 1 && course.get(i + 1).y < hStart) i++; while (i > 0 && course.get(i).anchor >= 0) i--; sim = Sim.startOn(course, g.tuning, i); sim.checkpoint = i; sim.keysFree = false; sim.keys = 0; }
@@ -144,7 +147,7 @@ public final class PlayScreen extends ScreenAdapter {
         if (tower != null) world.setOrigin(tower.originY, tower.originS);
         applySettings();
         world.snapCamera(sim);
-        if (demo) driver[0] = new Autopilot.Driver(sim);
+        if (demo || AUTOPILOT) driver[0] = new Autopilot.Driver(sim);
         Gdx.input.setInputProcessor(processors());
         Gdx.input.setCatchKey(Input.Keys.BACK, true);
         if (gi() != null) gi().controllerLost();          // a pad unplugged on the menus before this climb began is no reason to start it paused (found by the Build 64 scenario)
@@ -297,7 +300,7 @@ public final class PlayScreen extends ScreenAdapter {
             }
             int steps = 0;
             while (acc >= Sim.DT && steps < 6) {
-                if (demo) { driver[0].drive(sim, in); } else readInput();
+                if (demo || AUTOPILOT) { driver[0].drive(sim, in); if (AUTOPILOT && driver[0].failed) driver[0] = new Autopilot.Driver(sim); } else readInput();
                 sim.step(in);
                 in.jumpPressed = false; jumpLatch = false; kJump = false; in.swingPressed = false; swingLatch = false; kSwing = false;
                 if (gi() != null) gi().stepDone();
@@ -646,24 +649,36 @@ public final class PlayScreen extends ScreenAdapter {
         ui.begin();
         float W = ui.w(), H = ui.h(), m = 28f;
         float tm = ui.tm();
+        boolean reduced = g.settings.reducedHud;
+        if (reduced && (shotFromMenu || g.screenshotPending())) {     // Build 67 (owner): with REDUCED HUD a screenshot is the climb alone - nothing in the top left, no hints, no controls
+            if (fade > 0) ui.rect(0, 0, W, H, new Color(0, 0, 0, fade));
+            ui.end();
+            return;
+        }
         // height meter (top-left): current height, best height, and where we are in the repeating worlds
         float zk = Math.min(tm, 1.3f);
         double hAbs = absNow();
         double hZone = Math.max(0.0, hAbs);          // a fall below the very first platform (before the respawn catches it) is still the meadow, not the last world wrapped around
         int Z = Palette.ZONES; int zone = Math.min(Z - 1, (int) (((hZone / g.tuning.zoneHeight) % Z + Z) % Z)), lap = (int) (hZone / (g.tuning.zoneHeight * Z));
         String hs = (long) Math.max(0, hAbs) + " M";
-        boolean seedLine = g.settings.showSeed && !demo && g.save.seed != 0;                 // Build 64: the course code under the clocks (SHOW COURSE SEED)
-        ui.rect(m - 6, H - m - (seedLine ? 160f : 136f) * zk, 380 * zk + 12, (seedLine ? 160f : 136f) * zk + 6, new Color(0.05f, 0.07f, 0.14f, 0.55f));
-        if (seedLine) ui.text("SEED " + SeedCode.encode(g.save.seed), m, H - m - 152 * zk, 2.3f * zk, Ui.DIM);
-        ui.text(hs, m, H - m - 30 * zk, 4f * zk, Ui.TEXT);
-        ui.text("BEST " + (int) Math.max(g.save.bestHeight, maxAbs), m, H - m - 56 * zk, 2.6f * zk, Ui.DIM);
-        // speed-run clock: distance and time on the tower being worked towards, and the total time of the climb (always shown)
-        float segM = (float) Math.max(0.0, maxAbs - g.save.towerStartHeight);
-        if (g.save.finished) ui.text("INFINITY +" + (int) Math.max(0.0, maxAbs - g.tuning.finishCastle * g.tuning.castleSpacing) + " M", m, H - m - 80 * zk, 3f * zk, new Color(1f, 0.82f, 0.3f, 1f));
-        else ui.text("TOWER " + (int) segM + " M  " + fmtTime(g.save.runClock - g.save.towerStartClock), m, H - m - 80 * zk, 3f * zk, new Color(1f, 0.82f, 0.3f, 1f));
-        if (g.save.finished) ui.text("FINISH " + fmtTime(g.save.finishTime), m, H - m - 104 * zk, 3f * zk, new Color(0.45f, 1f, 0.55f, 1f));
-        else ui.text("TOTAL " + fmtTime(g.save.runClock), m, H - m - 104 * zk, 3f * zk, Ui.TEXT);
-        float barW = 360 * zk, barY = H - m - 126 * zk;
+        float barW = 360 * zk, barY;
+        if (reduced) {                                // Build 67 REDUCED HUD (owner: "that box is too bulky"): the height alone, shadowed to read on the sky, the tower bar right under it, any key under that
+            ui.font.drawShadow(ui.batch, hs, m, H - m - 30 * zk, 4f * zk, Ui.TEXT, new Color(0.05f, 0.07f, 0.14f, 0.85f));
+            barY = H - m - 50 * zk;
+        } else {
+            boolean seedLine = g.settings.showSeed && !demo && g.save.seed != 0;                 // Build 64: the course code under the clocks (SHOW COURSE SEED)
+            ui.rect(m - 6, H - m - (seedLine ? 160f : 136f) * zk, 380 * zk + 12, (seedLine ? 160f : 136f) * zk + 6, new Color(0.05f, 0.07f, 0.14f, 0.55f));
+            if (seedLine) ui.text("SEED " + SeedCode.encode(g.save.seed), m, H - m - 152 * zk, 2.3f * zk, Ui.DIM);
+            ui.text(hs, m, H - m - 30 * zk, 4f * zk, Ui.TEXT);
+            ui.text("BEST " + (int) Math.max(g.save.bestHeight, maxAbs), m, H - m - 56 * zk, 2.6f * zk, Ui.DIM);
+            // speed-run clock: distance and time on the tower being worked towards, and the total time of the climb (always shown)
+            float segM = (float) Math.max(0.0, maxAbs - g.save.towerStartHeight);
+            if (g.save.finished) ui.text("INFINITY +" + (int) Math.max(0.0, maxAbs - g.tuning.finishCastle * g.tuning.castleSpacing) + " M", m, H - m - 80 * zk, 3f * zk, new Color(1f, 0.82f, 0.3f, 1f));
+            else ui.text("TOWER " + (int) segM + " M  " + fmtTime(g.save.runClock - g.save.towerStartClock), m, H - m - 80 * zk, 3f * zk, new Color(1f, 0.82f, 0.3f, 1f));
+            if (g.save.finished) ui.text("FINISH " + fmtTime(g.save.finishTime), m, H - m - 104 * zk, 3f * zk, new Color(0.45f, 1f, 0.55f, 1f));
+            else ui.text("TOTAL " + fmtTime(g.save.runClock), m, H - m - 104 * zk, 3f * zk, Ui.TEXT);
+            barY = H - m - 126 * zk;
+        }
         // ten towers (castle to castle): finished towers green, the one being climbed yellow, the rest black; the orange tick is where you are right now
         int N = Math.max(1, (int) g.tuning.finishCastle); double span = g.tuning.castleSpacing;
         int cur = Math.min(N - 1, (int) (Math.max(0.0, maxAbs) / span));
@@ -693,13 +708,13 @@ public final class PlayScreen extends ScreenAdapter {
             ui.rect(cx0, cy0, cw * sim.clubTime / Sim.CLUB_SECONDS, 24 * zk, new Color(0.35f, 0.6f, 1f, 1f));
             ui.text("CLUB", cx0 + 8, cy0 + 4 * zk, 2.6f * zk, Ui.TEXT);
         }
-        // pause button
-        float pb = 96f; float px = g.settings.leftHanded ? m : W - m - pb, py = H - m - pb;
-        if (!g.platform.drawPauseButton(ui, px, py, pb)) {
-        ui.rect(px - 3, py - 3, pb + 6, pb + 6, Ui.EDGE); ui.rect(px, py, pb, pb, Ui.PANEL);
-        ui.rect(px + 28, py + 24, 14, 48, Ui.TEXT); ui.rect(px + 54, py + 24, 14, 48, Ui.TEXT);
+        // pause button: touch only (Build 67, owner: "we all know how to pause a game" - a keyboard, a pad and the phone's back key pause on their own; the desktop's corner plate is gone)
+        if (g.platform.touchControls()) {
+            float pb = 96f; float px = g.settings.leftHanded ? m : W - m - pb, py = H - m - pb;
+            ui.rect(px - 3, py - 3, pb + 6, pb + 6, Ui.EDGE); ui.rect(px, py, pb, pb, Ui.PANEL);
+            ui.rect(px + 28, py + 24, 14, 48, Ui.TEXT); ui.rect(px + 54, py + 24, 14, 48, Ui.TEXT);
+            if (state == State.PLAYING && ui.tappedIn(px - 10, py - 10, pb + 20, pb + 20)) pauseGame();
         }
-        if (state == State.PLAYING && ui.tappedIn(px - 10, py - 10, pb + 20, pb + 20)) pauseGame();
         // zone banner
         int zoneKey = zone + 4 * lap;
         if (zoneKey != lastZone) { lastZone = zoneKey; zoneT = 3f; }

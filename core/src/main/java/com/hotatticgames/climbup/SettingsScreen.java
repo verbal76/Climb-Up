@@ -58,6 +58,15 @@ public final class SettingsScreen extends ScreenAdapter {
 
     public void toggle(String label, boolean v, Runnable flip) { row(label, v ? "ON" : "OFF", null, null, flip); }
 
+    /** A character portrait (Build 67) in the gap between the next row's label and its value button, a little taller than the row; nothing when there is no picture. */
+    private void portrait(com.badlogic.gdx.graphics.g2d.TextureRegion r) {
+        if (r == null) return;
+        Ui ui = g.ui; float W = ui.w();
+        float cw = Math.min(980, W - 100), x = W / 2 - cw / 2, h = 64, bx = x + cw * 0.56f;
+        float ps = 92f;                                                   // 28 units taller than the row: it reaches into the gaps above and below (4 lower, clear of the tab row), never over a neighbour's text
+        ui.image(r, bx - ps - 12, rowY + h / 2 - ps / 2 - 4, ps, ps, 1f);
+    }
+
     /** The ERASE ALL PLAYERS row: a first tap arms it, a second one erases (the data-reset item the spec's menu list asks for). */
     private void eraseRow() {
         row("ERASE ALL PLAYERS", confirmReset ? g.platform.tip("TAP TO CONFIRM") : "ERASE", null, null, () -> {
@@ -93,10 +102,12 @@ public final class SettingsScreen extends ScreenAdapter {
             row("HAPTICS", HAP[s.haptics], null, null, () -> s.haptics = (s.haptics + 1) % 3);
             toggle("LEFT-HANDED LAYOUT", s.leftHanded, () -> s.leftHanded = !s.leftHanded);
             toggle("HIGH-CONTRAST CONTROLS", s.highContrast, () -> s.highContrast = !s.highContrast);
+            toggle("REDUCED HUD", s.reducedHud, () -> s.reducedHud = !s.reducedHud);          // Build 67: just the height, the tower bar and a carried key; screenshots then show no HUD
             toggle("SHOW COURSE SEED", s.showSeed, () -> s.showSeed = !s.showSeed);
             toggle("SHOW BEST TIMES", s.showBestTimes, () -> s.showBestTimes = !s.showBestTimes);
             eraseRow();
         } else if (page == 0) {                                     // AUDIO + DISPLAY / GENERAL
+            portrait(com.hotatticgames.climbup.render.Portraits.of(s.character));             // Build 67: who you are choosing, left of the name
             row("CHARACTER", com.hotatticgames.climbup.render.Characters.name(s.character), null, null, () -> s.character = com.hotatticgames.climbup.render.Characters.next(s.character));
             row("MUSIC VOLUME", String.valueOf(s.music), () -> s.music = Math.max(0, s.music - 1), () -> s.music = Math.min(10, s.music + 1), null);
             row("EFFECTS VOLUME", String.valueOf(s.sfx), () -> s.sfx = Math.max(0, s.sfx - 1), () -> s.sfx = Math.min(10, s.sfx + 1), null);

@@ -40,6 +40,21 @@ public class PersistenceTest {
         assertTrue("absent = on", rs.showSeed); assertTrue("absent = on", rs.showBestTimes); assertEquals("the rest still loads", 2, rs.music); assertTrue(rs.reducedMotion);
     }
 
+    /** Build 67: REDUCED HUD is its own switch, default OFF, saved with the rest, and off for a settings file from before it. */
+    @Test public void theReducedHudSwitchPersistsAndDefaultsOff() throws Exception {
+        SaveStore st = new SaveStore(tmp());
+        assertFalse("the full HUD by default", new Settings().reducedHud);
+        Settings s = new Settings(); s.reducedHud = true; s.showSeed = false;
+        st.saveSettings(s);
+        Settings rs = st.loadSettings();
+        assertTrue(rs.reducedHud); assertFalse("the other switches keep their own values", rs.showSeed); assertTrue(rs.showBestTimes);
+        s.reducedHud = false; st.saveSettings(s);
+        assertFalse(st.loadSettings().reducedHud);
+        st.writeAtomic("settings.json", "{\"music\":2,\"showSeed\":false}");           // a Build 66 settings file
+        rs = st.loadSettings();
+        assertFalse("absent = off", rs.reducedHud); assertFalse(rs.showSeed); assertEquals(2, rs.music);
+    }
+
     /** Build 64: a typed course code can name any 64-bit seed (a random draw never leaves 31 bits), so the save, the records and the legacy list must keep every bit. */
     @Test public void aCourseSeedOfAnySizeSurvivesTheSaveTheRecordsAndTheLegacyList() throws Exception {
         for (long seed : new long[]{0x5EED_C0DE_0000_0064L, Long.MAX_VALUE, Long.MIN_VALUE + 1, -1L, 987654321987654321L}) {

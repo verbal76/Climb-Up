@@ -400,6 +400,30 @@ public final class HeroRig implements Disposable {
         }
         ac = new AnimationController(inst);
         play("Idle", -1, 1f, 0f);
+        if (!ham && !astro) for (String id : new String[]{"mat4_White", "mat5_EyeColor", "mat3_Black"}) {    // the bunny's eye whites, irises and pupils are their own head parts (hero.g3dj)
+            Material em = inst.getMaterial(id); if (em != null) eyeMats.add(em);
+        }
+    }
+
+    // Build 67 (owner): hanging under a cable the bunny's raised arms cover its face, "and it looks weird". While it hangs there its eye parts are drawn
+    // through whatever is in front of them (no depth test, in the blended pass that follows everything opaque), so the eyes show through the arms. Nothing
+    // about the rig, the pose or the animations changes; the materials go back to normal the moment it lets go.
+    private final java.util.List<Material> eyeMats = new java.util.ArrayList<>();
+    private boolean eyesThrough;
+    /** Whether the eyes are being drawn through the arms right now (the cable hang). */
+    public boolean eyesThrough() { return eyesThrough; }
+    private void setEyesThrough(boolean on) {
+        if (on == eyesThrough || eyeMats.isEmpty()) return;
+        eyesThrough = on;
+        for (Material em : eyeMats) {
+            if (on) {
+                em.set(new com.badlogic.gdx.graphics.g3d.attributes.BlendingAttribute(true, com.badlogic.gdx.graphics.GL20.GL_SRC_ALPHA, com.badlogic.gdx.graphics.GL20.GL_ONE_MINUS_SRC_ALPHA, 1f));
+                em.set(new com.badlogic.gdx.graphics.g3d.attributes.DepthTestAttribute(com.badlogic.gdx.graphics.GL20.GL_ALWAYS, false));
+            } else {
+                em.remove(com.badlogic.gdx.graphics.g3d.attributes.BlendingAttribute.Type);
+                em.remove(com.badlogic.gdx.graphics.g3d.attributes.DepthTestAttribute.Type);
+            }
+        }
     }
 
     // Root-cause isolation switches (diagnostics only; all three off in production). NO_RECLAMP disables the fix,
@@ -471,6 +495,7 @@ public final class HeroRig implements Disposable {
         if (landT > 0) landT -= dt;
         cycleClock += dt;
         anim = pick(sim, speed);
+        setEyesThrough(sim.mode == Sim.Mode.CABLE || anim == Anim.SHIMMY);      // Build 67: the bunny's eyes show through its arms while it hangs under a cable
         if (!climbRefSet) { climbRefY = sim.y; climbRefS = sim.s; climbRefSet = true; }
         float climbTravel = frameAdvance(sim.y - climbRefY), shimmyTravel = frameAdvance(sim.course.dsWrap(sim.s, climbRefS));
         climbRefY = sim.y; climbRefS = sim.s;

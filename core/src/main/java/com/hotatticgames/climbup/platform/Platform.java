@@ -40,6 +40,13 @@ public interface Platform {
     List<SettingsTab> settingsTabs();
     /** The achievements/stats sink for this launcher. Default: a no-op (Android, headless). The Windows launcher returns a Steam-backed one. */
     default Achievements achievements() { return Achievements.NONE; }
+    /** The folder a player's screenshots go to, or null for the game's data folder plus "Screenshots" (headless, Android's fallback). Desktop: the user's Pictures folder. */
+    default java.io.File screenshotDir() { return null; }
+    /**
+     * A platform that stores screenshots itself (Android's gallery) writes the PNG and returns where it went, for the "SCREENSHOT SAVED" line; null means
+     * "not handled", and the game writes the file into {@link #screenshotDir()}. Called off the render thread; may throw when the write fails.
+     */
+    default String saveScreenshot(String name, byte[] png) throws java.io.IOException { return null; }
     /** Releases platform resources. */
     void dispose();
 

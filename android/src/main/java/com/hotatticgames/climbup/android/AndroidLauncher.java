@@ -22,7 +22,7 @@ public class AndroidLauncher extends AndroidApplication {
         config.numSamples = 0;
         config.maxSimultaneousSounds = 24;
         try { ClimbGame.appBuild = (int) getPackageManager().getPackageInfo(getPackageName(), 0).getLongVersionCode(); } catch (Exception ignored) { }
-        initialize(new ClimbGame(getFilesDir()), config);
+        initialize(new ClimbGame(getFilesDir(), new AndroidPlatform(this)), config);      // the original touch platform plus the gallery screenshot sink (Build 65)
     }
 
     /**

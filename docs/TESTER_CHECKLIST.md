@@ -8,7 +8,13 @@ Ten minutes per device. Note anything that feels wrong, with a screenshot or a s
 - **Linux / Steam Deck:** unpack `Upwardly.Build.64.Linux.tar.gz` and run `Upwardly/bin/Upwardly`.
 - Downloads: https://github.com/verbal76/Climb-Up/releases/tag/v1.1.5-build64 (APK) and https://github.com/verbal76/Climb-Up/releases/tag/build-64-desktop (Windows + Linux). Build 63 stays at its own links if you need to compare.
 
-## New in Build 64 (check these first)
+## New in Build 65 (screenshots)
+1. PC: press F9 during play. A "SCREENSHOT SAVED" line appears at the bottom with the folder; the PNG is in `Pictures\Upwardly\Screenshots` (or the save folder's `Screenshots`). Press F9 twice quickly: two files, different names. The picture must show the HUD and not the saved-line itself.
+2. Any device: pause → TAKE SCREENSHOT. The pause menu is still there afterwards and the run is still paused; the picture shows the game view without the menu.
+3. Android: the picture appears in the gallery under Pictures/Upwardly (Android 10+); otherwise in Android/data/com.hotatticgames.climbup/files/Pictures/Screenshots.
+4. Steam Deck: pause → TAKE SCREENSHOT with the pad; the file lands in `~/Pictures/Upwardly/Screenshots`. Steam's own screenshot (Steam + R1) must still work as before.
+
+## New in Build 64
 1. Title: the line under the name reads "TEN TOWERS. ONE CLOCK." one time and "TRAMPOLINES, CRABS AND CANNONS. YOU'RE WELCOME." the next (leave to a climb and come back). Both fit the screen on your device.
 2. Start a climb: under the clocks the HUD shows `SEED XXXXX-XXXX-XXXX` (13 letters and digits, never 0, O, 1, I or L). The same code is in the pause menu and on the finish screen.
 3. Title → NEW RUN → SEEDED RUN: type a friend's code on the picker (touch, keyboard or pad), OK. The HUD shows exactly that code and the course is the same as theirs (same platforms, the same cannons and crabs in the same places). Type a wrong code (too short, a letter that is not on the picker, all Z's): it says why and starts nothing. CANCEL keeps your saved climb.

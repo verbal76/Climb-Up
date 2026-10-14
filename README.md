@@ -21,6 +21,7 @@ Local APK builds need the Android SDK (`ANDROID_HOME`) and access to Google's Ma
 * **SWING** (appears above JUMP only while you carry the floating spiked club): knocks crabs off. Desktop: X or J.
 * Pause button top-right. Settings (volume, text size, haptics, reduced motion, captions with their own size and background, colourblind-safe key colours, left-handed layout, slower-speed and jump-forgiveness assists, tips on/off, erase data) are in the pause menu and on the title screen. Every key colour also carries a shape (red circle, blue square, green triangle, gold diamond) above the key, on its castle and beside the key you carry.
 * Desktop testing keys: A/D or arrows move, W/S climb, Space/Z jump, Esc pause.
+* Screenshots (Build 65): F9 on desktop saves the frame as a PNG to `Pictures/Upwardly/Screenshots` (or the save folder's `Screenshots` if there is no Pictures folder); every platform has TAKE SCREENSHOT in the pause menu, which captures the play view without the menu. Android keeps them in the gallery under `Pictures/Upwardly` (Android 10 and later) or in `Android/data/com.hotatticgames.climbup/files/Pictures/Screenshots`. Steam's own F12 capture is untouched.
 * Controllers (desktop): Xbox, PlayStation, Switch and the Steam Deck's own controls work out of the box with their own button glyphs; every menu is reachable on the pad. Unplugging the controller you are playing with pauses the climb; plug it back in and press RESUME.
 
 ## Build and run on desktop

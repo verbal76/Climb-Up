@@ -161,6 +161,19 @@ public final class Scenario implements ApplicationListener {
         steps.add(until(() -> screen() instanceof TitleScreen, 200, "title")); steps.add(wait(60));
         steps.add(act(() -> check("title uses the Upwardly name", dp.title().equals("Upwardly") && Gdx.graphics != null, dp.title())));
         steps.add(shot("02_title"));
+        // --- Build 65: F9 on the title screen: a PNG at the back buffer's size, upright (the orange logo sits in the top part of the picture and nowhere near the bottom)
+        steps.add(act(() -> shotsBefore = countShots()));
+        steps.add(tap(Input.Keys.F9));
+        steps.add(until(() -> countShots() >= shotsBefore + 1, 120, "title screenshot written")); steps.add(wait(5));
+        steps.add(act(() -> {
+            File[] pngs = newShots(shotsBefore);
+            check("F9 on the title wrote a screenshot", pngs.length == 1, pngs.length + " new in " + game.screenshotDir());
+            if (pngs.length == 1) {
+                int[] dims = pngDims(pngs[0]);
+                check("title screenshot is a PNG at the back buffer's size", dims != null && dims[0] == Gdx.graphics.getBackBufferWidth() && dims[1] == Gdx.graphics.getBackBufferHeight(), dims == null ? "unreadable" : dims[0] + "x" + dims[1]);
+                check("title screenshot is upright (orange logo pixels in the top part, none in the mirrored bottom row)", logoUpright(pngs[0]), orangeNote(pngs[0]));
+            }
+        }));
         steps.add(tap(Input.Keys.S)); steps.add(wait(3));
         steps.add(act(() -> check("down arrow moves focus to NEW RUN (always on the title since build 64)", nav().fm.focused() != null && nav().fm.focused().label.equals("NEW RUN"), String.valueOf(nav().fm.focused() == null ? null : nav().fm.focused().label))));
         steps.add(tap(Input.Keys.S)); steps.add(wait(3));
@@ -220,6 +233,22 @@ public final class Scenario implements ApplicationListener {
         for (int i = 0; i < 6; i++) { steps.add(tap(Input.Keys.SPACE)); steps.add(wait(45)); }
         steps.add(shot("15_play_keyboard"));
         steps.add(act(() -> check("the climb advanced while keys were held", game.save.playSeconds - playSecondsMark > 2f, "playSeconds +" + (game.save.playSeconds - playSecondsMark))));
+        // --- Build 65: F9 twice in the same second during play: two PNGs at the back buffer's size, upright, with distinct names, the confirmation only after the write
+        steps.add(act(() -> { shotsBefore = countShots(); shotSeedAtPlay = game.save.seed; }));
+        steps.add(tap(Input.Keys.F9)); steps.add(wait(2)); steps.add(tap(Input.Keys.F9));
+        steps.add(until(() -> countShots() >= shotsBefore + 2, 120, "two F9 screenshots written")); steps.add(wait(5));
+        steps.add(shot("15b_screenshot_saved_line"));          // the SCREENSHOT SAVED plate with the folder, as the player sees it (never in the captured file itself)
+        steps.add(act(() -> {
+            File[] pngs = newShots(shotsBefore);
+            check("F9 wrote two new screenshots", pngs.length == 2, pngs.length + " new in " + game.screenshotDir());
+            if (pngs.length == 2) {
+                check("screenshot names are timestamped and distinct", pngs[0].getName().matches("upwardly-\\d{8}-\\d{6}(-\\d+)?\\.png") && pngs[1].getName().matches("upwardly-\\d{8}-\\d{6}(-\\d+)?\\.png") && !pngs[0].getName().equals(pngs[1].getName()), pngs[0].getName() + " " + pngs[1].getName());
+                int[] dims = pngDims(pngs[0]);
+                check("screenshot is a PNG at the back buffer's size", dims != null && dims[0] == Gdx.graphics.getBackBufferWidth() && dims[1] == Gdx.graphics.getBackBufferHeight(), dims == null ? "unreadable" : dims[0] + "x" + dims[1] + " vs " + Gdx.graphics.getBackBufferWidth() + "x" + Gdx.graphics.getBackBufferHeight());
+            }
+            check("the confirmation line shows once the file is written", game.screenshotMessage().startsWith("SCREENSHOT SAVED"), game.screenshotMessage());
+            check("a screenshot changes nothing about the run", game.save.seed == shotSeedAtPlay && playScreen() != null && !hasButton("RESUME"), screenName());
+        }));
         // controller plugged in mid-run
         steps.add(act(() -> { FakePad p = new FakePad("scenario-pad", "Xbox Wireless Controller"); src.pads.add(p); }));
         steps.add(wait(10));
@@ -321,6 +350,16 @@ public final class Scenario implements ApplicationListener {
         steps.add(shot("34_deck_play_seed_1280x800"));
         steps.add(padTap(Ctl.START)); steps.add(wait(30));
         steps.add(act(() -> check("paused on the pad after the seeded start", playScreen() != null && hasButton("RESUME"), screenName()))); steps.add(shot("35_deck_pause_seed_1280x800"));
+        // Build 65: TAKE SCREENSHOT from the pause menu on the pad alone: the menu steps aside for the captured frame and is back after, the run still paused
+        steps.add(act(() -> shotsBefore = countShots()));
+        steps.add(padGoTo("TAKE SCREENSHOT")); steps.add(padIdle()); steps.add(padTap(Ctl.A));
+        steps.add(until(() -> countShots() >= shotsBefore + 1, 120, "pad screenshot written")); steps.add(wait(5));
+        steps.add(act(() -> {
+            File[] pngs = newShots(shotsBefore);
+            check("TAKE SCREENSHOT on the pad wrote one screenshot", pngs.length == 1, pngs.length + " new");
+            if (pngs.length == 1) check("the pause panel is not in the picture (the centre of the frame is the bright play view, not the dark panel)", centreLuma(pngs[0]) > 90, lumaNote(pngs[0]));
+            check("the pause menu is back and the run is still paused", playScreen() != null && hasButton("RESUME") && hasButton("TAKE SCREENSHOT"), screenName());
+        }));
         steps.add(padGoTo("SAVE & EXIT")); steps.add(padIdle()); steps.add(padTap(Ctl.A)); steps.add(until(() -> screen() instanceof TitleScreen, 90, "title after the seeded run on the pad")); steps.add(wait(20));
         steps.add(act(() -> { src.pads.clear(); })); steps.add(wait(5));
         steps.add(act(() -> Gdx.graphics.setWindowedMode(1280, 720))); steps.add(wait(20));
@@ -370,6 +409,22 @@ public final class Scenario implements ApplicationListener {
     }
 
     private boolean hasButton(String label) { for (int i = 0; i < 80; i++) { FocusModel.Item it = nav().fm.lastItem(i); if (it == null) return false; if (it.label.equals(label)) return true; } return false; }
+
+    // ---- Build 65 screenshot checks: the files the game wrote, their size and orientation
+    private int shotsBefore; private long shotSeedAtPlay;
+    private File[] allShots() { File[] f = game.screenshotDir().listFiles((d, n) -> n.endsWith(".png")); if (f == null) return new File[0]; java.util.Arrays.sort(f); return f; }
+    private int countShots() { return allShots().length; }
+    private File[] newShots(int before) { File[] all = allShots(); return java.util.Arrays.copyOfRange(all, Math.min(before, all.length), all.length); }
+    private static java.awt.image.BufferedImage readPng(File f) { try { return javax.imageio.ImageIO.read(f); } catch (Exception e) { return null; } }
+    private static int[] pngDims(File f) { java.awt.image.BufferedImage i = readPng(f); return i == null ? null : new int[]{i.getWidth(), i.getHeight()}; }
+    private static int luma(java.awt.image.BufferedImage i, int x, int y) { int p = i.getRGB(x, y); return (((p >> 16) & 255) + ((p >> 8) & 255) + (p & 255)) / 3; }
+    /** Orange logo pixels along one row of the picture (the UPWARDLY logo is orange on sky; nothing else that colour sits at the bottom of the title). */
+    private static int orangeOnRow(java.awt.image.BufferedImage i, int y) { int n = 0; for (int x = 0; x < i.getWidth(); x += 2) { int p = i.getRGB(x, y), r = (p >> 16) & 255, g = (p >> 8) & 255, b = p & 255; if (r > 180 && g > 100 && g < 210 && b < 90) n++; } return n; }
+    /** Upright title: the logo row (18 % down) carries orange, its mirror (82 % down, the MORE button and the platforms) carries none. */
+    private static boolean logoUpright(File f) { java.awt.image.BufferedImage i = readPng(f); return i != null && orangeOnRow(i, (int) (i.getHeight() * 0.18f)) > 20 && orangeOnRow(i, (int) (i.getHeight() * 0.82f)) < 5; }
+    private static String orangeNote(File f) { java.awt.image.BufferedImage i = readPng(f); return i == null ? "unreadable" : "orange at 18%: " + orangeOnRow(i, (int) (i.getHeight() * 0.18f)) + ", at 82%: " + orangeOnRow(i, (int) (i.getHeight() * 0.82f)); }
+    private static int centreLuma(File f) { java.awt.image.BufferedImage i = readPng(f); return i == null ? -1 : luma(i, i.getWidth() / 2, i.getHeight() / 2); }
+    private static String lumaNote(File f) { java.awt.image.BufferedImage i = readPng(f); return i == null ? "unreadable" : "top-left " + luma(i, 40, 40) + " bottom-left " + luma(i, 40, i.getHeight() - 40) + " centre " + luma(i, i.getWidth() / 2, i.getHeight() / 2); }
 
     private void hover(float vx, float vy) {
         com.badlogic.gdx.math.Vector2 v = new com.badlogic.gdx.math.Vector2(vx, vy); game.ui.viewport.project(v);

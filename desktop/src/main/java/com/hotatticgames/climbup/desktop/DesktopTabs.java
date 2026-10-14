@@ -112,6 +112,7 @@ final class DesktopTabs {
             s.skip(8);
             Ui ui = g.ui;
             note(ui, s, "KEYBOARD, MOUSE AND CONTROLLER ALL WORK AT ONCE. PROMPTS FOLLOW WHAT YOU USED LAST.");
+            note(ui, s, "F9 SAVES A SCREENSHOT TO PICTURES/UPWARDLY/SCREENSHOTS. THE PAUSE MENU HAS TAKE SCREENSHOT TOO.");
         }
     }
 }

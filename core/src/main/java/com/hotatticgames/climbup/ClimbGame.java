@@ -88,7 +88,65 @@ public class ClimbGame extends Game {
 
     private int shotCount;
     private float shotClock;
-    @Override public void render() { platform.frame(Gdx.graphics.getDeltaTime()); super.render(); if (audio != null) audio.update(Math.min(Gdx.graphics.getDeltaTime(), 0.25f)); }
+    @Override public void render() {
+        platform.frame(Gdx.graphics.getDeltaTime());
+        super.render();
+        if (shotRequested) { shotRequested = false; takeScreenshot(); }      // after the screen drew its frame, before the confirmation line: the line is never in the picture
+        drawScreenshotLine();
+        if (audio != null) audio.update(Math.min(Gdx.graphics.getDeltaTime(), 0.25f));
+    }
+
+    // ---- player screenshots (Build 65): F9 on desktop, TAKE SCREENSHOT in the pause menu everywhere
+    private boolean shotRequested;
+    private volatile String shotMsg = "", shotWhere = "";
+    private volatile float shotMsgT;
+    private final java.util.concurrent.ExecutorService shotWriter = java.util.concurrent.Executors.newSingleThreadExecutor(r -> { Thread t = new Thread(r, "screenshot-writer"); t.setDaemon(true); return t; });
+    /** Captures this frame once the active screen has finished drawing it. */
+    public void requestScreenshot() { shotRequested = true; }
+    /** The confirmation line showing now ("" when none): "SCREENSHOT SAVED" or "SCREENSHOT FAILED: ...". */
+    public String screenshotMessage() { return shotMsgT > 0f ? shotMsg : ""; }
+    /** Where a player's screenshots go when the platform does not store them itself: its folder (desktop: Pictures/Upwardly/Screenshots), else the data folder's Screenshots. */
+    public File screenshotDir() { File d = platform.screenshotDir(); return d != null ? d : new File(dataDir, "Screenshots"); }
+
+    private void takeScreenshot() {
+        final com.badlogic.gdx.graphics.Pixmap pm;
+        try { pm = Screenshots.captureUpright(); } catch (RuntimeException e) { showScreenshotLine("SCREENSHOT FAILED: " + reason(e), ""); return; }
+        final String name = Screenshots.fileName(System.currentTimeMillis());
+        final File dir = screenshotDir(), fallback = new File(dataDir, "Screenshots");
+        shotWriter.execute(() -> {
+            try {
+                byte[] png = Screenshots.encodePng(pm);
+                String where = platform.saveScreenshot(name, png);
+                if (where == null) {
+                    File f;
+                    try { f = Screenshots.writeTo(dir, name, png); }
+                    catch (java.io.IOException e) { if (dir.equals(fallback)) throw e; f = Screenshots.writeTo(fallback, name, png); }      // Pictures not writable: the data folder
+                    where = f.getParentFile().getAbsolutePath();
+                }
+                showScreenshotLine("SCREENSHOT SAVED", where);
+            } catch (Throwable e) { showScreenshotLine("SCREENSHOT FAILED: " + reason(e), ""); }
+            finally { Gdx.app.postRunnable(pm::dispose); }
+        });
+    }
+    private static String reason(Throwable e) { String m = e.getMessage(); return (m == null || m.isEmpty() ? e.getClass().getSimpleName() : m).toUpperCase(java.util.Locale.ROOT); }
+    private void showScreenshotLine(String msg, String where) { shotMsg = msg; shotWhere = where; shotMsgT = 3f; }
+
+    /** The confirmation after the file is on disk: a small plate at the bottom of the screen for three seconds, drawn after everything else (and after any capture). */
+    private void drawScreenshotLine() {
+        if (shotMsgT <= 0f || ui == null) return;
+        shotMsgT -= Math.min(Gdx.graphics.getDeltaTime(), 0.1f);
+        float W = ui.w(), H = ui.h();
+        String l1 = shotMsg, l2 = shotWhere.isEmpty() ? "" : Screenshots.printable(shotWhere, 70);
+        float px1 = Math.min(3.4f, (W - 80f) / (Math.max(1, l1.length()) * 6f)), px2 = l2.isEmpty() ? 0f : Math.min(2.4f, (W - 80f) / (l2.length() * 6f));
+        float h1 = ui.font.height(px1), h2 = l2.isEmpty() ? 0f : ui.font.height(px2) + 10f;
+        float w = Math.max(ui.font.width(l1, px1), l2.isEmpty() ? 0f : ui.font.width(l2, px2)) + 48f, h = h1 + h2 + 28f;
+        float x = W / 2 - w / 2, y = Math.min(H - h - 20f, platform.playHintsHeight() + 24f);
+        ui.viewport.apply(); ui.batch.setProjectionMatrix(ui.viewport.getCamera().combined); ui.batch.begin();
+        ui.rect(x, y, w, h, new com.badlogic.gdx.graphics.Color(0.05f, 0.07f, 0.14f, 0.85f));
+        ui.textC(l1, W / 2, y + h - 14f - h1, px1, l1.startsWith("SCREENSHOT SAVED") ? com.hotatticgames.climbup.ui.Ui.GOOD : com.hotatticgames.climbup.ui.Ui.ACCENT);
+        if (!l2.isEmpty()) ui.textC(l2, W / 2, y + 14f, px2, com.hotatticgames.climbup.ui.Ui.DIM);
+        ui.batch.end();
+    }
 
     @Override public void setScreen(com.badlogic.gdx.Screen screen) { super.setScreen(screen); platform.screenChanged(); }
 

@@ -53,6 +53,7 @@ public final class DesktopPlatform implements Platform {
     }
 
     @Override public boolean desktop() { return true; }
+    @Override public File screenshotDir() { return DataDirs.screenshotDir(configFile.getParentFile()); }     // Pictures/Upwardly/Screenshots, else the data folder
     @Override public boolean touchControls() { return false; }
     @Override public boolean networkAllowed() { return false; }
     @Override public String title() { return TITLE; }
@@ -92,6 +93,7 @@ public final class DesktopPlatform implements Platform {
         if (DesktopLauncher.exitAfter > 0f && (System.nanoTime() - startNs) / 1e9f > DesktopLauncher.exitAfter) { DesktopLauncher.exitAfter = 0f; DesktopLog.append("exit requested by --exit-after"); Gdx.app.exit(); }
         input.update(Math.min(dt, 0.1f));
         if (sources.justPressed(Input.Keys.F11) || (sources.justPressed(Input.Keys.ENTER) && (sources.down(Input.Keys.ALT_LEFT) || sources.down(Input.Keys.ALT_RIGHT)))) { display.toggle(cfg); save(); }
+        if (sources.justPressed(Input.Keys.F9) && g != null) g.requestScreenshot();          // Build 65: the game's own screenshot; F12 is left to Steam's overlay
         if (cfg.display == DesktopConfig.DisplayMode.WINDOWED && !Gdx.graphics.isFullscreen()) {
             int w = Gdx.graphics.getWidth(), h = Gdx.graphics.getHeight();
             if (w >= 640 && h >= 360 && (w != cfg.width || h != cfg.height)) { cfg.width = w; cfg.height = h; dirty = true; }

@@ -33,6 +33,7 @@ The Linux package is a native x86-64 app-image: the launcher `Upwardly/bin/Upwar
 6. **Suspend / resume**: mid-climb press the power button, wait 30 seconds, press it again. Expected: the game is either paused (pause menu) or continues exactly where it was; the TOTAL clock must not have jumped by more than a tenth of a second, controls must work, audio must play, the HUD and the seed line must be intact. Repeat once on the title screen.
 7. **Settings**: GRAPHICS → SHOW COURSE SEED off → resume: the HUD code line disappears, the pause menu and TIMES still show it. SHOW BEST TIMES off → the PB marks and "vs best" lines leave the HUD; the clock keeps running. Switch both back on. Quit (MORE → EXIT), relaunch: both still on, the run resumes with CONTINUE.
 8. **Readability**: at arm's length, read the smallest text on the TIMES screen (the legend under the table) and the HUD seed line. If any of it is uncomfortable to read, say which.
+9. **Screenshot (Build 65 and later)**: pause → TAKE SCREENSHOT. The menu comes back, the run stays paused, "SCREENSHOT SAVED" names the folder (`~/Pictures/Upwardly/Screenshots` on the Deck). Steam's own capture (Steam + R1) is separate and must still work.
 
 ## Steam Deck physical-device checklist (report PASS / FAIL and what you saw)
 

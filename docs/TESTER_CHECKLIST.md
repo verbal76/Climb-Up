@@ -1,12 +1,12 @@
-# Upwardly — tester checklist (Build 64)
+# Upwardly — tester checklist (Build 65)
 
 Ten minutes per device. Note anything that feels wrong, with a screenshot or a short video if you can.
 
 ## Install
-- **Android:** install `upwardly-1.1.5-build64-debug.apk` over Build 63 (no uninstall). Your players, climbs and times must still be there, and the run you had in progress continues with its times.
-- **Windows:** unzip `Upwardly.Build.64.EXE.zip` anywhere and run `Upwardly\Upwardly.exe` (no Java needed). Saves live in `%APPDATA%\HotAtticGames\Upwardly`. The title's status bar must say `BUILD 64`.
-- **Linux / Steam Deck:** unpack `Upwardly.Build.64.Linux.tar.gz` and run `Upwardly/bin/Upwardly`.
-- Downloads: https://github.com/verbal76/Climb-Up/releases/tag/v1.1.5-build64 (APK) and https://github.com/verbal76/Climb-Up/releases/tag/build-64-desktop (Windows + Linux). Build 63 stays at its own links if you need to compare.
+- **Android:** install `upwardly-1.1.5-build65-debug.apk` over Build 64 (no uninstall). Your players, climbs and times must still be there, and the run you had in progress continues with its times.
+- **Windows:** unzip `Upwardly.Build.65.EXE.zip` anywhere and run `Upwardly\Upwardly.exe` (no Java needed). Saves live in `%APPDATA%\HotAtticGames\Upwardly`. The title's status bar must say `BUILD 65`.
+- **Linux / Steam Deck:** unpack `Upwardly.Build.65.Linux.tar.gz` and run `Upwardly/bin/Upwardly`.
+- Downloads: https://github.com/verbal76/Climb-Up/releases/tag/v1.1.5-build65 (APK) and https://github.com/verbal76/Climb-Up/releases/tag/build-65-desktop (Windows + Linux). Build 64 stays at its own links if you need to compare.
 
 ## New in Build 65 (screenshots)
 1. PC: press F9 during play. A "SCREENSHOT SAVED" line appears at the bottom with the folder; the PNG is in `Pictures\Upwardly\Screenshots` (or the save folder's `Screenshots`). Press F9 twice quickly: two files, different names. The picture must show the HUD and not the saved-line itself.

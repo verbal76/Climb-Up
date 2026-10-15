@@ -68,7 +68,7 @@ public class SteamCloudLayoutTest {
         assertNotNull("the seed's bests survive the move", sb);
         assertEquals(60f, sb.bestLegs[0], 0f); assertEquals(70f, sb.bestLegs[1], 0f); assertEquals(80f, sb.bestLegs[2], 0f);
         assertEquals("the full-run record stays apart from the legs", 650f, sb.bestTotal, 0f);
-        assertEquals(650f, rb.bestTotal, 0f); assertEquals(60f, rb.bestLegs[0], 0f);
+        assertEquals("the all-seeds best full run keeps the faster time already held", 600.5f, rb.bestTotal, 0f); assertEquals(60f, rb.bestLegs[0], 0f);
         assertEquals(3, new SaveStore(now).loadSettings().music);
         assertTrue(new File(now, "upwardly-desktop.cfg").isFile());
         assertFalse("the emptied old folder is tidied away", old.exists());

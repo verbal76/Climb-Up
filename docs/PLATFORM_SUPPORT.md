@@ -11,7 +11,7 @@ source compiled by Gradle. No engine-specific gameplay branches.
 |---|---|
 | Simulation & physics (`sim/Sim.java`), procedural generator + solver (`sim/CourseGenerator.java`), hazards, checkpoints, fall rule | Input adapters: `android/` touch controls; `desktop/` keyboard + Xbox/gamepad controller (`desktop/.../input/InputManager.java`) |
 | Rendering & animation logic (`render/`), the hero rig & grip poses (`render/HeroRig.java`), camera | Window management / display modes / fullscreen (`desktop/` LWJGL3; Android activity) |
-| Save schema & persistence (`SaveData`, `SaveStore`), settings | Filesystem save paths (Android app storage; desktop `~/.local/share/hotatticgames/upwardly`, Windows `%APPDATA%`) |
+| Save schema & persistence (`SaveData`, `SaveStore`), settings | Filesystem save paths (Android app storage; desktop `~/.local/share/HotAtticGames/Upwardly` from Build 69, lower-case before, Windows `%APPDATA%`) |
 | Audio, UI, menus, accessibility | Packaging (APK via AGP; EXE via jpackage; Linux app-image via jpackage) |
 | Core unit tests (`core/src/test`) | Update delivery (Android signed-OTA content; desktop = SteamPipe/full replacement) |
 

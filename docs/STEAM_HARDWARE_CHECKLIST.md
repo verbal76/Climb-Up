@@ -28,7 +28,7 @@ see `docs/STEAMWORKS_SETUP.md`) · **N/A**.
 | 15 | Vulkan | **N/A** | OpenGL through LWJGL3; runs on Mesa (llvmpipe locally; RADV's GL on the Deck). No rewrite (§12.6). |
 | 16 | Suspend/resume, focus changes, controller reconnect, extended play, clean exit | **COMPLETE** + OWNER HARDWARE TEST | Losing window focus pauses and autosaves (`ClimbGame.pause`, `PlayScreen.pause`: progress, run snapshot, settings); a frame after a long freeze is clamped to 0.1 s so a suspend can never run minutes of simulation at once; unplugging the controller in use pauses the run with a "CONTROLLER DISCONNECTED" note and plugging it back in makes it active again with its prompts (build 62; `InputManagerTest`, scenario checks 22). Clean exit smoked in both packages. Real suspend on a Deck and hours-long sessions: owner. |
 | 17 | Performance (FPS, frame pacing, thermal, battery) | **OWNER HARDWARE TEST** | No physical measurement; llvmpipe software numbers are not representative. |
-| 18 | Steam Cloud saves (cross-device) | **OWNER STEAMWORKS ACTION** | Code side complete: atomic writes, per-player folders, per-device files separate; the exact Auto-Cloud root paths and patterns to enter are in `docs/STEAMWORKS_SETUP.md` §2. Steam's own conflict dialog protects newer progress. |
+| 18 | Steam Cloud saves (cross-device) | **OWNER STEAMWORKS ACTION + OWNER TEST REQUIRED** | Code side complete in Build 69: atomic writes, per-player folders, per-device files separate, and the Linux save folder now named like the Windows one (old folder moved once) so one root override shares the files. The exact quotas, four Auto-Cloud rows and the root override are in `docs/STEAMWORKS_SETUP.md` §2; the real-device test is below. |
 
 ## Owner hardware test list (what only a real Deck or pad can show)
 
@@ -39,3 +39,33 @@ see `docs/STEAMWORKS_SETUP.md`) · **N/A**.
 5. Type a new player name on the picker with the pad only.
 6. Read the HUD at arm's length with TEXT SIZE 100 % and 130 %.
 7. Note frame rate and warmth after 15 minutes (the default cap is 60).
+
+## Steam Cloud test (OWNER TEST REQUIRED, after the Steamworks settings in `docs/STEAMWORKS_SETUP.md` §2 are published)
+
+Needs a Build 69 or later package installed **through Steam** (a Steam depot or a Steam-launched build) on a Windows PC and a
+Steam Deck (or Linux PC) signed in to the same Steam account. Tick "Enable cloud support for developers only" while testing.
+
+**Order matters if the Deck already has a save from Build 68 or earlier:** launch Build 69 on the Deck first (step 6), so the
+game moves the old folder and Steam uploads it, before any Windows save reaches the cloud. Otherwise Steam fills the new folder
+from the cloud first and the old Deck folder is left as it is (kept, not merged).
+
+1. **Windows first save.** Launch Upwardly through Steam. Play a seeded run (NEW RUN → SEEDED RUN, note the 13-letter code)
+   until at least two castles are open, then SAVE & EXIT and quit. In Steam's library, the game's page should show the cloud
+   status as synced. Note: best height, the two castle splits on MORE → TIMES, the course code.
+2. **Deck receives it.** On the Deck, launch through Steam. The same player, best height, course code and splits must appear,
+   and CONTINUE must resume the climb at the same castle. If the Deck already had a local save, Steam shows a conflict dialog
+   first: choose the cloud copy for this test (the local files are kept by Steam until you choose).
+3. **Back again.** On the Deck open a third castle (or set a faster leg), SAVE & EXIT, quit. On Windows launch again: the third
+   castle and the new time must be there.
+4. **Offline.** Put the Deck in offline mode (or Wi-Fi off), play and SAVE & EXIT, then reconnect and launch Steam: Steam uploads
+   on reconnect. Launch on Windows and confirm the offline progress arrived.
+5. **Conflict.** Play offline on both machines, each saving something different, then go online on both. Launching on either
+   must show Steam's "Cloud Sync Conflict" dialog naming both copies; pick one; the game starts with that copy and does not crash.
+   Expected: the copy not chosen is replaced (Auto-Cloud does not merge records); this is the documented limitation.
+6. **Old Deck save survives.** On a Deck that played Build 68 or earlier (saves in `~/.local/share/hotatticgames/upwardly`),
+   the first Build 69 launch must show the old player, best height and times; the folder
+   `~/.local/share/HotAtticGames/Upwardly` now holds them. If the cloud already had a save from Windows, the old local folder is
+   left in place untouched rather than merged (the game never overwrites); tell me and I will add a merge step.
+7. Record device, build number, what synced and any dialog text. Only after steps 1 to 5 pass: untick "developers only",
+   publish, and tick Steam Cloud under the store page's Supported Features.
+

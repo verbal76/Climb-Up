@@ -3,14 +3,55 @@ package com.hotatticgames.climbup.desktop;
 import java.io.File;
 import java.util.Locale;
 
-/** Where saves live: %APPDATA%\HotAtticGames\Upwardly on Windows, never the working directory. */
+/**
+ * Where saves live, never the working directory: %APPDATA%\HotAtticGames\Upwardly on Windows, $XDG_DATA_HOME (else ~/.local/share)/HotAtticGames/Upwardly
+ * on Linux and the Steam Deck. The two use the same folder name on purpose: Steam Auto-Cloud maps the Windows root onto the Linux one with a
+ * root override, which keeps the subdirectory as it is, so the names must match letter for letter. Builds before the Steam Cloud work used a
+ * lower-case hotatticgames/upwardly on Linux; {@link #migrateLinuxLegacy} moves that folder's contents across once.
+ */
 public final class DataDirs {
     private DataDirs() { }
 
     public static File dataDir() {
         String o = System.getProperty("climb.data");
         if (o != null && !o.isEmpty()) return new File(o);
-        return resolve(System.getProperty("os.name", ""), System.getenv("APPDATA"), System.getenv("XDG_DATA_HOME"), System.getProperty("user.home", "."));
+        String os = System.getProperty("os.name", ""), xdg = System.getenv("XDG_DATA_HOME"), home = System.getProperty("user.home", ".");
+        File dir = resolve(os, System.getenv("APPDATA"), xdg, home);
+        File old = legacyLinux(os, xdg, home);
+        if (old != null) migrateLinuxLegacy(old, dir);
+        return dir;
+    }
+
+    /** Pure: the lower-case Linux folder of the builds before Steam Cloud (null on Windows and macOS). */
+    public static File legacyLinux(String os, String xdg, String home) {
+        String n = os.toLowerCase(Locale.ROOT);
+        if (n.contains("win") || n.contains("mac")) return null;
+        String base = xdg != null && !xdg.isEmpty() ? xdg : new File(home, ".local/share").getPath();
+        return new File(new File(base, "hotatticgames"), "upwardly");
+    }
+
+    /**
+     * Moves the old Linux folder's contents into the new one, once. Each top-level entry (players.json, players/, settings.json, the desktop
+     * config, ...) is moved only if the new folder does not have it yet, so nothing in the new folder is ever overwritten and running it again
+     * does nothing. Anything that cannot be moved stays where it was (never deleted). Returns the number of entries moved.
+     */
+    public static int migrateLinuxLegacy(File oldDir, File newDir) {
+        try {
+            if (oldDir == null || !oldDir.isDirectory()) return 0;
+            if (newDir.exists() && java.nio.file.Files.isSameFile(oldDir.toPath(), newDir.toPath())) return 0;     // a case-insensitive file system: one folder
+            File[] items = oldDir.listFiles();
+            if (items == null || items.length == 0) return 0;
+            newDir.mkdirs();
+            int moved = 0;
+            for (File f : items) {
+                File to = new File(newDir, f.getName());
+                if (to.exists()) continue;
+                try { java.nio.file.Files.move(f.toPath(), to.toPath()); moved++; } catch (Exception e) { /* left in the old folder, untouched */ }
+            }
+            String[] left = oldDir.list();
+            if (left != null && left.length == 0) { oldDir.delete(); File parent = oldDir.getParentFile(); String[] p = parent == null ? null : parent.list(); if (p != null && p.length == 0) parent.delete(); }
+            return moved;
+        } catch (Exception e) { return 0; }
     }
 
     /** The player's screenshot folder (Build 65): Upwardly/Screenshots under the user's Pictures folder when that folder exists, else the data folder's Screenshots. */
@@ -49,6 +90,6 @@ public final class DataDirs {
         }
         if (n.contains("mac")) return new File(home, "Library/Application Support/HotAtticGames/Upwardly");
         String base = xdg != null && !xdg.isEmpty() ? xdg : new File(home, ".local/share").getPath();
-        return new File(new File(base, "hotatticgames"), "upwardly");
+        return new File(new File(base, "HotAtticGames"), "Upwardly");
     }
 }

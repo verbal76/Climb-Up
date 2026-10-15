@@ -16,7 +16,7 @@ public class PlatformMiscTest {
         assertTrue(f.getPath().startsWith("C:\\Users\\Kev\\AppData\\Roaming"));
         File g = DataDirs.resolve("Windows 10", null, null, "/home/x");
         assertTrue(g.getPath().replace('\\', '/').contains("AppData/Roaming/HotAtticGames/Upwardly"));
-        assertTrue(DataDirs.resolve("Linux", null, null, "/home/x").getPath().endsWith("upwardly"));
+        assertEquals(new File("/home/x/.local/share/HotAtticGames/Upwardly"), DataDirs.resolve("Linux", null, null, "/home/x"));     // Steam Cloud: the same folder name as Windows, letter for letter
         assertTrue(DataDirs.resolve("Linux", null, "/xdg", "/home/x").getPath().startsWith("/xdg"));
     }
 

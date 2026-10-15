@@ -26,6 +26,15 @@
 * Desktop screenshots reviewed for: cannon + spiked ball, spike block, spike slab, saw, spring + arrow, castle in key colour, crab, floating club, endless HUD.
 * Known weak spots: crab and key visuals are small at gameplay distance; the solver models perfect play, not human timing, so the hazards' timing windows (>= 14-20% of a cycle) are the fairness guard; nothing here has been played on a phone yet.
 
+## Steam achievement icons (15 October 2026, owner approved Style A; no game code changed, no build)
+- `python3 tools/achievements/package.py`: 54 PNGs with exactly the expected names (27 `_unlocked`, 27 `_locked`, names
+  from `AchievementRules.ALL_IDS`), every file opens as PNG, every one 256 x 256 RGB (opaque by design), none flat or
+  empty, frame intact at every corner, every locked icon clearly differs from its unlocked one, no duplicates, a second
+  export byte-identical, zip CRCs good and its 54 PNGs + manifest + README match the files. All PASS.
+- The exported files are byte-identical to the renders the owner approved (54/54 SHA-256 match).
+- Not verified: how Steam shows them (upload, the locked/unlocked swap, the overlay pop-up). That needs the owner's
+  Steamworks entry and a Steam-client run (`docs/STEAM_ACHIEVEMENTS_ENTRY_SHEET.md` section 4).
+
 ## NOT run / unknown
 * **No APK was built, installed or run.** `dl.google.com` (Android SDK + AGP) is blocked in this sandbox. The Android module, manifest, icons, resources and CI workflow are untested; first CI run may need small fixes.
 * No real touch input, haptics, audio output (no sound device), on-device frame rate, memory, thermals, notch/cutout behaviour, background/kill-and-relaunch on a phone.

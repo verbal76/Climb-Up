@@ -7,9 +7,11 @@ read from the game's source on 15 October 2026. The game code is not changed by 
   (`core/src/main/java/com/hotatticgames/climbup/sim/AchievementRules.java`). Steam matches them letter for letter,
   capitals included. If one differs, that achievement can never unlock and nothing tells you why.
 - **Nothing is entered in Steamworks yet.** Assume every row below still has to be typed in.
-- **Icons:** 256 x 256 PNG, two per achievement. The filenames are in the tables. The artwork is waiting on your
-  choice of style (see `branding/steam/achievements/concepts/`). Until the icons exist you can enter every text
-  field and add the icons later.
+- **Icons (final, owner approved 15 October 2026, Style A "Sky Diorama"):** 256 x 256 PNG, two per achievement, in
+  `branding/steam/achievements/Upwardly_Steam_Achievement_Icons.zip` (also unzipped in
+  `branding/steam/achievements/icons/`, with `manifest.csv`). `ACH_<NAME>_unlocked.png` goes in **Achieved Icon**,
+  `ACH_<NAME>_locked.png` in **Unachieved Icon**. `Upwardly_Steam_Achievements.pdf` beside the zip shows every icon
+  with its API name, name and description.
 - **Thresholds:** Express Elevator (20 minutes) and The Long Haul (50,000 m) are approved for now and may be tuned
   after Steam play-testing. If they change, only the description text here and the constant in `AchievementRules`
   change. The API names stay the same.
@@ -169,9 +171,9 @@ None of these blocks configuring Steamworks. Any change to them is a gameplay-si
    - Click **Save** at the right end of the row.
 
    Then **New Achievement** again for the next row, 27 times in the table's order.
-5. Icons: if you enter the text before the icon pack is ready, save each row without icons. Later, open each row again
-   (its Edit link), choose and upload the two files, and Save. If **Upload** does nothing on a brand-new row, save the
-   row first and upload the icons after.
+5. Icons: unzip `Upwardly_Steam_Achievement_Icons.zip` first; every file is named after its API name, so pick the
+   pair whose name matches the row's API Name. If **Upload** does nothing on a brand-new row, save the row first, then
+   open it again (its Edit link), upload the two icons and Save.
 6. Check the page: it lists **27 achievements**, every API name starts `ACH_`, and nothing has a typo or a stray
    space. The Stats page lists **4 INT stats**. Compare them against this sheet one row at a time.
 7. Publish: open the **Publish** tab, click **Prepare for Publishing**, then **Publish to Steam**. Type the

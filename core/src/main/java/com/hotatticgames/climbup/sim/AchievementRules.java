@@ -78,6 +78,17 @@ public final class AchievementRules {
     public static final float SPEED_SUMMIT_SECONDS = 1200f;          // "Express Elevator": all ten towers under ~20 minutes
     public static final int MARATHON_METERS = 50000;                 // "The Long Haul": cumulative metres across all runs
 
+    /**
+     * The world index for an absolute climb height. The worlds repeat upward for ever (after Deep Space comes Meadow Base
+     * again), but nothing below the start belongs to another world: a fall under the starting platform stays in world 0.
+     * (Build 69 wrapped negative heights round to Deep Space, which unlocked Deep Space and No Safety Net for a fall off
+     * the first platforms - found by the owner on Steam.)
+     */
+    public static int zoneAt(double absHeight, double zoneHeight) {
+        if (!(absHeight > 0) || !(zoneHeight > 0)) return 0;
+        return (int) (Math.floor(absHeight / zoneHeight) % WORLD_COUNT);
+    }
+
     /** Immutable per-step snapshot the caller fills from the simulation and the run record. */
     public static final class Tick {
         public int events;               // the sim event bitmask just consumed (Sim.EV_*)

@@ -212,6 +212,22 @@ public class AchievementRulesTest {
         assertTrue(got.contains(AchievementRules.ALL_WORLDS));
     }
 
+    @Test public void fallingBelowTheStartIsNotAnotherWorld() {
+        // Build 69 on Steam: a fall under the first platforms wrapped round to Deep Space and unlocked Deep Space and No Safety Net
+        assertEquals(0, AchievementRules.zoneAt(-0.01, 100));
+        assertEquals(0, AchievementRules.zoneAt(-350, 100));
+        assertEquals(0, AchievementRules.zoneAt(0, 100));
+        assertEquals(0, AchievementRules.zoneAt(99.9, 100));
+        assertEquals(1, AchievementRules.zoneAt(100, 100));
+        assertEquals(AchievementRules.SPACE_WORLD, AchievementRules.zoneAt(450, 100));
+        assertEquals(0, AchievementRules.zoneAt(500, 100));            // the worlds repeat above
+        AchievementRules a = new AchievementRules();
+        Set<String> got = new HashSet<>();
+        for (double h : new double[]{5, 2, -1, -40, -200}) { AchievementRules.Tick u = t(); u.zone = AchievementRules.zoneAt(h, 100); got.addAll(a.step(u)); }
+        assertFalse(got.contains(AchievementRules.SPACE));
+        assertFalse(got.contains(AchievementRules.NO_CHECKPOINT_WORLD));
+    }
+
     @Test public void noCheckpointWorldRequiresAFallFreeWorld() {
         // climb cleanly from world 0 up into world 1
         AchievementRules a = new AchievementRules();

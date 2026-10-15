@@ -2,6 +2,7 @@
 
 ## Open items for Build 70 (owner, 15 October; not built yet, more may be added)
 - [x] Desktop About: "UPDATES COME THROUGH STEAM." instead of the OTA content line (done, commit 729ff7f).
+- [x] Achievement fix (owner's first Steam test, Build 69): falling below the start wrapped round to Deep Space and unlocked Deep Space + No Safety Net. `AchievementRules.zoneAt` keeps anything below the start in world 0; test `fallingBelowTheStartIsNotAnotherWorld`. Owner to clear ACH_SPACE + ACH_NO_CHECKPOINT_WORLD on his account (Steam console `achievement_clear 5427130 <API name>`). Note: the sky shown below the start uses the same wrap (looks like space) - visual only, ask the owner.
 - [ ] Remove TAKE SCREENSHOT from the pause menu (owner: "useless there"). F9 and LB + RB stay; check the phone, which has no other screenshot button, before removing it there.
 - [ ] Ice sheets in the snow world look like rectangular plexiglass: make them puddle-shaped, rounded corners and wiggly edges. Visual only; the ice's footprint and physics stay the same.
 - [ ] Steamworks (owner side, not a build item): split depot 5427131 into Windows + Linux depots, add the Linux depot to the 3 packages, Linux upload from a Linux machine or the Deck (executable bit).

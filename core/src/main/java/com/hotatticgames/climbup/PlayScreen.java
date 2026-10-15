@@ -561,7 +561,7 @@ public final class PlayScreen extends ScreenAdapter {
         t.runFalls = g.save.climbFalls;
         t.runHits = g.save.climbHits;
         t.totalFalls = g.save.falls;
-        t.zone = (int) (((abs / zh) % W + W) % W);
+        t.zone = AchievementRules.zoneAt(abs, zh);          // below the start is still world 0, never a wrap round to Deep Space
         t.currentTower = (int) Math.max(0, Math.min(AchievementRules.TOWERS_TOTAL - 1, Math.floor(abs / cs)));
         t.infinityMeters = g.save.finished ? (int) Math.max(0.0, maxAbs - g.tuning.finishCastle * cs) : -1;
         t.bestInfinityMeters = achBestInfinity;

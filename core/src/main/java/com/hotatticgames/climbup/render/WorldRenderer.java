@@ -450,7 +450,7 @@ public final class WorldRenderer implements Disposable {
         if (sim.teleported) camY = target;
         else camY += (target - camY) * Math.min(1f, (target > camY ? 7f : 10f) * dt);
         float bgY = (float) ((camY + originY) % 65536.0);          // continuous across origin moves (and across the shift, nothing pops); wraps only every 65 km
-        float zf = (float) ((camY + originY) / T.zoneHeight);
+        float zf = (float) Math.max(0.0, (camY + originY) / T.zoneHeight);      // Build 70 (owner): below the start is still the start area (Meadow), never the last world wrapped round
         float zoneF = Math.min(Palette.ZONES - 0.001f, ((zf % Palette.ZONES) + Palette.ZONES) % Palette.ZONES);        // the five worlds repeat for ever
         Palette.blend(Palette.SKY_TOP, zoneF, skyTop); Palette.blend(Palette.SKY_BOT, zoneF, skyBot);
         Palette.blend(Palette.TINT, zoneF, tint); Palette.blend(Palette.AMBIENT, zoneF, amb);

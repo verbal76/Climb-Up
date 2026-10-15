@@ -2,8 +2,9 @@
 
 ## Open items for Build 70 (owner, 15 October; not built yet, more may be added)
 - [x] Desktop About: "UPDATES COME THROUGH STEAM." instead of the OTA content line (done, commit 729ff7f).
-- [x] Achievement fix (owner's first Steam test, Build 69): falling below the start wrapped round to Deep Space and unlocked Deep Space + No Safety Net. `AchievementRules.zoneAt` keeps anything below the start in world 0; test `fallingBelowTheStartIsNotAnotherWorld`. Owner to clear ACH_SPACE + ACH_NO_CHECKPOINT_WORLD on his account (Steam console `achievement_clear 5427130 <API name>`). Note: the sky shown below the start uses the same wrap (looks like space) - visual only, ask the owner.
-- [ ] Remove TAKE SCREENSHOT from the pause menu (owner: "useless there"). F9 and LB + RB stay; check the phone, which has no other screenshot button, before removing it there.
+- [x] Achievement fix (owner's first Steam test, Build 69): falling below the start wrapped round to Deep Space and unlocked Deep Space + No Safety Net. `AchievementRules.zoneAt` keeps anything below the start in world 0; test `fallingBelowTheStartIsNotAnotherWorld`. Owner to clear ACH_SPACE + ACH_NO_CHECKPOINT_WORLD on his account (Steam console `achievement_clear 5427130 <API name>`). Sky below the start: owner 15 October, "if you fall below the start you are still in the start area" - the sky now stays Meadow there too (`WorldRenderer`, zf clamped at 0; the HUD world label already did this).
+- [ ] Nice Catch: owner wants it only when a moving platform catches you after a fall or a hit, not a plain jump onto one - waiting on the owner's exact rule (A falling / B knocked off / C either), then new Steam description.
+- [ ] Remove TAKE SCREENSHOT from the pause menu everywhere (owner: "useless there"; phones have their own). F9 and LB + RB stay. Work in progress is in `git stash` ("Build 70 WIP: TAKE SCREENSHOT removed..."): PlayScreen, ClimbGame comment, Scenario step; needs tests run before commit.
 - [ ] Ice sheets in the snow world look like rectangular plexiglass: make them puddle-shaped, rounded corners and wiggly edges. Visual only; the ice's footprint and physics stay the same.
 - [ ] Steamworks (owner side, not a build item): split depot 5427131 into Windows + Linux depots, add the Linux depot to the 3 packages, Linux upload from a Linux machine or the Deck (executable bit).
 

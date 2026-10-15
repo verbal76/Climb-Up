@@ -64,7 +64,7 @@ kept monotonic in `SteamManager` (max, or bitwise-OR for the mask) so a stale re
 
 ## Tunable constants (TODO: owner to confirm after a Steam play-test)
 In `AchievementRules`:
-- `SPEED_SUMMIT_SECONDS = 1200f` (20 minutes) - the `ACH_SPEED_SUMMIT` limit; a first guess.
+- `SPEED_SUMMIT_SECONDS = 3600f` (60 minutes) - the `ACH_SPEED_SUMMIT` limit, set by the owner on 15 October from the autopilot baseline (72.3 min flawless on seed 7).
 - `MARATHON_METERS = 50000` - the `ACH_MARATHON` total; a first guess.
 - `FALL_25_THRESHOLD = 25`, `FALL_100_THRESHOLD = 100`, `RAGE_SPOT_FAILS = 5` - as named in the design.
 

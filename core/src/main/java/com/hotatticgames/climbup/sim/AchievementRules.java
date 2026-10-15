@@ -77,7 +77,7 @@ public final class AchievementRules {
     public static final int SPACE_WORLD = 4;                         // mirrors Palette.SPACE (Deep Space)
     public static final int INFINITY_500_M = 500, INFINITY_1000_M = 1000, INFINITY_2500_M = 2500, INFINITY_5000_M = 5000;
     // TODO(owner): tune these two guesses once the build has been play-tested on Steam.
-    public static final float SPEED_SUMMIT_SECONDS = 1200f;          // "Express Elevator": all ten towers under ~20 minutes
+    public static final float SPEED_SUMMIT_SECONDS = 3600f;          // "Express Elevator": all ten towers under 60 minutes (owner, 15 Oct: the flawless careful autopilot takes 72.3 min on seed 7, see SpeedBaselineMeasure; 20 min was physically impossible)
     public static final int MARATHON_METERS = 50000;                 // "The Long Haul": cumulative metres across all runs
 
     /**

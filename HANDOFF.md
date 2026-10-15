@@ -1,6 +1,7 @@
 # Handoff
 
 ## Build 70 (owner wrap-up, 15 October)
+- **After Build 70 (in source, next build):** Express Elevator (`ACH_SPEED_SUMMIT`) is now under **60 minutes** (`SPEED_SUMMIT_SECONDS = 3600`, owner 15 October). The flawless careful autopilot took 72.3 min to castle 10 on seed 7 (`SpeedBaselineMeasure`, ~1.15 m/s); 20 min was physically impossible. **Owner: change the Steam description to "Reach the summit in under 60 minutes."** Open: the measurement's autopilot stopped once on seeds 11 (~1,356 m) and 23 (~699 m); probably the per-slice restart of the measurement, not yet confirmed.
 - [x] PC About: "UPDATES COME THROUGH STEAM." (729ff7f)
 - [x] Below the start is world 0 for achievements: no Deep Space / No Safety Net from a fall off the bottom (3883a8a, `AchievementRules.zoneAt`, test `fallingBelowTheStartIsNotAnotherWorld`)
 - [x] Sky below the start stays Meadow (e9388c6)

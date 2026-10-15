@@ -154,6 +154,10 @@ public class AchievementRulesTest {
         assertFalse(messy.contains(AchievementRules.CLEAN_RUN));
         assertFalse(messy.contains(AchievementRules.PERFECT_SUMMIT));
         assertFalse(messy.contains(AchievementRules.SPEED_SUMMIT));
+        AchievementRules.Tick edge = t(); edge.events = Sim.EV_FINISH; edge.runFalls = 9; edge.runHits = 9; edge.finishTimeSec = 3600f;     // Express Elevator: 60 minutes or less, falls allowed
+        assertTrue(all(new AchievementRules().step(edge)).contains(AchievementRules.SPEED_SUMMIT));
+        AchievementRules.Tick late = t(); late.events = Sim.EV_FINISH; late.runFalls = 0; late.runHits = 0; late.finishTimeSec = 3600.5f;
+        assertFalse(all(new AchievementRules().step(late)).contains(AchievementRules.SPEED_SUMMIT));
     }
 
     // ---- falls -------------------------------------------------------------------------------------------------------

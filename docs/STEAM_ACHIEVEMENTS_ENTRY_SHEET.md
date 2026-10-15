@@ -12,7 +12,7 @@ read from the game's source on 15 October 2026. The game code is not changed by 
   `branding/steam/achievements/icons/`, with `manifest.csv`). `ACH_<NAME>_unlocked.png` goes in **Achieved Icon**,
   `ACH_<NAME>_locked.png` in **Unachieved Icon**. `Upwardly_Steam_Achievements.pdf` beside the zip shows every icon
   with its API name, name and description.
-- **Thresholds:** Express Elevator (20 minutes) and The Long Haul (50,000 m) are approved for now and may be tuned
+- **Thresholds:** Express Elevator (60 minutes; owner, 15 October, from the autopilot baseline of 72.3 min) and The Long Haul (50,000 m) are approved for now and may be tuned
   after Steam play-testing. If they change, only the description text here and the constant in `AchievementRules`
   change. The API names stay the same.
 
@@ -76,7 +76,7 @@ Icon**.
 | 21 | `ACH_INFINITY_5000` | Basically Astronaut | Climb 5,000 m past the summit. | >= 5000 m |
 | 22 | `ACH_ALL_WORLDS` | Grand Tour | Pass through all five worlds in one sitting. | all 5 worlds seen since the climb was opened this session |
 | 23 | `ACH_NO_CHECKPOINT_WORLD` | No Safety Net | Climb out of a world without falling back to a checkpoint in it. | crossed up into the next world with no fall back since entering this one |
-| 24 | `ACH_SPEED_SUMMIT` | Express Elevator | Reach the summit in under 20 minutes. | at the finish, run clock > 0 and <= 1200 s |
+| 24 | `ACH_SPEED_SUMMIT` | Express Elevator | Reach the summit in under 60 minutes. | at the finish, run clock > 0 and <= 3600 s |
 | 25 | `ACH_PERFECT_SUMMIT` | Flawless | Reach the summit without falling back or being hit by a hazard. | at the finish, falls back == 0 and hazard hits == 0 this climb |
 | 26 | `ACH_SWING_CHAIN` | Acrobat | Go from a rope to a swing to a moving platform without touching solid ground. | rope grabbed, then a swing super-jump, then a landing on a moving platform, with no landing on solid ground in between (landing on a swing does not break it) |
 | 27 | `ACH_MARATHON` | The Long Haul | Climb 50,000 m in total. | `STAT_MARATHON_M` (stored total plus this session) >= 50,000 |

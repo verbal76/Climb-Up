@@ -1,5 +1,11 @@
 # Handoff
 
+## Open items for Build 70 (owner, 15 October; not built yet, more may be added)
+- [x] Desktop About: "UPDATES COME THROUGH STEAM." instead of the OTA content line (done, commit 729ff7f).
+- [ ] Remove TAKE SCREENSHOT from the pause menu (owner: "useless there"). F9 and LB + RB stay; check the phone, which has no other screenshot button, before removing it there.
+- [ ] Ice sheets in the snow world look like rectangular plexiglass: make them puddle-shaped, rounded corners and wiggly edges. Visual only; the ice's footprint and physics stay the same.
+- [ ] Steamworks (owner side, not a build item): split depot 5427131 into Windows + Linux depots, add the Linux depot to the 3 packages, Linux upload from a Linux machine or the Deck (executable bit).
+
 ## Queued for Build 69 (owner, 15 October; not started, more items may be added before it is built)
 - **New app icon (done, in the repo):** design A "Sky Peek" replaces the old dusk-sky icon everywhere: `tools/gen_icon.py` rewritten around it writes the Android adaptive layers (design square in the middle 72 dp, so circle and squircle masks keep the ears), monochrome layer, legacy mipmaps, `docs/play_store_icon_512.png` (the Windows EXE and Linux launcher icons are made from it when packaging) and the desktop window icons; the 512 master matches `branding/steam/shortcut-icon-512.png` within one colour level. Seen only as rendered PNGs, not yet on a phone or in a built EXE. Do not build until the owner says Build 69 is ready.
 - **Steam achievements art + Steamworks prep (done 15 October; no code change, no build):** 27 achievements + 4 INT stats audited; `docs/STEAM_ACHIEVEMENTS_ENTRY_SHEET.md` (exact names, descriptions, stat settings, click-by-click matching the owner's Steamworks screenshot, Steam-client test plan, audit notes). Owner approved Style A Sky Diorama and all 27 designs (four revised). Final: `branding/steam/achievements/Upwardly_Steam_Achievement_Icons.zip` (54 PNG + manifest.csv + README), `icons/`, `Upwardly_Steam_Achievements.pdf`, `export_check.png`; regenerate with `python3 tools/achievements/package.py`. Next is the owner's: enter stats + achievements in Steamworks, upload icons, Publish; then the Steam-client test with a Steam build.

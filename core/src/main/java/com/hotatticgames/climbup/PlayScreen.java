@@ -567,6 +567,7 @@ public final class PlayScreen extends ScreenAdapter {
         t.bestInfinityMeters = achBestInfinity;
         t.marathonMeters = (int) Math.min(Integer.MAX_VALUE, (long) achMarathonBase + (long) Math.max(0.0, maxAbs - achSessionStartMax));
         t.checkpointIndex = sim.checkpoint;
+        t.height = abs;
         for (String id : achRules.step(t)) a.unlock(id);
         // mirror the persistent stats to Steam (the Steam layer caches and throttles the actual StoreStats; the no-op sink ignores them)
         a.stat(AchievementRules.STAT_FALLS, g.save.falls);

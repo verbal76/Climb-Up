@@ -358,10 +358,14 @@ public final class WorldRenderer implements Disposable {
         ModelInstance lo = rainCloud(true), hi = rainCloud(false);
         place(lo, es, cy, -2.2f, camS, sc, sc * 0.8f, sc, 0f); batch.render(lo, env);
         place(hi, es + 0.2f, cy + 0.55f * sc, -1.9f, camS, sc * 1.05f, sc * 0.9f, sc * 1.05f, 18f); batch.render(hi, env);
-        // wet shimmer on the top face (clear of the platform top by 2 cm): a pale film and a highlight that slides along it
-        drawBox(es, ey + SHIMMER_LIFT, 0f, camS, w * 0.97f, 0.02f, 1.5f, 0.55f, 0.72f, 0.92f);
-        float hl = reducedMotion ? 0f : MathUtils.sin(time * 1.3f) * w * 0.35f;
-        drawBox(es + hl, ey + SHIMMER_LIFT + 0.01f, 0f, camS, w * 0.16f, 0.02f, 1.3f, 0.86f, 0.94f, 1f);
+        // wet shimmer on the top face (clear of the platform top by 2 cm). Build 70 (owner: "rectangular pieces of plexiglass"): a puddle - rounded, wavy edges - with a
+        // small second puddle beside it and a pale highlight gliding across, instead of one flat sheet over the whole top. The platform's grip is unchanged (Sim, T.wetGrip).
+        int pv = Math.abs(Float.floatToIntBits(e.y) * 31 + (int) (e.w * 7f));                 // a fixed variant per platform
+        float side = (pv & 4) == 0 ? 1f : -1f, off = side * w * 0.06f;
+        drawPuddle(pv % 3, es + off, ey + SHIMMER_LIFT, 0f, camS, w * 0.78f, 0.02f, 1.25f, 0.55f, 0.72f, 0.92f);
+        drawPuddle((pv + 1) % 3, es - side * w * 0.40f, ey + SHIMMER_LIFT, 0.18f, camS, Math.min(0.9f, w * 0.16f), 0.02f, 0.5f, 0.55f, 0.72f, 0.92f);
+        float hl = reducedMotion ? 0f : MathUtils.sin(time * 1.3f) * w * 0.26f;
+        drawPuddle((pv + 2) % 3, es + off + hl, ey + SHIMMER_LIFT + 0.01f, -0.1f, camS, w * 0.14f, 0.02f, 0.55f, 0.86f, 0.94f, 1f);
         if (reducedMotion) {
             for (int k = -2; k <= 2; k++) drawBox(es + k * w * 0.17f, ey + 0.4f, 0.1f, camS, 0.04f, cy - ey - 0.8f, 0.04f, rainCol.r, rainCol.g, rainCol.b);
         } else if (quality > 0) {
@@ -950,6 +954,15 @@ public final class WorldRenderer implements Disposable {
         batch.render(st, env);
     }
     private final java.util.HashMap<Integer, ModelInstance> boxByColour = new java.util.HashMap<>();
+    /** A flat puddle (Models.puddles), coloured like {@link #drawBox}: one instance per variant and colour. */
+    private void drawPuddle(int variant, float arc, float y, float dz, float camS, float w, float h, float d, float cr, float cg, float cb) {
+        int key = (variant << 24) | ((int) (cr * 255) << 16) | ((int) (cg * 255) << 8) | (int) (cb * 255);
+        ModelInstance st = puddleByColour.get(key);
+        if (st == null) { st = new ModelInstance(models.puddles[variant]); st.materials.get(0).set(ColorAttribute.createDiffuse(cr, cg, cb, 1f)); puddleByColour.put(key, st); }
+        place(st, arc, y + h * 0.5f, dz, camS, w, h, d, 0f);
+        batch.render(st, env);
+    }
+    private final java.util.HashMap<Integer, ModelInstance> puddleByColour = new java.util.HashMap<>();
 
     /**
      * The red spike mat lies on its platform: its bottom is buried in the slab, its top face used to be only 0.03 above the platform top and 0.01 under the player's blob shadow

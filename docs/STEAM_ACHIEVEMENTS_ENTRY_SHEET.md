@@ -58,7 +58,7 @@ Icon**.
 | 3 | `ACH_SUMMIT` | To the Top | Reach the summit of all ten towers. | the finish (or win) event fires |
 | 4 | `ACH_FINGERTIP` | By the Fingertips | Catch a ledge by your fingertips and pull yourself up. | a pull-up event that leaves the climber in the ledge pull-up |
 | 5 | `ACH_ROPE_TOP` | Top of the Rope | Climb to the top of a rope and haul yourself onto the beam. | a pull-up event that leaves the climber on the beam at a rope top |
-| 6 | `ACH_MIDAIR_CATCH` | Nice Catch | Land on a moving platform straight out of the air. | a landing on a sideways, up-down or in-out moving platform |
+| 6 | `ACH_MIDAIR_CATCH` | Nice Catch | Get saved by a moving platform after a fall, a slip or a knock. | from Build 70: a landing on a moving platform after a hit or crab shove, after stepping, slipping or crumbling off (1 m+ drop), or after a missed jump (2.5 m+ below where the jump began); a clean jump onto one does not count |
 | 7 | `ACH_CRAB_OFF` | Crab Rangoon | Knock a crab or a bee off with the spiked club. | the crab-off event fires |
 | 8 | `ACH_BOUNCE` | Boing! | Get launched by a trampoline, spring or swing. | the bounce event fires (trampoline, spring, bouncy slab or swing launch) |
 | 9 | `ACH_INFINITY_ENTER` | Beyond the Top | Keep climbing past the summit. | after finishing, at least 1 m above the tenth castle |
@@ -93,7 +93,7 @@ descriptions are reworded so they say exactly what the code checks. Any of the t
 | 3 | `ACH_SUMMIT` | `EV_FINISH` / `EV_WIN` | none | no | yes | `cleanRunPerfectAndSpeedAreDistinct` |
 | 4 | `ACH_FINGERTIP` | `EV_PULL`, mode `PULLUP` | none | no | yes | `fingertipAndRopeTopAreDistinguishedByResultingMode` |
 | 5 | `ACH_ROPE_TOP` | `EV_PULL`, mode `BEAM` | none | no | yes | `fingertipAndRopeTopAreDistinguishedByResultingMode` |
-| 6 | `ACH_MIDAIR_CATCH` | `EV_LAND` on `MOVE_H/MOVE_V/MOVE_Z` | none | no | yes | `midairCatchOnlyCountsTranslatingMovers` |
+| 6 | `ACH_MIDAIR_CATCH` | `EV_LAND` on `MOVE_H/MOVE_V/MOVE_Z` after a fall the climber's own jump did not end cleanly (hit, shove, crumble, step-off, missed jump) | none | no | yes | `midairCatchOnlyCountsTranslatingMovers`, `niceCatchNeedsSomethingOtherThanYourJump` |
 | 7 | `ACH_CRAB_OFF` | `EV_CRAB_OFF` | none | no | yes | `crabOffAndBounce` |
 | 8 | `ACH_BOUNCE` | `EV_BOUNCE` | none | no | yes | `crabOffAndBounce` |
 | 9 | `ACH_INFINITY_ENTER` | height past the summit | none | no | yes | `infinityThresholds` |
@@ -137,7 +137,7 @@ them when it reconnects. With **no Steam client at all** (the plain GitHub build
 6. **If Steam reports that the stats could not be loaded,** the game does not ask again during that session. Unlocks
    from that session wait in memory and are dropped at exit. State-based achievements unlock again next session;
    one-off moments have to be repeated.
-7. **`ACH_MIDAIR_CATCH` is easy:** any landing on a moving platform counts, including a short hop onto one.
+7. **`ACH_MIDAIR_CATCH`** was too easy in Build 69 (any landing on a mover). From Build 70 it needs a real save; **update its Steam description** to the new text in the table.
 
 None of these blocks configuring Steamworks. Any change to them is a gameplay-side code change and needs your go-ahead.
 

@@ -61,13 +61,52 @@ public class AchievementRulesTest {
     }
 
     @Test public void midairCatchOnlyCountsTranslatingMovers() {
+        // stepping off a ledge and dropping 3 m onto a sideways mover counts; the same drop onto a fixed platform does not
         AchievementRules a = new AchievementRules();
-        AchievementRules.Tick t = t(); t.events = Sim.EV_LAND; t.mode = Sim.Mode.GROUND; t.landedType = Element.Type.MOVE_H;
-        assertTrue(all(a.step(t)).contains(AchievementRules.MIDAIR_CATCH));
-
+        at(a, 10, Sim.Mode.GROUND, 0, null); at(a, 9.8, Sim.Mode.AIR, 0, null);
+        assertTrue(all(at(a, 7, Sim.Mode.GROUND, Sim.EV_LAND, Element.Type.MOVE_H)).contains(AchievementRules.MIDAIR_CATCH));
         AchievementRules b = new AchievementRules();
-        AchievementRules.Tick u = t(); u.events = Sim.EV_LAND; u.mode = Sim.Mode.GROUND; u.landedType = Element.Type.STATIC;
-        assertFalse(all(b.step(u)).contains(AchievementRules.MIDAIR_CATCH));
+        at(b, 10, Sim.Mode.GROUND, 0, null); at(b, 9.8, Sim.Mode.AIR, 0, null);
+        assertFalse(all(at(b, 7, Sim.Mode.GROUND, Sim.EV_LAND, Element.Type.STATIC)).contains(AchievementRules.MIDAIR_CATCH));
+    }
+
+    @Test public void niceCatchNeedsSomethingOtherThanYourJump() {
+        // Build 70 (owner): the jump must not be the last thing that put you in the air
+        AchievementRules jumpUp = new AchievementRules();                 // a jump up onto a mover
+        at(jumpUp, 10, Sim.Mode.GROUND, 0, null); at(jumpUp, 12, Sim.Mode.AIR, Sim.EV_JUMP, null); at(jumpUp, 13, Sim.Mode.AIR, 0, null);
+        assertFalse(all(at(jumpUp, 11, Sim.Mode.GROUND, Sim.EV_LAND, Element.Type.MOVE_V)).contains(AchievementRules.MIDAIR_CATCH));
+        AchievementRules shortDown = new AchievementRules();              // a jump down a little (2 m) onto a mover: a clean jump
+        at(shortDown, 10, Sim.Mode.GROUND, 0, null); at(shortDown, 11, Sim.Mode.AIR, Sim.EV_JUMP, null); at(shortDown, 9, Sim.Mode.AIR, 0, null);
+        assertFalse(all(at(shortDown, 8, Sim.Mode.GROUND, Sim.EV_LAND, Element.Type.MOVE_H)).contains(AchievementRules.MIDAIR_CATCH));
+        AchievementRules missed = new AchievementRules();                 // a missed jump: dropped 6 m below where it started before a mover caught it
+        at(missed, 10, Sim.Mode.GROUND, 0, null); at(missed, 11, Sim.Mode.AIR, Sim.EV_JUMP, null); at(missed, 6, Sim.Mode.AIR, 0, null);
+        assertTrue(all(at(missed, 4, Sim.Mode.GROUND, Sim.EV_LAND, Element.Type.MOVE_H)).contains(AchievementRules.MIDAIR_CATCH));
+        AchievementRules edge = new AchievementRules();                   // exactly 2.5 m below the jump's start: counts
+        at(edge, 10, Sim.Mode.GROUND, 0, null); at(edge, 11, Sim.Mode.AIR, Sim.EV_JUMP, null);
+        assertTrue(all(at(edge, 7.5, Sim.Mode.GROUND, Sim.EV_LAND, Element.Type.MOVE_V)).contains(AchievementRules.MIDAIR_CATCH));
+        AchievementRules pad = new AchievementRules();                    // a trampoline launch is a launch you chose
+        at(pad, 10, Sim.Mode.GROUND, 0, null); at(pad, 14, Sim.Mode.AIR, Sim.EV_BOUNCE, null); at(pad, 9, Sim.Mode.AIR, 0, null);
+        assertFalse(all(at(pad, 8, Sim.Mode.GROUND, Sim.EV_LAND, Element.Type.MOVE_Z)).contains(AchievementRules.MIDAIR_CATCH));
+        AchievementRules jumpThenHit = new AchievementRules();            // jumped, then a cannonball broke the jump: counts
+        at(jumpThenHit, 10, Sim.Mode.GROUND, 0, null); at(jumpThenHit, 11, Sim.Mode.AIR, Sim.EV_JUMP, null); at(jumpThenHit, 11.5, Sim.Mode.AIR, Sim.EV_HIT, null);
+        assertTrue(all(at(jumpThenHit, 11, Sim.Mode.GROUND, Sim.EV_LAND, Element.Type.MOVE_H)).contains(AchievementRules.MIDAIR_CATCH));
+        AchievementRules shove = new AchievementRules();                  // shoved off by a crab and caught at about the same height: counts
+        at(shove, 10, Sim.Mode.GROUND, Sim.EV_SHOVE, null); at(shove, 10.2, Sim.Mode.AIR, 0, null);
+        assertTrue(all(at(shove, 9.8, Sim.Mode.GROUND, Sim.EV_LAND, Element.Type.MOVE_H)).contains(AchievementRules.MIDAIR_CATCH));
+        AchievementRules crumble = new AchievementRules();                // the platform crumbled away under you: counts
+        at(crumble, 10, Sim.Mode.GROUND, Sim.EV_CRUMBLE, null); at(crumble, 9.5, Sim.Mode.AIR, 0, null);
+        assertTrue(all(at(crumble, 8, Sim.Mode.GROUND, Sim.EV_LAND, Element.Type.MOVE_V)).contains(AchievementRules.MIDAIR_CATCH));
+        AchievementRules tinyStep = new AchievementRules();               // stepping off onto a mover just below (under 1 m) is not a save
+        at(tinyStep, 10, Sim.Mode.GROUND, 0, null); at(tinyStep, 9.9, Sim.Mode.AIR, 0, null);
+        assertFalse(all(at(tinyStep, 9.5, Sim.Mode.GROUND, Sim.EV_LAND, Element.Type.MOVE_H)).contains(AchievementRules.MIDAIR_CATCH));
+        AchievementRules hitThenJump = new AchievementRules();            // knocked, then you jumped again in the air (swing): your jump is the latest input
+        at(hitThenJump, 10, Sim.Mode.AIR, Sim.EV_HIT, null); at(hitThenJump, 11, Sim.Mode.AIR, Sim.EV_JUMP | Sim.EV_BOUNCE, null);
+        assertFalse(all(at(hitThenJump, 9, Sim.Mode.GROUND, Sim.EV_LAND, Element.Type.MOVE_H)).contains(AchievementRules.MIDAIR_CATCH));
+    }
+
+    /** One step of the climber at a height in a mode (helper for Nice Catch). */
+    private static List<String> at(AchievementRules a, double h, Sim.Mode m, int ev, Element.Type landed) {
+        AchievementRules.Tick t = t(); t.height = h; t.mode = m; t.events = ev; t.landedType = landed; return a.step(t);
     }
 
     @Test public void crabOffAndBounce() {
@@ -254,7 +293,7 @@ public class AchievementRulesTest {
         AchievementRules.Tick catchIt = t(); catchIt.events = Sim.EV_LAND; catchIt.mode = Sim.Mode.GROUND; catchIt.landedType = Element.Type.MOVE_V;
         Set<String> got = all(a.step(catchIt));
         assertTrue(got.contains(AchievementRules.SWING_CHAIN));
-        assertTrue(got.contains(AchievementRules.MIDAIR_CATCH));
+        assertFalse(got.contains(AchievementRules.MIDAIR_CATCH));     // Build 70: a swing launch straight onto a mover is the Acrobat, not a fall caught (no drop, no knock)
     }
 
     @Test public void swingChainIsBrokenByTouchingSolidGround() {

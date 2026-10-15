@@ -68,6 +68,8 @@ public final class AchievementRules {
     public static final int FALL_25_THRESHOLD = 25;
     public static final int FALL_100_THRESHOLD = 100;
     public static final int RAGE_SPOT_FAILS = 5;
+    public static final float CATCH_DROP_M = 1.0f;                   // Nice Catch after stepping, slipping or crumbling off: at least this far below where the footing was lost
+    public static final float CATCH_MISSED_JUMP_M = 2.5f;            // Nice Catch after a jump: it failed - at least this far below the jump's starting elevation
     public static final int TOWERS_TOTAL = 10;                       // mirrors Tuning.finishCastle (ten towers)
     public static final int ALL_TOWERS_MASK = (1 << TOWERS_TOTAL) - 1;
     public static final int WORLD_COUNT = 5;                         // mirrors Palette.ZONES (Meadow, Frost, Dusk, Night, Deep Space)
@@ -105,6 +107,7 @@ public final class AchievementRules {
         public int bestInfinityMeters;   // the best endless distance recorded BEFORE this climb (fixed baseline)
         public int marathonMeters;       // cumulative metres climbed across all runs
         public int checkpointIndex;      // the route element index of the live checkpoint (Sim.checkpoint)
+        public double height;            // the climber's absolute height this step, metres (Nice Catch measures the fall from it)
     }
 
     private final Set<String> fired = new HashSet<>();   // ids already returned this session (Steam also dedupes globally)
@@ -114,6 +117,11 @@ public final class AchievementRules {
     private int lastZone = -1;
     private boolean fellInThisZone;
     private boolean ropeTouched, swungFromRope;
+    // Nice Catch (Build 70, owner): the climber's own jump must not be the last thing that put them in the air
+    private boolean wasAir;               // in the air on the previous step
+    private boolean interrupted;          // this air time was started or broken by something other than a jump (a step off, a crumble, a let-go, a hit, a shove)
+    private boolean knocked;              // ...and that something was a hit or a shove (no minimum drop then)
+    private double footingHeight = Double.NaN;  // where the footing was last had
 
     public AchievementRules() { this(0); }
 
@@ -134,7 +142,13 @@ public final class AchievementRules {
         // ---- traversal feats (one clean event/state each) ----
         if ((ev & Sim.EV_PULL) != 0 && t.mode == Sim.Mode.PULLUP) earn(out, FINGERTIP);          // fingertip grab / ledge mantle over a too-big gap
         if ((ev & Sim.EV_PULL) != 0 && t.mode == Sim.Mode.BEAM) earn(out, ROPE_TOP);             // hauled onto the beam at the top of a rope
-        if ((ev & Sim.EV_LAND) != 0 && isMovingPlatform(t.landedType)) earn(out, MIDAIR_CATCH);  // caught a moving platform out of the air
+        if ((ev & Sim.EV_LAND) != 0 && isMovingPlatform(t.landedType)) {         // Build 70 (owner): a moving platform saved a fall - a clean jump onto one is not a catch
+            double drop = Double.isNaN(footingHeight) ? 0.0 : footingHeight - t.height;
+            if (knocked                                                        // a hit or a shove broke the air time
+                    || (interrupted && drop >= CATCH_DROP_M)                   // stepped, slipped or crumbled off, then a real fall
+                    || drop >= CATCH_MISSED_JUMP_M)                            // a jump that failed: well below where it started
+                earn(out, MIDAIR_CATCH);
+        }
         if ((ev & Sim.EV_CRAB_OFF) != 0) earn(out, CRAB_OFF);                                    // knocked a crab/bee off with the club
         if ((ev & Sim.EV_BOUNCE) != 0) earn(out, BOUNCE);                                        // launched off a trampoline/spring/slab/swing
 
@@ -192,6 +206,15 @@ public final class AchievementRules {
             else if (t.landedType != null && t.landedType != Element.Type.SWING) { ropeTouched = false; swungFromRope = false; }   // solid ground breaks the chain (a swing in between does not)
         }
         if ((ev & Sim.EV_RESPAWN) != 0) { ropeTouched = false; swungFromRope = false; }
+
+        // ---- footing bookkeeping for Nice Catch (after the checks above, so a landing step still sees the fall it ends)
+        boolean air = t.mode == Sim.Mode.AIR, jumped = (ev & (Sim.EV_JUMP | Sim.EV_BOUNCE)) != 0;
+        if (!air) { footingHeight = t.height; interrupted = false; knocked = false; }          // footing again: a fresh start
+        else if (jumped) { interrupted = false; knocked = false; }                              // a jump (or a pad / swing launch) is the latest input: not a catch
+        else if (!wasAir) interrupted = true;                                                    // left the footing without jumping: stepped off, crumbled, let go
+        if ((ev & (Sim.EV_HIT | Sim.EV_SHOVE | Sim.EV_CRUMBLE)) != 0) { interrupted = true; if ((ev & Sim.EV_CRUMBLE) == 0) knocked = true; }   // something broke the jump
+        if ((ev & Sim.EV_RESPAWN) != 0) { interrupted = false; knocked = false; footingHeight = Double.NaN; }
+        wasAir = air;
 
         return out;
     }

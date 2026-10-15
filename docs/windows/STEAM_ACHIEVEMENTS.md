@@ -1,5 +1,9 @@
 # Upwardly (Windows) - Steam achievements
 
+> **For entering these in Steamworks use `docs/STEAM_ACHIEVEMENTS_ENTRY_SHEET.md`** (15 October 2026): exact API names,
+> descriptions reworded to match the code, stat settings, click-by-click and the Steam-client test plan. The same Steam
+> layer also runs in the Linux / Steam Deck desktop build, not only Windows.
+
 Windows/desktop only. Android and the plain (non-Steam) zip build are unaffected: the hook is a no-op unless a Steam
 client is running. **Nothing has been uploaded to Steam** - the owner still has to create these 27 achievement
 definitions and 4 stats in Steamworks (using the exact API ids below) before any can unlock.

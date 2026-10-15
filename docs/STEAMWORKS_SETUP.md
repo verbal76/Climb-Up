@@ -4,12 +4,15 @@ Everything the game can do on its own side for Steam is done and tested without 
 `docs/STEAM_HARDWARE_CHECKLIST.md`). The items below need the Steamworks partner account, the app's store configuration
 or Valve's review, so they are **owner actions**. None of them blocks the GitHub tester builds, which do not use Steam.
 
-## 1. Confirm the App ID (do this first)
+## 1. The App ID: 5427130 (confirmed)
 
 `desktop/src/main/java/com/hotatticgames/climbup/desktop/SteamManager.java` carries `STEAM_APP_ID = 5427130`, and the
-development file `steam_appid.txt` at the repository root holds the same number. **This number was never confirmed
-against the partner site**; it was entered as a placeholder when the achievements code was written. If the real App ID
-differs, change both places (one constant, one text file) and nothing else.
+development file `steam_appid.txt` at the repository root holds the same number. The owner confirmed it as Upwardly's
+Steamworks App ID on 15 October 2026 (the Steam Cloud and achievements work both use it). It is public (it is in the
+store URL), not a secret. The `TODO(owner)` comment beside the constant predates that confirmation and is out of date.
+
+For achievements and stats, use `docs/STEAM_ACHIEVEMENTS_ENTRY_SHEET.md`: the exact API names, the Steamworks
+settings, the click-by-click and the Steam-client test plan.
 
 With the wrong App ID the Steam client refuses `SteamAPI_Init`, the game logs "Steam client not running or init failed -
 achievements disabled" and plays exactly as the plain build; nothing crashes.

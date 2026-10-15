@@ -127,6 +127,16 @@ Controls tab). For the Steam Deck set the default to **Gamepad** as well. Keyboa
 The game's own prompts already follow the connected pad (Xbox / PlayStation / Switch glyphs, the Deck's controls as the
 Xbox layout).
 
+## 3b. Installation > Redistributables (owner set this 15 October 2026)
+
+Tick **Visual C++ Redist 2022** only. Leave everything else unticked, including "no redistributables are needed".
+- The game brings its own Java (a bundled JRE 17 inside the build), so Steam installs no Java.
+- It uses OpenGL and its own bundled OpenAL (LWJGL ships OpenAL Soft): no DirectX, OpenAL 2.0.7, .NET, XNA or PhysX.
+- Visual C++ 2022 is the safety net: the bundled Java runtime and the launcher are Microsoft C++ programs. They
+  normally carry the DLLs they need, but CI only proved the build on machines that already had the runtime; ticking
+  it costs nothing on PCs that have it and fixes a "VCRUNTIME140.dll missing" start-up error on a bare Windows install.
+- Linux / Steam Deck needs nothing from this page.
+
 ## 4. Steam Deck review
 
 The Deck Verified review is Valve's. Before requesting it, run the owner checklist in `docs/STEAM_HARDWARE_CHECKLIST.md`

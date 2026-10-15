@@ -2,11 +2,13 @@
 
 Build 67 packages (one source commit for all three: `85efd23c1b0afefd95488a8fc598770aa54566b6`; Build 67 = Build 66 plus cannon balls from the centre of the mouth, EXIT on the title, REDUCED HUD with clean screenshots, no desktop pause plate, hero portraits in settings, the bunny's eyes through its arms on a cable, and the times-table tags). Verification of every package is in `docs/VERIFICATION.md` ("Build 67 candidate"). Build 66's packages stay at their own links (`v1.1.5-build66`, `build-66-desktop`) if you need to compare.
 
+Current packages: **Build 70**, all three from commit `2af40774ec1b17c60e09e34d82568b6e2dc8f474` (Build 69's stay at `v1.1.5-build69` / `build-69-desktop`).
+
 | Platform | File | Size | SHA-256 |
 |---|---|---|---|
-| Android | https://github.com/verbal76/Climb-Up/releases/download/v1.1.5-build69/upwardly-1.1.5-build69-debug.apk | 22,206,858 | `63d8541185a1383e93584c554026dd40080ba2be664113ebf0abaf41c21a058e` |
-| Windows (desktop PC and laptop) | https://github.com/verbal76/Climb-Up/releases/download/build-69-desktop/Upwardly.Build.69.EXE.zip | 50,435,926 | `c2fdf05b48c91ecd2a7f4aa8c963800f0a952f68ba43e2700d9afaea36dee9e1` |
-| Linux x86-64 (Steam Deck) | https://github.com/verbal76/Climb-Up/releases/download/build-69-desktop/Upwardly.Build.69.Linux.tar.gz | 55,281,405 | `9541b6d2a95c2584d9471e112bc8faf24c9289ad244071f2cc202867b12c44f2` |
+| Android | https://github.com/verbal76/Climb-Up/releases/download/v1.1.5-build70/upwardly-1.1.5-build70-debug.apk | 22,206,858 | `f3da4648c8494c69f86503d3a3f96f9c0c570e2e466d173d0355fedd60a660b2` |
+| Windows (desktop PC and laptop) | https://github.com/verbal76/Climb-Up/releases/download/build-70-desktop/Upwardly.Build.70.EXE.zip | 50,438,023 | `22fe8c2f3241f6c8dd90380757d351460f5b44ad412b9f0913200ad55806f693` |
+| Linux x86-64 (Steam Deck) | https://github.com/verbal76/Climb-Up/releases/download/build-70-desktop/Upwardly.Build.70.Linux.tar.gz | 55,279,201 | `926d5b5550b8f17200f430fb5438286d586d76f3d74e5faf2245ef6b753c17fb` |
 
 The Linux package is a native x86-64 app-image: the launcher `Upwardly/bin/Upwardly` (a small ELF that needs only glibc), the game in `Upwardly/lib/app/upwardly.jar` with its assets beside it, and a bundled Java 17 runtime in `Upwardly/lib/runtime`. Nothing has to be installed on the Deck. It is a `.tar.gz` rather than a `.zip` on purpose: tar keeps the launcher's executable bit (`-rwxr-xr-x`, checked in the published archive), zip would not. SteamOS Desktop Mode extracts it with a right-click.
 

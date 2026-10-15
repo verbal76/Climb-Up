@@ -117,12 +117,12 @@ public final class SettingsScreen extends ScreenAdapter {
             toggle("CONTEXTUAL TIPS", s.tips, () -> s.tips = !s.tips);
         } else if (page == 2) {                                     // ABOUT (+ the data reset on desktop, whose controls live in the launcher's own tab)
             rowY -= 24; ui.textC(g.platform.title() + "  " + Legacy.versionLine(ClimbGame.VERSION, ClimbGame.appBuild), W / 2, rowY + 30, 4.5f, Ui.TEXT); rowY -= 72;
-            rowY = aboutLines("CONTENT: " + g.ota.describe(), 3.0f, W, rowY, 54);
             if (g.platform.networkAllowed()) {
+                rowY = aboutLines("CONTENT: " + g.ota.describe(), 3.0f, W, rowY, 54);
                 rowY = aboutLines("UPDATES ARE SIGNED AND VERIFIED. " + (g.otaClient.status.isEmpty() ? "" : g.otaClient.status.toUpperCase()), 2.4f, W, rowY, 54);
                 toggle("CHECK FOR GAME UPDATES", s.otaEnabled, () -> s.otaEnabled = !s.otaEnabled);
                 row("UPDATE NOW", "CHECK", null, null, () -> g.startOtaCheck(true));
-            } else { ui.textC("THIS BUILD NEVER CONNECTS TO THE INTERNET.", W / 2, rowY + 30, 2.8f, Ui.DIM); rowY -= 64; }
+            } else { ui.textC("UPDATES COME THROUGH STEAM.", W / 2, rowY + 30, 2.8f, Ui.DIM); rowY -= 64; }     // the desktop build has no update code path of its own (networkAllowed() is false)
             ui.textC(g.audio.diag(), W / 2, rowY + 30, 2.8f, Ui.DIM); rowY -= 64;
             if (g.canRestartApp()) row("APPLY UPDATE / RESTART GAME", "RESTART", null, null, () -> { g.persist(); g.restartApp(); });
             else row("RESTART AUDIO", "RESTART", null, null, () -> g.audio.restart());

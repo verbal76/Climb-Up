@@ -154,17 +154,24 @@ None of these blocks configuring Steamworks. Any change to them is a gameplay-si
    - **Display Name**: as in the table.
 
    Click **Save** on the row. Do this for all four.
-4. Choose **Achievements** (same tab). For each row of section 2, click **New Achievement** and fill in:
-   - **API Name**: exactly as in the table.
-   - **Display Name** and **Description**: as in the table.
-   - **Set By**: Client.
-   - **Hidden**: unticked.
-   - **Progress Stat**: none.
+4. Choose **Achievements** (same tab). Click **New Achievement**. A row appears with placeholder text. Fill it in left to
+   right (this matches the page as it looked on 15 October 2026):
+   - **API Name** (top box, shows `NEW_ACHIEVEMENT_1_0`): select all, delete, type the API name from the table, e.g.
+     `ACH_TOWER_1`.
+   - **Progress Stat**: leave **None**. Leave **Min value 0** and **Max 0** as they are.
+   - **Display Name** (upper box, shows `NEW_ACHIEVEMENT_NAME_1_0`): replace it with the display name, e.g. `First Castle`.
+   - **Description** (lower box, shows `NEW_ACHIEVEMENT_DESC_1_0`): replace it with the description, e.g.
+     `Reach the first castle.`
+   - **Set By**: **Client** (already selected).
+   - **Hidden?**: leave unticked.
+   - **Achieved Icon**: **Choose File**, pick `ACH_TOWER_1_unlocked.png`, then click **Upload** under it.
+   - **Unachieved Icon**: **Choose File**, pick `ACH_TOWER_1_locked.png`, then click **Upload** under it.
+   - Click **Save** at the right end of the row.
 
-   Click **Save**. Do this for all 27.
-5. Icons: on each achievement row, click the **Achieved Icon** box and upload `ACH_<NAME>_unlocked.png`. Click the
-   **Unachieved Icon** box and upload `ACH_<NAME>_locked.png`. You can do this later, once the icon pack is approved and
-   exported.
+   Then **New Achievement** again for the next row, 27 times in the table's order.
+5. Icons: if you enter the text before the icon pack is ready, save each row without icons. Later, open each row again
+   (its Edit link), choose and upload the two files, and Save. If **Upload** does nothing on a brand-new row, save the
+   row first and upload the icons after.
 6. Check the page: it lists **27 achievements**, every API name starts `ACH_`, and nothing has a typo or a stray
    space. The Stats page lists **4 INT stats**. Compare them against this sheet one row at a time.
 7. Publish: open the **Publish** tab, click **Prepare for Publishing**, then **Publish to Steam**. Type the

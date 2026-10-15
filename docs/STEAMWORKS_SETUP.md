@@ -50,7 +50,7 @@ The patterns below name only the four synced files, so nothing else can slip in.
 |---|---|
 | Byte quota per user | `100000000` |
 | Number of files allowed per user | `100` |
-| Enable cloud support for developers only | **checked while testing**, unchecked for launch |
+| Enable cloud support for developers only | **unchecked** (before the public release only key holders own the game; with it ticked Auto-Cloud stays off unless the Steam console command `testappcloudpaths 5427130` is used, per the live page) |
 | Dynamic Cloud Sync | unchecked |
 | Shared Cloud App ID | `0` |
 
@@ -58,14 +58,14 @@ Why those quotas are enough: at most 6 players × 3 files + `players.json` = 19 
 by a few hundred bytes per seed timed; at most 60 seeds are kept), `run.json` a few KB, and `history.bin` about 1.5 MB per
 100 km climbed. 100 MB covers several thousand kilometres per player.
 
-**Auto-Cloud → Root Paths** (four rows, all with OS **All OSes**):
+**Auto-Cloud → Root Paths** (four rows, all with OS **[Cross-Platform]**, the default; the live page warns that a specific OS locks the files to that OS):
 
 | Root | Subdirectory | Pattern | OS | Recursive |
 |---|---|---|---|---|
-| `WinAppDataRoaming` | `HotAtticGames/Upwardly` | `players.json` | All OSes | unchecked |
-| `WinAppDataRoaming` | `HotAtticGames/Upwardly/players` | `save.json` | All OSes | checked |
-| `WinAppDataRoaming` | `HotAtticGames/Upwardly/players` | `run.json` | All OSes | checked |
-| `WinAppDataRoaming` | `HotAtticGames/Upwardly/players` | `history.bin` | All OSes | checked |
+| `WinAppDataRoaming` | `HotAtticGames/Upwardly` | `players.json` | [Cross-Platform] | unchecked |
+| `WinAppDataRoaming` | `HotAtticGames/Upwardly/players` | `save.json` | [Cross-Platform] | checked |
+| `WinAppDataRoaming` | `HotAtticGames/Upwardly/players` | `run.json` | [Cross-Platform] | checked |
+| `WinAppDataRoaming` | `HotAtticGames/Upwardly/players` | `history.bin` | [Cross-Platform] | checked |
 
 **Auto-Cloud → Root Overrides** (one row):
 
@@ -94,19 +94,21 @@ For testers: start the Deck on Build 69 before the first Windows save reaches th
 ### Click-by-click (owner)
 
 1. Steamworks → **App 5427130** → **Application** → **Steam Cloud**.
-2. Enter **Byte quota per user** `100000000` and **Number of files allowed per user** `100`; tick **Enable cloud support for
-   developers only**; leave **Dynamic Cloud Sync** unticked and **Shared Cloud App ID** at `0`. **Save**.
+2. Enter **Byte quota per user** `100000000` and **Number of files allowed per user** `100` (done 15 October); leave
+   **Enable cloud support for developers only** unticked, **Enable Steam Cloud sync on system suspend and resume** unticked and
+   **Shared cloud App ID** at `0`. **Save**.
 3. The **Auto-Cloud Configuration** section is now available. Under **Root Paths**, **Add New Root** four times and fill the
    four rows of the Root Paths table above exactly (Root, Subdirectory, Pattern, OS, Recursive). **Save**.
 4. Under **Root Overrides**, **Add Root Override** once and fill the one row above. **Save**.
 5. **Publish** → **Prepare for Publishing** → **Publish to Steam**. Cloud settings only reach Steam clients after publishing.
 6. Install a Build 69 (or later) package through Steam on a Windows PC and on the Steam Deck and run the test in
    `docs/STEAM_HARDWARE_CHECKLIST.md` ("Steam Cloud"). Do not untick "developers only" before it passes.
-7. For launch: untick **Enable cloud support for developers only**, Save, Publish; and on the store page's **Supported
-   Features** tick **Steam Cloud**, so the store shows the cloud icon only once it works for everyone.
+7. For launch: on the store page's **Supported Features** tick **Steam Cloud** (the page's RELEASING note says this completes
+   the release checklist). Use **Enable cloud support for developers only** only for testing cloud changes after the public release.
 
-Owner-verified field names on 15 October: Byte quota per user, Files allowed per user, Developer-only cloud support,
-Dynamic Cloud Sync, Shared Cloud App ID. The Root Paths and Root Overrides column names follow Valve's Auto-Cloud page; if a
+Field names checked against the owner's screenshots of the live page (15 October): Byte quota per user, Number of files allowed
+per user, Enable cloud support for developers only, Enable Steam Cloud sync on system suspend and resume, Shared cloud App ID,
+Root OS [Cross-Platform]. The Root Paths and Root Overrides column names follow Valve's Auto-Cloud page; if a
 label reads slightly differently on the live page, the values are the same.
 
 ## 3. Steam Input — default configuration

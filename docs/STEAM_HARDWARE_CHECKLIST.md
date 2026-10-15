@@ -43,7 +43,7 @@ see `docs/STEAMWORKS_SETUP.md`) · **N/A**.
 ## Steam Cloud test (OWNER TEST REQUIRED, after the Steamworks settings in `docs/STEAMWORKS_SETUP.md` §2 are published)
 
 Needs a Build 69 or later package installed **through Steam** (a Steam depot or a Steam-launched build) on a Windows PC and a
-Steam Deck (or Linux PC) signed in to the same Steam account. Tick "Enable cloud support for developers only" while testing.
+Steam Deck (or Linux PC) signed in to the same Steam account. Leave "Enable cloud support for developers only" unticked (before release only key holders own the game).
 
 **Order matters if the Deck already has a save from Build 68 or earlier:** launch Build 69 on the Deck first (step 6), so the
 game moves the old folder and Steam uploads it, before any Windows save reaches the cloud. Otherwise Steam fills the new folder
@@ -66,6 +66,6 @@ from the cloud first and the old Deck folder is left as it is (kept, not merged)
    the first Build 69 launch must show the old player, best height and times; the folder
    `~/.local/share/HotAtticGames/Upwardly` now holds them. If the cloud already had a save from Windows, the old local folder is
    left in place untouched rather than merged (the game never overwrites); tell me and I will add a merge step.
-7. Record device, build number, what synced and any dialog text. Only after steps 1 to 5 pass: untick "developers only",
-   publish, and tick Steam Cloud under the store page's Supported Features.
+7. Record device, build number, what synced and any dialog text. Only after steps 1 to 5 pass: tick Steam Cloud under the store
+   page's Supported Features.
 

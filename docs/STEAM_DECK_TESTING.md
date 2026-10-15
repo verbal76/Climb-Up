@@ -4,9 +4,9 @@ Build 67 packages (one source commit for all three: `85efd23c1b0afefd95488a8fc59
 
 | Platform | File | Size | SHA-256 |
 |---|---|---|---|
-| Android | https://github.com/verbal76/Climb-Up/releases/download/v1.1.5-build67/upwardly-1.1.5-build67-debug.apk | 22,212,174 | `6c45c8b8beb7c038ed4c0e52afd94bf25610019e4a07545f77e9c0338e644062` |
-| Windows (desktop PC and laptop) | https://github.com/verbal76/Climb-Up/releases/download/build-67-desktop/Upwardly.Build.67.EXE.zip | 50,439,101 | `3d6414ae2d866fde0e49d1edca25d7f6e2feeb8fe92a4d76d6fc3b0d2f404d86` |
-| Linux x86-64 (Steam Deck) | https://github.com/verbal76/Climb-Up/releases/download/build-67-desktop/Upwardly.Build.67.Linux.tar.gz | 55,289,061 | `6dde99ff2ac2c5f041844adfffcc650eccb7271d42d2618b553aa66935772f89` |
+| Android | https://github.com/verbal76/Climb-Up/releases/download/v1.1.5-build69/upwardly-1.1.5-build69-debug.apk | 22,206,858 | `63d8541185a1383e93584c554026dd40080ba2be664113ebf0abaf41c21a058e` |
+| Windows (desktop PC and laptop) | https://github.com/verbal76/Climb-Up/releases/download/build-69-desktop/Upwardly.Build.69.EXE.zip | 50,435,926 | `c2fdf05b48c91ecd2a7f4aa8c963800f0a952f68ba43e2700d9afaea36dee9e1` |
+| Linux x86-64 (Steam Deck) | https://github.com/verbal76/Climb-Up/releases/download/build-69-desktop/Upwardly.Build.69.Linux.tar.gz | 55,281,405 | `9541b6d2a95c2584d9471e112bc8faf24c9289ad244071f2cc202867b12c44f2` |
 
 The Linux package is a native x86-64 app-image: the launcher `Upwardly/bin/Upwardly` (a small ELF that needs only glibc), the game in `Upwardly/lib/app/upwardly.jar` with its assets beside it, and a bundled Java 17 runtime in `Upwardly/lib/runtime`. Nothing has to be installed on the Deck. It is a `.tar.gz` rather than a `.zip` on purpose: tar keeps the launcher's executable bit (`-rwxr-xr-x`, checked in the published archive), zip would not. SteamOS Desktop Mode extracts it with a right-click.
 
@@ -20,7 +20,7 @@ The Linux package is a native x86-64 app-image: the launcher `Upwardly/bin/Upwar
 6. Return to Gaming Mode (the **Return to Gaming Mode** icon on the desktop).
 7. Library → Non-Steam → **Upwardly** → Play. The game starts full screen at the Deck's 1280×800 (it reads the `SteamDeck=1` environment Game Mode sets; its first-run Deck profile is MEDIUM quality, 2× anti-aliasing, vsync, 60 fps cap). Settings → ABOUT must read `V1.1.5  BUILD 67`.
 8. Controller: the Deck's built-in controls come through Steam Input's default gamepad template and the game treats them as an Xbox-layout pad (A confirm, B back, View or Menu = pause). The prompts in the hint bar and menus must show those glyphs, never key caps.
-9. Saves: `~/.local/share/hotatticgames/upwardly` up to Build 68 (lower case); from Build 69 `~/.local/share/HotAtticGames/Upwardly`, the same name as Windows so Steam Cloud can share it (the first Build 69 launch moves the old folder across by itself; players players in `players/pN/`, device settings in `settings.json` and `upwardly-desktop.cfg`). Screenshots: `~/Pictures/Upwardly/Screenshots` (or `~/.local/share/hotatticgames/upwardly/Screenshots` if the Deck has no Pictures folder). Nothing is written next to the game.
+9. Saves: `~/.local/share/hotatticgames/upwardly` up to Build 68 (lower case); from Build 69 `~/.local/share/HotAtticGames/Upwardly`, the same name as Windows so Steam Cloud can share it (the first Build 69 launch moves the old folder across by itself; players in `players/pN/`, device settings in `settings.json` and `upwardly-desktop.cfg`). Screenshots: `~/Pictures/Upwardly/Screenshots` (or `Screenshots` inside the save folder if the Deck has no Pictures folder). Nothing is written next to the game.
 10. If anything refuses to start, run it once from Konsole to see the message: `~/Downloads/Upwardly/bin/Upwardly` (adjust the path). `Upwardly/BUILD_INFO.txt` names the build and source commit.
 
 ## First 15 minutes on the Deck

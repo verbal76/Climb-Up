@@ -153,8 +153,24 @@ def s_tower_1():
 
 
 def s_tower_5():
-    im = sky('high'); clouds(im, ((150, 900, 330), (870, 940, 300), (620, 260, 200)))
-    platform(im, 512, 905, 1100); put(im, 'castle', 420, 500, h=700); put(im, 'bun_yes', 790, 680, h=330)
+    """Halfway: high above the clouds, the bunny cheering on the castle's battlements, a ten-step height gauge half full."""
+    im = sky('high'); sunburst(im, 430, 300, col=(255, 236, 170), a=45, n=20)
+    clouds(im, ((120, 930, 360), (520, 980, 420), (900, 930, 330)))
+    put(im, 'castle', 430, 590, h=720)
+    put(im, 'bun_yes', 430, 175, h=250)
+    put(im, 'flag', 600, 160, h=230, shadow=False)
+    d = ImageDraw.Draw(im)                                                                      # the height gauge: 10 steps, 5 lit
+    x0, x1, top, step = 840, 930, 190, 66
+    for k in range(10):
+        y = top + (9 - k) * step
+        if k < 5:
+            d.rounded_rectangle([x0 - 6, y - 6, x1 + 6, y + step - 6], 14, fill=BROWN)
+            d.rounded_rectangle([x0, y, x1, y + step - 12], 10, fill=GOLD)
+        else:
+            d.rounded_rectangle([x0, y, x1, y + step - 12], 10, outline=(255, 255, 255), width=8)
+    d.polygon([(x0 - 70, top + 5 * step - 6 - 34), (x0 - 18, top + 5 * step - 6), (x0 - 70, top + 5 * step - 6 + 34)], fill=(226, 59, 43))   # "you are here"
+    for x, y, r in ((250, 140, 34), (690, 300, 28)):
+        sparkle(im, x, y, r)
     return im
 
 
@@ -251,13 +267,20 @@ def s_space():
 
 
 def s_clean_run():
-    im = sky('frost'); clouds(im, ((850, 240, 240),))
-    platform(im, 512, 930, 1150)
-    put(im, 'gem', 230, 620, h=300)
-    for x, y, r in ((120, 450, 36), (340, 470, 28), (300, 760, 24)):
+    """No take-backs: one unbroken golden trail from the bottom to the summit castle, no checkpoint ever used."""
+    im = sky('frost'); clouds(im, ((150, 220, 240), (900, 600, 200)))
+    def bez(p0, p1, p2, p3, n=60):
+        return [tuple((1 - t) ** 3 * a + 3 * (1 - t) ** 2 * t * b + 3 * (1 - t) * t ** 2 * c + t ** 3 * e for a, b, c, e in zip(p0, p1, p2, p3)) for t in (i / n for i in range(n + 1))]
+    path = bez((30, 960), (420, 960), (900, 900), (840, 700)) + bez((840, 700), (790, 540), (480, 600), (560, 470))[1:] + bez((560, 470), (620, 400), (700, 430), (780, 420))[1:]
+    lay = Image.new('RGBA', im.size, (0, 0, 0, 0)); d = ImageDraw.Draw(lay)
+    d.line(path, fill=BROWN + (255,), width=50, joint='curve')
+    d.line(path, fill=GOLD + (255,), width=34, joint='curve')
+    d.line([(x - 3, y - 7) for x, y in path], fill=(255, 236, 160, 255), width=8, joint='curve')
+    im.alpha_composite(lay)
+    put(im, 'castle', 790, 270, h=320)
+    put(im, 'bun_walk', 380, 790, h=330)
+    for x, y, r in ((200, 860, 30), (640, 820, 30), (900, 560, 26), (470, 400, 26), (620, 960, 22)):
         sparkle(im, x, y, r)
-    put(im, 'bun_walk', 640, 720, h=360)
-    streaks(im, [(380, 640, 470, 640, 16), (360, 720, 450, 720, 16), (390, 800, 470, 800, 16)], a=170)
     return im
 
 
@@ -327,24 +350,36 @@ s_inf_5000 = endless('space', 'bun_jump', lambda im: (put(im, 'planet_b', 230, 7
 
 
 def s_all_worlds():
+    """Grand tour: the five worlds stacked as the climb meets them (Meadow at the bottom, Deep Space on top), each with its
+    landmark, and the route climbing through all of them to the bunny waving at the top."""
     im = Image.new('RGBA', (N, N)); d = ImageDraw.Draw(im)
-    bands = ['meadow', 'frost', 'dusk', 'night', 'space']
-    for y in range(N):
-        for x in range(0, N, 4):
-            t = (x + (N - y)) / (2 * N) * 5
-            i = min(4, int(t)); top, bot = SKIES[bands[i]]
-            col = tuple(int(a + (b - a) * 0.6) for a, b in zip(top, bot))
-            d.line([(x, y), (x + 3, y)], fill=col + (255,))
-    for i in range(1, 5):                                                                      # thin bright seams between the worlds
-        c = i * 2 * N / 5
-        d.line([(c - N, N - 0), (c, 0)] if False else [(c, N), (c - N, 0)], fill=(255, 255, 255, 120), width=6)
+    order = ['meadow', 'frost', 'dusk', 'night', 'space']                                       # bottom to top
+    bh = N / 5
+    for k, w in enumerate(order):
+        y0 = N - (k + 1) * bh
+        top, bot = SKIES[w]
+        for y in range(int(y0), int(y0 + bh) + 1):
+            t = (y - y0) / bh
+            d.line([(0, y), (N, y)], fill=tuple(int(a + (b - a) * (0.25 + 0.6 * t)) for a, b in zip(top, bot)) + (255,))
     rnd = random.Random(5)
-    for _ in range(50):
-        x, y = rnd.random() * N, rnd.random() * N
-        if (x + (N - y)) / (2 * N) * 5 > 3.2:
-            d.rectangle([x, y, x + 5, y + 5], fill=(255, 255, 255, 210))
-    put(im, 'cloud', 210, 820, w=220, shadow=False)
-    put(im, 'bun_wave', 512, 560, h=470)
+    for _ in range(70):                                                                          # stars in Night and Deep Space
+        x, y = rnd.random() * N, rnd.random() * 2 * bh
+        d.rectangle([x, y, x + 5, y + 5], fill=(255, 255, 255, 220))
+    for k in range(1, 5):
+        y = N - k * bh
+        d.line([(0, y), (N, y)], fill=(255, 255, 255, 140), width=5)
+    # landmarks, one per world
+    platform(im, 300, N - 0.28 * bh, 520)                                                        # Meadow: grass platforms
+    put(im, 'tree', 860, N - 1.45 * bh, h=170)                                                   # Frost: snowy pine
+    d.ellipse([110, N - 2.75 * bh, 230, N - 2.75 * bh + 120], fill=(255, 210, 120))              # Dusk: low sun
+    moon(im, 850, N - 3.55 * bh, 60)                                                             # Night: moon
+    put(im, 'planet_b', 210, 0.48 * bh, w=290, shadow=False)                                     # Deep Space: ringed planet
+    route = [(300, N - 0.6 * bh), (700, N - 1.5 * bh), (320, N - 2.5 * bh), (690, N - 3.5 * bh), (560, 0.75 * bh)]
+    path = []
+    for p, q in zip(route, route[1:]):
+        path += arc_pts(p[0], p[1], q[0], q[1], 30, 30)
+    dashed(im, path, col=(255, 236, 160), a=240, w=14)
+    put(im, 'bun_wave', 600, 170, h=220)
     return im
 
 
@@ -388,6 +423,7 @@ def s_swing_chain():
 
 
 def s_marathon():
+    """The long haul: the bunny, big in front, setting off along a long winding route that links castle after castle up the sky."""
     im = Image.new('RGBA', (N, N)); d = ImageDraw.Draw(im)
     for y in range(N):
         t = y / (N - 1); a, b = SKIES['night'][0], SKIES['meadow'][1]
@@ -396,13 +432,14 @@ def s_marathon():
     for _ in range(45):
         x, y = rnd.random() * N, rnd.random() * 330
         d.rectangle([x, y, x + 5, y + 5], fill=(255, 255, 255, 200))
-    pts = [(230, 960), (780, 860), (300, 640), (720, 470), (420, 300), (600, 150)]
+    pts = [(330, 930), (860, 820), (560, 600), (880, 430), (620, 290), (800, 120)]
     path = []
     for p, q in zip(pts, pts[1:]):
         path += arc_pts(p[0], p[1], q[0], q[1], 40, 30)
-    dashed(im, path, col=(255, 230, 150), a=230, w=14)
-    put(im, 'castle', 790, 760, h=300); put(im, 'castle_b', 270, 520, h=230); put(im, 'castle', 700, 330, h=170); put(im, 'castle_b', 450, 160, h=120)
-    put(im, 'bun_walk', 250, 860, h=230)
+    dashed(im, path, col=(255, 230, 150), a=235, w=16)
+    put(im, 'castle', 880, 740, h=260); put(im, 'castle_b', 560, 520, h=190); put(im, 'castle', 880, 360, h=140); put(im, 'castle_b', 620, 230, h=100); put(im, 'castle', 800, 80, h=70, shadow=False)
+    platform(im, 250, 990, 620)
+    put(im, 'bun_walk', 250, 700, h=500)
     return im
 
 

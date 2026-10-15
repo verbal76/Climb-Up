@@ -76,6 +76,10 @@ by a few hundred bytes per seed timed; at most 60 seeds are kept), `run.json` a 
 With that override the same cloud files land on Linux/Steam Deck at `LinuxXdgDataHome/HotAtticGames/Upwardly/...`,
 which is exactly where the Linux build saves. macOS is not shipped, so it has no override.
 
+Steam writes its own `steam_autocloud.vdf` into each synced folder; the game ignores it (players are only folders named
+`p1`, `p2`, ...; `SteamCloudLayoutTest.steamsOwnMarkerFileIsIgnored`). Several Steam accounts on one computer share the
+save folder; the game's own named players (up to six) keep their progress apart, so no `{64BitSteamID}` subfolder is used.
+
 ### Conflicts and offline play
 
 Auto-Cloud syncs whole files; it does not merge the records inside them. If a player plays offline on two machines and both

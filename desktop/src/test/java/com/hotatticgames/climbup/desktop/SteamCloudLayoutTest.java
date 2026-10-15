@@ -119,6 +119,21 @@ public class SteamCloudLayoutTest {
         }
     }
 
+    @Test public void steamsOwnMarkerFileIsIgnored() throws Exception {
+        File root = tmp.newFolder("vdf");
+        Profiles p = Profiles.load(root);
+        File pd = p.dirOf(p.last().id);
+        SaveStore st = new SaveStore(pd); SaveData d = st.loadGame(); d.bestHeight = 77f; st.saveGame(d);
+        for (File dir : new File[]{root, new File(root, "players"), pd})          // Auto-Cloud writes steam_autocloud.vdf into every synced folder
+            Files.write(new File(dir, "steam_autocloud.vdf").toPath(), "\"steam_autocloud.vdf\"\n{\n}\n".getBytes(StandardCharsets.UTF_8));
+        Profiles again = Profiles.load(root);
+        assertEquals(1, again.count());
+        assertFalse(again.rebuilt);
+        assertEquals(77f, new SaveStore(again.dirOf(again.last().id)).loadGame().bestHeight, 0f);
+        new File(root, "players.json").delete();                                   // even the rebuild-from-folders path ignores it
+        assertEquals(1, Profiles.load(root).count());
+    }
+
     private static String rel(File f, String base) {
         String a = f.getPath().replace('\\', '/'), b = base.replace('\\', '/');
         assertTrue(a + " is under " + b, a.startsWith(b + "/"));

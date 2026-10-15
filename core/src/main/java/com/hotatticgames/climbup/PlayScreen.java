@@ -271,7 +271,6 @@ public final class PlayScreen extends ScreenAdapter {
     @Override public void render(float dt) {
         dt = Math.min(dt, 0.1f);
         time += dt;
-        if (shotPending) { shotPending = false; shotFromMenu = true; }      // the frame after the TAKE SCREENSHOT press: no pause panel, then captured
         CrashContext.set(crashSnapshot());          // record game state each frame so a crash log says what we were doing
         if (OVERLAY != null && time > 0.8f && state == State.PLAYING) { if (OVERLAY.equals("pause")) pauseGame(); }
         if (pauseCd > 0f) pauseCd -= dt;
@@ -331,11 +330,9 @@ public final class PlayScreen extends ScreenAdapter {
         world.render(sim, play ? acc / Sim.DT : 1f, dt, time, true);
         if (world.cloudsBroken > 0) { g.audio.play("poof", 0.45f, 0.9f + MathUtils.random(0.3f)); world.cloudsBroken = 0; }
         drawHud();
-        if (shotFromMenu) { shotFromMenu = false; g.requestScreenshot(); }     // TAKE SCREENSHOT: this frame drew the play view without the pause panel; the game captures it after we return
         g.autoShot("play", dt);
         if (next != null) { com.badlogic.gdx.Screen n = next; next = null; boolean d = disposeOnLeave; g.setScreen(n); if (d) dispose(); }
     }
-    private boolean shotPending, shotFromMenu;       // Build 65: TAKE SCREENSHOT presses on frame N (menu drawn); frame N+1 draws without the menu and is captured; frame N+2 has the menu back, the run paused throughout
 
     private final java.util.HashMap<Element, Integer> cycleSeen = new java.util.HashMap<>();
     private float sawT;
@@ -651,7 +648,7 @@ public final class PlayScreen extends ScreenAdapter {
         float W = ui.w(), H = ui.h(), m = 28f;
         float tm = ui.tm();
         boolean reduced = g.settings.reducedHud;
-        if (reduced && (shotFromMenu || g.screenshotPending())) {     // Build 67 (owner): with REDUCED HUD a screenshot is the climb alone - nothing in the top left, no hints, no controls
+        if (reduced && g.screenshotPending()) {     // Build 67 (owner): with REDUCED HUD a screenshot is the climb alone - nothing in the top left, no hints, no controls
             if (fade > 0) ui.rect(0, 0, W, H, new Color(0, 0, 0, fade));
             ui.end();
             return;
@@ -752,7 +749,7 @@ public final class PlayScreen extends ScreenAdapter {
         drawPops();
         if (state == State.PLAYING) { if (g.platform.touchControls()) drawControls(); else g.platform.drawPlayHints(ui, sim.clubTime > 0f, W, H); }
         if (fade > 0) ui.rect(0, 0, W, H, new Color(0, 0, 0, fade));
-        if (state == State.PAUSED && !shotFromMenu) pauseMenu();
+        if (state == State.PAUSED) pauseMenu();
         if (state == State.FINISHED) finishMenu();
         ui.end();
     }
@@ -864,8 +861,8 @@ public final class PlayScreen extends ScreenAdapter {
         Ui ui = g.ui; float W = ui.w(), H = ui.h();
         boolean canEnd = g.save.finished && tower != null && !demo;          // climbing for ever after castle 10: the run can be ended here and its times saved
         boolean seedLine = g.save.seed != 0 && !demo;                        // Build 64: the course code is always in the pause menu, whatever the HUD switch says
-        float bs = canEnd ? 76 : 84, bh = bs - 12;                           // Build 65: TAKE SCREENSHOT makes six buttons (seven with END RUN); a shorter step keeps the panel inside a 720-high screen
-        float pw = 560, bw = 440, ph = 176 + (canEnd ? 6 : 5) * bs + 36 + (seedLine ? 30 : 0), x = W / 2 - pw / 2, y = H / 2 - ph / 2;
+        float bs = canEnd ? 84 : 90, bh = bs - 12;                           // Build 70: TAKE SCREENSHOT left the pause menu (owner: F9, LB + RB and the phone's own screenshot cover it); five buttons, six with END RUN
+        float pw = 560, bw = 440, ph = 176 + (canEnd ? 5 : 4) * bs + 36 + (seedLine ? 30 : 0), x = W / 2 - pw / 2, y = H / 2 - ph / 2;
         ui.rect(0, 0, W, H, new Color(0, 0, 0, 0.55f));
         ui.panel(x, y, pw, ph);
         if (seedLine) ui.textC("SEED " + SeedCode.encode(g.save.seed), W / 2, y + 14, 2.6f, Ui.DIM);
@@ -899,8 +896,6 @@ public final class PlayScreen extends ScreenAdapter {
         if (ui.button("SETTINGS", bx, by, bw, bh)) { g.audio.play("click"); g.persist(); next = new SettingsScreen(g, this); disposeOnLeave = false; }
         by -= bs;
         if (ui.button("TIMES", bx, by, bw, bh)) { g.audio.play("click"); g.persist(); next = new TimesScreen(g, this); disposeOnLeave = false; }
-        by -= bs;
-        if (ui.button("TAKE SCREENSHOT", bx, by, bw, bh)) { g.audio.play("click"); shotPending = true; }     // the NEXT frame draws the play view alone and is captured; the menu is back the frame after, still paused
         by -= bs;
         if (canEnd) {
             if (ui.button(confirmEnd ? "TAP AGAIN TO CONFIRM" : "END RUN AND SAVE TIME", bx, by, bw, bh)) { if (confirmEnd) endRunToSummary(); else confirmEnd = true; }

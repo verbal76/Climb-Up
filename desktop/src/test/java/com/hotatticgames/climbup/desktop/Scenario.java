@@ -377,16 +377,8 @@ public final class Scenario implements ApplicationListener {
         steps.add(shot("34_deck_play_seed_1280x800"));
         steps.add(padTap(Ctl.START)); steps.add(wait(30));
         steps.add(act(() -> check("paused on the pad after the seeded start", playScreen() != null && hasButton("RESUME"), screenName()))); steps.add(shot("35_deck_pause_seed_1280x800"));
-        // Build 65: TAKE SCREENSHOT from the pause menu on the pad alone: the menu steps aside for the captured frame and is back after, the run still paused
-        steps.add(act(() -> shotsBefore = countShots()));
-        steps.add(padGoTo("TAKE SCREENSHOT")); steps.add(padIdle()); steps.add(padTap(Ctl.A));
-        steps.add(until(() -> countShots() >= shotsBefore + 1, 120, "pad screenshot written")); steps.add(wait(5));
-        steps.add(act(() -> {
-            File[] pngs = newShots(shotsBefore);
-            check("TAKE SCREENSHOT on the pad wrote one screenshot", pngs.length == 1, pngs.length + " new");
-            if (pngs.length == 1) check("the pause panel is not in the picture (the centre of the frame is the bright play view, not the dark panel)", centreLuma(pngs[0]) > 90, lumaNote(pngs[0]));
-            check("the pause menu is back and the run is still paused", playScreen() != null && hasButton("RESUME") && hasButton("TAKE SCREENSHOT"), screenName());
-        }));
+        // Build 70 (owner): TAKE SCREENSHOT is no longer in the pause menu; F9, LB + RB and the phone's own screenshot remain
+        steps.add(act(() -> check("the pause menu has no TAKE SCREENSHOT button", playScreen() != null && hasButton("RESUME") && !hasButton("TAKE SCREENSHOT"), screenName())));
         // Build 66: LB + RB together on the pad takes a screenshot (fixed, like F9): once per joint press, locked until both bumpers are up again
         steps.add(act(() -> shotsBefore = countShots()));
         steps.add(act(() -> { pad().set(Ctl.L1, 1f); pad().set(Ctl.R1, 1f); }));

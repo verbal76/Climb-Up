@@ -96,7 +96,7 @@ public class ClimbGame extends Game {
         if (audio != null) audio.update(Math.min(Gdx.graphics.getDeltaTime(), 0.25f));
     }
 
-    // ---- player screenshots (Build 65): F9 on desktop, TAKE SCREENSHOT in the pause menu everywhere
+    // ---- player screenshots (Build 65): F9 and LB + RB on desktop (the pause-menu button was removed in Build 70)
     private boolean shotRequested;
     private volatile String shotMsg = "", shotWhere = "";
     private volatile float shotMsgT;

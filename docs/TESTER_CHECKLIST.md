@@ -11,7 +11,7 @@ Ten minutes per device. Note anything that feels wrong, with a screenshot or a s
 ## New in Build 67 (cannons, title EXIT, reduced HUD, no desktop pause plate, hero portrait, cable eyes, times tags)
 1. Side cannon (first castle world): the spiked ball comes out of the centre of the cannon's mouth with a small puff, then curves onto its path. It no longer appears beside the carriage. Mortar: the charge glow is centred on the mouth and the ball rises straight out of it.
 2. Title: EXIT sits beside MORE on the bottom row (MORE no longer holds EXIT). Pad: from SETTINGS press down then right to reach EXIT.
-3. PC: SETTINGS → HUD (a new tab beside DISPLAY): REDUCED HUD, SHOW COURSE SEED, SHOW BEST TIMES. Phone: REDUCED HUD is on CONTROLS + DATA. REDUCED HUD on: the big top-left box is gone; you see only the height, the ten-tower bar and a key you carry. Take a screenshot (F9, LB + RB, or TAKE SCREENSHOT in the pause menu) with it on: the picture has no HUD at all. Off again: the full box is back.
+3. PC: SETTINGS → HUD (a new tab beside DISPLAY): REDUCED HUD, SHOW COURSE SEED, SHOW BEST TIMES. Phone: REDUCED HUD is on CONTROLS + DATA. REDUCED HUD on: the big top-left box is gone; you see only the height, the ten-tower bar and a key you carry. Take a screenshot (F9 or LB + RB on PC / Deck; the phone's own screenshot) with it on: the picture has no HUD at all. Off again: the full box is back.
 4. PC: the PAUSE plate in the top-right corner is gone; Esc, P or the pad's Menu button pause as before. Phone: the touch pause button stays.
 5. SETTINGS → GENERAL (phone: AUDIO + DISPLAY): a small portrait of the chosen hero sits left of the CHARACTER box and changes as you tap through the heroes.
 6. Bunny on an overhead cable: the eyes stay visible through the arms while it hangs and shimmies; nothing else about the pose changed.
@@ -26,9 +26,9 @@ Ten minutes per device. Note anything that feels wrong, with a screenshot or a s
 
 ## New in Build 65 (screenshots)
 1. PC: press F9 during play. A "SCREENSHOT SAVED" line appears at the bottom with the folder; the PNG is in `Pictures\Upwardly\Screenshots` (or the save folder's `Screenshots`). Press F9 twice quickly: two files, different names. The picture must show the HUD and not the saved-line itself.
-2. Any device: pause → TAKE SCREENSHOT. The pause menu is still there afterwards and the run is still paused; the picture shows the game view without the menu.
+2. Any device (Build 70): the pause menu has RESUME, RETRY CHECKPOINT, SETTINGS, TIMES, SAVE & EXIT (plus END RUN past the summit) and no TAKE SCREENSHOT.
 3. Android: the picture appears in the gallery under Pictures/Upwardly (Android 10+); otherwise in Android/data/com.hotatticgames.climbup/files/Pictures/Screenshots.
-4. Steam Deck: pause → TAKE SCREENSHOT with the pad; the file lands in `~/Pictures/Upwardly/Screenshots`. Steam's own screenshot (Steam + R1) must still work as before.
+4. Steam Deck: L1 + R1 together; the file lands in `~/Pictures/Upwardly/Screenshots`. Steam's own screenshot (Steam + R1) must still work as before.
 
 ## New in Build 64
 1. Title: the line under the name reads "TEN TOWERS. ONE CLOCK." one time and "TRAMPOLINES, CRABS AND CANNONS. YOU'RE WELCOME." the next (leave to a climb and come back). Both fit the screen on your device.

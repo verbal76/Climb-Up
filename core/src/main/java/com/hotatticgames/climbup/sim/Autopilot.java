@@ -164,6 +164,53 @@ public final class Autopilot {
         }
     }
 
+    /** Every planned move is played with a person's reflexes on top (Build 71): see {@link Reflex}. */
+    static Policy make(PolicyFactory f) { return new Reflex(f); }
+
+    /**
+     * Build 71 creatures need reflexes rather than a plan made in advance: a skull dashes at you wherever you are, a green blob lands where you were.
+     * On foot, this hops a dashing skull just before it reaches you (its dash is low, so a hop clears it) and steps out of a blob's shadow (away from its
+     * centre, or the other way when the deck's edge is too close). The planned move is then started again from wherever that left you. Without either
+     * creature nearby it is exactly the planned move.
+     */
+    static final class Reflex implements Policy {
+        final PolicyFactory f; Policy inner; int busy; int blob = -1; float dodge;
+        Reflex(PolicyFactory f) { this.f = f; inner = f.create(); }
+        public void act(Sim s, InputState in) {
+            if (busy == 1) {                                         // in the hop over a skull
+                if (s.mode == Sim.Mode.AIR) { in.jumpHeld = s.vy > 0f; return; }
+                busy = 0; inner = f.create();
+            } else if (busy == 2) {                                  // stepping out of a blob's shadow
+                if (s.mode == Sim.Mode.GROUND && s.blobShadow(blob) >= 0f) { in.moveX = dodge; return; }
+                busy = 0; inner = f.create();
+            }
+            if (s.mode == Sim.Mode.GROUND && threat(s, in)) return;
+            inner.act(s, in);
+        }
+        private boolean threat(Sim s, InputState in) {
+            Course c = s.course; float hw = s.T.halfWidth;
+            for (int k = 0, n = s.hz == null ? c.hazards.size() : s.hz.length; k < n; k++) {
+                int hi = s.hz == null ? k : s.hz[k];
+                if (hi >= c.hazards.size()) continue;
+                Element h = c.hazards.get(hi);
+                if (h.type == Element.Type.SKULL && s.skullDashing(hi)) {
+                    Element deck = h.anchor >= 0 && h.anchor < c.size() ? c.get(h.anchor) : null;
+                    if (deck == null || Math.abs(s.y - deck.y) > 0.6f) continue;
+                    float ahead = c.dsWrap(s.s, s.mobS[hi]) * s.mobDir[hi], gap = ahead - (Element.SKULL_R + hw);
+                    if (ahead > 0f && gap / Element.SKULL_SPEED < 0.15f) { in.jumpPressed = true; in.jumpHeld = true; busy = 1; return true; }
+                } else if (h.type == Element.Type.BLOB && s.blobShadow(hi) >= 0f && s.mobDir[hi] == 0f) {
+                    float d = c.dsWrap(s.s, s.mobTgt[hi]);
+                    if (Math.abs(d) >= Element.BLOB_R + hw + 0.35f) continue;
+                    Element deck = h.anchor >= 0 && h.anchor < c.size() ? c.get(h.anchor) : null;
+                    float dir = d > 0f ? 1f : d < 0f ? -1f : s.facing;
+                    if (deck != null) { float room = c.dsWrap(s.es1[h.anchor] + dir * deck.halfW(), s.s) * dir; if (room < 1.3f) dir = -dir; }
+                    dodge = dir; blob = hi; busy = 2; in.moveX = dir; return true;
+                }
+            }
+            return false;
+        }
+    }
+
     static final class PullPolicy implements Policy {
         public void act(Sim s, InputState in) { in.moveY = 1f; }
     }
@@ -219,7 +266,7 @@ public final class Autopilot {
         Sim s = base.copy();
         if (tgt >= 0) s.setWindowNear(anchorIdx(s.course, a) - 2, anchorIdx(s.course, a) + 6, a, tgt);     // plus earlier route platforms the climb passed that hang over a side branch
         else s.setWindow(a - 1, a + 6);
-        Policy p = f.create();
+        Policy p = make(f);
         InputState in = new InputState();
         int fallsBefore = s.setbacks();
         float floorY = (tgt >= 0 ? Math.min(s.course.get(a).y, s.course.get(tgt).y) : Math.min(s.course.get(a).y, s.course.get(Math.min(s.course.routeSize() - 1, a + 1)).y)) - 4.5f;
@@ -382,7 +429,7 @@ public final class Autopilot {
         if (!p.isPlatform()) return false;
         for (Element h : c.hazards) {
             if (h.anchor != a) continue;
-            switch (h.type) { case SPIKE_TRAP: case SAW_H: case SPIKE_BLOCK: case SPIKE_DROP: case GATE: case CRAB: if (Math.abs(c.dsWrap(h.s, p.s)) < p.halfW()) return true; break; default: break; }
+            switch (h.type) { case SPIKE_TRAP: case SAW_H: case SPIKE_BLOCK: case SPIKE_DROP: case GATE: case CRAB: case SKULL: case BLOB: if (Math.abs(c.dsWrap(h.s, p.s)) < p.halfW()) return true; break; default: break; }
         }
         return false;
     }
@@ -410,7 +457,7 @@ public final class Autopilot {
             }
         }
         if (!r.ok) { if (Boolean.getBoolean("dbg")) System.out.printf("execLink %d->%d plan failed at t=%.2f s=%.2f y=%.2f keys=%d%n", a, b, real.time, real.s, real.y, real.keys); return false; }
-        Policy p = r.factory.create(); Policy pull = new PullPolicy();
+        Policy p = make(r.factory); Policy pull = new PullPolicy();
         int f0 = real.setbacks(); int guard = (int) (14f / Sim.DT);
         while (guard-- > 0 && !succeededTo(real, b)) { in.clear(); p.act(real, in); real.step(in); if (real.setbacks() != f0) { if (Boolean.getBoolean("dbg")) System.out.printf("execLink %d->%d setback during exec: mode=%s s=%.2f y=%.2f t=%.2f events=%d hits=%d falls=%d%n", a, b, real.mode, real.s, real.y, real.time, real.events, real.hits, real.falls); return false; } }
         if (!succeededTo(real, b)) { if (Boolean.getBoolean("dbg")) System.out.printf("execLink %d->%d exec failed mode=%s s=%.2f y=%.2f falls=%d%n", a, b, real.mode, real.s, real.y, real.setbacks() - f0); return false; }
@@ -590,7 +637,7 @@ public final class Autopilot {
                 }
             }
             if (!r.ok) { rep.failedLink = a; rep.simTime = real.time; rep.failInfo = String.format("plan failed: mode=%s on=%d s=%.2f y=%.2f vx=%.2f vy=%.2f", real.mode, real.onElem, real.s, real.y, real.vx, real.vy); return rep; }
-            Policy p = r.factory.create();
+            Policy p = make(r.factory);
             int fallsBefore = real.setbacks();
             real.act = null;
             int guard = (int) (20f / Sim.DT);
@@ -648,7 +695,7 @@ public final class Autopilot {
                 Result r = plan(s, a, false, true);
                 s.act = win0;
                 if (!r.ok) { failed = true; return; }
-                p = r.factory.create();
+                p = make(r.factory);
             }
             p.act(s, in);
         }

@@ -22,7 +22,11 @@ public final class Element {
         /** Mortar: a cannon in the ground BELOW the path that points straight up. Its ball rises from the muzzle (y) by amp, falls back into the barrel, waits to reload, and fires again every period. The ball is a lethal disc (a hit only knocks you away). */
         MORTAR,
         /** Aimed cannon (late game): a turret at (s, y) that tracks the player, locks and flashes a warning, then fires a ball along exactly the locked barrel direction. The aim lives in the Sim (per-hazard state); the lethal ball is evaluated there. */
-        AIMED }
+        AIMED,
+        /** Skull (Build 71, owner): hovers and bobs above one end of a long fixed platform or bridge; when you are on its deck it drops low and dashes straight along it at you, leaving a misty trail. Jump over it; a hit launches you hard the way it was going (never hurts). Then it turns, rises, bobs, and comes again. w = its deck's width. */
+        SKULL,
+        /** Green blob (Build 71, owner): sits on a long fixed platform or a tipping bridge. When you are on its deck it wobbles, leaps high off the screen and drops on you: only its shadow shows where, at the last moment. Squashed flat, you are bounced away (never hurts). Landing on the far end of a tipping bridge you stand on launches you three times your jump height. w = its deck's width. */
+        BLOB }
 
     public Type type;
     public int zone;
@@ -69,7 +73,7 @@ public final class Element {
     public boolean isPlatform() { return type != Type.ROPE && type != Type.CABLE && !isHazard(); }
     /** True for anything that changes with time (planner sweeps its phase). */
     public boolean isMoving() {
-        switch (type) { case MOVE_H: case MOVE_V: case MOVE_Z: case SWING: case SAW_H: case SAW_V: case PENDULUM: case CANNON: case SPIKE_TRAP: case SPIKE_DROP: case CRAB: case BEE: case MORTAR: case AIMED: return true; default: return false; }
+        switch (type) { case MOVE_H: case MOVE_V: case MOVE_Z: case SWING: case SAW_H: case SAW_V: case PENDULUM: case CANNON: case SPIKE_TRAP: case SPIKE_DROP: case CRAB: case BEE: case MORTAR: case AIMED: case SKULL: case BLOB: return true; default: return false; }
     }
 
     public static final float CANNON_FLIGHT = 0.7f;      // fraction of the cycle the cycle's ball takes to cross the lane (its launch speed)
@@ -147,6 +151,30 @@ public final class Element {
 
     // ---- bee: a visit takes BEE_VISIT of the cycle; it enters high from one side, buzzes around (s, y) with amplitude amp (arc) and len (height), dives, and leaves high on the other side
     public static final float BEE_VISIT = 0.58f, BEE_R = 0.5f;
+    /** Build 71 (owner: the bee "flies by and leaves, it should do more"): while it visits it homes in on you, its buzzing centre drifting toward you at BEE_DRIFT m/s up to BEE_REACH from its post, and its dive swoops at your chest; you are noticed within BEE_SEEK of its post. It still leaves after its visit. */
+    public static final float BEE_REACH = 2.4f, BEE_DRIFT = 2.2f, BEE_SEEK = 7f, BEE_SWOOP = 0.85f;
+    /** Bee bump (was 6.5 / 3: barely a nudge). */
+    public static final float BEE_PUSH_X = 8f, BEE_PUSH_Y = 5f;
+    /** 0..1 strength of the dive at time t (0 outside the dive), shared by the simulation's swoop at the player and the drawn bee. */
+    public float beeDive(float t) { float u = beeU(t); return u > 0.38f && u < 0.62f ? (float) Math.sin((u - 0.38f) / 0.24f * Math.PI) : 0f; }
+
+    // ---- skull (Build 71): body radius, heights of its centre above the deck while hovering and while dashing, dash speed, and the phase lengths
+    public static final float SKULL_R = 0.42f, SKULL_HOVER = 1.75f, SKULL_LOW = 0.55f, SKULL_SPEED = 10f;
+    public static final float SKULL_NOTICE = 0.35f, SKULL_WINDUP = 0.55f, SKULL_TURN = 0.5f, SKULL_REST = 1.3f, SKULL_END = 0.7f;
+    /** A dash that catches you throws you this hard along its way, and up. */
+    public static final float SKULL_LAUNCH_X = 11f, SKULL_LAUNCH_Y = 7.5f;
+
+    // ---- green blob (Build 71): landing half-width, phase lengths, how far up it leaps (off the top of the screen), how long its shadow shows before it lands
+    public static final float BLOB_R = 0.6f, BLOB_NOTICE = 0.3f, BLOB_WOBBLE = 0.8f, BLOB_AIR = 1.7f, BLOB_SHADOW = 0.55f, BLOB_REST = 1.2f, BLOB_APEX = 11f, BLOB_END = 0.8f;
+    /** A squash bounces you away and up. */
+    public static final float BLOB_PUSH_X = 4.5f, BLOB_PUSH_Y = 8f;
+    /** Landing on the far end of a tipping bridge you stand on: launch speed = this times the jump speed (sqrt 3 = three times the jump height). */
+    public static final float BLOB_LAUNCH = 1.7320508f;
+    /** Height of the leaping blob above its deck, k = 0..1 through the leap: up fast, a hang off screen, and down. */
+    public static float blobLeapY(float k) {
+        if (k < 0.45f) { float u = k / 0.45f; return BLOB_APEX * (1f - (1f - u) * (1f - u)); }
+        float u = (k - 0.45f) / 0.55f; return BLOB_APEX * (1f - u * u);
+    }
     private float beeU(float t) { return cyc(t) / BEE_VISIT; }
     public boolean beePresent(float t) { return beeU(t) < 1f; }
     private static float smooth(float x) { x = Math.max(0f, Math.min(1f, x)); return x * x * (3f - 2f * x); }

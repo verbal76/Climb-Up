@@ -222,6 +222,7 @@ public final class Tower {
     public long elemKeyAt(int worldIdx) { return worldIdx >= 0 && worldIdx < elemKey.length ? elemKey[worldIdx] : -1L; }
     public long hazKeyAt(int hazIdx) { return hazIdx >= 0 && hazIdx < hazKey.length ? hazKey[hazIdx] : -1L; }
     /** World index of the element with this identity, or -1 if its slice is not resident. */
+    public int indexOfHazKey(long key) { for (int i = 0; i < world.hazards.size() && i < hazKey.length; i++) if (hazKey[i] == key) return i; return -1; }
     public int indexOfElemKey(long key) { for (int i = 0; i < world.size() && i < elemKey.length; i++) if (elemKey[i] == key) return i; return -1; }
     public int sliceCountResident() { return res.size(); }
 

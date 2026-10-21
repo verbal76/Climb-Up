@@ -75,7 +75,9 @@ public class DeterminismTest {
     }
 
     @Test public void theRulesVersionIsStampedAndOlderBuildsAreNotComparable() {
-        assertEquals(1, CourseGenerator.RULES_VERSION);
+        assertEquals(2, CourseGenerator.RULES_VERSION);           // Build 71: creatures, chained drops, un-sequenced mortars, the late ramp, ice on tiny platforms
+        assertEquals(2, CourseGenerator.rulesOfBuild(71));
+        assertEquals(1, CourseGenerator.rulesOfBuild(70));
         assertEquals(1, CourseGenerator.rulesOfBuild(63));
         assertEquals(1, CourseGenerator.rulesOfBuild(64));
         assertEquals(0, CourseGenerator.rulesOfBuild(62));
@@ -92,7 +94,7 @@ public class DeterminismTest {
         while (a.sliceCount() < 6) a.extend();
         String fp = fingerprint(blobs(a), 6);
         System.out.println("GENERATION_FINGERPRINT rules=" + CourseGenerator.RULES_VERSION + " " + fp);      // in the test report, for the refresh
-        assertEquals("generation changed: bump RULES_VERSION and refresh this fingerprint", RULES_1_FINGERPRINT, fp);
+        assertEquals("generation changed: bump RULES_VERSION and refresh this fingerprint", RULES_2_FINGERPRINT, fp);
     }
-    private static final String RULES_1_FINGERPRINT = "9812f0f035707f8b19824fa8";     // Build 63 generation (rules version 1), seed 1, slices 0-5
+    private static final String RULES_2_FINGERPRINT = "1111401d1974d639878f2d4e";     // Build 71 generation (rules version 2), seed 1, slices 0-5 (rules 1, Build 63-70: 9812f0f035707f8b19824fa8)
 }

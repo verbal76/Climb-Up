@@ -73,6 +73,8 @@ public final class HeroRig implements Disposable {
         if ((ev & Sim.EV_LAND) != 0) sqV -= 4f + Math.min(16f, landSpeed) * 0.45f;
         if ((ev & Sim.EV_BOUNCE) != 0) sqV += 9f;
         if ((ev & Sim.EV_GRAB) != 0) sqV -= 5f;
+        if ((ev & Sim.EV_SQUASH) != 0) { sq = -0.45f; sqV = -1f; }          // Build 71: a green blob landed on him: flattened, then he springs back up
+        if ((ev & Sim.EV_LAUNCH) != 0) sqV += 12f;                          // thrown by a skull or a tipping bridge: stretched out
     }
 
     // ---- idle director: after a few still seconds he turns to the camera and does a bit (sometimes with a speech bubble)
@@ -221,6 +223,7 @@ public final class HeroRig implements Disposable {
         String id = n.id;
         if (id.endsWith("_UpperArm.L")) upL = n; else if (id.endsWith("_LowerArm.L")) loL = n; else if (id.endsWith("_Fist.L") || id.endsWith("_Middle1.L")) fiL = n;
         else if (id.endsWith("_UpperLeg.L")) ulL = n; else if (id.endsWith("_UpperLeg.R")) ulR = n; else if (id.endsWith("_LowerLeg.L")) llL = n; else if (id.endsWith("_LowerLeg.R")) llR = n;
+        else if (id.endsWith("_Head") && n.getParent() != null && n.getParent().id.endsWith("_Neck")) head = n; else if (id.endsWith("_Torso")) torso = n;
         else if (id.endsWith("_Foot.L")) ftL = n; else if (id.endsWith("_Foot.R")) ftR = n;
         else if (id.endsWith("_UpperArm.R")) upR = n; else if (id.endsWith("_LowerArm.R")) loR = n; else if (id.endsWith("_Fist.R") || id.endsWith("_Middle1.R")) fiR = n;
         for (Node c : n.getChildren()) collect(c);
@@ -400,31 +403,26 @@ public final class HeroRig implements Disposable {
         }
         ac = new AnimationController(inst);
         play("Idle", -1, 1f, 0f);
-        if (!ham && !astro) for (String id : new String[]{"mat4_White", "mat5_EyeColor", "mat3_Black"}) {    // the bunny's eye whites, irises and pupils are their own head parts (hero.g3dj)
-            Material em = inst.getMaterial(id); if (em != null) eyeMats.add(em);
-        }
     }
 
-    // Build 67 (owner): hanging under a cable the bunny's raised arms cover its face, "and it looks weird". While it hangs there its eye parts are drawn
-    // through whatever is in front of them (no depth test, in the blended pass that follows everything opaque), so the eyes show through the arms. Nothing
-    // about the rig, the pose or the animations changes; the materials go back to normal the moment it lets go.
-    private final java.util.List<Material> eyeMats = new java.util.ArrayList<>();
-    private boolean eyesThrough;
-    /** Whether the eyes are being drawn through the arms right now (the cable hang). */
-    public boolean eyesThrough() { return eyesThrough; }
-    private void setEyesThrough(boolean on) {
-        if (on == eyesThrough || eyeMats.isEmpty()) return;
-        eyesThrough = on;
-        for (Material em : eyeMats) {
-            if (on) {
-                em.set(new com.badlogic.gdx.graphics.g3d.attributes.BlendingAttribute(true, com.badlogic.gdx.graphics.GL20.GL_SRC_ALPHA, com.badlogic.gdx.graphics.GL20.GL_ONE_MINUS_SRC_ALPHA, 1f));
-                em.set(new com.badlogic.gdx.graphics.g3d.attributes.DepthTestAttribute(com.badlogic.gdx.graphics.GL20.GL_ALWAYS, false));
-            } else {
-                em.remove(com.badlogic.gdx.graphics.g3d.attributes.BlendingAttribute.Type);
-                em.remove(com.badlogic.gdx.graphics.g3d.attributes.DepthTestAttribute.Type);
-            }
-        }
-    }
+    // Build 71 (owner): under a cable the bunny's raised arms cover its face. Build 67 drew the eyes through the arms, which
+    // read as eyes floating over the arms ("not acceptable"). Instead the bunny now tips its head back and turns its face toward
+    // the camera while it hangs or shimmies, with a small upper-body turn, eased in and out. The eyes stay real head parts with
+    // normal depth: an arm passing in front of them may hide them for a moment, which the owner prefers to floating eyes.
+    static final float CABLE_HEAD_BACK = Float.parseFloat(System.getProperty("climb.cableHeadBack", "0.42"));    // rad the head tips back (face up toward the line)
+    static final float CABLE_HEAD_TURN = Float.parseFloat(System.getProperty("climb.cableHeadTurn", "0.4"));    // share of the body's travel yaw the head turns back toward the camera
+    static final float CABLE_CHEST_TURN = Float.parseFloat(System.getProperty("climb.cableChestTurn", "0.2"));  // share of that yaw the upper body turns toward the camera
+    static final float CABLE_SPREAD = Float.parseFloat(System.getProperty("climb.cableSpread", "0.75"));   // bunny: hand spread along the cable (share of arm reach)
+    static final float CABLE_UP = Float.parseFloat(System.getProperty("climb.cableUp", "1.0"));           // bunny: how high the hands reach (share of arm reach)
+    static final float CABLE_FWD = Float.parseFloat(System.getProperty("climb.cableFwd", "0.10"));         // bunny: how far forward the hands reach (share of arm reach)
+    static final float CABLE_BACK = Float.parseFloat(System.getProperty("climb.cableBack", "0.30"));       // bunny: how far the body hangs behind the cable (world units)
+    static final float CABLE_STRETCH = Float.parseFloat(System.getProperty("climb.cableStretch", "0.5"));   // bunny: arm stretch on the cable (BUN_STRETCH 0.4 elsewhere), so it hangs with its head below the line
+    static final float CABLE_YAW = Float.parseFloat(System.getProperty("climb.cableYaw", "8"));                 // body yaw (deg) toward the direction of travel on the cable (was 24): the bunny shows the camera more of its face
+    private Node head, torso;
+    private boolean cableHead() { return !ham && !astro; }
+    private float cableLook;         // 0..1 blend of the cable head pose (eases both ways)
+    /** The current blend of the cable face-the-camera pose (0 = off, 1 = full). */
+    public float cableLook() { return cableLook; }
 
     // Root-cause isolation switches (diagnostics only; all three off in production). NO_RECLAMP disables the fix,
     // NO_POSE disables all procedural grip/limb posing, NO_BLEND removes animation cross-fades (so clips are set, not lerped).
@@ -480,7 +478,7 @@ public final class HeroRig implements Disposable {
             case ROPE: targetYaw = sim.facing * 6f; break;
             case LEDGE: case PULLUP: targetYaw = sim.ledgeSide * HANG_YAW; break;
             case BEAM: targetYaw = sim.mounting() ? sim.facing * 22f : sim.facing * 68f; break;   // turns to face the ledge he is gripping
-            case CABLE: targetYaw = sim.facing * 24f; break;
+            case CABLE: targetYaw = sim.facing * (cableHead() ? CABLE_YAW : 24f); break;
             default: targetYaw = sim.facing * 68f;   // clearly faces the direction of travel
         }
         if ((pendingEv & (Sim.EV_SHOVE | Sim.EV_HIT)) != 0) { hitT = HIT_TIME; hitFresh = true; current = ""; }
@@ -495,7 +493,6 @@ public final class HeroRig implements Disposable {
         if (landT > 0) landT -= dt;
         cycleClock += dt;
         anim = pick(sim, speed);
-        setEyesThrough(sim.mode == Sim.Mode.CABLE || anim == Anim.SHIMMY);      // Build 67: the bunny's eyes show through its arms while it hangs under a cable
         if (!climbRefSet) { climbRefY = sim.y; climbRefS = sim.s; climbRefSet = true; }
         float climbTravel = frameAdvance(sim.y - climbRefY), shimmyTravel = frameAdvance(sim.course.dsWrap(sim.s, climbRefS));
         climbRefY = sim.y; climbRefS = sim.s;
@@ -561,9 +558,10 @@ public final class HeroRig implements Disposable {
             boolean cable = anim == Anim.SHIMMY || sim.mode == Sim.Mode.CABLE;
             if (stubArms) stretchArmsBy(grip, HAM_WIDEN, cable ? HAM_CABLE_REACH : HAM_REACH);   // on the overhead cable the stub-armed hamster stretches further, so it hangs with its head below the line (not above it)
             else if (astro && line && !cable) stretchArmsBy(grip, 0.08f, ASTRO_STRETCH);   // lengthen the astronauts' arms so the hands reach the rope that sits forward of the deep helmet
-            else if (!astro && line && cable) stretchArmsBy(grip, BUN_STRETCH, BUN_STRETCH);   // bunny: a UNIFORM stretch (X==Y==Z, or the fist counter-scale distorts its real paws) so its short arms reach up and grip the overhead cable instead of hanging below it with no visible arms
+            else if (!astro && line && cable) { float st = cableHead() ? CABLE_STRETCH : BUN_STRETCH; stretchArmsBy(grip, st, st); }   // bunny: a UNIFORM stretch (X==Y==Z, or the fist counter-scale distorts its real paws) so its short arms reach up and grip the overhead cable instead of hanging below it with no visible arms
             if (line) {                // rope or cable: both hands on the line, alternating hand over hand while moving; knees draw up alternately
                 float moving = MathUtils.clamp(lineMove, 0f, 1f);
+                if (cable && cableLook > 0.01f && torso != null) rotateBone(torso, 0f, 1f, 0f, -yaw * MathUtils.degreesToRadians * CABLE_CHEST_TURN * cableLook);   // chest turns a little toward the camera; the hands are then posed onto the line from there
                 gripLine(climbPhase, moving, cable);
                 if (!cable && handBall) ballFront = BALL_FRONT * grip;   // vertical rope: clasp the ball hands in front of the line (pushed toward the camera)
                 if (!cable && (astro || stubArms)) {   // vertical rope: close the feet on the line (astro + the stub-armed hamster; the re-rigged hamster climbs like the bunny)
@@ -580,7 +578,7 @@ public final class HeroRig implements Disposable {
                 float shift = (sim.y + sim.T.handHeight) - handWorld;
                 if (stubArms && cable) { shift -= HAM_CABLE_DROP * grip; ballLift = HAM_CABLE_DROP * grip; }   // hang lower under the cable; the balls stay on the line
                 float tremble = sim.mode == Sim.Mode.LEDGE && !reduced ? MathUtils.sin(time * 22f) * (0.4f + Math.min(0.8f, hangT * 0.3f)) : 0f;
-                float behind = line ? (cable ? ROPE_FRONT : lineBack()) * grip : 0f;   // the vertical rope sits in front of the face (bigger for the astronauts' helmets); the overhead cable keeps its tuned offset
+                float behind = line ? (cable ? (cableHead() ? CABLE_BACK : ROPE_FRONT) : lineBack()) * grip : 0f;   // the vertical rope sits in front of the face (bigger for the astronauts' helmets); the overhead cable keeps its tuned offset
                 // cable shimmy: the whole body swings side to side under the hands with each hand-over-hand, like a playful monkey swing (not with reduced motion)
                 boolean shimmy = anim == Anim.SHIMMY && !reduced;
                 float roll = shimmy ? 11f * MathUtils.clamp(lineMove, 0f, 1f) * MathUtils.sin(climbPhase + 0.6f) : 0f, pivot = handModelY() * sy;
@@ -588,7 +586,13 @@ public final class HeroRig implements Disposable {
                         .translate(0, pivot, 0).rotate(0, 0, 1, roll).translate(0, -pivot, 0).rotate(0, 0, 1, tremble).scale(sx, sy, sz);
             }
         }
-        else if (anim == Anim.IDLE && beat == null && !NO_POSE) armsRest();     // plain standing: tuck the arms in from the clip's slight A-pose so he doesn't read as T-posing
+        else if (anim == Anim.IDLE && beat == null && !NO_POSE) armsRest();
+        boolean onCable = cableHead() && grip > 0.01f && (anim == Anim.SHIMMY || sim.mode == Sim.Mode.CABLE);
+        cableLook = smooth(cableLook, onCable ? 1f : 0f, 7f, dt);
+        if (cableLook > 0.01f && head != null && !NO_POSE) {     // face up and toward the camera, out from behind the raised arms (after the arms are posed: the head has no arm children)
+            rotateBone(head, 0f, 1f, 0f, -yaw * MathUtils.degreesToRadians * CABLE_HEAD_TURN * cableLook);
+            rotateBone(head, 1f, 0f, 0f, -CABLE_HEAD_BACK * cableLook);
+        }     // plain standing: tuck the arms in from the clip's slight A-pose so he doesn't read as T-posing
         else if (astro && anim == Anim.FALL && !NO_POSE) armsFall();            // astronauts: the falling clip raised an arm in front of the visor; spread the arms out and down instead
         placeHandBalls();                                                        // sit a ball on each hand (same world spot the hand renders at)
     }
@@ -781,10 +785,12 @@ public final class HeroRig implements Disposable {
                 // a horizontal bar overhead: BOTH hands grip the bar spread apart along it (monkey-bar style), at the same
                 // bar height, the leading hand reaching a little further along the traverse. (Was: hands clustered together
                 // above the head because the spread was tiny and both reached to nearly the same point.)
-                float spread = len * (0.40f + 0.16f * lead * m);
+                // Build 71: the bunny grips wider, higher and less far forward, so its arms rise BESIDE its head rather than across its face
+                boolean bun = cableHead();
+                float spread = len * ((bun ? CABLE_SPREAD : 0.40f) + 0.16f * lead * m);
                 tx = side0 * spread;                                   // each hand out to its own side, onto the bar
-                ty = pB.y + len * 0.82f;                               // up at the bar (nearly full overhead reach)
-                tz = pB.z + len * 0.40f;                               // reach forward to the line (he hangs a little behind it)
+                ty = pB.y + len * (bun ? CABLE_UP : 0.82f);            // up at the bar (nearly full overhead reach)
+                tz = pB.z + len * (bun ? CABLE_FWD : 0.40f);           // reach forward to the line (he hangs a little behind it)
             } else {
                 // a vertical rope straight in front of him at world (x=0, z=0); the body sits back off it by lineBack() world
                 // units, which in bone space (before the instance scale) is lineBack()/SCALE ahead of the body's origin. Each

@@ -17,7 +17,11 @@ public final class CourseGenerator {
     static final float RAMP_SLOPE = 0.576f;
     enum Kind { HOP, STAIRS, CRUMBLE, MOVER_H, MOVER_V, PAD, ROPE, CABLE, SWING, GRAB, HAZ, TRAP, SPRING, SEESAW, BRIDGE, RAMP, MOVER_Z, ELEV_FALL, SLIDE_FALL, MORTAR, WET,
         /** A long walkable corridor (owner request): room to walk between scenery and stand fully in front of the back wall. */
-        LONG }
+        LONG,
+        /** Build 71: a creature's deck - a skull on a long fixed platform or bridge (from the second world), or a green blob on a long platform or a tipping bridge (from the third). */
+        CREATURE,
+        /** Build 71: a row of platforms, each under its own chained spike drop (own speed, own top height, none low): like a mortar row, cross each when its slab is up. */
+        DROPS }
 
     private final Tuning T;
     private final Random rnd;
@@ -28,6 +32,8 @@ public final class CourseGenerator {
     private int ctx = 1;                    // leading elements that are context from the previous slice
     private boolean endless;
     private float rampH;
+    private int clubBoost;               // Build 71: modules left that should carry a crab or a bee for the club just placed
+    private boolean wantCreature;        // the module being built should be a crab (TRAP) or a bee (HAZ)
     private boolean relaxed;            // last-resort mode (see chunkIn)
     private double base;                    // framed generation: absolute height = base + local y (a multiple of the castle spacing); 0 for the classic absolute-frame slices
     private List<Element> ghostElems = new ArrayList<>();   // earlier-slice elements, only consulted for spiral-layer clearance
@@ -42,9 +48,9 @@ public final class CourseGenerator {
      * generator (the crab rules of Build 63 changed what a seed produced, so runs from earlier builds carry version 0, "old rules", and are not compared).
      * {@code GeneratorFingerprintTest} fails when generation changes without a bump.
      */
-    public static final int RULES_VERSION = 1;
+    public static final int RULES_VERSION = 2;      // 2 = Build 71: the bee homes in, skulls and green blobs, mortars out of step at random
     /** The rules version a climb started on a given build used (0 = unknown or before the stamps: not comparable). */
-    public static int rulesOfBuild(int build) { return build >= 63 ? 1 : 0; }
+    public static int rulesOfBuild(int build) { return build >= 71 ? 2 : build >= 63 ? 1 : 0; }
 
     private CourseGenerator(long seed, Tuning t, long salt) {
         T = t; this.salt = salt; rnd = new Random(seed * 0x9E3779B97F4A7C15L + 12345 + salt * 0x632BE59BD9B4E019L); c = new Course(seed, t.circumference());
@@ -117,6 +123,17 @@ public final class CourseGenerator {
     float intensity(float y) {
         float start = endless ? T.hazardStartY : T.courseHeight * 0.18f, ramp = endless ? T.hazardRampY : T.courseHeight * 0.7f;
         return Math.min(1f, Math.max(0f, (float) ((y + base - start) / ramp)));
+    }
+
+    /**
+     * Build 71 (owner: traps and creatures should keep getting harder, chaining more together): 0 until the ordinary ramp is complete (intensity reaches 1 at
+     * about 1,170 m), then rising to 1 over the next LATE_RAMP metres. It lengthens hazard chains and mortar and spike-drop rows and makes creature decks and
+     * creature-then-trap pairs more common; every link is still proven.
+     */
+    static final float LATE_RAMP = 3800f;
+    float late(float y) {
+        float done = endless ? T.hazardStartY + T.hazardRampY : T.courseHeight;
+        return Math.min(1f, Math.max(0f, (float) ((y + base - done) / LATE_RAMP)));
     }
 
     // ------------------------------------------------------------------ physics helpers
@@ -260,8 +277,16 @@ public final class CourseGenerator {
                 addRest(th); sinceRest = 0; lastRestY = c.get(c.size() - 1).y; nextGap = T.gemSpacing * r(0.85f, 1.15f); maybeCastle(th); continue;
             }
             Kind k = pick(zone, last);
+            boolean clubTarget = false;
+            if (clubBoost > 0) { clubBoost--; k = rnd.nextBoolean() ? Kind.TRAP : Kind.HAZ; clubTarget = true; }      // Build 71 (owner): a club was just placed - the next few modules give it crabs and bees to hit
+            wantCreature = clubTarget;
             if (th == 1 && last.type == Element.Type.STATIC && rnd.nextFloat() < 0.2f) k = Kind.WET;          // the Frost world: some platforms are under a rain cloud (slippery)
-            if (last.wet() && (k == Kind.HAZ || k == Kind.TRAP || k == Kind.MORTAR)) k = Kind.STAIRS;          // after a slippery platform give a walk-up (not a hazard you must time, nor a jump you must push off a slippery surface for): its timing windows assume a normal run-up (SawFairnessTest) and the plain climb stays walkable
+            if (th >= 1 && k != Kind.WET && prev != Kind.CREATURE && !last.wet() && rnd.nextFloat() < (th >= 2 ? 0.065f : 0.06f) + 0.05f * late(last.y)) k = Kind.CREATURE;
+            else if (prev == Kind.CREATURE && !last.wet() && rnd.nextFloat() < 0.35f * late(last.y)) k = rnd.nextBoolean() ? Kind.HAZ : Kind.TRAP;      // Build 71: higher up, a creature deck runs straight into a trap      // Build 71: a skull's deck (world 2 on), or a green blob's (world 3 on)
+            boolean secondHalf = endless && th == 0 && ((last.y + base) % T.zoneHeight) >= 0.5f * T.zoneHeight - 15f;      // castle 1 to castle 2: the Meadow's second, harder half (owner, Build 71)
+            if (k != Kind.WET && k != Kind.CREATURE && !last.wet() && prev != Kind.DROPS && (secondHalf ? rnd.nextFloat() < 0.10f : th >= 1 && rnd.nextFloat() < 0.04f)) k = Kind.DROPS;
+            else if (secondHalf && (k == Kind.HOP || k == Kind.STAIRS) && rnd.nextFloat() < 0.3f) k = Kind.HAZ;          // a little rougher than the first half
+            if (last.wet() && (k == Kind.HAZ || k == Kind.TRAP || k == Kind.MORTAR || k == Kind.CREATURE || k == Kind.DROPS)) k = Kind.STAIRS;          // after a slippery platform give a walk-up (not a hazard you must time, nor a jump you must push off a slippery surface for): its timing windows assume a normal run-up (SawFairnessTest) and the plain climb stays walkable
             if (!tryModuleBelow(k, d, th)) {
                 rejected++;
                 boolean ok = false;
@@ -803,6 +828,7 @@ public final class CourseGenerator {
             case SPIKE_DROP: return h.y + h.amp + Element.DROP_H;
             case GATE: return h.y + h.len;
             case CRAB: return h.y + 0.7f;
+            case SKULL: case BLOB: return h.y + 2.3f;      // the skull's hover; the blob's leap goes off the top of the screen and is not standing-room clutter
             case BEE: return h.y + h.len + 0.6f;
             default: return h.y + h.len;
         }
@@ -832,7 +858,7 @@ public final class CourseGenerator {
     private int ownerOf(Element h) {
         if (h.anchor < 0 || h.anchor >= c.size()) return -1;
         Element o = c.get(h.anchor);
-        boolean on = (h.type == Element.Type.SPIKE_TRAP || h.type == Element.Type.SAW_H || h.type == Element.Type.SPIKE_BLOCK || h.type == Element.Type.SPIKE_DROP || h.type == Element.Type.GATE || h.type == Element.Type.CRAB) && o.isPlatform() && Math.abs(hzS(h) - o.s) < o.w * 0.5f;
+        boolean on = (h.type == Element.Type.SPIKE_TRAP || h.type == Element.Type.SAW_H || h.type == Element.Type.SPIKE_BLOCK || h.type == Element.Type.SPIKE_DROP || h.type == Element.Type.GATE || h.type == Element.Type.CRAB || h.type == Element.Type.SKULL || h.type == Element.Type.BLOB) && o.isPlatform() && Math.abs(hzS(h) - o.s) < o.w * 0.5f;
         return on ? h.anchor : -1;
     }
 
@@ -912,7 +938,8 @@ public final class CourseGenerator {
 
     private boolean tryModule(Kind k, float d, int zone) {
         Element last = c.get(c.size() - 1);
-        for (int attempt = 0; attempt < 8; attempt++) {
+        int attempts = k == Kind.DROPS ? 4 : 8;           // a chain of timed drops is the costliest module to prove; after four misses another module is cheaper
+        for (int attempt = 0; attempt < attempts; attempt++) {
             float dd = Math.max(0f, d * (1f - attempt * 0.14f));
             List<Element> hz = new ArrayList<>();
             List<Element> es;
@@ -920,6 +947,8 @@ public final class CourseGenerator {
             else if (k == Kind.TRAP) es = buildMid(last, Math.max(dd, 0.35f), zone, attempt, hz);
             else if (k == Kind.WET) es = buildWet(last, dd, zone, attempt);
             else if (k == Kind.MORTAR) es = buildMortar(last, Math.max(dd, 0.35f), zone, attempt, hz);
+            else if (k == Kind.CREATURE) es = buildCreature(last, Math.max(dd, 0.3f), zone, attempt, hz);
+            else if (k == Kind.DROPS) es = buildDrops(last, Math.max(dd, 0.3f), zone, attempt, hz);
             else es = build(k, last, dd, zone, attempt);
             if (es == null) continue;
             float margin = k == Kind.GRAB ? Math.min(0.05f, T.minLinkMargin) : T.minLinkMargin;
@@ -942,7 +971,7 @@ public final class CourseGenerator {
     /** A wide platform under a rain cloud (the hero slides on it): a hop to a platform 4.5-5.5 m wide, marked wet. Proven like any other module; the link OUT of it is proven by the next module with the slippery physics. */
     private List<Element> buildWet(Element last, float d, int z, int attempt) {
         float eR = last.s + last.w / 2f, dy = r(0f, 0.6f);
-        float gap = reach(dy) * lerp(0.45f, 0.8f, d) * r(0.9f, 1.05f) * (1f - 0.03f * attempt), w = r(4.5f, 5.5f);
+        float gap = reach(dy) * lerp(0.45f, 0.8f, d) * r(0.9f, 1.05f) * (1f - 0.03f * attempt), w = rnd.nextFloat() < 0.35f ? r(2.4f, 3.0f) : r(4.5f, 5.5f);      // Build 71 (owner): some icy platforms are tiny ones
         Element p = plat(Element.Type.STATIC, eR + gap + w / 2f, last.y + dy, w, z);
         p.color = Element.WET;
         List<Element> l = new ArrayList<>(); l.add(p); return l;
@@ -957,10 +986,10 @@ public final class CourseGenerator {
      */
     private List<Element> buildMortar(Element last, float d, int z, int attempt, List<Element> hzOut) {
         float inten = intensity(last.y);
-        int n = 5 + rnd.nextInt(2);
+        int n = 5 + rnd.nextInt(2) + (rnd.nextFloat() < late(last.y) ? 2 : 0);          // Build 71: longer mortar rows higher up
         List<Element> es = new ArrayList<>();
         Element cur = last; int base = c.size();
-        float period = r(3.2f, 4.0f) - 0.4f * inten, stagger = r(0.9f, 1.7f), phase0 = r(0f, 6.28f);
+        float period = r(3.2f, 4.0f) - 0.4f * inten;
         for (int k = 0; k < n; k++) {
             float uR = cur.s + cur.w / 2f;
             float g = Math.min(3.0f, Math.max(2.2f, reach(0f) * lerp(0.55f, 0.72f, d) * r(0.95f, 1f) * (1f - 0.03f * attempt)));
@@ -968,7 +997,7 @@ public final class CourseGenerator {
             Element v = plat(Element.Type.STATIC, uR + g + w / 2f, cur.y, w, z);
             es.add(v);
             Element m = hz(Element.Type.MORTAR, uR + g / 2f, cur.y - MORTAR_DEPTH, 0f, z);
-            m.amp = MORTAR_DEPTH + 2f * T.height; m.period = period; m.phase = phase0 + k * stagger;
+            m.amp = MORTAR_DEPTH + 2f * T.height; m.period = period * r(0.9f, 1.1f); m.phase = r(0f, 6.28f);      // Build 71 (owner): each mortar keeps its own time - no wait-jump-wait wave; a few gaps may line up for two or three jumps in a row
             m.anchor = k == 0 ? base - 1 : base + k - 1;
             hzOut.add(m);
             cur = v;
@@ -976,17 +1005,85 @@ public final class CourseGenerator {
         return es;
     }
 
+    /**
+     * Build 71 (owner): a creature's deck. World 2 on: a skull over a long fixed platform (half the time a fixed wooden bridge) - jump its dash. World 3 on, also: a green
+     * blob on a long platform, or on a tipping bridge with a hop to a block beyond - keep moving so it does not land on you. The creature sits at the far end. Proven by
+     * {@link #commit} like every module (the planner hops the skull's dash and steps out of the blob's shadow; see Autopilot.Reflex).
+     */
+    private List<Element> buildCreature(Element last, float d, int z, int attempt, List<Element> hzOut) {
+        float uR = last.s + last.w / 2f;
+        int roll = z >= 2 ? (rnd.nextBoolean() ? 0 : 1 + rnd.nextInt(2)) : 0;          // 0 skull (half), 1 blob on a platform, 2 blob on a tipping bridge
+        List<Element> es = new ArrayList<>();
+        if (roll == 2) {
+            float w = 7f + rnd.nextInt(2), dyIn = r(-0.4f, 0.3f);
+            float gapIn = reach(dyIn) * lerp(0.5f, 0.85f, d) * r(0.92f, 1f) * (1f - 0.03f * attempt);
+            Element sw = plat(Element.Type.SEESAW, uR + gapIn + w / 2f, last.y + dyIn, w, z); sw.skin = 1;
+            es.add(sw);
+            float gapOut = lerp(0.5f, 1.3f, d) * r(0.9f, 1.1f) * (1f - 0.05f * attempt);
+            es.add(plat(Element.Type.STATIC, sw.s + w / 2f + gapOut + 1.5f, sw.y + r(-0.5f, 0.6f), 3f, z));
+            Element b = hz(Element.Type.BLOB, sw.s + (w / 2f - Element.BLOB_END), sw.y, w, z); b.anchor = c.size(); b.phase = r(0f, 6.28f);
+            hzOut.add(b);
+            return es;
+        }
+        float dy = r(0f, 0.6f), gapIn = reach(dy) * lerp(0.5f, 0.85f, d) * (1f - 0.03f * attempt);
+        float w = roll == 0 ? 8f + rnd.nextInt(2) : 7f + rnd.nextInt(2);
+        Element p = plat(Element.Type.STATIC, uR + gapIn + w / 2f, last.y + dy, w, z);
+        if (roll == 0 && rnd.nextBoolean()) p.skin = 1;          // a fixed wooden bridge (owner: long platforms and bridges that do not move)
+        es.add(p);
+        Element h = hz(roll == 0 ? Element.Type.SKULL : Element.Type.BLOB, roll == 0 ? p.s : p.s + (w / 2f - Element.BLOB_END), p.y, w, z);
+        h.anchor = c.size(); h.phase = r(0f, 6.28f);
+        hzOut.add(h);
+        float we = r(3.0f, 3.6f);          // a clear landing past the creature's deck: a breather, and the next module does not have to prove its jump with the creature at its back
+        es.add(plat(Element.Type.STATIC, p.s + w / 2f + r(1.0f, 1.5f) * (1f - 0.03f * attempt) + we / 2f, p.y + r(-0.1f, 0.4f), we, z));
+        return es;
+    }
+
+    /** Spike drops in a row never hang lower than this above the walkway when raised (owner: "dont make any too low"): head room with a margin. */
+    static final float DROP_MIN_TOP = 2.5f, DROP_MAX_TOP = 3.6f;
+    /**
+     * Build 71 (owner): chained spike drops, introduced between castle 1 and castle 2. Three to five platforms with short hops between them, each with a spiked slab on a chain
+     * hanging forward of its middle; every slab has its own speed (period) and its own top height (DROP_MIN_TOP..DROP_MAX_TOP), all out of step, so the row has no rhythm to learn by heart.
+     * Each platform keeps a safe pocket at both ends; every link is proven by {@link #commit}.
+     */
+    private List<Element> buildDrops(Element last, float d, int z, int attempt, List<Element> hzOut) {
+        float inten = intensity(last.y);
+        int n = 3 + (rnd.nextFloat() < 0.35f + 0.4f * inten ? 1 : 0) + (rnd.nextFloat() < late(last.y) ? 1 : 0);
+        List<Element> es = new ArrayList<>();
+        Element cur = last; int base0 = c.size();
+        for (int k = 0; k < n; k++) {
+            float uR = cur.s + cur.w / 2f;
+            float g = k == 0 ? reach(0.2f) * lerp(0.45f, 0.75f, d) * (1f - 0.03f * attempt) : r(1.1f, 1.7f) * (1f - 0.03f * attempt);
+            float w = r(5.0f, 5.8f);
+            Element p = plat(Element.Type.STATIC, uR + g + w / 2f, cur.y + (k == 0 ? r(0f, 0.4f) : r(-0.2f, 0.3f)), w, z);
+            es.add(p);
+            // the slab hangs forward of the middle: you land on clear deck at the back, time your run under it, and take off from the lip in front
+            // (centred, it hung right where the hop lands, and a climber who stopped there had no safe way on - EndlessTest, seed 4 slice 9)
+            Element h = hz(Element.Type.SPIKE_DROP, p.s + 0.2f * w, p.y, 1.6f, z);
+            h.amp = r(DROP_MIN_TOP, DROP_MAX_TOP); h.period = r(2.7f, 4.3f) - 0.3f * inten; h.phase = r(0f, 6.28f);
+            h.anchor = base0 + k;
+            hzOut.add(h);
+            cur = p;
+        }
+        // a clear landing after the chain: a breather, and the next module starts from safe footing instead of under a drop (proving the jump
+        // after a drop platform cost the generator many failed tries, ~40 s a slice in the castle 1-2 band)
+        float w = r(3.0f, 3.8f);
+        es.add(plat(Element.Type.STATIC, cur.s + cur.w / 2f + r(1.1f, 1.6f) * (1f - 0.03f * attempt) + w / 2f, cur.y + r(-0.1f, 0.3f), w, z));
+        return es;
+    }
+
     /** One or two hazard-guarded gaps: a saw blade, a spiked pendulum-free blade, a cannon lane, or a spiked block you must clear. */
     private List<Element> buildHaz(Element last, float d, int z, int attempt, List<Element> hzOut) {
         float inten = intensity(last.y);
         int n = (inten > 0.35f && rnd.nextFloat() < inten * 0.6f) ? 2 : 1;
+        float lt = late(last.y);
+        if (n == 2 && lt > 0.2f && rnd.nextFloat() < lt * 0.55f) n = 3;          // Build 71: higher up, three guarded gaps in a row
         List<Element> es = new ArrayList<>();
         Element cur = last;
         int base = c.size();
         for (int j = 0; j < n; j++) {
             float uR = cur.s + cur.w / 2f, dy = r(-0.3f, 0.6f);
             boolean cannonOk = cur.w >= 3f && cur.type == Element.Type.STATIC;
-            int roll = rnd.nextInt(cannonOk ? 5 : 4);
+            int roll = wantCreature && j == 0 ? 3 : rnd.nextInt(cannonOk ? 5 : 4);
             if (roll == 1) dy = Math.min(dy, 0.1f);      // a saw never guards an uphill jump: the blade would sit higher than the take-off
             float g = Math.min(3.05f, Math.max(2.3f, reach(Math.max(0f, dy)) * lerp(0.68f, 0.90f, d) * r(0.95f, 1f) * (1f - 0.03f * attempt)));
             if (roll == 1) g = Math.min(g, 2.6f);      // a saw hangs in the gap: keep the gap well short of a full-length jump so there is room to time the arc over the blade
@@ -1030,7 +1127,7 @@ public final class CourseGenerator {
         float inten = intensity(last.y);
         float uR = last.s + last.w / 2f, dy = r(0f, 0.6f);
         float gapIn = reach(dy) * lerp(0.5f, 0.85f, d) * (1f - 0.03f * attempt);
-        int roll = rnd.nextInt(5);
+        int roll = wantCreature ? 4 : rnd.nextInt(5);
         float w = roll == 4 ? 9f : 8f;
         Element p = plat(Element.Type.STATIC, uR + gapIn + w / 2f, last.y + dy, w, z);
         // bug #14: the spike-follow fix (Sim.carryS/carryY + the renderer) rides a spike with its platform whenever that platform moves.
@@ -1056,6 +1153,7 @@ public final class CourseGenerator {
             if (last.w >= 3f && last.isPlatform() && rnd.nextInt(3) > 0) {
                 Element club = hz(Element.Type.CLUB, last.s, last.y + 1.0f, 0f, z); club.anchor = c.size() - 1; club.phase = r(0f, 6.28f);
                 hzOut.add(club);
+                if (!wantCreature) clubBoost = 3;          // three more crab or bee modules follow, so the 30 seconds are worth having
             }
         }
         h.phase = r(0f, 6.28f); h.anchor = c.size();      // the platform being added (first appended element)

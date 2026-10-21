@@ -10,7 +10,8 @@ public final class Sim {
     public static final float DT = 1f / 60f, SWING_TIME = 0.34f;
     // event bits
     public static final int EV_JUMP = 1, EV_LAND = 2, EV_BOUNCE = 4, EV_GRAB = 8, EV_PULL = 16, EV_CRUMBLE = 32,
-            EV_CHECKPOINT = 64, EV_RESPAWN = 128, EV_WIN = 256, EV_ROPE = 512, EV_CABLE = 1024, EV_FALL_NEAR = 2048, EV_HIT = 4096, EV_KEY = 8192, EV_DOOR = 16384, EV_BLOCKED = 32768, EV_CLUB = 65536, EV_SWING = 131072, EV_SHOVE = 262144, EV_CRAB_OFF = 524288, EV_FINISH = 1048576, EV_AIM = 2097152;
+            EV_CHECKPOINT = 64, EV_RESPAWN = 128, EV_WIN = 256, EV_ROPE = 512, EV_CABLE = 1024, EV_FALL_NEAR = 2048, EV_HIT = 4096, EV_KEY = 8192, EV_DOOR = 16384, EV_BLOCKED = 32768, EV_CLUB = 65536, EV_SWING = 131072, EV_SHOVE = 262144, EV_CRAB_OFF = 524288, EV_FINISH = 1048576, EV_AIM = 2097152,
+            EV_DASH = 4194304, EV_BLOB_JUMP = 8388608, EV_BLOB_LAND = 16777216, EV_SQUASH = 33554432, EV_LAUNCH = 67108864, EV_SLIP = 134217728;   // Build 71: a skull starts a dash, a blob leaps, a blob lands, you were squashed, a skull or a tipping bridge launched you
 
     public final Course course;
     public final Tuning T;
@@ -67,6 +68,11 @@ public final class Sim {
     private float[] crabStuck = new float[0], crabCool = new float[0];   // seconds it has been held at its edge with you out of reach; seconds left before it may chase again
     private float[] crabTurn = new float[0];                              // seconds left standing still to turn round (it faces the new way at once)
     private float[] crabSeen = new float[0];                              // seconds it has had you in sight (it reacts after CRAB_NOTICE)
+    /** Build 71 creatures (Course.hazards index): bee drift off its post; skull and blob state (mobState), clock in that state, live arc, height above the deck, heading, target arc, and how long you have been in sight. */
+    public byte[] mobState = new byte[0];
+    public float[] mobT = new float[0], mobS = new float[0], mobY = new float[0], mobDir = new float[0], mobTgt = new float[0], mobSeen = new float[0];
+    public float squashT;
+    public float slipCd;                                                   // seconds before ice can set off another skid (EV_SLIP)                                                  // seconds left of the player being squashed flat (drawing only)
     public int lastKeyColor, lastGateColor, lastGateNo;
     public boolean finishedRun;         // the finishCastle's door has been walked through (the timed run is over)
     public float clubTime, swingT, shoveCd;       // spiked club carried (seconds left), swing animation clock, grace between shoves
@@ -139,6 +145,26 @@ public final class Sim {
         java.util.Arrays.fill(aimFireT, o, n, -1e9f);
         crabPos = java.util.Arrays.copyOf(crabPos, n); crabVel = java.util.Arrays.copyOf(crabVel, n); crabMode = java.util.Arrays.copyOf(crabMode, n);
         crabStuck = java.util.Arrays.copyOf(crabStuck, n); crabCool = java.util.Arrays.copyOf(crabCool, n); crabTurn = java.util.Arrays.copyOf(crabTurn, n); crabSeen = java.util.Arrays.copyOf(crabSeen, n);
+        mobState = java.util.Arrays.copyOf(mobState, n); mobT = java.util.Arrays.copyOf(mobT, n); mobS = java.util.Arrays.copyOf(mobS, n); mobY = java.util.Arrays.copyOf(mobY, n);
+        mobDir = java.util.Arrays.copyOf(mobDir, n); mobTgt = java.util.Arrays.copyOf(mobTgt, n); mobSeen = java.util.Arrays.copyOf(mobSeen, n);
+    }
+
+    /** Width of {@link #hazardState}: every live per-hazard value the simulation carries (aimed cannons, crabs, Build 71 creatures). */
+    public static final int HAZ_STATE = 17;
+    /** Build 71 (save/load determinism): the dynamic state of one hazard, packed, so a saved climb restores its cannons, crabs, bees, skulls and blobs mid-move. */
+    public float[] hazardState(int i) {
+        ensureCapacity();
+        return new float[]{aimAng[i], aimFireT[i], aimArmed[i] ? 1f : 0f, crabPos[i], crabVel[i], crabMode[i], crabStuck[i], crabCool[i], crabTurn[i], crabSeen[i],
+                mobState[i], mobT[i], mobS[i], mobY[i], mobDir[i], mobTgt[i], mobSeen[i]};
+    }
+    /** Writes back what {@link #hazardState} packed (ignored unless it has the right width and is all finite). */
+    public void setHazardState(int i, float[] v) {
+        if (v == null || v.length != HAZ_STATE) return;
+        for (float f : v) if (Float.isNaN(f) || Float.isInfinite(f)) return;
+        ensureCapacity();
+        if (i < 0 || i >= aimAng.length) return;
+        aimAng[i] = v[0]; aimFireT[i] = v[1]; aimArmed[i] = v[2] != 0f; crabPos[i] = v[3]; crabVel[i] = v[4]; crabMode[i] = (byte) v[5]; crabStuck[i] = v[6]; crabCool[i] = v[7]; crabTurn[i] = v[8]; crabSeen[i] = v[9];
+        mobState[i] = (byte) v[10]; mobT[i] = v[11]; mobS[i] = v[12]; mobY[i] = v[13]; mobDir[i] = v[14]; mobTgt[i] = v[15]; mobSeen[i] = v[16];
     }
 
     /** The course grew (endless mode): extend the per-element state arrays. */
@@ -176,7 +202,7 @@ public final class Sim {
         landSpeed = o.landSpeed; events = o.events; assistForgive = o.assistForgive; ps0 = o.ps0; py0 = o.py0; teleported = o.teleported;
         es0 = o.es0.clone(); ey0 = o.ey0.clone(); es1 = o.es1.clone(); ey1 = o.ey1.clone();
         crumbleT = o.crumbleT.clone(); gone = o.gone.clone(); goneT = o.goneT.clone(); padSquash = o.padSquash.clone(); tilt = o.tilt.clone(); onT = o.onT.clone();
-        clubTime = o.clubTime; swingT = o.swingT; shoveCd = o.shoveCd; crabS = o.crabS; crabY = o.crabY; keys = o.keys; keysFree = o.keysFree; featDone = o.featDone.clone(); aimAng = o.aimAng.clone(); aimFireT = o.aimFireT.clone(); aimArmed = o.aimArmed.clone(); crabPos = o.crabPos.clone(); crabVel = o.crabVel.clone(); crabMode = o.crabMode.clone(); crabStuck = o.crabStuck.clone(); crabCool = o.crabCool.clone(); crabTurn = o.crabTurn.clone(); crabSeen = o.crabSeen.clone(); finishedRun = o.finishedRun; lastGateNo = o.lastGateNo; lastKeyColor = o.lastKeyColor; lastGateColor = o.lastGateColor;
+        clubTime = o.clubTime; swingT = o.swingT; shoveCd = o.shoveCd; crabS = o.crabS; crabY = o.crabY; keys = o.keys; keysFree = o.keysFree; featDone = o.featDone.clone(); aimAng = o.aimAng.clone(); aimFireT = o.aimFireT.clone(); aimArmed = o.aimArmed.clone(); crabPos = o.crabPos.clone(); crabVel = o.crabVel.clone(); crabMode = o.crabMode.clone(); crabStuck = o.crabStuck.clone(); crabCool = o.crabCool.clone(); crabTurn = o.crabTurn.clone(); crabSeen = o.crabSeen.clone(); mobState = o.mobState.clone(); mobT = o.mobT.clone(); mobS = o.mobS.clone(); mobY = o.mobY.clone(); mobDir = o.mobDir.clone(); mobTgt = o.mobTgt.clone(); mobSeen = o.mobSeen.clone(); squashT = o.squashT; slipCd = o.slipCd; finishedRun = o.finishedRun; lastGateNo = o.lastGateNo; lastKeyColor = o.lastKeyColor; lastGateColor = o.lastGateColor;
         act = o.act; hz = o.hz; winLo = o.winLo; winHi = o.winHi; invuln = o.invuln; hits = o.hits; hitS = o.hitS; hitY = o.hitY;
     }
 
@@ -246,7 +272,7 @@ public final class Sim {
             default:
                 m.spawnAtCheckpoint(idx); m.checkpoint = 0; m.bestElem = idx;
                 for (Element h : c.hazards) {      // platforms with a hazard in the middle: start in the safe pocket at the back, as a real landing would
-                    if (h.anchor == idx && (h.type == Element.Type.SPIKE_TRAP || h.type == Element.Type.SAW_H || h.type == Element.Type.SPIKE_BLOCK || h.type == Element.Type.SPIKE_DROP || h.type == Element.Type.CRAB) && Math.abs(c.dsWrap(h.s, e.s)) < e.halfW()) {
+                    if (h.anchor == idx && (h.type == Element.Type.SPIKE_TRAP || h.type == Element.Type.SAW_H || h.type == Element.Type.SPIKE_BLOCK || h.type == Element.Type.SPIKE_DROP || h.type == Element.Type.CRAB || h.type == Element.Type.SKULL || h.type == Element.Type.BLOB) && Math.abs(c.dsWrap(h.s, e.s)) < e.halfW()) {
                         m.s = c.wrap(m.es1[idx] - e.halfW() + 1.0f); break;
                     }
                 }
@@ -310,6 +336,9 @@ public final class Sim {
         float[] ncp = new float[nf.length], ncv = new float[nf.length], ncs = new float[nf.length], ncc = new float[nf.length], nct = new float[nf.length], ncn = new float[nf.length]; byte[] ncm = new byte[nf.length];
         for (int i = 0; i < m.haz.length && i < crabPos.length; i++) { int j = m.haz[i]; if (j >= 0 && j < ncp.length) { ncp[j] = crabPos[i]; ncv[j] = crabVel[i]; ncm[j] = crabMode[i]; ncs[j] = crabStuck[i]; ncc[j] = crabCool[i]; nct[j] = crabTurn[i]; ncn[j] = crabSeen[i]; } }
         crabPos = ncp; crabVel = ncv; crabMode = ncm; crabStuck = ncs; crabCool = ncc; crabTurn = nct; crabSeen = ncn;
+        byte[] nms = new byte[nf.length]; float[] nmt = new float[nf.length], nmS = new float[nf.length], nmy = new float[nf.length], nmd = new float[nf.length], nmg = new float[nf.length], nmn = new float[nf.length];
+        for (int i = 0; i < m.haz.length && i < mobState.length; i++) { int j = m.haz[i]; if (j >= 0 && j < nms.length) { nms[j] = mobState[i]; nmt[j] = mobT[i]; nmS[j] = mobS[i]; nmy[j] = mobY[i]; nmd[j] = mobDir[i]; nmg[j] = mobTgt[i]; nmn[j] = mobSeen[i]; } }
+        mobState = nms; mobT = nmt; mobS = nmS; mobY = nmy; mobDir = nmd; mobTgt = nmg; mobSeen = nmn;      // arcs are wrap-invariant and mobY is relative to the deck, so no height shift is needed
         onElem = onElem >= 0 && onElem < m.elem.length ? m.elem[onElem] : onElem;
         lastPad = lastPad >= 0 && lastPad < m.elem.length ? m.elem[lastPad] : lastPad;
         onSlab = onSlab >= 0 && onSlab < m.haz.length ? m.haz[onSlab] : -1;
@@ -392,6 +421,7 @@ public final class Sim {
         if (y > maxHeight) maxHeight = y;
 
         if (shoveCd > 0) shoveCd = Math.max(0f, shoveCd - dt);
+        if (squashT > 0) squashT = Math.max(0f, squashT - dt);
         if (clubTime > 0) clubTime = Math.max(0f, clubTime - dt);
         if (swingT > 0) swingT = Math.max(0f, swingT - dt);
         else if (in.swingPressed && clubTime > 0f && (mode == Mode.GROUND || mode == Mode.AIR)) { swingT = SWING_TIME; events |= EV_SWING; }
@@ -425,18 +455,181 @@ public final class Sim {
         }
     }
     private void stepBee(Element e, int idx, float hw) {
-        if (!e.beePresent(time)) return;
-        float bs = e.beeS(time), by = e.beeY(time), dx = course.dsWrap(s, bs);
+        if (!e.beePresent(time)) { if (idx < mobS.length) { mobS[idx] = 0f; mobY[idx] = 0f; } return; }     // away: its next visit starts from its post again
+        float[] b = beeAt(idx, e, true);
+        float bs = b[0], by = b[1], dx = course.dsWrap(s, bs);
         if (swingT > 0.06f && swingT < 0.28f) {
             float ahead = -dx * facing;
             if (ahead > -0.3f && ahead < 2.2f && Math.abs(by - (y + 0.7f)) < 1.6f) { featDone[idx] = true; crabS = bs; crabY = by; knockedBee = true; events |= EV_CRAB_OFF; return; }
         }
         if (shoveCd <= 0f && invuln <= 0f && Math.abs(dx) < Element.BEE_R + hw && by + Element.BEE_R > y + 0.1f && by - Element.BEE_R < y + T.height - 0.05f && (mode == Mode.GROUND || mode == Mode.AIR)) {
             float side = Math.signum(dx); if (side == 0f) side = -facing;
-            vx = side * 6.5f; vy = Math.max(vy, 3f); mode = Mode.AIR; onElem = -1; lockout = 0.25f; jumpedUp = false; shoveCd = 1.0f; events |= EV_SHOVE;
+            vx = side * Element.BEE_PUSH_X; vy = Math.max(vy, Element.BEE_PUSH_Y); mode = Mode.AIR; onElem = -1; lockout = 0.25f; jumpedUp = false; shoveCd = 1.0f; events |= EV_SHOVE;
         }
     }
-    public static final float CLUB_SECONDS = 18f;
+    private final float[] beeTmp = new float[2];
+    /**
+     * Where bee {@code e} (hazard index idx) is: its flight path (Element.beeS / beeY) plus a drift toward you (Build 71). While it visits and you are within
+     * BEE_SEEK of its post, its buzzing centre drifts toward you at BEE_DRIFT m/s up to BEE_REACH away, and its dive swoops most of the way to your chest.
+     * {@code advance} moves the drift on one step (the simulation); false only reads it (the renderer). Driven by sim state alone: deterministic.
+     */
+    public float[] beeAt(int idx, Element e, boolean advance) {
+        float ps = e.beeS(time), py = e.beeY(time);
+        if (idx >= mobS.length) { beeTmp[0] = ps; beeTmp[1] = py; return beeTmp; }
+        if (advance) {
+            float dPost = course.dsWrap(s, e.s), dyPost = y - e.y;
+            boolean seek = Math.abs(dPost) < Element.BEE_SEEK && dyPost > -4f && dyPost < 3f && (mode == Mode.GROUND || mode == Mode.AIR);
+            float tx = seek ? Math.max(-Element.BEE_REACH, Math.min(Element.BEE_REACH, dPost)) : 0f;
+            float ty = seek ? Math.max(-1.2f, Math.min(1.2f, (y + 0.9f) - e.y)) : 0f;
+            float st = Element.BEE_DRIFT * DT;
+            mobS[idx] = approach(mobS[idx], tx, st); mobY[idx] = approach(mobY[idx], ty, st);
+        }
+        float bs = ps + mobS[idx], by = py + mobY[idx];
+        float dive = e.beeDive(time);
+        if (dive > 0f) {           // the dive swoops at you (most of the way), limited to BEE_REACH from where it was
+            float toS = Math.max(-Element.BEE_REACH, Math.min(Element.BEE_REACH, course.dsWrap(s, bs))), toY = Math.max(-2f, Math.min(1.5f, (y + 0.8f) - by));
+            float k = dive * Element.BEE_SWOOP;
+            bs += toS * k; by += toY * k;
+        }
+        beeTmp[0] = bs; beeTmp[1] = by; return beeTmp;
+    }
+    // ---------------------------------------------------------------- skull and green blob (Build 71, owner)
+    private Element deckOf(Element e) { return e.anchor >= 0 && e.anchor < course.size() && course.get(e.anchor).isPlatform() ? course.get(e.anchor) : null; }
+    /** You are over a creature's deck (or just past its ends) and near its height, on foot or in the air. */
+    private boolean onDeck(float dS, float half, float dY) {
+        return (mode == Mode.GROUND || mode == Mode.AIR) && Math.abs(course.dsWrap(s, dS)) <= half + 0.3f && y - dY > -0.4f && y - dY < 2.8f;
+    }
+    private static float smooth01(float k) { k = Math.max(0f, Math.min(1f, k)); return k * k * (3f - 2f * k); }
+
+    /**
+     * Skull: 1 hovers and bobs above one end of its deck; once you have been on the deck SKULL_NOTICE and it has rested SKULL_REST, 2 it drops low (SKULL_WINDUP),
+     * 3 dashes along the deck at SKULL_SPEED toward your side to the far end, 4 rises and turns round (SKULL_TURN), and hovers again. Only the dash hits:
+     * it is low (centre SKULL_LOW above the deck), so a jump clears it; a hit throws you hard along its way. Pure sim state: deterministic.
+     */
+    private void stepSkull(Element e, int idx, float hw) {
+        if (idx >= mobState.length) return;
+        Element deck = deckOf(e);
+        float dS = deck != null ? es1[e.anchor] : e.s, half = deck != null ? deck.halfW() : Math.max(2f, e.w * 0.5f), dY = deck != null ? deck.y : e.y;
+        float end = Math.max(0.5f, half - Element.SKULL_END);
+        if (mobState[idx] == 0) { mobState[idx] = 1; mobS[idx] = course.wrap(dS + end); mobDir[idx] = -1f; mobT[idx] = Element.SKULL_REST; mobY[idx] = Element.SKULL_HOVER; mobSeen[idx] = 0f; }
+        boolean sees = onDeck(dS, half, dY);
+        mobSeen[idx] = sees ? mobSeen[idx] + DT : 0f;
+        mobT[idx] += DT;
+        switch (mobState[idx]) {
+            case 1: {
+                mobY[idx] = Element.SKULL_HOVER + 0.12f * (float) Math.sin(time * 2.6f + e.phase);
+                if (sees && mobSeen[idx] >= Element.SKULL_NOTICE && mobT[idx] >= Element.SKULL_REST) {
+                    float d = course.dsWrap(s, mobS[idx]), dir = d > 0.05f ? 1f : d < -0.05f ? -1f : mobDir[idx];
+                    float tgt = dS + dir * end;
+                    if (Math.abs(course.dsWrap(tgt, mobS[idx])) < 1.2f) { dir = -dir; tgt = dS + dir * end; }      // already at that end: go the other way
+                    mobDir[idx] = dir; mobTgt[idx] = course.wrap(tgt); mobState[idx] = 2; mobT[idx] = 0f;
+                }
+                break;
+            }
+            case 2: {
+                float k = smooth01(mobT[idx] / Element.SKULL_WINDUP);
+                mobY[idx] = Element.SKULL_HOVER + (Element.SKULL_LOW - Element.SKULL_HOVER) * k;
+                if (mobT[idx] >= Element.SKULL_WINDUP) { mobState[idx] = 3; mobT[idx] = 0f; events |= EV_DASH; }
+                break;
+            }
+            case 3: {
+                mobY[idx] = Element.SKULL_LOW;
+                float rem = course.dsWrap(mobTgt[idx], mobS[idx]) * mobDir[idx], stp = Element.SKULL_SPEED * DT;
+                if (rem <= stp) { mobS[idx] = mobTgt[idx]; mobState[idx] = 4; mobT[idx] = 0f; }
+                else mobS[idx] = course.wrap(mobS[idx] + mobDir[idx] * stp);
+                float cy = dY + mobY[idx], dx = course.dsWrap(s, mobS[idx]);
+                if (shoveCd <= 0f && invuln <= 0f && Math.abs(dx) < Element.SKULL_R + hw && cy - Element.SKULL_R < y + T.height && cy + Element.SKULL_R > y + 0.05f && (mode == Mode.GROUND || mode == Mode.AIR)) {
+                    vx = mobDir[idx] * Element.SKULL_LAUNCH_X; vy = Math.max(vy, Element.SKULL_LAUNCH_Y); mode = Mode.AIR; onElem = -1; coyote = 0f; lockout = 0.35f; jumpedUp = false; shoveCd = 0.9f;
+                    events |= EV_SHOVE | EV_LAUNCH;
+                }
+                break;
+            }
+            default: {
+                float k = smooth01(mobT[idx] / Element.SKULL_TURN);
+                mobY[idx] = Element.SKULL_LOW + (Element.SKULL_HOVER - Element.SKULL_LOW) * k;
+                if (mobT[idx] >= Element.SKULL_TURN) { mobDir[idx] = -mobDir[idx]; mobState[idx] = 1; mobT[idx] = 0f; }
+                break;
+            }
+        }
+    }
+    /** The skull's live arc / height above its deck / heading (for the renderer and the planner's reflex); state 3 = dashing. */
+    public boolean skullDashing(int hi) { return hi < mobState.length && mobState[hi] == 3; }
+
+    /**
+     * Green blob: 1 sits; once you have been on its deck BLOB_NOTICE and it has rested, 2 wobbles (BLOB_WOBBLE), 3 leaps BLOB_APEX up off the screen and falls back over
+     * BLOB_AIR; BLOB_SHADOW before it lands it picks its spot - where you are (kept on its deck), or, if you stand on a tipping bridge, the far end from you - and its
+     * shadow shows there; 4 it lands and rests. Landing on you squashes you flat and bounces you away; landing on the far end of the bridge you stand on launches you
+     * BLOB_LAUNCH times the jump speed (three times the jump height). Pure sim state: deterministic.
+     */
+    private void stepBlob(Element e, int idx, float hw) {
+        if (idx >= mobState.length) return;
+        Element deck = deckOf(e); int a = e.anchor;
+        float dS = deck != null ? es1[a] : e.s, half = deck != null ? deck.halfW() : Math.max(2f, e.w * 0.5f), dY = deck != null ? deck.y : e.y;
+        boolean saw = deck != null && deck.type == Element.Type.SEESAW;
+        float end = Math.max(0.4f, half - Element.BLOB_END);
+        if (mobState[idx] == 0) { mobState[idx] = 1; mobS[idx] = course.wrap(e.s); mobT[idx] = Element.BLOB_REST; mobDir[idx] = 0f; }
+        boolean sees = onDeck(dS, half, dY);
+        mobSeen[idx] = sees ? mobSeen[idx] + DT : 0f;
+        float t0 = mobT[idx]; mobT[idx] += DT;
+        switch (mobState[idx]) {
+            case 1:
+                mobY[idx] = 0f;
+                if (sees && mobSeen[idx] >= Element.BLOB_NOTICE && mobT[idx] >= Element.BLOB_REST) { mobState[idx] = 2; mobT[idx] = 0f; }
+                break;
+            case 2:
+                mobY[idx] = 0f;
+                if (mobT[idx] >= Element.BLOB_WOBBLE) { mobState[idx] = 3; mobT[idx] = 0f; mobDir[idx] = 0f; events |= EV_BLOB_JUMP; }
+                break;
+            case 3: {
+                mobY[idx] = Element.blobLeapY(Math.min(1f, mobT[idx] / Element.BLOB_AIR));
+                float lockAt = Element.BLOB_AIR - Element.BLOB_SHADOW;
+                if (t0 < lockAt && mobT[idx] >= lockAt) {              // it picks its spot now; its shadow shows there from here on
+                    float x = course.dsWrap(s, dS);
+                    if (saw && mode == Mode.GROUND && onElem == a) { float side = x >= 0f ? 1f : -1f; mobTgt[idx] = course.wrap(dS - side * end); mobDir[idx] = side; }
+                    else { mobTgt[idx] = course.wrap(dS + Math.max(-end, Math.min(end, x))); mobDir[idx] = 0f; }
+                    mobS[idx] = mobTgt[idx];
+                }
+                if (mobT[idx] >= Element.BLOB_AIR) {
+                    mobY[idx] = 0f; mobState[idx] = 4; mobT[idx] = 0f; events |= EV_BLOB_LAND;
+                    blobLands(deck, a, dS, dY, saw, idx, hw);
+                }
+                break;
+            }
+            default:
+                mobY[idx] = 0f;
+                if (mobT[idx] >= Element.BLOB_REST) { mobState[idx] = 1; mobT[idx] = Element.BLOB_REST; }
+                break;
+        }
+    }
+    private void blobLands(Element deck, int a, float dS, float dY, boolean saw, int idx, float hw) {
+        float side = mobDir[idx];
+        if (saw && side != 0f && mode == Mode.GROUND && onElem == a && (course.dsWrap(s, dS) >= 0f ? 1f : -1f) == side) {     // the far end of the bridge you are on: up you go
+            vy = T.jumpVel * Element.BLOB_LAUNCH; mode = Mode.AIR; onElem = -1; coyote = 0f; jumpedUp = false; lockout = 0.2f;
+            tilt[a] = side * T.seesawMaxTilt;
+            events |= EV_LAUNCH;
+            return;
+        }
+        float surf = blobSurfaceY(idx, deck, a, dY), dx = course.dsWrap(s, mobS[idx]);
+        if (invuln <= 0f && Math.abs(dx) < Element.BLOB_R + hw && y < surf + 1.4f && y > surf - 0.6f && (mode == Mode.GROUND || mode == Mode.AIR)) {      // squashed flat, and bounced away
+            float push = dx > 0f ? 1f : dx < 0f ? -1f : -facing;
+            vx = push * Element.BLOB_PUSH_X; vy = Math.max(vy, Element.BLOB_PUSH_Y); mode = Mode.AIR; onElem = -1; coyote = 0f; lockout = 0.3f; jumpedUp = false; shoveCd = 0.9f;
+            squashT = 0.45f; events |= EV_SQUASH | EV_SHOVE;
+        }
+    }
+    /** Height of the deck surface under the blob (a tipping bridge's plank at the blob's own arc). */
+    public float blobSurfaceY(int idx, Element deck, int a, float dY) {
+        if (deck == null || deck.type != Element.Type.SEESAW || a < 0 || a >= tilt.length || idx >= mobS.length) return dY;
+        float hw = deck.halfW(), x = Math.max(-hw, Math.min(hw, course.dsWrap(mobS[idx], es1[a])));
+        return deck.y + tilt[a] * x;
+    }
+    /** Seconds left before the leaping blob lands, while its shadow shows (else -1): the renderer grows the shadow, the planner's reflex steps out of it. */
+    public float blobShadow(int hi) {
+        if (hi >= mobState.length || mobState[hi] != 3) return -1f;
+        float left = Element.BLOB_AIR - mobT[hi];
+        return left <= Element.BLOB_SHADOW ? left : -1f;
+    }
+
+    public static final float CLUB_SECONDS = 30f;      // Build 71 (owner): 30 seconds, with crabs and bees placed ahead to use it on (CourseGenerator.clubBoost)
 
     // ---------------------------------------------------------------- crabs (Build 63, owner: "once they see you, they should chase you")
     /** How far along its platform a crab sees you, and the height band above its deck it looks in (standing on its platform, or hopping over it). */
@@ -516,6 +709,8 @@ public final class Sim {
             int hi_ = hz == null ? k : hz[k];
             Element e = course.hazards.get(hi_);
             if (e.type == Element.Type.CLUB || e.type == Element.Type.CRAB || e.type == Element.Type.BEE) { stepClubCrab(e, hi_, hw); continue; }
+            if (e.type == Element.Type.SKULL) { stepSkull(e, hi_, hw); continue; }
+            if (e.type == Element.Type.BLOB) { stepBlob(e, hi_, hw); continue; }
             if (e.type != Element.Type.KEY && e.type != Element.Type.GATE) continue;
             if (e.type == Element.Type.GATE && !finishedRun && e.skin > 0 && e.skin == T.finishCastle && hi_ < featDone.length && featDone[hi_]
                     && Math.abs(course.dsWrap(s, e.s)) < 0.35f && hi < e.y + e.len && lo > e.y - 1f) { finishedRun = true; events |= EV_FINISH; }          // walked through the finish castle's open door
@@ -667,8 +862,15 @@ public final class Sim {
         if (saw) { float up = tilt[e] * Math.signum(target) / T.seesawMaxTilt; if (up > 0) target *= Math.max(0.2f, 1f - T.seesawUphill * up); }
         float a = (Math.abs(target) > 0.01f && Math.signum(target) == Math.signum(vx) || Math.abs(vx) < 0.01f) ? T.groundAccel : T.groundDecel;
         if (Math.abs(target) < 0.01f) a = T.groundDecel;
-        if (course.get(e).wet()) a *= T.wetGrip;            // a wet platform: low friction (jump, edges and everything else are unchanged)
+        boolean wet = course.get(e).wet();
+        if (wet) a *= T.wetGrip;            // a wet platform: low friction (jump, edges and everything else are unchanged)
         vx = approach(vx, target, a * dt);
+        if (wet) {                          // Build 71 (owner: "a goofy dance with no real chance of falling"): on ice your feet skid about - a lurch that comes and goes - and braking hard sets off a real slide
+            boolean braking = Math.abs(vx) > 1.6f && (Math.abs(target) < 0.01f || Math.signum(target) != Math.signum(vx));
+            vx += (float) Math.sin(time * T.wetLurchRate) * T.wetLurch * dt;
+            if (braking && slipCd <= 0f) { slipCd = 0.9f; vx *= T.wetSkid; events |= EV_SLIP; }
+        }
+        if (slipCd > 0f) slipCd = Math.max(0f, slipCd - dt);
         if (Math.abs(in.moveX) > 0.15f) facing = in.moveX > 0 ? 1 : -1;
         s += vx * dt;
         if (saw) s -= tilt[e] * T.seesawSlide * dt;       // the tipped plank slides you downhill whatever you do

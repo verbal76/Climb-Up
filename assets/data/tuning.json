@@ -5,6 +5,7 @@
   "coyote": 0.12, "jumpBuffer": 0.13,
   "halfWidth": 0.28, "height": 1.25, "handHeight": 1.15, "edgeOverhang": 0.2,
   "padBounce": 21.0, "padBounceHeld": 24.0,
+  "wetGrip": 0.08, "wetLurch": 2.2, "wetLurchRate": 5.3, "wetSkid": 1.12,
   "climbSpeed": 3.4, "ropeGrabRadius": 0.42, "cableShimmy": 3.6, "grabLockout": 0.28,
   "ledgeReachX": 0.4, "ledgeReachBelow": 0.9, "ledgeReachAbove": 0.15, "pullUpTime": 0.32,
   "crumbleDelay": 0.7, "crumbleRespawn": 3.4,

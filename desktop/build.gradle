@@ -132,3 +132,13 @@ tasks.register('linuxJar', Jar) {
     }) { exclude 'META-INF/*.SF', 'META-INF/*.RSA', 'META-INF/*.DSA', 'module-info.class', 'META-INF/versions/**/module-info.class'
          exclude '**/*.dll', '**/*.dylib', '**/windows/**', '**/macos/**', '**/macosx/**' }
 }
+
+// Build 71: the skull, the green blob and the homing bee through the real renderer while the autopilot plays their decks. Locally: xvfb-run -a -s "-screen 0 320x240x24" ./gradlew :desktop:creatureShot
+tasks.register('creatureShot', JavaExec) {
+    group = 'verification'
+    description = 'Screenshots the Build 71 creatures (skull, green blob, bee) in play to desktop/build/creatureshot/ (see CreatureShot).'
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.hotatticgames.climbup.desktop.CreatureShot'
+    workingDir = file('../assets')
+    systemProperties System.properties.findAll { it.key.toString().startsWith('climb.') }
+}

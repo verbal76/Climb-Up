@@ -32,7 +32,11 @@ public final class RunSnapshot {
     public long[] eKey = new long[0];
     public float[] eCrumble = new float[0], eGoneT = new float[0], eTilt = new float[0], eOnT = new float[0];
     public boolean[] eGone = new boolean[0];
-    public long[] doneKeys = new long[0];      // features done (keys taken, gates opened, crabs knocked off)
+    public long[] doneKeys = new long[0];
+    // Build 71: hazards that are mid-move (cannon aim, crabs, bees, skulls, blobs), Sim.HAZ_STATE floats each, and the ice skid cooldown. Optional: older files have none, and those hazards start fresh.
+    public long[] hKey = new long[0];
+    public float[] hState = new float[0];
+    public float slipCd;      // features done (keys taken, gates opened, crabs knocked off)
 
     public RunSnapshot() {}
 
@@ -63,11 +67,27 @@ public final class RunSnapshot {
             r.eKey[k] = tower.elemKeyAt(i); r.eCrumble[k] = sim.crumbleT[i]; r.eGoneT[k] = sim.goneT[i]; r.eTilt[k] = sim.tilt[i]; r.eOnT[k] = sim.onT[i]; r.eGone[k] = sim.gone[i];
             k++;
         }
+        r.slipCd = sim.slipCd;
+        java.util.ArrayList<Long> hk = new java.util.ArrayList<>(); java.util.ArrayList<float[]> hv = new java.util.ArrayList<>();
+        sim.ensureCapacity();
+        for (int i = 0; i < sim.course.hazards.size(); i++) {
+            float[] v = sim.hazardState(i); long key = tower.hazKeyAt(i);
+            if (key < 0 || pristine(v)) continue;
+            hk.add(key); hv.add(v);
+        }
+        r.hKey = new long[hk.size()]; r.hState = new float[hk.size() * Sim.HAZ_STATE];
+        for (int i = 0; i < hk.size(); i++) { r.hKey[i] = hk.get(i); System.arraycopy(hv.get(i), 0, r.hState, i * Sim.HAZ_STATE, Sim.HAZ_STATE); }
         java.util.List<Long> done = tower.doneKeys(sim);
         r.doneKeys = new long[done.size()]; for (int i = 0; i < r.doneKeys.length; i++) r.doneKeys[i] = done.get(i);
         r.maxSlice = Math.max(tower.sliceAtAbs(r.absY), r.cpSlice);
         for (long key : r.eKey) r.maxSlice = Math.max(r.maxSlice, (int) (key >> 16));
         return r.valid() ? r : null;
+    }
+
+    /** A hazard still in its never-touched state (what a fresh Sim gives it), so it needs no record. */
+    private static boolean pristine(float[] v) {
+        for (int k = 0; k < v.length; k++) if (k == 1 ? v[k] != -1e9f : v[k] != 0f) return false;
+        return true;
     }
 
     private static boolean resting(Sim sim, int i) {
@@ -88,6 +108,8 @@ public final class RunSnapshot {
         int n = eKey.length;
         if (eCrumble.length != n || eGoneT.length != n || eTilt.length != n || eOnT.length != n || eGone.length != n) return false;
         for (int i = 0; i < n; i++) if (!fin(eCrumble[i], eGoneT[i], eTilt[i], eOnT[i])) return false;
+        if (hKey == null || hState == null || hState.length != hKey.length * Sim.HAZ_STATE || !fin(slipCd)) return false;
+        for (float f : hState) if (!fin(f)) return false;
         return true;
     }
 
@@ -135,6 +157,11 @@ public final class RunSnapshot {
             int w = tower.indexOfElemKey(eKey[i]);
             if (w < 0) continue;
             sim.crumbleT[w] = eCrumble[i]; sim.gone[w] = eGone[i]; sim.goneT[w] = eGoneT[i]; sim.tilt[w] = eTilt[i]; sim.onT[w] = eOnT[i];
+        }
+        sim.slipCd = slipCd;
+        for (int i = 0; i < hKey.length; i++) {
+            int w = tower.indexOfHazKey(hKey[i]);
+            if (w >= 0) sim.setHazardState(w, java.util.Arrays.copyOfRange(hState, i * Sim.HAZ_STATE, (i + 1) * Sim.HAZ_STATE));
         }
         tower.addDone(doneKeys);
         tower.applyDone(sim);

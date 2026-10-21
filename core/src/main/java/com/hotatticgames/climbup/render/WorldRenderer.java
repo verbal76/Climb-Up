@@ -458,8 +458,13 @@ public final class WorldRenderer implements Disposable {
         float zoneF = Math.min(Palette.ZONES - 0.001f, ((zf % Palette.ZONES) + Palette.ZONES) % Palette.ZONES);        // the five worlds repeat for ever
         Palette.blend(Palette.SKY_TOP, zoneF, skyTop); Palette.blend(Palette.SKY_BOT, zoneF, skyBot);
         Palette.blend(Palette.TINT, zoneF, tint); Palette.blend(Palette.AMBIENT, zoneF, amb);
+        float gold = goldenHour(zoneF);            // Build 71 (owner): castle 1 to castle 2 is a late-afternoon Meadow, not just more of the start
+        if (gold > 0f) {
+            skyTop.lerp(0.40f, 0.52f, 0.86f, 1f, gold); skyBot.lerp(1.00f, 0.80f, 0.56f, 1f, gold);
+            tint.lerp(1.00f, 0.93f, 0.82f, 1f, gold); amb.lerp(0.66f, 0.58f, 0.52f, 1f, gold);
+        }
         ((ColorAttribute) env.get(ColorAttribute.AmbientLight)).color.set(amb);
-        Palette.blend(Palette.SUN, zoneF, lc); sun.color.set(lc); Palette.blendDir(Palette.SUN_DIR, zoneF, lv); sun.direction.set(lv);
+        Palette.blend(Palette.SUN, zoneF, lc); if (gold > 0f) lc.lerp(1.00f, 0.78f, 0.52f, 1f, gold); sun.color.set(lc); Palette.blendDir(Palette.SUN_DIR, zoneF, lv); if (gold > 0f) lv.lerp(GOLD_SUN, gold).nor(); sun.direction.set(lv);
         Palette.blend(Palette.FILL, zoneF, lc); fillL.color.set(lc);
         Palette.blend(Palette.BOUNCE, zoneF, lc); bounceL.color.set(lc);
         // the hero gets his own three-point rig: a stronger key, a fill, the bounce, and a contrasting rim light from behind so his silhouette always separates from the background
@@ -644,7 +649,7 @@ public final class WorldRenderer implements Disposable {
             if (p.localZ != 0f) p.inst.transform.translate(0f, 0f, p.localZ);     // recentre an off-origin mesh along its own Z (applied before scale): see Part.localZ / the ramp
             batch.render(p.inst, env);
         }
-        if (e.wet()) drawRain(e, es, ey, camS, time);
+        if (e.wet()) drawRain(e, es, ey - (i < dip.length ? Math.max(-0.1f, Math.min(0.22f, dip[i])) : 0f), camS, time);      // Build 71 (owner): the puddle dips and springs back with its platform when you land
         if (e.type == Element.Type.MOVE_Z) drawDepthRail(e, es, ey, camS, sim.time);
         if (course.isCheckpoint(e) && i > 0 && e.type == Element.Type.STATIC) drawGem(sim, i, es, ey, camS, time);
         if (e.type == Element.Type.SWING) drawSwingRopes(e, es, ey, camS);
@@ -901,7 +906,7 @@ public final class WorldRenderer implements Disposable {
     }
 
     /** Animated pack creatures (crab walk cycle, bee flapping), one rig per element, created when first seen. */
-    private static final class Rig { ModelInstance inst; com.badlogic.gdx.graphics.g3d.utils.AnimationController ctrl; }
+    private static final class Rig { ModelInstance inst; com.badlogic.gdx.graphics.g3d.utils.AnimationController ctrl; String cur; }
     private final java.util.HashMap<Element, Rig> rigs = new java.util.HashMap<>();
     private float frameDt = 1f / 60f;
 
@@ -914,8 +919,9 @@ public final class WorldRenderer implements Disposable {
             r.ctrl = new com.badlogic.gdx.graphics.g3d.utils.AnimationController(r.inst);
             r.ctrl.animate(anim, -1, 1f, null, 0f);
             r.ctrl.update(MathUtils.random(2f));         // desynchronise the cycles
+            r.cur = anim;
             rigs.put(e, r);
-        }
+        } else if (!anim.equals(r.cur)) { r.ctrl.animate(anim, -1, 1f, null, 0.15f); r.cur = anim; }      // Build 71: creatures change clip with their state (the skull's dash, the blob's leap)
         return r;
     }
 
@@ -973,17 +979,40 @@ public final class WorldRenderer implements Disposable {
     /** A cannonball that has left the screen is not drawn: further than the widest view (21:9) reaches. (How many launches fly at once: Element.CANNON_TRAIL, shared with the simulation, which tests every one of them.) */
     private static final float CANNON_OFFSCREEN = 14f;
 
+    private final Color mistCol = new Color();
+    /**
+     * How golden the light is (0..1): the Meadow's second half, castle 1 (500 m, zone 0.5) to castle 2, eases into late afternoon over the 50 m before castle 1
+     * and hands over to the next world's own colours where the worlds already blend (the last fifth of a world). Only the first world has this second look.
+     */
+    private static final com.badlogic.gdx.math.Vector3 GOLD_SUN = new com.badlogic.gdx.math.Vector3(-0.85f, -0.45f, -0.55f).nor();      // a low afternoon sun
+    static float goldenHour(float zoneF) {
+        if (zoneF >= 1f) return 0f;
+        float in = MathUtils.clamp((zoneF - 0.45f) / 0.05f, 0f, 1f), out = 1f - MathUtils.clamp((zoneF - 0.8f) / 0.2f, 0f, 1f);
+        return in * in * (3f - 2f * in) * out;
+    }
+    /** The skull's turn toward the camera (degrees from facing along its way) and where its eyes sit on its face; tuned on CreatureShot captures. */
+    private static final float SKULL_YAW = Float.parseFloat(System.getProperty("climb.skullYaw", "160")), SKULL_EYE_GAP = Float.parseFloat(System.getProperty("climb.skullEyeGap", "0.13")),
+            SKULL_EYE_Z = Float.parseFloat(System.getProperty("climb.skullEyeZ", "-0.5")), SKULL_EYE_UP = Float.parseFloat(System.getProperty("climb.skullEyeUp", "0.05")), SKULL_EYE_FWD = Float.parseFloat(System.getProperty("climb.skullEyeFwd", "0.62"));
     private Sim rsim; private int rhz;            // the simulation and hazard index being drawn (aimed cannons draw the sim's own aim, crabs where the sim has them)
 
+    /** Build 71 (owner): how far the platform a trap sits on has dipped from a landing (the same spring the platform is drawn with); traps on it move with it. */
+    private float anchorDip(Element h) {
+        int a = h.anchor;
+        if (a < 0 || a >= dip.length || a >= course.size() || !course.get(a).isPlatform()) return 0f;
+        if (Math.abs(course.dsWrap(h.s, course.get(a).s)) > course.get(a).halfW() + 0.3f) return 0f;      // a saw or spike block in the gap beside the platform stays put
+        return Math.max(-0.1f, Math.min(0.22f, dip[a]));
+    }
+
     private void drawHazard(Element h, float t, float camS, float time, boolean done) {
+        float dipY = h.ridesAnchor() || h.type == Element.Type.BLOB ? anchorDip(h) : 0f;
         float cs = h.type == Element.Type.CANNON ? h.s + h.dir * h.len * 0.5f : h.s;
-        float half = h.type == Element.Type.AIMED ? 17f : h.type == Element.Type.CANNON ? h.len * 0.5f + 1.5f + CANNON_OFFSCREEN : (h.type == Element.Type.SAW_H ? h.amp + 1.5f : 2f);
+        float half = h.type == Element.Type.AIMED ? 17f : h.type == Element.Type.CANNON ? h.len * 0.5f + 1.5f + CANNON_OFFSCREEN : (h.type == Element.Type.SAW_H ? h.amp + 1.5f : h.type == Element.Type.SKULL || h.type == Element.Type.BLOB ? h.w * 0.5f + 1.5f : 2f);
         float cy = h.type == Element.Type.SAW_V ? h.y + h.amp * 0.5f : h.y;
         if (!visible(cs, cy, camS, half)) return;
         switch (h.type) {
             case SAW_H: {
-                drawBox(h.s, h.y - 0.05f, 0.25f, camS, h.amp * 2f + 1.2f, 0.1f, 0.14f, 0.3f, 0.32f, 0.4f);
-                drawPack("hazard_saw", h.sAt(t), h.yAt(t), 0.25f, camS, PK, PK, PK, 0f, -time * 600f);
+                drawBox(h.s, h.y - 0.05f - dipY, 0.25f, camS, h.amp * 2f + 1.2f, 0.1f, 0.14f, 0.3f, 0.32f, 0.4f);
+                drawPack("hazard_saw", h.sAt(t), h.yAt(t) - dipY, 0.25f, camS, PK, PK, PK, 0f, -time * 600f);
                 break;
             }
             case SAW_V: {
@@ -1081,7 +1110,7 @@ public final class WorldRenderer implements Disposable {
                 break;
             }
             case SPIKE_TRAP: {
-                float hcs = rsim != null ? rsim.hazCarryS(h) : 0f, hcy = rsim != null ? rsim.hazCarryY(h) : 0f;   // ride the platform (0 unless it is a mover) so the pad stays with its block
+                float hcs = rsim != null ? rsim.hazCarryS(h) : 0f, hcy = (rsim != null ? rsim.hazCarryY(h) : 0f) - dipY;   // ride the platform (0 unless it is a mover) so the pad stays with its block, and its landing dip
                 float sp = h.spikeHeight(t);
                 drawBox(h.s + hcs, h.y + hcy + SPIKE_MAT_BOTTOM, 0f, camS, h.w + 0.3f, SPIKE_MAT_TOP - SPIKE_MAT_BOTTOM, 1.5f, 0.55f, 0.2f, 0.18f);
                 if (sp > 0.02f) {
@@ -1125,13 +1154,61 @@ public final class WorldRenderer implements Disposable {
                 float crabX = rsim != null ? rsim.crabAt(rhz, h) : h.sAt(t);
                 float face = rsim != null ? rsim.crabFacing(rhz, h) : (h.amp * (float) Math.cos(2 * Math.PI * t / h.period + h.phase) >= 0f ? 1f : -1f);
                 boolean chasing = rsim != null && rsim.crabChasing(rhz);
-                drawRig(rig(h, "crab_anim", "Walk"), crabX, h.y, 0f, camS, 0.34f, face >= 0f ? 90f : -90f, 0f, chasing ? 2.4f : 1.6f);
+                drawRig(rig(h, "crab_anim", "Walk"), crabX, h.y - dipY, 0f, camS, 0.34f, face >= 0f ? 90f : -90f, 0f, chasing ? 2.4f : 1.6f);
                 break;
             }
             case BEE: {
                 if (done || !h.beePresent(t)) break;
                 float bs = h.beeS(t), by = h.beeY(t), vel = h.beeS(t + 0.05f) - bs;
+                if (rsim != null) { float[] b = rsim.beeAt(rhz, h, false); vel = b[0] - bs + vel; bs = b[0]; by = b[1]; }     // Build 71: where the simulation has it (homing on you, swooping in its dive)
                 drawRig(rig(h, "bee_anim", "Flying"), bs, by, 0f, camS, 0.36f, vel >= 0 ? 70f : -70f, MathUtils.clamp(vel * 120f, -25f, 25f) * (vel >= 0 ? -1f : 1f), 1f);
+                break;
+            }
+            case SKULL: {
+                // Build 71: a floating skull with glowing eyes. It bobs at the hover height, drops low and shivers before a dash, streaks along its deck leaving mist, rises and turns round.
+                Element deck = h.anchor >= 0 && h.anchor < course.size() ? course.get(h.anchor) : null;
+                float dY = deck != null ? deck.y : h.y, end = h.w * 0.5f - Element.SKULL_END;
+                int st = rsim != null && rhz < rsim.mobState.length ? rsim.mobState[rhz] : 1;
+                float ks = rsim != null && st > 0 ? rsim.mobS[rhz] : h.s + end, ky = dY + (rsim != null && st > 0 ? rsim.mobY[rhz] : Element.SKULL_HOVER + 0.12f * MathUtils.sin(time * 2.6f + h.phase));
+                float dir = rsim != null && st > 0 ? rsim.mobDir[rhz] : -1f;
+                if (st == 2 && !reducedMotion) ks += 0.04f * MathUtils.sin(time * 70f);                 // it shivers as it winds up
+                float sc = 0.6f, yaw = (dir >= 0f ? -1f : 1f) * SKULL_YAW;                              // its face mostly toward you, a little toward where it is going, so both eyes show
+                drawRig(rig(h, "skull_anim", st == 3 ? "Bite_Front" : "Idle"), ks, ky - 0.62f * sc, 0f, camS, sc, yaw, st == 3 ? -dir * 12f : 0f, st == 3 ? 2f : 1f);
+                float glow = st == 2 || st == 3 ? 1f : 0.65f + 0.2f * MathUtils.sin(time * 4f);
+                for (int e = -1; e <= 1; e += 2) {                                                       // the eyes: two glowing sockets with dark pupils on the face (which looks at you)
+                    float es = ks + dir * SKULL_EYE_FWD + e * SKULL_EYE_GAP, ez = SKULL_EYE_Z, ew = 0.14f;
+                    drawBox(es, ky + SKULL_EYE_UP, ez, camS, ew, ew, 0.04f, 1f, 0.35f + 0.4f * glow, 0.1f);
+                    drawBox(es + dir * 0.025f, ky + SKULL_EYE_UP + 0.035f, ez - 0.03f, camS, ew * 0.45f, ew * 0.45f, 0.03f, 0.05f, 0.08f, 0.1f);
+                }
+                if (st == 3 || (st == 2 && rsim != null && rsim.mobT[rhz] > Element.SKULL_WINDUP * 0.6f)) {     // the misty trail
+                    for (int q = 0; q < 3; q++) { mistCol.set(0.82f, 0.9f, 1f, 0.55f); particles.spawn(ks - dir * MathUtils.random(0.2f, 0.6f), ky + MathUtils.random(-0.3f, 0.3f), -dir * MathUtils.random(0.2f, 0.8f), MathUtils.random(0.1f, 0.5f), mistCol, MathUtils.random(0.12f, 0.22f), -0.3f, MathUtils.random(0.45f, 0.8f)); }
+                }
+                break;
+            }
+            case BLOB: {
+                // Build 71: the green blob. It wobbles, leaps off the top of the screen, and drops: only its growing shadow shows where, in the last BLOB_SHADOW seconds.
+                Element deck = h.anchor >= 0 && h.anchor < course.size() ? course.get(h.anchor) : null;
+                float dY = deck != null ? deck.y : h.y;
+                int st = rsim != null && rhz < rsim.mobState.length ? rsim.mobState[rhz] : 1;
+                float bs = rsim != null && st > 0 ? rsim.mobS[rhz] : h.s;
+                float surf = (rsim != null ? rsim.blobSurfaceY(rhz, deck, h.anchor, dY) : dY) - dipY;
+                float lift = rsim != null && st > 0 ? rsim.mobY[rhz] : 0f;
+                float sx = 1f, sy = 1f;
+                if (st == 2 && !reducedMotion) { float w = MathUtils.sin(time * 26f) * 0.13f; sx = 1f + w; sy = 1f - w; }          // the wobble before the leap
+                if (st == 4 && rsim != null && rsim.mobT[rhz] < 0.25f) { float k = 1f - rsim.mobT[rhz] / 0.25f; sx = 1f + 0.3f * k; sy = 1f - 0.35f * k; }   // splat on landing
+                float shadow = rsim != null ? rsim.blobShadow(rhz) : -1f;
+                if (shadow >= 0f) {
+                    float tgt = rsim.mobTgt[rhz], k = 1f - shadow / Element.BLOB_SHADOW, sw = 0.5f + 0.9f * k;
+                    float ty = rsim.blobSurfaceY(rhz, deck, h.anchor, dY);
+                    drawPuddle(0, tgt, ty + SHADOW_LIFT, 0f, camS, sw, SHADOW_THICK, sw * 0.8f, 0.06f, 0.07f, 0.09f);
+                }
+                float sc = 0.6f, face = rsim != null && course.dsWrap(rsim.s, bs) < 0f ? -1f : 1f;
+                Rig r = rig(h, "blob_anim", st == 3 ? "Jump" : "Idle");
+                r.ctrl.update(frameDt);
+                float phi = wrapDiff(bs, camS) / T.radius;
+                r.inst.transform.idt().translate(T.radius * MathUtils.sin(phi), surf + lift, -T.radius + T.radius * MathUtils.cos(phi))
+                        .rotate(0, 1, 0, phi * MathUtils.radiansToDegrees + (face >= 0f ? 40f : -40f)).scale(sc * sx, sc * sy, sc * sx);
+                batch.render(r.inst, env);
                 break;
             }
             case CLUB: {
@@ -1141,7 +1218,7 @@ public final class WorldRenderer implements Disposable {
                 break;
             }
             case SPIKE_DROP: {
-                float hcs = rsim != null ? rsim.hazCarryS(h) : 0f, hcy = rsim != null ? rsim.hazCarryY(h) : 0f;   // the drop frame rides its platform when it is a mover (bug #14)
+                float hcs = rsim != null ? rsim.hazCarryS(h) : 0f, hcy = (rsim != null ? rsim.hazCarryY(h) : 0f) - dipY;   // the drop frame rides its platform when it is a mover (bug #14), and its landing dip
                 float b = h.dropBottom(t), top = h.y + h.amp + Element.DROP_H;
                 drawBox(h.s + hcs - h.w * 0.5f - 0.1f, h.y + hcy, 0.2f, camS, 0.1f, h.amp + Element.DROP_H + 0.6f, 0.14f, 0.3f, 0.32f, 0.4f);
                 drawBox(h.s + hcs + h.w * 0.5f + 0.1f, h.y + hcy, 0.2f, camS, 0.1f, h.amp + Element.DROP_H + 0.6f, 0.14f, 0.3f, 0.32f, 0.4f);
@@ -1151,7 +1228,7 @@ public final class WorldRenderer implements Disposable {
                 break;
             }
             case SPIKE_BLOCK: {
-                float hcs = rsim != null ? rsim.hazCarryS(h) : 0f, hcy = rsim != null ? rsim.hazCarryY(h) : 0f;   // the red spike block rides its platform when it is a mover (bug #14)
+                float hcs = rsim != null ? rsim.hazCarryS(h) : 0f, hcy = (rsim != null ? rsim.hazCarryY(h) : 0f) - dipY;   // the red spike block rides its platform when it is a mover (bug #14), and its landing dip
                 float base = Math.min(0.5f, h.len * 0.5f), sh = Math.max(0.3f, h.len - base);
                 drawBox(h.s + hcs, h.y + hcy, 0f, camS, h.w, base, 1.3f, 0.42f, 0.38f, 0.5f);
                 drawPack("spikes", h.s + hcs, h.y + hcy + base, 0f, camS, h.w * 0.46f, sh / 3.4f, h.w * 0.46f, 0f, 0f);

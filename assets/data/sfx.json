@@ -101,5 +101,9 @@
   ],
   "fall": [
     "fall"
+  ],
+  "slip": [
+    "parry2",
+    "parry3"
   ]
 }

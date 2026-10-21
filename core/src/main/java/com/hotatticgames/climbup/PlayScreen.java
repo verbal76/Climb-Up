@@ -287,7 +287,7 @@ public final class PlayScreen extends ScreenAdapter {
             float speed = g.settings.assistSlow ? g.tuning.assistSlowFactor : 1f;
             if (hitstop > 0) hitstop -= dt; else acc += dt * speed;
             if (tower != null) {
-                try { tower.openedUpTo = g.save.openedUpTo; tower.ensureAbove(maxAbs, 75f); tower.maintain(sim); }
+                try { tower.openedUpTo = g.save.openedUpTo; tower.ensureAbove(maxAbs, BUILD_AHEAD); tower.maintain(sim); }
                 catch (RuntimeException ex) {          // the next stretch of tower could not be built (never expected): keep the run as a stamped record and go back to the title instead of crashing
                     Gdx.app.error("climb", "tower generation failed", ex);
                     if (g.save.seed != 0) Legacy.archive(g.save, Legacy.today());
@@ -390,6 +390,10 @@ public final class PlayScreen extends ScreenAdapter {
     private void say(String s) { if (g.settings.captions) { caption = s; captionT = 1.4f; } }
 
     private final Color red = new Color(1f, 0.3f, 0.25f, 1f), dust = new Color(0.9f, 0.88f, 0.8f, 1f), gold = new Color(1f, 0.85f, 0.25f, 1f), brown = new Color(0.55f, 0.4f, 0.28f, 1f), cyan = new Color(0.4f, 0.9f, 1f, 1f);
+    /** Metres of tower kept built above the highest point reached. Slices are made (and every link proven) on a background thread; Build 71's
+     *  denser content costs ~4 s a slice on average and ~19 s at worst on a desktop core, so this keeps two slices in hand (was 75 m, one slice). */
+    static final float BUILD_AHEAD = 150f;
+    private static final Color SQUASH_GREEN = new Color(0.45f, 0.95f, 0.35f, 1f);
 
     /** A castle was opened: record the split (time since the previous unlock) and the total, keep the personal bests, start timing the next tower. */
     private void towerUnlocked() {
@@ -505,7 +509,14 @@ public final class PlayScreen extends ScreenAdapter {
             toast = g.platform.tip("SPIKED CLUB! TAP SWING TO KNOCK CRABS AND BEES OFF"); toastT = 3f; say("[CLUB]");
         }
         if ((ev & Sim.EV_SWING) != 0) { g.audio.play("swing", 0.8f, 0.95f + MathUtils.random(0.1f)); vibrate(10, 2); }
-        if ((ev & Sim.EV_SHOVE) != 0) { g.audio.play("bonk", 0.9f, 0.9f + MathUtils.random(0.2f)); world.shake(0.4f); freeze(0.05f); vibrate(25, 1); pop("OOF!", Color.WHITE); say("[BONK]"); }
+        if ((ev & Sim.EV_SHOVE) != 0 && (ev & (Sim.EV_SQUASH | Sim.EV_LAUNCH)) == 0) { g.audio.play("bonk", 0.9f, 0.9f + MathUtils.random(0.2f)); world.shake(0.4f); freeze(0.05f); vibrate(25, 1); pop("OOF!", Color.WHITE); say("[BONK]"); }
+        // Build 71 creatures: the skull's dash, the blob's leap and landing, being squashed, being launched
+        if ((ev & Sim.EV_SLIP) != 0) { g.audio.play("slip", 1f, 1.45f + MathUtils.random(0.2f)); pop("WHOA!", Color.WHITE); say("[SQUEAK]"); vibrate(15, 2); }      // a squeaky-shoe skid on ice (sfx.json "slip")
+        if ((ev & Sim.EV_DASH) != 0) { g.audio.play("swing", 0.85f, 0.7f); say("[WHOOSH]"); }
+        if ((ev & Sim.EV_BLOB_JUMP) != 0) { g.audio.play("jump", 0.9f, 0.6f); say("[BOING]"); }
+        if ((ev & Sim.EV_BLOB_LAND) != 0) { g.audio.play("land", 1f, 0.55f); world.shake(0.25f); say("[THUD]"); }
+        if ((ev & Sim.EV_SQUASH) != 0) { g.audio.play("bonk", 1f, 0.6f); world.shake(0.6f); freeze(0.08f); vibrate(45, 1); pop("SQUASH!", SQUASH_GREEN); say("[SQUASH]"); }
+        if ((ev & Sim.EV_LAUNCH) != 0) { g.audio.play("bounce", 1f, 0.8f); world.shake(0.5f); freeze(0.05f); vibrate(35, 1); pop("WHOOSH!", Color.WHITE); say("[LAUNCHED]"); }
         if ((ev & Sim.EV_CRAB_OFF) != 0) {
             g.audio.play("squeak", 0.9f, 0.9f + MathUtils.random(0.3f)); world.crabFlung(sim.crabS, sim.crabY, sim.facing, sim.knockedBee); freeze(0.07f); world.shake(0.4f); vibrate(30, 1);
             pop("BONK!", gold); world.particles.burst(sim.crabS, sim.crabY + 0.4f, 12, red, 3.5f, 3.5f, 0.12f, 6f, 0.6f);
@@ -700,11 +711,13 @@ public final class PlayScreen extends ScreenAdapter {
             ui.marker(com.hotatticgames.climbup.render.KeyColors.shape(c), kx0 + ks * 2.3f, ky0 + ks * 0.5f, ks * 0.72f, kc);      // the colour's shape, so the key reads without its colour
             kx0 += ks * 2.95f + 10;
         }
-        if (sim.clubTime > 0f) {                                       // club timer
-            float cw = 150 * zk, cx0 = m, cy0 = ky0 - 34 * zk;
-            ui.rect(cx0 - 3, cy0 - 3, cw + 6, 24 * zk + 6, new Color(0.05f, 0.07f, 0.14f, 0.7f));
-            ui.rect(cx0, cy0, cw * sim.clubTime / Sim.CLUB_SECONDS, 24 * zk, new Color(0.35f, 0.6f, 1f, 1f));
-            ui.text("CLUB", cx0 + 8, cy0 + 4 * zk, 2.6f * zk, Ui.TEXT);
+        if (sim.clubTime > 0f) {                                       // club countdown (Build 71, owner: show when it will disappear): a draining bar with the seconds left, flashing in the last five
+            float cw = 230 * zk, ch = 34 * zk, cx0 = m, cy0 = ky0 - 48 * zk;
+            int secs = (int) Math.ceil(sim.clubTime);
+            boolean low = sim.clubTime < 5f, flash = low && !g.settings.reducedMotion && ((int) (sim.clubTime * 4f)) % 2 == 0;
+            ui.rect(cx0 - 3, cy0 - 3, cw + 6, ch + 6, new Color(0.05f, 0.07f, 0.14f, 0.75f));
+            ui.rect(cx0, cy0, cw * Math.min(1f, sim.clubTime / Sim.CLUB_SECONDS), ch, low ? (flash ? new Color(1f, 0.35f, 0.3f, 1f) : new Color(0.85f, 0.25f, 0.2f, 1f)) : new Color(0.35f, 0.6f, 1f, 1f));
+            ui.text("CLUB " + secs + "S", cx0 + 10, cy0 + 6 * zk, 3f * zk, Ui.TEXT);
         }
         // pause button: touch only (Build 67, owner: "we all know how to pause a game" - a keyboard, a pad and the phone's back key pause on their own; the desktop's corner plate is gone)
         if (g.platform.touchControls()) {

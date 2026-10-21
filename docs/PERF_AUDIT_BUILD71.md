@@ -195,4 +195,13 @@ time should be larger in absolute terms (slower string formatting on ART) but ha
 * The respawn present cost (P4) is unexplained on this software renderer.
 * "Single-speed virtual stick" and "sprint toggle" do not exist in Build 71 (see D); please clarify what they refer to.
 * Speedrun policy questions for the owner: the slow-speed assist and jump forgiveness are not recorded with times (E1).
-* Long session: see below.
+## Long session (stability)
+
+* **30-minute run** at 640x360, cap 60: 51,663 frames, a fall every 45 s, a restart every 10 min, 214 autosaves; it climbed to 500 m.
+  * 89 young GCs, 333 ms in total.
+  * No crash, no stuck state the game caused (the stuck-skips are the test autopilot's), no growth in frame times over the run.
+  * About 15 s of 1.3-1.4 s frames around t=1500 s were the **test autopilot** replanning (autopilot_ms of about 1,350 ms per frame), not game work.
+  * One 23.6 s stall at the first restart happened while this machine was also compiling and running tests in parallel. A clean repeat (12 minutes, 4 restarts, nothing else running) measured 1,233-1,291 ms per restart, max interval 1,361 ms, so it is attributed to the machine, not the game.
+* **Memory: no leak.** The harness's "heap after the last young GC" rose 27 → 72 MB, but that figure counts dead old-generation objects G1 had not yet collected.
+  * Full-GC class histograms of the clean repeat show the live set at **8.7 MB (2 min) → 9.8 MB (7 min) → 11.2 MB (12 min)**, across 4 restarts and 15 falls.
+  * All of the growth is `double[]`: the harness's own per-frame rows (2.65 MB, 16,986 rows). Nothing else grew by more than 25 KB.

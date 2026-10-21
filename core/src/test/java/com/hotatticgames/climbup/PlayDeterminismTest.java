@@ -18,7 +18,7 @@ import org.junit.Test;
  */
 public class PlayDeterminismTest {
     private static final long SEED = 7L;           // shares TestUtil's cached slices with OfficialWorldRulesTest
-    private static final float TOP = 2600f;        // through world 2 (skulls, the castle 1-2 drops) into world 3 (blobs)
+    private static final float TOP = 3200f;        // through world 2 (skulls, the castle 1-2 drops) well into world 3 (blobs)
 
     /** A hash of everything that decides what happens next: the hero, the events of this step and every simulated hazard (its packed state and where it is). */
     private static long stepHash(Sim s, int ev, long h) {

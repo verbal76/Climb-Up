@@ -878,7 +878,7 @@ public final class CourseGenerator {
         int from = n0 - 1;
         for (Element h : hz) if (h.type == Element.Type.CANNON && h.anchor == n0 - 1 && n0 >= 2) from = n0 - 2;          // a cannon fires across the platform the previous link LANDS on: that link must be proven with the cannon there too
         for (int i = from; i < c.size() - 1 && ok; i++) {
-            Sim sim = Sim.startOn(c, T, i);
+            Sim sim = Sim.startOn(c, T, i); quietStart(sim, i);
             Autopilot.Result res = Autopilot.plan(sim, i, true);
             boolean touched = false;
             for (Element h : hz) if (h.anchor == i || h.anchor + 1 == i || h.anchor == i + 1) touched = true;
@@ -886,7 +886,7 @@ public final class CourseGenerator {
             else if (touched && res.window < windowNeeded(c.get(i).y)) { ok = false; failWindow++; }
             else if (Autopilot.hasMidHazard(c, i)) {       // a person never stands on the exact spot the planner starts from: the move must work from nearby too
                 for (float dx : new float[]{-0.5f, 0.4f}) {
-                    Sim b = Sim.startOn(c, T, i); b.s = c.wrap(b.s + dx);
+                    Sim b = Sim.startOn(c, T, i); b.s = c.wrap(b.s + dx); quietStart(b, i);
                     if (!Autopilot.plan(b, i, false).ok) { ok = false; failPlan++; break; }
                 }
             }
@@ -895,6 +895,24 @@ public final class CourseGenerator {
         else if (!hz.isEmpty()) { hazardsPlaced += hz.size(); }
         hazardTried += hz.isEmpty() ? 0 : 1;
         return ok;
+    }
+
+    /**
+     * A standing start at a moment when standing there is safe. Proofs start at time 0; on a platform inside a cannon's reach (its balls fly 14 m past
+     * the lane, Build 63) a ball can be passing right there at time 0, so every trial was hit before it could move and a fair platform became a dead end
+     * (FramedGenerationTest, seed 21). A climber arrives at some moment and can wait for the gap, so the proof starts at the first quiet moment instead.
+     * Untouched when time 0 is already safe, or when the start platform itself moves.
+     */
+    private void quietStart(Sim sim, int i) {
+        if (sim.mode != Sim.Mode.GROUND || c.get(i).isMoving() || c.get(i).crumbles()) return;
+        float t0 = sim.time;
+        for (int k = 0; k < 60 && !quiet(sim); k++) { sim.time = t0 + 0.15f * (k + 1); sim.syncElements(); }
+        if (!quiet(sim)) { sim.time = t0; sim.syncElements(); }
+    }
+    private static boolean quiet(Sim sim) {
+        Sim d = sim.copy(); InputState in = new InputState();
+        for (int q = 0; q < 24; q++) { d.step(in); if ((d.consumeEvents() & (Sim.EV_HIT | Sim.EV_SHOVE)) != 0 || d.mode != Sim.Mode.GROUND) return false; }
+        return true;
     }
 
     private Kind pick(int zone, Element last) {
@@ -1079,11 +1097,13 @@ public final class CourseGenerator {
         if (n == 2 && lt > 0.2f && rnd.nextFloat() < lt * 0.55f) n = 3;          // Build 71: higher up, three guarded gaps in a row
         List<Element> es = new ArrayList<>();
         Element cur = last;
-        int base = c.size();
+        int base = c.size(), prevRoll = -1;
         for (int j = 0; j < n; j++) {
             float uR = cur.s + cur.w / 2f, dy = r(-0.3f, 0.6f);
             boolean cannonOk = cur.w >= 3f && cur.type == Element.Type.STATIC;
             int roll = wantCreature && j == 0 ? 3 : rnd.nextInt(cannonOk ? 5 : 4);
+            if ((roll == 1 && prevRoll == 3) || (roll == 3 && prevRoll == 1)) roll = 2;      // Build 71: the bee now homes in and bumps you, so it never sits next to a saw you must time (it cut the saw's window to 0.2 s; SawFairnessTest)
+            prevRoll = roll;
             if (roll == 1) dy = Math.min(dy, 0.1f);      // a saw never guards an uphill jump: the blade would sit higher than the take-off
             float g = Math.min(3.05f, Math.max(2.3f, reach(Math.max(0f, dy)) * lerp(0.68f, 0.90f, d) * r(0.95f, 1f) * (1f - 0.03f * attempt)));
             if (roll == 1) g = Math.min(g, 2.6f);      // a saw hangs in the gap: keep the gap well short of a full-length jump so there is room to time the arc over the blade

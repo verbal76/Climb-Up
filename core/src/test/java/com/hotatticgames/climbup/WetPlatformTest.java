@@ -69,7 +69,7 @@ public class WetPlatformTest {
             for (int i = 0; i < c.size(); i++) {
                 Element e = c.get(i);
                 if (!e.wet()) continue;
-                wet++; assertFalse("a wet platform is never a checkpoint", e.checkpoint); assertTrue("wide enough to stand on", e.w >= 4.5f);
+                wet++; assertFalse("a wet platform is never a checkpoint", e.checkpoint); assertTrue("wide enough to stand on (Build 71: tiny icy platforms from 2.4 m)", e.w >= 2.4f - 1e-3f);
                 if (e.zone != 1) wetOutsideFrost++;
             }
         }

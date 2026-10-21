@@ -44,7 +44,7 @@ public class MortarTest {
         assertEquals("no checkpoint teleport", 0, s.falls);
     }
 
-    @Test public void mortarRowsAreGeneratedStaggeredAndOnlyAfterTheFirstWorld() throws Exception {
+    @Test public void mortarRowsAreGeneratedOutOfSequenceAndOnlyAfterTheFirstWorld() throws Exception {
         Tuning t = TestUtil.tuning();
         int mortars = 0, rows = 0; float lowest = 1e9f;
         for (long seed = 160; seed < 170; seed++) {
@@ -53,7 +53,15 @@ public class MortarTest {
                 Course c = CourseGenerator.chunk(seed, k, prev, t); prev = c;
                 java.util.List<Element> row = new java.util.ArrayList<>();
                 for (Element h : c.hazards) if (h.type == Element.Type.MORTAR) { row.add(h); mortars++; lowest = Math.min(lowest, h.y); assertEquals("apex two heights above the path", h.y + 3f + 2f * t.height, h.y + h.amp, 0.01f); }
-                if (row.size() >= 5) { rows++; for (int i = 1; i < row.size(); i++) assertNotEquals("neighbouring mortars are out of step", row.get(i - 1).phase, row.get(i).phase, 0.2f); }
+                if (row.size() >= 5) {          // Build 71 (owner: "just no sequence"): each mortar keeps its own random phase and period, so a row is not a fixed stagger
+                    rows++;
+                    boolean evenStep = true, samePeriod = true;
+                    float step0 = row.get(1).phase - row.get(0).phase;
+                    for (int i = 2; i < row.size(); i++) if (Math.abs((row.get(i).phase - row.get(i - 1).phase) - step0) > 0.05f) evenStep = false;
+                    for (int i = 1; i < row.size(); i++) if (Math.abs(row.get(i).period - row.get(0).period) > 1e-4f) samePeriod = false;
+                    assertFalse("a mortar row fires in a fixed stagger", evenStep);
+                    assertFalse("every mortar in the row has the same period", samePeriod);
+                }
             }
         }
         assertTrue("rows were generated (" + mortars + " mortars, " + rows + " rows)", rows >= 1);

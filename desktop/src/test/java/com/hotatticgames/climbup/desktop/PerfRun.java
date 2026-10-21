@@ -16,7 +16,6 @@ import java.io.IOException;
 import java.io.PrintWriter;
 import java.lang.management.GarbageCollectorMXBean;
 import java.lang.management.ManagementFactory;
-import java.lang.management.MemoryPoolMXBean;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -116,10 +115,17 @@ public final class PerfRun implements ApplicationListener {
         if (clock >= SECONDS) { report(); Gdx.app.exit(); }
     }
 
+    /** Heap in use right after the most recent collection (all pools, from the collector's own GC info): the live set, a leak shows as a rising floor. */
     private static long oldGenAfterGc() {
-        long v = 0;
-        for (MemoryPoolMXBean p : ManagementFactory.getMemoryPoolMXBeans()) if (p.getCollectionUsage() != null && (p.getName().contains("Old") || p.getName().contains("Tenured"))) v += p.getCollectionUsage().getUsed();
-        return v;
+        long best = 0, when = -1;
+        for (java.lang.management.GarbageCollectorMXBean b : ManagementFactory.getGarbageCollectorMXBeans()) {
+            if (!(b instanceof com.sun.management.GarbageCollectorMXBean)) continue;
+            com.sun.management.GcInfo i = ((com.sun.management.GarbageCollectorMXBean) b).getLastGcInfo();
+            if (i == null || i.getEndTime() < when) continue;
+            long v = 0; for (java.lang.management.MemoryUsage u : i.getMemoryUsageAfterGc().values()) v += u.getUsed();
+            if (v > 0) { best = v; when = i.getEndTime(); }
+        }
+        return best;
     }
 
     private static double pct(double[] sorted, double q) { if (sorted.length == 0) return 0; int i = (int) Math.ceil(q * sorted.length) - 1; return sorted[Math.max(0, Math.min(sorted.length - 1, i))]; }

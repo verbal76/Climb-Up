@@ -163,5 +163,6 @@ tasks.register('perfRun', JavaExec) {
     mainClass = 'com.hotatticgames.climbup.desktop.PerfRun'
     workingDir = file('../assets')
     jvmArgs = ['-Xms256m', '-Xmx1024m', '-XX:+UseG1GC']      // the shipped desktop launchers' options (tools/linux/package.sh, tools/windows/package.ps1)
+    if (System.getProperty('perf.jfr')) jvmArgs += ["-XX:FlightRecorderOptions=stackdepth=512", "-XX:StartFlightRecording=settings=profile,filename=${System.getProperty('perf.jfr')}"]      // optional Flight Recorder profile (samples and allocation sites)
     systemProperties System.properties.findAll { it.key.toString().startsWith('climb.') || it.key.toString().startsWith('perf.') }
 }

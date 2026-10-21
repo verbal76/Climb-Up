@@ -46,4 +46,22 @@ public class ClockTextTest {
         assertEquals(ClockText.delta(-4.8f), PlayScreen.fmtDelta(-4.8f));
         assertEquals("1 DAY 00:00:00.0", PlayScreen.fmtTime(86400f));
     }
+
+    /** Build 71 audit: time() is built by hand instead of with String.format; it must print exactly what the String.format version printed. */
+    @Test public void theHandBuiltTextMatchesTheFormattedOneEverywhere() {
+        java.util.Random r = new java.util.Random(71);
+        for (int i = 0; i < 200_000; i++) {
+            float sec = i < 100_000 ? i * 0.1f : r.nextFloat() * (i % 3 == 0 ? 3600f : i % 3 == 1 ? 86400f : 40f * 86400f);
+            assertEquals("at " + sec + " s", formatted(sec), ClockText.time(sec));
+        }
+        for (float sec : new float[]{0f, -1f, 59.95f, 3599.99f, 3600f, 86399.99f, 86400f, 172800f, 429425.1f, 400f * 86400f, Float.MAX_VALUE, Float.NaN})
+            assertEquals("at " + sec + " s", formatted(sec), ClockText.time(sec));
+    }
+    private static String formatted(float sec) {         // the Build 66 implementation, kept here as the reference
+        long t = Math.max(0L, (long) (sec * 10f));
+        long tenth = t % 10, s = (t / 10) % 60, m = (t / 600) % 60, h = (t / 36000) % 24, d = t / 864000;
+        if (d > 0) return d + (d == 1 ? " DAY " : " DAYS ") + String.format(java.util.Locale.ROOT, "%02d:%02d:%02d.%d", h, m, s, tenth);
+        if (h > 0) return String.format(java.util.Locale.ROOT, "%d:%02d:%02d.%d", h, m, s, tenth);
+        return String.format(java.util.Locale.ROOT, "%d:%02d.%d", m, s, tenth);
+    }
 }

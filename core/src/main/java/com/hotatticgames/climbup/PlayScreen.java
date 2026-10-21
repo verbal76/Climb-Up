@@ -46,6 +46,8 @@ public final class PlayScreen extends ScreenAdapter {
             return "screen=play (snapshot failed: " + e + ")";
         }
     }
+    private final java.util.function.Supplier<String> crashSource = this::crashSnapshot;
+    private float crashLineT = 1f;
     private Sim sim;
     private WorldRenderer world;
     private final InputState in = new InputState();
@@ -272,7 +274,8 @@ public final class PlayScreen extends ScreenAdapter {
         if (PerfProbe.ON) { PerfProbe.tStart = System.nanoTime(); PerfProbe.steps = 0; PerfProbe.events = 0; PerfProbe.saved = false; PerfProbe.tDrive = 0; }
         dt = Math.min(dt, 0.1f);
         time += dt;
-        CrashContext.set(crashSnapshot());          // record game state each frame so a crash log says what we were doing
+        CrashContext.source(crashSource);            // a crash log asks this screen what we were doing (built only then)
+        if ((crashLineT += dt) >= 1f) { crashLineT = 0f; CrashContext.set(crashSnapshot()); }      // and a stored line about once a second, in case the live one cannot be built mid-crash
         if (OVERLAY != null && time > 0.8f && state == State.PLAYING) { if (OVERLAY.equals("pause")) pauseGame(); }
         if (pauseCd > 0f) pauseCd -= dt;
         if (gi() != null) {                                              // desktop: pause / resume from the keyboard or controller (the pause button and menus work through the mouse and the focus ring)
@@ -933,7 +936,7 @@ public final class PlayScreen extends ScreenAdapter {
     private void resumePlay() { if (gi() != null) gi().clear(); state = State.PLAYING; acc = 0; padLost = false; g.audio.play("click"); }
     public void resumeFromSettings() { applySettings(); }
 
-    @Override public void hide() { g.audio.fallStop(); g.persist(); }
+    @Override public void hide() { CrashContext.set(crashSnapshot()); CrashContext.source(null); g.audio.fallStop(); g.persist(); }      // the last play state stays as the crash line; the left screen is not kept alive by it
     @Override public void pause() { /* app backgrounded */ g.audio.fallStop(); if (state == State.PLAYING) { state = State.PAUSED; confirmRestart = confirmEnd = false; stickPtr = jumpPtr = -1; jumpHeldTouch = false; } g.persist(); saveRun(); g.audio.pauseMusic(); }
     @Override public void resume() { g.audio.resumeMusic(); }
 

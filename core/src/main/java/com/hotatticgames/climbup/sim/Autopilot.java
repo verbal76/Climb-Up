@@ -695,6 +695,7 @@ public final class Autopilot {
                 Result r = plan(s, a, false, true);
                 s.act = win0;
                 if (!r.ok) { failed = true; return; }
+                if (r.factory == null) return;          // the end of the route: nothing left to plan, stand still
                 p = make(r.factory);
             }
             p.act(s, in);

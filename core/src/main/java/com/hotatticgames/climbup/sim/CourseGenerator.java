@@ -377,14 +377,10 @@ public final class CourseGenerator {
 
     /** The halfway red gem: among the route platforms of this slice, the suitable one (a plain platform wide enough to stand and wait on) closest to the exact midpoint; if none is within 1.5 m a natural rest platform is added right where the climb crosses it. */
     private void chooseGem(int th) {
-        int best = bestGemCandidate(3.5f);
-        if (best < 0 || Math.abs(c.get(best).y - castleTarget) > 1.5f) {          // nothing roomy close by: an ordinary 3 m platform at the right height beats a rest added
-            int narrow = bestGemCandidate(3.0f);                                     // further up (when a rest has no room, addRest climbs first and the gem landed 5.4 m high; FramedGenerationTest, seed 21)
-            if (narrow >= 0 && Math.abs(c.get(narrow).y - castleTarget) <= 1.5f) best = narrow;
-        }
+        int best = bestGemCandidate();
         // none close enough: a natural rest platform is added right here (the climb is within GEM_LEAD of the midpoint), and again if it came out too narrow to stand and wait on
         for (int tries = 0; tries < 3 && (best < 0 || Math.abs(c.get(best).y - castleTarget) > 1.5f); tries++) {
-            addRest(th); int b2 = bestGemCandidate(3.5f);
+            addRest(th, true); int b2 = bestGemCandidate();
             if (b2 >= 0 && (best < 0 || Math.abs(c.get(b2).y - castleTarget) < Math.abs(c.get(best).y - castleTarget))) best = b2;
             if (b2 == c.size() - 1) break;          // the new rest is suitable
         }
@@ -393,11 +389,11 @@ public final class CourseGenerator {
     }
     /** How far below the exact midpoint the climb may still be when the red gem platform is chosen: a rest added then lands within about 4 m of the midpoint instead of up to a whole module above it. */
     private static final float GEM_LEAD = 4f;
-    private int bestGemCandidate(float minW) {
+    private int bestGemCandidate() {
         int best = -1; float dev = 1e9f;
         for (int i = Math.max(1, ctx); i < c.size(); i++) {          // this slice's own platforms: the context platforms belong to the previous slice, a gem marked on one would be lost
             Element e = c.get(i);
-            if (e.type != Element.Type.STATIC || e.skin != 0 || e.wet() || e.w < minW || e.anchor >= 0 || Autopilot.hasMidHazard(c, i)) continue;
+            if (e.type != Element.Type.STATIC || e.skin != 0 || e.wet() || e.w < 3.5f || e.anchor >= 0 || Autopilot.hasMidHazard(c, i)) continue;
             float d = Math.abs(e.y - castleTarget);
             if (d < dev) { dev = d; best = i; }
         }
@@ -742,13 +738,17 @@ public final class CourseGenerator {
 
     private List<Element> listOf(Element... es) { List<Element> l = new ArrayList<>(); for (Element e : es) l.add(e); return l; }
 
-    private void addRest(int zone) {
+    private void addRest(int zone) { addRest(zone, false); }
+
+    /** gem: the halfway red gem's rest - if there is no room for it a little higher, try level or a little lower before climbing (a climb first
+     *  can carry the gem a whole module past its height: 5.4 m on seed 21, where the official rule allows 4.5 m). */
+    private void addRest(int zone, boolean gem) {
         for (int round = 0; round < 4; round++) {
             Element last = c.get(c.size() - 1);
-            for (int attempt = 0; attempt < 8; attempt++) {
-                float dy = r(0.3f, 1.0f) * (1f - attempt * 0.08f);
-                float gap = reach(dy) * (0.5f - attempt * 0.03f);
-                float w = attempt < 4 ? 5 + rnd.nextInt(2) : (attempt < 6 ? 4 : 3);
+            for (int attempt = 0; attempt < (gem && round == 0 ? 14 : 8); attempt++) {
+                float dy = attempt >= 8 ? r(-0.8f, 0.2f) : r(0.3f, 1.0f) * (1f - attempt * 0.08f);
+                float gap = reach(Math.max(0f, dy)) * (0.5f - Math.min(attempt, 7) * 0.03f);
+                float w = attempt < 4 ? 5 + rnd.nextInt(2) : (attempt < 6 ? 4 : attempt < 8 ? 3 : 4);
                 Element e = plat(Element.Type.STATIC, last.s + last.w / 2 + gap + w / 2, last.y + dy, w, zone);
                 rests++;
                 e.checkpoint = (rests % Math.max(1, T.checkpointEveryRests)) == 0;

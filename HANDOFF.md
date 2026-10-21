@@ -1,6 +1,9 @@
 # Handoff
 
-## Checkpoint gem height rule (owner, 21 October; in source, not built)
+## Build 71 released for owner playtesting (21 October)
+- **Built 21 October 2026 from commit `cc39cd37c6cdc08cd4c006eea574d6ad9d521b6c`** (owner-authorised playtest release; tests and CI already green on this exact commit, so the desktop run used `skip_tests`, with its EXE and Linux launcher smoke checks still on). APK `v1.1.5-build71` (versionCode 71, 22,324,415 bytes, SHA-256 000084d8dd36a44b4f809eb28fa8839b3d8ba20eb09f5779cdae3cdc56567fa1, same certificate CE:DD:D6:86...; run 39615756545): https://github.com/verbal76/Climb-Up/releases/tag/v1.1.5-build71. Desktop `build-71-desktop` (Windows EXE zip 50,536,170 bytes 960fe72393482d3325b1e53a63f7466049fae721114dc79b3e50d9047306fc80; Linux tar.gz 55,386,075 bytes 6951329b60cba577bf94fa2c6465810fe2a758a26633ca3250f2558270822c8a; run 39615761394): https://github.com/verbal76/Climb-Up/releases/tag/build-71-desktop. Nothing sent to Steam. Not played on a device yet.
+
+## Checkpoint gem height rule (owner, 21 October; in Build 71)
 - The gem's bottom edge never rises above the shortest character's face (0.618 m, measured head bone), even at the top of its bob. Its mean centre is 0.90 m above the deck, so the bottom runs 0.32-0.59 m (`sim/CheckpointGem`, shared by Sim and renderer). Pickup is the whole platform width up to the gem's top (`Sim.stepGemPickup`); landing still counts. Verified in the real renderer (`:desktop:gemShot`) and headless (`CheckpointGemTest`). Not seen on a phone.
 
 ## Build 71 work (owner queue 16-20 October; in source on `ccr-cb458cd1-w4dh5c`, NOT built; do not build or touch Steam until the owner says so)

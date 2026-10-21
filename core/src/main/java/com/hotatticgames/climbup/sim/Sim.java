@@ -427,6 +427,7 @@ public final class Sim {
         else if (in.swingPressed && clubTime > 0f && (mode == Mode.GROUND || mode == Mode.AIR)) { swingT = SWING_TIME; events |= EV_SWING; }
         stepFeatures();
         stepAimed();
+        stepGemPickup();
         if (invuln > 0) invuln = Math.max(0f, invuln - dt);
         else if (hazardHit()) { hits++; events |= EV_HIT; hitS = s; hitY = y; knockOff(); }
 
@@ -434,6 +435,19 @@ public final class Sim {
         else if (y > lastGroundY && mode == Mode.AIR && vy <= 0) { /* keep */ }
         if (floorY > Float.NEGATIVE_INFINITY) { if (y < floorY - 6f) respawn(); }   // endless: a fall only ends below the lowest platform
         else if (y < lastGroundY - T.fallRespawnDepth) respawn();
+    }
+
+    /** The checkpoint gem is collected by touching it (its pickup volume, {@link CheckpointGem}) as well as by landing on its platform; walking or running across is enough. */
+    private void stepGemPickup() {
+        if (mode == Mode.LEDGE || mode == Mode.PULLUP) return;          // hanging off the gem platform's lip: the landing collects it a moment later
+        int n = act == null ? course.size() : act.length;
+        for (int k = 0; k < n; k++) {
+            int i = act == null ? k : act[k];
+            if (i <= checkpoint || i <= 0 || i >= course.size()) continue;
+            Element e = course.get(i);
+            if (e.type != Element.Type.STATIC || !course.isCheckpoint(e)) continue;
+            if (CheckpointGem.touches(course, e, es1[i], ey1[i], s, y, T)) { checkpoint = i; events |= EV_CHECKPOINT; }
+        }
     }
 
     private void stepClubCrab(Element e, int idx, float hw) {

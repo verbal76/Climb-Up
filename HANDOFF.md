@@ -1,5 +1,8 @@
 # Handoff
 
+## Checkpoint gem height rule (owner, 21 October; in source, not built)
+- The gem's bottom edge never rises above the shortest character's face (0.618 m, measured head bone), even at the top of its bob. Its mean centre is 0.90 m above the deck, so the bottom runs 0.32-0.59 m (`sim/CheckpointGem`, shared by Sim and renderer). Pickup is the whole platform width up to the gem's top (`Sim.stepGemPickup`); landing still counts. Verified in the real renderer (`:desktop:gemShot`) and headless (`CheckpointGemTest`). Not seen on a phone.
+
 ## Build 71 work (owner queue 16-20 October; in source on `ccr-cb458cd1-w4dh5c`, NOT built; do not build or touch Steam until the owner says so)
 - All ten queued items are implemented. Design: `docs/DECISIONS.md` "Build 71". Evidence: `docs/VERIFICATION.md` "Build 71 work". Items: bee dive and bump; skull (world 2+); green blob (world 3+, squash or 3x seesaw launch); bot dodges with legal moves only (`Autopilot.Reflex`); traps ride the platform landing dip; mortar rows un-sequenced; ice slicker with a squeak and skid, plus ice on tiny platforms; difficulty ramp (`late(y)`, 3,800 m); castle 1-2 "Late-afternoon Meadow" light, a little harder, with chained spike drops; spiked club 30 s with a HUD countdown and creatures queued after it.
 - Owner directive "Seed Determinism, Traversal Animation": the bunny's cable pose replaces the Build 67 eyes-through-arms hack (wider, higher grip, head tipped back and turned to the camera, less travel yaw; captured both directions). Play determinism is tested by `PlayDeterminismTest`. Saves now keep hazard state (`RunSnapshot.hKey`/`hState`, optional fields, older saves load).

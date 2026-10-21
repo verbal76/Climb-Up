@@ -852,6 +852,21 @@ public final class HeroRig implements Disposable {
 
     /** Diagnostic hook: each fist's true on-screen world position (inst.transform x the bone's global), for checking the
      *  hands sit on the rope, which hangs at world x=0, z=0. Set NaN until the skeleton has been located. */
+    /** Diagnostic hook: the head bone's world position (the joint at the base of the head, just under the face), NaN if the rig has none. */
+    public void headWorld(Vector3 out) {
+        Node h = headBone(inst.nodes);
+        if (h == null) { out.set(Float.NaN, Float.NaN, Float.NaN); return; }
+        new Matrix4(inst.transform).mul(h.globalTransform).getTranslation(out);
+    }
+    private static Node headBone(Iterable<Node> nodes) {
+        for (Node n : nodes) {
+            if (n.id.endsWith("_Head") && n.parts.size == 0) return n;
+            Node c = headBone(n.getChildren());
+            if (c != null) return c;
+        }
+        return null;
+    }
+
     public void fistWorld(Vector3 outL, Vector3 outR) {
         if (fiL == null || fiR == null) { outL.set(Float.NaN, Float.NaN, Float.NaN); outR.set(outL); return; }
         new Matrix4(inst.transform).mul(fiL.globalTransform).getTranslation(outL);

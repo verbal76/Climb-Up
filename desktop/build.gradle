@@ -142,3 +142,14 @@ tasks.register('creatureShot', JavaExec) {
     workingDir = file('../assets')
     systemProperties System.properties.findAll { it.key.toString().startsWith('climb.') }
 }
+
+// Build 71 (owner, checkpoint gem height rule): measures every character's head height and the gem's real drawn bottom over its bob, and shoots the
+// hero walking under the gem from both sides at its lowest, middle and highest bob. Locally: xvfb-run -a -s "-screen 0 1280x720x24" ./gradlew :desktop:gemShot
+tasks.register('gemShot', JavaExec) {
+    group = 'verification'
+    description = 'Checkpoint gem height vs the characters, and walk-under shots, to assets/build/gemshot/ (see GemShot).'
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.hotatticgames.climbup.desktop.GemShot'
+    workingDir = file('../assets')
+    systemProperties System.properties.findAll { it.key.toString().startsWith('climb.') }
+}

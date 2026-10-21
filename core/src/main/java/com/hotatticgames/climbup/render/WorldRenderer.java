@@ -19,6 +19,7 @@ import com.badlogic.gdx.utils.Array;
 import com.badlogic.gdx.utils.Disposable;
 import com.hotatticgames.climbup.sim.Course;
 import com.hotatticgames.climbup.sim.Element;
+import com.hotatticgames.climbup.sim.CheckpointGem;
 import com.hotatticgames.climbup.sim.Sim;
 import com.hotatticgames.climbup.sim.Tuning;
 
@@ -667,6 +668,9 @@ public final class WorldRenderer implements Disposable {
     private final Color keyCol = new Color(1f, 1f, 1f, 1f);
     private final Color gemRed = new Color(1f, 0.12f, 0.16f, 1f);
 
+    /** Diagnostic hook: the solid checkpoint gem as last drawn (its transform is the one the frame used). */
+    public ModelInstance gemDiag() { return gem; }
+
     private void initGem() {
         gem = new ModelInstance(models.pack("gem_pink")); gemGlow = new ModelInstance(models.pack("gem_pink"));
         for (com.badlogic.gdx.graphics.g3d.Material m : gem.materials) { gemDiff = ColorAttribute.createDiffuse(1f, 0.1f, 0.15f, 1f); gemEmis = ColorAttribute.createEmissive(0.6f, 0.05f, 0.08f, 1f); gemBlend = new BlendingAttribute(true, 1f); m.set(gemDiff, gemEmis, gemBlend); }
@@ -681,12 +685,13 @@ public final class WorldRenderer implements Disposable {
         if (!active) gemSeenWaiting.add(i);
         if (active && t0 == null) {
             // the pop and its red dust only happen when the player really reaches the gem; a hero who simply starts or resumes standing at a checkpoint gets no dust over his head
-            if (sim.checkpoint > i || !gemSeenWaiting.contains(i)) t0 = -1000f; else { t0 = time; particles.burst(es, ey + 1.7f, 16, gemRed, 2.6f, 3.4f, 0.1f, -1f, 1.1f); }
+            if (sim.checkpoint > i || !gemSeenWaiting.contains(i)) t0 = -1000f; else { t0 = time; particles.burst(es, ey + CheckpointGem.LIFT, 16, gemRed, 2.6f, 3.4f, 0.1f, -1f, 1.1f); }
             gemAct.put(i, t0);
         } else if (!active && t0 != null) { gemAct.remove(i); t0 = null; }      // respawned behind a gem that was reached: the world was reset
+        // owner rule (Build 71): the gem's bottom edge never rises above the standing character's face, even at the top of its bob - it is walked into, never jumped for
         float ph = i * 1.7f, base = 0.46f;
-        float yy = ey + 1.7f + (reducedMotion ? 0f : 0.13f * MathUtils.sin(time * 2.1f + ph));
-        float roll = reducedMotion ? 0f : 9f * MathUtils.sin(time * 1.7f + ph), yaw = reducedMotion ? 0f : time * 55f + ph * 40f;
+        float yy = ey + CheckpointGem.LIFT + (reducedMotion ? 0f : CheckpointGem.BOB * MathUtils.sin(time * 2.1f + ph));
+        float roll = reducedMotion ? 0f : CheckpointGem.ROLL_DEG * MathUtils.sin(time * 1.7f + ph), yaw = reducedMotion ? 0f : time * 55f + ph * 40f;
         float pulse = 0.5f + 0.5f * MathUtils.sin(time * 2.6f + ph);
         if (t0 == null) {                       // waiting to be reached
             gemEmis.color.set(0.45f + 0.35f * pulse, 0.04f, 0.07f, 1f); gemDiff.color.set(1f, 0.1f, 0.15f, 1f); gemBlend.opacity = 1f;

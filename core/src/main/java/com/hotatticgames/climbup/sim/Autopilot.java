@@ -165,7 +165,7 @@ public final class Autopilot {
     }
 
     /** Every planned move is played with a person's reflexes on top (Build 71): see {@link Reflex}. */
-    static Policy make(PolicyFactory f) { return new Reflex(f); }
+    static Policy make(PolicyFactory f) { return f == null ? null : new Reflex(f); }
 
     /**
      * Build 71 creatures need reflexes rather than a plan made in advance: a skull dashes at you wherever you are, a green blob lands where you were.

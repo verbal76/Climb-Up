@@ -377,10 +377,14 @@ public final class CourseGenerator {
 
     /** The halfway red gem: among the route platforms of this slice, the suitable one (a plain platform wide enough to stand and wait on) closest to the exact midpoint; if none is within 1.5 m a natural rest platform is added right where the climb crosses it. */
     private void chooseGem(int th) {
-        int best = bestGemCandidate();
+        int best = bestGemCandidate(3.5f);
+        if (best < 0 || Math.abs(c.get(best).y - castleTarget) > 1.5f) {          // nothing roomy close by: an ordinary 3 m platform at the right height beats a rest added
+            int narrow = bestGemCandidate(3.0f);                                     // further up (when a rest has no room, addRest climbs first and the gem landed 5.4 m high; FramedGenerationTest, seed 21)
+            if (narrow >= 0 && Math.abs(c.get(narrow).y - castleTarget) <= 1.5f) best = narrow;
+        }
         // none close enough: a natural rest platform is added right here (the climb is within GEM_LEAD of the midpoint), and again if it came out too narrow to stand and wait on
         for (int tries = 0; tries < 3 && (best < 0 || Math.abs(c.get(best).y - castleTarget) > 1.5f); tries++) {
-            addRest(th); int b2 = bestGemCandidate();
+            addRest(th); int b2 = bestGemCandidate(3.5f);
             if (b2 >= 0 && (best < 0 || Math.abs(c.get(b2).y - castleTarget) < Math.abs(c.get(best).y - castleTarget))) best = b2;
             if (b2 == c.size() - 1) break;          // the new rest is suitable
         }
@@ -389,11 +393,11 @@ public final class CourseGenerator {
     }
     /** How far below the exact midpoint the climb may still be when the red gem platform is chosen: a rest added then lands within about 4 m of the midpoint instead of up to a whole module above it. */
     private static final float GEM_LEAD = 4f;
-    private int bestGemCandidate() {
+    private int bestGemCandidate(float minW) {
         int best = -1; float dev = 1e9f;
         for (int i = Math.max(1, ctx); i < c.size(); i++) {          // this slice's own platforms: the context platforms belong to the previous slice, a gem marked on one would be lost
             Element e = c.get(i);
-            if (e.type != Element.Type.STATIC || e.skin != 0 || e.wet() || e.w < 3.5f || e.anchor >= 0 || Autopilot.hasMidHazard(c, i)) continue;
+            if (e.type != Element.Type.STATIC || e.skin != 0 || e.wet() || e.w < minW || e.anchor >= 0 || Autopilot.hasMidHazard(c, i)) continue;
             float d = Math.abs(e.y - castleTarget);
             if (d < dev) { dev = d; best = i; }
         }

@@ -1055,6 +1055,7 @@ public final class CourseGenerator {
         Element h = hz(roll == 0 ? Element.Type.SKULL : Element.Type.BLOB, roll == 0 ? p.s : p.s + (w / 2f - Element.BLOB_END), p.y, w, z);
         h.anchor = c.size(); h.phase = r(0f, 6.28f);
         hzOut.add(h);
+        if (roll != 0) return es;          // a blob waits at the front end of its deck, so a short hop to a landing ran straight into it and no blob module could be proven (0 blobs on 3 seeds); the next module starts from the deck as before
         float we = r(3.0f, 3.6f);          // a clear landing past the creature's deck: a breather, and the next module does not have to prove its jump with the creature at its back
         es.add(plat(Element.Type.STATIC, p.s + w / 2f + r(1.0f, 1.5f) * (1f - 0.03f * attempt) + we / 2f, p.y + r(-0.1f, 0.4f), we, z));
         return es;

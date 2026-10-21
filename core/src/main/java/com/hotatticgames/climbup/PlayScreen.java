@@ -269,6 +269,7 @@ public final class PlayScreen extends ScreenAdapter {
     // ------------------------------------------------------------------ frame
 
     @Override public void render(float dt) {
+        if (PerfProbe.ON) { PerfProbe.tStart = System.nanoTime(); PerfProbe.steps = 0; PerfProbe.events = 0; PerfProbe.saved = false; PerfProbe.tDrive = 0; }
         dt = Math.min(dt, 0.1f);
         time += dt;
         CrashContext.set(crashSnapshot());          // record game state each frame so a crash log says what we were doing
@@ -297,9 +298,11 @@ public final class PlayScreen extends ScreenAdapter {
                 if (course.size() != simSize) { sim.setRange(0, course.size() - 1); simSize = course.size(); }
                 g.syncHistory(tower);
             }
+            if (PerfProbe.ON) { PerfProbe.tStream = System.nanoTime(); PerfProbe.generating = tower != null && tower.generating(); if (PerfProbe.forceFall) { PerfProbe.forceFall = false; sim.respawn(); }
+                if (PerfProbe.skipAhead) { PerfProbe.skipAhead = false; int idx = Math.min(course.routeSize() - 1, Math.max(sim.bestElem, sim.onElem) + 3); while (idx < course.routeSize() - 1 && !course.get(idx).isPlatform()) idx++; sim.checkpoint = idx; sim.respawn(); } }
             int steps = 0;
             while (acc >= Sim.DT && steps < 6) {
-                if (demo || AUTOPILOT) { driver[0].drive(sim, in); if (AUTOPILOT && driver[0].failed) driver[0] = new Autopilot.Driver(sim); } else readInput();
+                if (demo || AUTOPILOT) { long d0 = PerfProbe.ON ? System.nanoTime() : 0L; driver[0].drive(sim, in); if (AUTOPILOT && driver[0].failed) driver[0] = new Autopilot.Driver(sim); if (PerfProbe.ON) PerfProbe.tDrive += System.nanoTime() - d0; } else readInput();
                 sim.step(in);
                 in.jumpPressed = false; jumpLatch = false; kJump = false; in.swingPressed = false; swingLatch = false; kSwing = false;
                 if (gi() != null) gi().stepDone();
@@ -307,12 +310,14 @@ public final class PlayScreen extends ScreenAdapter {
                 if (runTime > 15f && g.ota != null) g.ota.confirm();          // live play with the current (possibly OTA) content: a freshly applied update is now trusted
                 if (!demo) { if (!clockLive && (in.moveX != 0f || in.jumpPressed || in.moveY != 0f)) clockLive = true; RunRecord.tick(g.save, Sim.DT, clockLive); if (absNow() > maxAbs) maxAbs = absNow(); if (maxAbs > g.save.climbHeight) g.save.climbHeight = (float) maxAbs; ResumeState.capture(g.save, sim); }
                 int ev = sim.consumeEvents();
+                if (PerfProbe.ON) PerfProbe.events |= ev;
                 handleEvents(ev);
                 if (!demo) achievements(ev);
                 acc -= Sim.DT; steps++;
                 if (state != State.PLAYING) break;
             }
             if (steps == 6) acc = 0;
+            if (PerfProbe.ON) { PerfProbe.tSim = System.nanoTime(); PerfProbe.steps = steps; PerfProbe.mode = sim.mode.ordinal(); PerfProbe.absY = absNow(); }
             if (world.takeWhoosh()) g.audio.play("whoosh", 0.6f, 1f);
             g.save.playSeconds += dt;
             if (maxAbs > g.save.bestHeight) g.save.bestHeight = (float) maxAbs;
@@ -320,16 +325,19 @@ public final class PlayScreen extends ScreenAdapter {
             int ms = (int) (maxAbs / 50f);
             if (ms > milestone) { milestone = ms; toast = ms * 50 + " M!"; toastT = 1.6f; g.audio.play("checkpoint", 0.55f, 1.35f); world.particles.burst(sim.s, sim.y + 1f, 12, gold, 2.6f, 3.2f, 0.1f, -0.5f, 1f); }
             for (int pi = pops.size() - 1; pi >= 0; pi--) { Pop pp = pops.get(pi); pp.age += dt; pp.liftShown += (pp.lift - pp.liftShown) * Math.min(1f, dt * 14f); if (pp.age > 1.1f) pops.remove(pi); }
-            autosaveT += dt; if (autosaveT > 8f) { autosaveT = 0; g.persist(); saveRun(); }
+            autosaveT += dt; if (autosaveT > 8f) { autosaveT = 0; g.persist(); saveRun(); if (PerfProbe.ON) PerfProbe.saved = true; }
             ambientSounds(dt);
             juice(dt);
             updateTips(dt);
         }
         if (fade > 0) fade = Math.max(0, fade - dt * 2.2f);
         world.particles.update(play ? dt : 0f);
+        if (PerfProbe.ON && !play) { PerfProbe.tStream = PerfProbe.tSim = System.nanoTime(); }
         world.render(sim, play ? acc / Sim.DT : 1f, dt, time, true);
+        if (PerfProbe.ON) PerfProbe.tWorld = System.nanoTime();
         if (world.cloudsBroken > 0) { g.audio.play("poof", 0.45f, 0.9f + MathUtils.random(0.3f)); world.cloudsBroken = 0; }
         drawHud();
+        if (PerfProbe.ON) PerfProbe.tHud = System.nanoTime();
         g.autoShot("play", dt);
         if (next != null) { com.badlogic.gdx.Screen n = next; next = null; boolean d = disposeOnLeave; g.setScreen(n); if (d) dispose(); }
     }

@@ -153,3 +153,15 @@ tasks.register('gemShot', JavaExec) {
     workingDir = file('../assets')
     systemProperties System.properties.findAll { it.key.toString().startsWith('climb.') }
 }
+
+// Performance audit (dev only): the real game with the autopilot, every frame's interval, stage times, GC and allocation logged (see PerfRun).
+// Locally: xvfb-run -a -s "-screen 0 1920x1080x24" ./gradlew :desktop:perfRun -Dperf.seconds=600 -Dperf.cap=60
+tasks.register('perfRun', JavaExec) {
+    group = 'verification'
+    description = 'Frame-time / stage / GC audit of the real game under the autopilot (see PerfRun).'
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.hotatticgames.climbup.desktop.PerfRun'
+    workingDir = file('../assets')
+    jvmArgs = ['-Xms256m', '-Xmx1024m', '-XX:+UseG1GC']      // the shipped desktop launchers' options (tools/linux/package.sh, tools/windows/package.ps1)
+    systemProperties System.properties.findAll { it.key.toString().startsWith('climb.') || it.key.toString().startsWith('perf.') }
+}

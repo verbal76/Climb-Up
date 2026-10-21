@@ -137,6 +137,9 @@ public final class Tower {
     }
 
     /** Blocking variant for tests and tools. */
+    /** Whether a slice is being generated on the background thread right now (diagnostics). */
+    public boolean generating() { return pending != null && !pending.isDone(); }
+
     public void extend() {
         requestNext();
         try { pending.get(); } catch (Exception e) { throw new IllegalStateException(e); }

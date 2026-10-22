@@ -4,7 +4,7 @@ name: CI (validation only)
 # Numbered releases are produced only by the explicitly owner-triggered android.yml (APK) and windows.yml (Windows+Linux).
 on:
   push:
-    branches: [ccr-cb458cd1-w4dh5c]
+    branches: [ccr-cb458cd1-w4dh5c, build-74-determinism]
   pull_request:
     branches: [ccr-cb458cd1-w4dh5c]
 permissions:

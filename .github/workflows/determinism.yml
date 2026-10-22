@@ -8,7 +8,7 @@ name: Cross-platform course generation check
 on:
   workflow_dispatch:
   push:            # whenever the simulation, generation, the replays, their tuning or this check changes (a manual dispatch needs the file on the default branch)
-    branches: [ccr-cb458cd1-w4dh5c]
+    branches: [ccr-cb458cd1-w4dh5c, build-74-determinism]
     paths:
       - '.github/workflows/determinism.yml'
       - 'core/src/main/java/com/hotatticgames/climbup/sim/**'

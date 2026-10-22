@@ -291,21 +291,13 @@ public final class PlayScreen extends ScreenAdapter {
         if (play) {
             float speed = g.settings.assistSlow ? g.tuning.assistSlowFactor : 1f;
             if (hitstop > 0) hitstop -= dt; else acc += dt * speed;
-            if (tower != null) {
-                try { tower.openedUpTo = g.save.openedUpTo; tower.ensureAbove(maxAbs, BUILD_AHEAD); tower.maintain(sim); }
-                catch (RuntimeException ex) {          // the next stretch of tower could not be built (never expected): keep the run as a stamped record and go back to the title instead of crashing
-                    Gdx.app.error("climb", "tower generation failed", ex);
-                    if (g.save.seed != 0) Legacy.archive(g.save, Legacy.today());
-                    g.history.delete(); g.persist(); next = new TitleScreen(g); disposeOnLeave = true;
-                }
-                if (tower.rebuilds != seenRebuilds) { seenRebuilds = tower.rebuilds; world.rebased(tower.lastRemap, tower.originY, tower.originS); simSize = course.size(); }
-                if (course.size() != simSize) { sim.setRange(0, course.size() - 1); simSize = course.size(); }
-                g.syncHistory(tower);
-            }
+            boolean towerOk = tower == null || keepTower();
+            if (tower != null && towerOk) g.syncHistory(tower);
             if (PerfProbe.ON) { PerfProbe.tStream = System.nanoTime(); PerfProbe.generating = tower != null && tower.generating(); if (PerfProbe.forceFall) { PerfProbe.forceFall = false; sim.respawn(); }
                 if (PerfProbe.skipAhead) { PerfProbe.skipAhead = false; int idx = Math.min(course.routeSize() - 1, Math.max(sim.bestElem, sim.onElem) + 3); while (idx < course.routeSize() - 1 && !course.get(idx).isPlatform()) idx++; sim.checkpoint = idx; sim.respawn(); } }
             int steps = 0;
-            while (acc >= Sim.DT && steps < 6) {
+            while (towerOk && acc >= Sim.DT && steps < 6) {
+                if (tower != null && !(towerOk = keepTower())) break;           // Build 74: before EVERY step, not once per frame (see keepTower)
                 if (demo || AUTOPILOT) { long d0 = PerfProbe.ON ? System.nanoTime() : 0L; driver[0].drive(sim, in); if (AUTOPILOT && driver[0].failed) driver[0] = new Autopilot.Driver(sim); if (PerfProbe.ON) PerfProbe.tDrive += System.nanoTime() - d0; } else readInput();
                 sim.step(in);
                 in.jumpPressed = false; jumpLatch = false; kJump = false; in.swingPressed = false; swingLatch = false; kSwing = false;
@@ -405,6 +397,28 @@ public final class PlayScreen extends ScreenAdapter {
     /** Metres of tower kept built above the highest point reached. Slices are made (and every link proven) on a background thread; Build 71's
      *  denser content costs ~4 s a slice on average and ~19 s at worst on a desktop core, so this keeps two slices in hand (was 75 m, one slice). */
     static final float BUILD_AHEAD = 150f;
+    /** Build 74: slices join the window up to this far above the highest point climbed (below BUILD_AHEAD, so the background thread is normally there first); see Tower.admitAbs. */
+    static final float ADMIT_AHEAD = 100f;
+
+    /**
+     * Keeps the tower in step with the simulation: the next stretch requested, the window moved (and the floating origin with it) and a fall's respawn
+     * completed. Build 74 (owner: the same inputs on the same steps must give the same run on every device): this runs before every simulation step, not
+     * once per rendered frame. Run once per frame, a respawn asked for in the middle of a frame left the frame's remaining steps frozen, yet counted by the
+     * run clock and swallowing their inputs, so a fall cost 0 to 5 extra steps depending on the frame rate; and a window move happened at a step that
+     * depended on the frame rate too. The window admits new slices by height (Tower.admitAbs), not by when the background thread finished them. Returns false if the tower could not be built (the run is then closed).
+     */
+    private boolean keepTower() {
+        try { tower.openedUpTo = g.save.openedUpTo; tower.admitAbs = maxAbs + ADMIT_AHEAD; tower.ensureAbove(maxAbs, BUILD_AHEAD); tower.maintain(sim); }
+        catch (RuntimeException ex) {          // the next stretch of tower could not be built (never expected): keep the run as a stamped record and go back to the title instead of crashing
+            Gdx.app.error("climb", "tower generation failed", ex);
+            if (g.save.seed != 0) Legacy.archive(g.save, Legacy.today());
+            g.history.delete(); g.persist(); next = new TitleScreen(g); disposeOnLeave = true;
+            return false;
+        }
+        if (tower.rebuilds != seenRebuilds) { seenRebuilds = tower.rebuilds; world.rebased(tower.lastRemap, tower.originY, tower.originS); simSize = course.size(); }
+        if (course.size() != simSize) { sim.setRange(0, course.size() - 1); simSize = course.size(); }
+        return true;
+    }
     private static final Color SQUASH_GREEN = new Color(0.45f, 0.95f, 0.35f, 1f);
 
     /** A castle was opened: record the split (time since the previous unlock) and the total, keep the personal bests, start timing the next tower. */
@@ -418,10 +432,10 @@ public final class PlayScreen extends ScreenAdapter {
         sd.towers = n + 1;
         RecordsData.Run cur = null;
         if (n < RecordsData.LEGS) { sd.records().legDone(sd.seed, runRules(), n, split); cur = sd.records().current; }          // times table: this leg, its global and its on-this-course bests
-        boolean hadSplit = sd.bestSplit > 0f, pbSplit = !sd.assisted && (!hadSplit || split < sd.bestSplit);       // owner (Build 71): an assisted run's towers are timed but set no best
+        boolean hadSplit = sd.bestSplit > 0f, pbSplit = !sd.assisted && (!hadSplit || RunRecord.faster(split, sd.bestSplit));       // owner (Build 71): an assisted run's towers are timed but set no best
         if (pbSplit) sd.bestSplit = split;
         if (sd.bestTotals.length <= n) sd.bestTotals = java.util.Arrays.copyOf(sd.bestTotals, n + 1);
-        boolean hadTotal = sd.bestTotals[n] > 0f, pbTotal = !sd.assisted && (!hadTotal || total < sd.bestTotals[n]);
+        boolean hadTotal = sd.bestTotals[n] > 0f, pbTotal = !sd.assisted && (!hadTotal || RunRecord.faster(total, sd.bestTotals[n]));
         if (pbTotal) sd.bestTotals[n] = total;
         sd.towerStartClock = sd.runClock; sd.towerStartHeight = (float) Math.max(0.0, maxAbs);
         toast = keyName(sim.lastGateColor) + " CASTLE OPENED!"; toastT = 3.2f;

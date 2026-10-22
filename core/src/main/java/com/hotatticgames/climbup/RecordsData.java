@@ -105,12 +105,12 @@ public final class RecordsData {
             r.legSeedPrev[index] = s != null ? s.bestLegs[index] : 0f;
             return false;
         }
-        boolean pb = bestLegs[index] <= 0f || seconds < bestLegs[index];
+        boolean pb = bestLegs[index] <= 0f || RunRecord.faster(seconds, bestLegs[index]);
         if (pb) { bestLegs[index] = seconds; r.legPb[index] = true; }
         if (rules > 0) {
             SeedBests s = seedBestsOrNew(seed, rules);
             r.legSeedPrev[index] = s.bestLegs[index];
-            boolean spb = s.bestLegs[index] <= 0f || seconds < s.bestLegs[index];
+            boolean spb = s.bestLegs[index] <= 0f || RunRecord.faster(seconds, s.bestLegs[index]);
             if (spb) { s.bestLegs[index] = seconds; r.legSeedPb[index] = true; }
             if (index == 0) s.runs++;
         }
@@ -129,12 +129,12 @@ public final class RecordsData {
             if (first) r.totalSeedPrev = s != null ? s.bestTotal : 0f;
             return false;
         }
-        boolean pb = bestTotal <= 0f || total < bestTotal;
+        boolean pb = bestTotal <= 0f || RunRecord.faster(total, bestTotal);
         if (pb) { bestTotal = total; r.totalPb = true; }
         if (rules > 0 && first) {
             SeedBests s = seedBestsOrNew(seed, rules);
             r.totalSeedPrev = s.bestTotal;
-            boolean spb = s.bestTotal <= 0f || total < s.bestTotal;
+            boolean spb = s.bestTotal <= 0f || RunRecord.faster(total, s.bestTotal);
             if (spb) { s.bestTotal = total; r.totalSeedPb = true; }
         }
         return pb;

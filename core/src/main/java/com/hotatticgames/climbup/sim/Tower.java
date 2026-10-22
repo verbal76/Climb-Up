@@ -89,11 +89,21 @@ public final class Tower {
     private final java.util.HashSet<Long> doneFeat = new java.util.HashSet<>();      // keys taken, gates opened, crabs knocked off: remembered across unloading a slice
     public int openedUpTo;                                // castles up to this number are open, wherever the player later falls to
 
+    /**
+     * Build 74 (owner: the same inputs must give the same run on every device): the resident window only ever uses slices whose bottom is at or below this
+     * absolute height (the game sets it from the highest point climbed, before every step). Generation still runs ahead on a background thread, but how
+     * far ahead it happens to be (device speed, thread timing) no longer changes which slices the window holds or when it is rebuilt around a new floating
+     * origin: a slice joins at the same step on every device, and if it is needed before the thread has made it, it is made on the spot. Unset (infinite),
+     * every generated slice joins at once, as before (tests and tools).
+     */
+    public double admitAbs = Double.POSITIVE_INFINITY;
+    private int admitted;                                 // slices that have joined: the window logic sees only these
+
     /** A fresh climb from the very bottom. */
     public Tower(long seed, Tuning t) {
         this.seed = seed; this.T = t;
         world = new Course(seed, t.circumference()); world.gemCheckpoints = t.castleSpacing > 0f;
-        append(firstSlice(seed, t));
+        append(firstSlice(seed, t)); admitted = 1;
         rebuild(0, 0, 0.0, 0.0);
     }
 
@@ -103,6 +113,7 @@ public final class Tower {
         world = new Course(seed, t.circumference()); world.gemCheckpoints = t.castleSpacing > 0f;
         if (history.isEmpty()) throw new IllegalArgumentException("empty history");
         for (byte[] b : history) { CourseGenerator.Framed f = SliceCodec.decode(b); record(f, b); top = f; }
+        admitted = blobs.size();
         int k = Math.max(0, Math.min(at, blobs.size() - 1));
         double mid = 0.5 * (botAbs[k] + topAbs[k]);
         int[] r = rangeFor(mid);
@@ -151,16 +162,29 @@ public final class Tower {
         pending = POOL.submit((Callable<CourseGenerator.Framed>) () -> CourseGenerator.chunkFramed(seed, idx, prev, T));
     }
 
-    /** Appends a finished slice, if any. Call from the thread that owns the world. Returns true if the resident world grew. */
+    /** Takes a finished slice, if any, and lets slices join the window up to {@link #admitAbs}. Call from the thread that owns the world. Returns true if the resident world grew. */
     public boolean poll() {
-        if (pending == null || !pending.isDone()) return false;
+        if (pending != null && pending.isDone()) take();
+        return admit();
+    }
+
+    private void take() {
         CourseGenerator.Framed f;
         try { f = pending.get(); } catch (Exception e) { throw new IllegalStateException("tower generation failed at slice " + blobs.size(), e); }
         finally { pending = null; }
-        boolean wasTopResident = !res.isEmpty() && res.get(res.size() - 1).index == blobs.size() - 1;
         append(f);
-        if (wasTopResident) { stitch(blobs.size() - 1, f); return true; }
-        return false;
+    }
+
+    /** Lets every slice whose bottom is at or below {@link #admitAbs} join, in order, making it now if the background thread has not yet; a slice joins the resident world at once when the top slice is resident. */
+    private boolean admit() {
+        boolean grew = false;
+        while (admitted >= blobs.size() ? topAbs[blobs.size() - 1] <= admitAbs : botAbs[admitted] <= admitAbs) {
+            if (admitted >= blobs.size()) { if (admitAbs == Double.POSITIVE_INFINITY) break; requestNext(); try { pending.get(); } catch (Exception e) { throw new IllegalStateException(e); } take(); continue; }
+            boolean topResident = !res.isEmpty() && res.get(res.size() - 1).index == admitted - 1;
+            int k = admitted++;
+            if (topResident) { stitch(k, slice(k)); grew = true; }
+        }
+        return grew;
     }
 
     /** Blocking variant for tests and tools. */
@@ -182,7 +206,7 @@ public final class Tower {
     // ------------------------------------------------------------------ the resident window
 
     public int sliceAt(double abs) {                       // the slice whose route spans this height (clamped)
-        int lo = 0, hi = blobs.size() - 1;
+        int lo = 0, hi = admitted - 1;
         while (lo < hi) { int mid = (lo + hi + 1) >>> 1; if (botAbs[mid] <= abs) lo = mid; else hi = mid - 1; }
         return lo;
     }
@@ -195,7 +219,7 @@ public final class Tower {
     public boolean ensureWindow(Sim sim) {
         double abs = originY + sim.y;
         int first = res.get(0).index, last = res.get(res.size() - 1).index;
-        boolean lowOk = first == 0 || abs - MARGIN >= botAbs[first], highOk = last == blobs.size() - 1 || abs + MARGIN <= topAbs[last];
+        boolean lowOk = first == 0 || abs - MARGIN >= botAbs[first], highOk = last == admitted - 1 || abs + MARGIN <= topAbs[last];
         boolean tooBig = abs - botAbs[first] > 2 * REACH + 60f || topAbs[last] - abs > 2 * REACH + 60f;          // trim what the player has left far behind (keeps memory bounded however high the climb goes)
         if (lowOk && highOk && !tooBig && Math.abs(sim.y) < 1500f) return false;
         int[] r = rangeFor(abs);
@@ -295,7 +319,7 @@ public final class Tower {
     }
 
     public int lastRouteIndex() { return res.get(res.size() - 1).lastRouteWorld; }
-    public boolean topResident() { return res.get(res.size() - 1).index == blobs.size() - 1; }
+    public boolean topResident() { return res.get(res.size() - 1).index == admitted - 1; }
 
     // ------------------------------------------------------------------ building the world course
 

@@ -57,11 +57,23 @@ public class ClockTextTest {
         for (float sec : new float[]{0f, -1f, 59.95f, 3599.99f, 3600f, 86399.99f, 86400f, 172800f, 429425.1f, 400f * 86400f, Float.MAX_VALUE, Float.NaN})
             assertEquals("at " + sec + " s", formatted(sec), ClockText.time(sec));
     }
-    private static String formatted(float sec) {         // the Build 66 implementation, kept here as the reference
-        long t = Math.max(0L, (long) (sec * 10f));
+    private static String formatted(float sec) {         // the Build 66 implementation, kept here as the reference for the layout
+        // Build 74: the tenths come from the exact step count (RunRecord.ticksOf), no longer from float arithmetic; the layout check is unchanged
+        long t = sec < 65536f ? Math.max(0L, RunRecord.ticksOf(sec)) / 6 : Math.max(0L, (long) (sec * 10f));
         long tenth = t % 10, s = (t / 10) % 60, m = (t / 600) % 60, h = (t / 36000) % 24, d = t / 864000;
         if (d > 0) return d + (d == 1 ? " DAY " : " DAYS ") + String.format(java.util.Locale.ROOT, "%02d:%02d:%02d.%d", h, m, s, tenth);
         if (h > 0) return String.format(java.util.Locale.ROOT, "%d:%02d:%02d.%d", h, m, s, tenth);
         return String.format(java.util.Locale.ROOT, "%d:%02d.%d", m, s, tenth);
+    }
+
+    /** Build 74 (owner): a clock is a whole number of 1/60 s steps, and its tenths come from that count exactly (6 steps a tenth), whatever the float holds. */
+    @Test public void tenthsComeFromTheExactStepCount() {
+        for (long ticks = 0; ticks < 60L * 3600 * 2; ticks += 7) {
+            float clock = (float) (ticks / (double) RunRecord.STEPS_PER_SECOND);          // how SaveData keeps the run clock
+            assertEquals(ticks, RunRecord.ticksOf(clock));
+            long tenths = ticks / 6;
+            String want = (tenths / 600) % 60 + ":" + String.format(java.util.Locale.ROOT, "%02d.%d", (tenths / 10) % 60, tenths % 10);
+            if (tenths < 36000) assertEquals("at " + ticks + " steps", want, ClockText.time(clock));
+        }
     }
 }

@@ -81,7 +81,7 @@ public final class Element {
     /** The spinning ramp's heading at time t (radians): 0 = uphill toward +s, as a fixed ramp. */
     public float spinAngle(float t) { return phase + 6.2831855f * t / period; }
     /** A ramp's slope along the lane at time t: fixed, or for the spinning ramp the slope of its turning top where the lane crosses it (it flattens side-on and flips). */
-    public float rampSlope(float t) { return spins() ? amp * (float) Math.cos(spinAngle(t)) : amp; }
+    public float rampSlope(float t) { return spins() ? amp * (float) StrictMath.cos(spinAngle(t)) : amp; }
 
     public boolean isMoving() {
         switch (type) { case MOVE_H: case MOVE_V: case MOVE_Z: case SWING: case SAW_H: case SAW_V: case PENDULUM: case CANNON: case SPIKE_TRAP: case SPIKE_DROP: case CRAB: case BEE: case MORTAR: case AIMED: case SKULL: case BLOB: return true; default: return false; }
@@ -140,7 +140,7 @@ public final class Element {
     public float spikeHeight(float t) {
         float c = cyc(t), st = 0.55f, d = amp;
         if (c < st - 0.18f || c >= st + d + 0.04f) return 0f;
-        if (c < st) return 0.14f + 0.05f * (float) Math.sin(c * 90f);
+        if (c < st) return 0.14f + 0.05f * (float) StrictMath.sin(c * 90f);
         if (c < st + d) return 0.62f;
         return 0.62f * (1f - (c - st - d) / 0.04f);
     }
@@ -149,7 +149,7 @@ public final class Element {
     public float dropBottom(float t) {
         float c = cyc(t), hi = y + amp, lo = y;
         if (c < 0.15f) return hi;                                                   // brief pause at the top, then it strikes (was a long 0.50 hover that made the first drop feel too slow to be a threat)
-        if (c < 0.27f) return hi + 0.05f * (float) Math.sin(c * 220f);              // telegraph: it trembles
+        if (c < 0.27f) return hi + 0.05f * (float) StrictMath.sin(c * 220f);              // telegraph: it trembles
         if (c < 0.33f) { float k = (c - 0.27f) / 0.06f; return hi + (lo - hi) * k * k; }   // slam (same quickness as before)
         if (c < 0.45f) return lo;                                                   // rest at the bottom (same)
         return lo + (hi - lo) * (c - 0.45f) / 0.55f;                                // slow rise back up fills the rest of the cycle, so the slam-to-slam period is unchanged
@@ -167,7 +167,7 @@ public final class Element {
     /** Bee bump (was 6.5 / 3: barely a nudge). */
     public static final float BEE_PUSH_X = 8f, BEE_PUSH_Y = 5f;
     /** 0..1 strength of the dive at time t (0 outside the dive), shared by the simulation's swoop at the player and the drawn bee. */
-    public float beeDive(float t) { float u = beeU(t); return u > 0.38f && u < 0.62f ? (float) Math.sin((u - 0.38f) / 0.24f * Math.PI) : 0f; }
+    public float beeDive(float t) { float u = beeU(t); return u > 0.38f && u < 0.62f ? (float) StrictMath.sin((u - 0.38f) / 0.24f * Math.PI) : 0f; }
 
     // ---- skull (Build 71): body radius, heights of its centre above the deck while hovering and while dashing, dash speed, and the phase lengths
     public static final float SKULL_R = 0.42f, SKULL_HOVER = 1.75f, SKULL_LOW = 0.55f, SKULL_SPEED = 10f;
@@ -193,13 +193,13 @@ public final class Element {
     public float beeS(float t) {
         float u = beeU(t); if (u >= 1f) return s;
         float env = beeEnv(u), fly = (u < 0.5f ? -1f : 1f) * 14f * (1f - env);
-        return s + fly + amp * env * (float) Math.sin(2 * Math.PI * 2.3f * u);
+        return s + fly + amp * env * (float) StrictMath.sin(2 * Math.PI * 2.3f * u);
     }
     public float beeY(float t) {
         float u = beeU(t); if (u >= 1f) return y + 6f;
         float env = beeEnv(u);
-        float dive = u > 0.38f && u < 0.62f ? 0.9f * (float) Math.sin((u - 0.38f) / 0.24f * Math.PI) : 0f;
-        return y + len * env * (float) Math.sin(2 * Math.PI * 3.1f * u + 1f) - dive + 4f * (1f - env);
+        float dive = u > 0.38f && u < 0.62f ? 0.9f * (float) StrictMath.sin((u - 0.38f) / 0.24f * Math.PI) : 0f;
+        return y + len * env * (float) StrictMath.sin(2 * Math.PI * 3.1f * u + 1f) - dive + 4f * (1f - env);
     }
 
     /** Whether the hazard can hurt at time t. */
@@ -215,18 +215,18 @@ public final class Element {
 
     public static final float Z_REACH = 1.0f;
     /** Depth offset of a depth mover at time t (+ = away from the camera). */
-    public float zAt(float t) { return type == Type.MOVE_Z ? amp * (float) Math.sin(ang(t)) : 0f; }
+    public float zAt(float t) { return type == Type.MOVE_Z ? amp * (float) StrictMath.sin(ang(t)) : 0f; }
     /** Swing platforms: -1..1 position along the arc (+-1 = top of the arc, where the platform is momentarily still). */
-    public float swingFrac(float t) { return (float) Math.sin(ang(t)); }
+    public float swingFrac(float t) { return (float) StrictMath.sin(ang(t)); }
 
     private float ang(float t) { return (float) (2 * Math.PI * t / period + phase); }
 
     /** Center arc position at time t (unwrapped, relative to course space). */
     public float sAt(float t) {
         switch (type) {
-            case MOVE_H: return s + amp * (float) Math.sin(ang(t));
-            case SWING: case PENDULUM: return s + len * (float) Math.sin(amp * Math.sin(ang(t)));
-            case SAW_H: case CRAB: return s + amp * (float) Math.sin(ang(t));
+            case MOVE_H: return s + amp * (float) StrictMath.sin(ang(t));
+            case SWING: case PENDULUM: return s + len * (float) StrictMath.sin(amp * StrictMath.sin(ang(t)));
+            case SAW_H: case CRAB: return s + amp * (float) StrictMath.sin(ang(t));
             case CANNON: { float c = cyc(t); return c < CANNON_FLIGHT ? s + dir * len * (c / CANNON_FLIGHT) : s; }
             default: return s;
         }
@@ -235,8 +235,8 @@ public final class Element {
     /** Top surface height (platforms) or anchor/cable height at time t. */
     public float yAt(float t) {
         switch (type) {
-            case MOVE_V: case SAW_V: return y + amp * 0.5f * (1f - (float) Math.cos(ang(t)));
-            case SWING: case PENDULUM: return y + len - len * (float) Math.cos(amp * Math.sin(ang(t)));
+            case MOVE_V: case SAW_V: return y + amp * 0.5f * (1f - (float) StrictMath.cos(ang(t)));
+            case SWING: case PENDULUM: return y + len - len * (float) StrictMath.cos(amp * StrictMath.sin(ang(t)));
             case MORTAR: return mortarBallY(t);
             default: return y;
         }

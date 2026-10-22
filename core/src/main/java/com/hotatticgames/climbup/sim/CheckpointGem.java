@@ -28,7 +28,7 @@ public final class CheckpointGem {
     public static final float LIFT = 0.90f;
 
     /** Where the bottom edge is (above the deck) for a given bob phase sin(...) in [-1, 1] and roll angle. */
-    public static float bottomAt(float bobSin, float rollDeg) { return LIFT + BOB * bobSin - HALF_H * (float) Math.cos(Math.toRadians(rollDeg)); }
+    public static float bottomAt(float bobSin, float rollDeg) { return LIFT + BOB * bobSin - HALF_H * (float) StrictMath.cos(Math.toRadians(rollDeg)); }
     /** The highest the gem's top ever reaches above the deck. */
     public static float topMax() { return LIFT + BOB + HALF_H; }
 

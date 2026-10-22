@@ -15,6 +15,15 @@ public final class RunRecord {
     public static final int STEPS_PER_SECOND = 60;
 
     /**
+     * Build 74 (owner): the competitive time is the whole number of simulation steps, never a float. Every time kept in seconds is a step count divided by
+     * {@link #STEPS_PER_SECOND} (or a difference of two such clocks), so rounding it back gives that exact count (a float holds it to well under half a step
+     * for any time below 18 hours). Rankings and ties compare these counts.
+     */
+    public static long ticksOf(float seconds) { return Math.round(seconds * (double) STEPS_PER_SECOND); }
+    /** True when {@code a} is a faster time than {@code b}, compared in whole simulation steps (a tie is not faster). */
+    public static boolean faster(float a, float b) { return ticksOf(a) < ticksOf(b); }
+
+    /**
      * Owner (Build 71): a climb whose clock runs with an assist on (slower speed or jump forgiveness) is an assisted run from then on, even if the assist is
      * switched off again. Its castles, splits and finish still count for the climb itself; none of its times become a personal or course best. Called on
      * every timed simulation step; a finished run is left as it is.
@@ -29,7 +38,7 @@ public final class RunRecord {
     public static int complete(SaveData sd) {
         if (sd.finished) return -1;
         sd.finished = true; sd.finishTime = sd.runClock; sd.lastFinish = sd.finishTime;
-        boolean best = !sd.assisted && (sd.bestFinish <= 0f || sd.finishTime < sd.bestFinish);      // an assisted run finishes normally but is never a record
+        boolean best = !sd.assisted && (sd.bestFinish <= 0f || faster(sd.finishTime, sd.bestFinish));      // an assisted run finishes normally but is never a record
         if (best) sd.bestFinish = sd.finishTime;
         return best ? 1 : 0;
     }

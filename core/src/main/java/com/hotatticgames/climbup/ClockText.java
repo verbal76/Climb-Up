@@ -10,7 +10,9 @@ public final class ClockText {
     private ClockText() { }
 
     public static String time(float sec) {
-        long t = Math.max(0L, (long) (sec * 10f));
+        // Build 74: tenths from the exact step count (6 steps a tenth), never from float arithmetic. Past 18 hours a float no longer holds every step, so
+        // a marathon clock falls back to its own tenths (it is never a ranked time).
+        long t = sec < 65536f ? Math.max(0L, RunRecord.ticksOf(sec)) / (RunRecord.STEPS_PER_SECOND / 10) : (long) (sec * 10f);
         long tenth = t % 10, s = (t / 10) % 60, m = (t / 600) % 60, h = (t / 36000) % 24, d = t / 864000;
         // built by hand, not with String.format: the HUD prints this a few times every frame (Build 71 performance audit); the text is unchanged (ClockTextTest)
         StringBuilder b = new StringBuilder(24);
@@ -23,5 +25,8 @@ public final class ClockText {
     private static StringBuilder two(StringBuilder b, long v) { if (v < 10) b.append('0'); return b.append(v); }
 
     /** A signed time difference to the nearest tenth: "-0:04.8" faster, "+2:03.4" slower. */
-    public static String delta(float d) { float a = Math.round(Math.abs(d) * 10f) / 10f; return (d < 0f && a > 0f ? "-" : "+") + time(a); }
+    public static String delta(float d) {
+        long steps = Math.abs(RunRecord.ticksOf(d)), tenths = (steps + 3) / 6;                         // Build 74: rounded to the nearest tenth from the exact step count
+        return (d < 0f && tenths > 0 ? "-" : "+") + time(tenths / 10f);
+    }
 }

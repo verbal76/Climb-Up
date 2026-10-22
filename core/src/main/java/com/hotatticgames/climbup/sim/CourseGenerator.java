@@ -773,7 +773,7 @@ public final class CourseGenerator {
     private static float arcHalf(Element e) {
         switch (e.type) {
             case MOVE_H: return e.w / 2f + e.amp;
-            case SWING: return e.w / 2f + e.len * (float) Math.sin(e.amp);
+            case SWING: return e.w / 2f + e.len * (float) StrictMath.sin(e.amp);
             case ROPE: return 0.8f;
             default: return e.w / 2f;
         }
@@ -810,7 +810,7 @@ public final class CourseGenerator {
             case CRAB: return h.amp + 0.6f;
             case BEE: return h.amp + 0.6f;
             case SAW_V: return Element.SAW_R;
-            case PENDULUM: return h.len * (float) Math.sin(h.amp) + Element.BALL_R;
+            case PENDULUM: return h.len * (float) StrictMath.sin(h.amp) + Element.BALL_R;
             case CANNON: return h.len * 0.5f + Element.SHOT_R;
             case MORTAR: return Element.MORTAR_R;
             case AIMED: return 0.6f;
@@ -824,7 +824,7 @@ public final class CourseGenerator {
         switch (h.type) {
             case SAW_H: return h.y + Element.SAW_R;
             case SAW_V: return h.y + h.amp + Element.SAW_R;
-            case PENDULUM: return h.y + h.len * (1f - (float) Math.cos(h.amp)) + Element.BALL_R;
+            case PENDULUM: return h.y + h.len * (1f - (float) StrictMath.cos(h.amp)) + Element.BALL_R;
             case CANNON: return h.y + Element.SHOT_R;
             case MORTAR: return h.y + h.amp + Element.MORTAR_R;
             case AIMED: return h.y + 0.6f;
@@ -1291,7 +1291,7 @@ public final class CourseGenerator {
                 break;
             }
             case SWING: {
-                float len = 5f, th = 0.5f, ext = len * (float) Math.sin(th), wm = 2f;
+                float len = 5f, th = 0.5f, ext = len * (float) StrictMath.sin(th), wm = 2f;
                 float gapIn = lerp(1.0f, 1.8f, d), gapOut = lerp(1.0f, 1.8f, d);
                 Element sw = plat(Element.Type.SWING, eR + gapIn + ext + wm / 2, y0 - 0.35f, wm, z);
                 sw.len = len; sw.amp = th; sw.period = r(3.6f, 4.4f); sw.phase = r(0f, 6.28f);
@@ -1301,7 +1301,7 @@ public final class CourseGenerator {
             }
             case SPRING: {
                 float ang = r(0.32f, 0.62f) * (1f - 0.04f * attempt);
-                float v = T.padBounce, vy0 = v * (float) Math.cos(ang), vx0 = v * (float) Math.sin(ang);
+                float v = T.padBounce, vy0 = v * (float) StrictMath.cos(ang), vx0 = v * (float) StrictMath.sin(ang);
                 float gap = lerp(1.0f, 1.8f, d) * r(0.9f, 1.1f);
                 float sS = eR + gap + 1f;
                 float dy = r(-0.8f, 2.8f);

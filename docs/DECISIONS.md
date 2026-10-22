@@ -456,3 +456,37 @@ This replaces the earlier centre-mass placement instruction. The gem's lowest vi
   - written permission for the hamster model;
   - Suno terms for the music;
   - the raw jeageroni SFX files in this public repository.
+
+## Build 74: cross-platform determinism and competitive timing (owner directive, 2026-10-22)
+
+Requirement: the same seed, the same inputs on the same simulation steps, give the same run, the same finish step and the same recorded time on Windows, Linux and Android.
+
+**Causes found (with evidence) and fixed:**
+1. **Respawns waited for the next rendered frame** (`PlayScreen` maintained the tower once per frame). Any simulation steps left in that frame were frozen, yet counted by the run clock and swallowing their inputs.
+   - A fall therefore cost 0 to 5 extra steps depending on frame rate. `PacingProbe`: 174 frozen steps and a different climb under uneven pacing, from the same inputs.
+   - Fix: `PlayScreen.keepTower` runs before every simulation step. A steady 60 fps device behaves exactly as before.
+2. **Origin shifts shifted stored platform heights** (`Sim.rebase` subtracted the shift from `ey0`/`ey1`). A platform rebuilt around the new origin can differ from the shifted copy in the last bit.
+   - Static platforms keep that height for good, and whether a far platform was resident during a shift depended on how far ahead the tower had been generated.
+   - `ReplayTool diff`: same inputs with the tower generated 150 m vs 400 m ahead gave a 1-ulp landing difference at step 56,683, then a different climb (5 doors instead of 9, no finish).
+   - Fix: the current height is taken from the rebuilt element (`e.yAt(time)`). Movers, seesaws and ramps recompute it every step anyway.
+3. **Window decisions depended on the background generator's progress.** Generated slices joined the window as soon as the thread finished them, so rebuilds (and origin shifts) happened at device-dependent steps. With the fix above, the next difference was a rebuild at step 57,258 in one run only.
+   - Fix: `Tower.admitAbs`. Slices join the window only once their bottom is at or below the highest point climbed + 100 m (`PlayScreen.ADMIT_AHEAD`), checked every step. If the thread has not finished a needed slice, it is made on the spot (never skipped, never partial). The thread still works 150 m ahead, so that wait is normally never needed.
+4. **Transcendental maths:** `Math.sin`/`cos`/`atan2` may differ by an ulp between JVMs/ART. All 35 simulation and generation calls now use `StrictMath` (fdlibm, identical everywhere).
+   - Measured before the switch: replays and generation were unchanged with every result nudged ±1 ulp (results are stored as floats). The switch removes the residual risk.
+   - Desktop course fingerprints are unchanged.
+
+**Timing (owner decision):**
+- The clock is the integer step count at 60 steps/s (`SaveData.runTicks`), independent of frame rate, device speed and wall time. Resolution is 1/60 s ≈ 16.667 ms. No interpolated sub-step finish.
+- **Rankings and ties:** compared in whole steps (`RunRecord.ticksOf`/`faster`: finish, legs, totals, per-seed bests, splits, the Express Elevator achievement). Every stored time is a step count / 60, recovered exactly below 18 hours.
+- **Display:** the HUD/times text is derived from the step count (6 steps per tenth). The game shows **m:ss.t** (tenths, truncated), not MM:SS.mmm. Unchanged pending the owner's decision.
+
+**Not changed:**
+- simulation rate, movement, physics, course generation (fingerprints identical), saves and records (same fields; comparisons only);
+- the hero's own position is still re-expressed at an origin shift, but the shift happens at the same step on every device;
+- input is sampled per rendered frame, so a 30 fps device can change input only every second step. That is fairness, not determinism; it is documented and not changed.
+
+**Verification:**
+- `ReplayTool` (record/replay/diff) plays climbs exactly as `PlayScreen` does. Recorded: seed 12 to the castle-10 finish (472,941 steps, 9 castle doors; 35 harness SKIP actions where the autopilot stalls) and seed 21 with a respawn every 20,000 steps.
+- The seed 12 replay is identical with generation 150 m, 400 m and 1,000 m ahead.
+- `determinism.yml` replays the files on Linux, Windows (desktop JVMs) and Android (ART, x86_64 emulator) and requires byte-identical output.
+- A real ARM phone is not covered (owner did not choose the in-app check).

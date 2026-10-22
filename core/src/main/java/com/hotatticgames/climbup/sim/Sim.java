@@ -262,7 +262,7 @@ public final class Sim {
         switch (e.type) {
             case PAD: case SPRING:
                 m.s = c.wrap(m.es1[idx]); m.y = m.ey1[idx];
-                m.vx = e.type == Element.Type.SPRING ? t.padBounce * (float) Math.sin(e.amp) : 0f; m.vy = e.type == Element.Type.SPRING ? t.padBounce * (float) Math.cos(e.amp) : t.padBounce; m.mode = Mode.AIR;
+                m.vx = e.type == Element.Type.SPRING ? t.padBounce * (float) StrictMath.sin(e.amp) : 0f; m.vy = e.type == Element.Type.SPRING ? t.padBounce * (float) StrictMath.cos(e.amp) : t.padBounce; m.mode = Mode.AIR;
                 m.onElem = -1; m.lastPad = idx; m.lastGroundY = m.y; m.bestElem = idx;
                 break;
             case ROPE:
@@ -326,8 +326,12 @@ public final class Sim {
         for (int i = 0; i < n; i++) { Element e = course.get(i); nes0[i] = nes1[i] = e.sAt(time); ney0[i] = ney1[i] = e.yAt(time); }
         for (int i = 0; i < m.elem.length && i < oldN; i++) {
             int j = m.elem[i]; if (j < 0) continue;
-            nes0[j] = es0[i]; nes1[j] = es1[i]; ney0[j] = ey0[i] - m.dy; ney1[j] = ey1[i] - m.dy;       // heights follow the origin; arcs are wrap-invariant and recomputed above
-            Element e = course.get(j); nes0[j] = e.sAt(time - DT); nes1[j] = e.sAt(time);
+            // Build 74: the current height is taken from the rebuilt element itself, never by shifting the old one: a float shifted by the origin and the same
+            // height rebuilt around that origin can differ in the last bit, and whether a far-off platform was resident during a shift depends on how far ahead
+            // the tower happened to be generated (a background thread), so the shifted copy made the same inputs land a step's worth differently on
+            // different devices (ReplayTool diff). Static platforms keep this height for good; movers, seesaws and ramps set it again every step anyway.
+            Element e = course.get(j);
+            nes0[j] = e.sAt(time - DT); nes1[j] = e.sAt(time); ney0[j] = ey0[i] - m.dy; ney1[j] = e.yAt(time);
             nc[j] = crumbleT[i]; ngone[j] = gone[i]; ngt[j] = goneT[i]; npq[j] = padSquash[i]; ntl[j] = tilt[i]; not[j] = onT[i];
         }
         sideIn = sideIn >= 0 && sideIn < m.elem.length ? m.elem[sideIn] : -1;
@@ -370,7 +374,7 @@ public final class Sim {
     public float platformVs(int i) { return course.dsWrap(es1[i], es0[i]) / DT + surfaceCarry(i); }
     /** The spinning ramp's sideways push now (0 for anything else). */
     /** How fast the surface itself carries a body along +s: a spinning ramp's sideways push, or a conveyor belt. */
-    public float surfaceCarry(int i) { Element e = course.get(i); return e.spins() ? SPIN_CARRY * (float) Math.sin(e.spinAngle(time)) : e.beltV(); }
+    public float surfaceCarry(int i) { Element e = course.get(i); return e.spins() ? SPIN_CARRY * (float) StrictMath.sin(e.spinAngle(time)) : e.beltV(); }
 
     public boolean attachedTo(int idx) {
         if (idx < 0) return false;
@@ -562,7 +566,7 @@ public final class Sim {
         mobT[idx] += DT;
         switch (mobState[idx]) {
             case 1: {
-                mobY[idx] = Element.SKULL_HOVER + 0.12f * (float) Math.sin(time * 2.6f + e.phase);
+                mobY[idx] = Element.SKULL_HOVER + 0.12f * (float) StrictMath.sin(time * 2.6f + e.phase);
                 if (sees && mobSeen[idx] >= Element.SKULL_NOTICE && mobT[idx] >= Element.SKULL_REST) {
                     float d = course.dsWrap(s, mobS[idx]), dir = d > 0.05f ? 1f : d < -0.05f ? -1f : mobDir[idx];
                     float tgt = dS + dir * end;
@@ -712,7 +716,7 @@ public final class Sim {
         float stepLen = CRAB_CHASE * 2f * (float) Math.PI * Math.abs(e.amp) / Math.max(0.1f, e.period) * DT;
         float ns = cs;
         // the way it faces: along its sweep, else the way it last moved (or was turned)
-        float face = crabMode[idx] == 0 ? (e.amp * (float) Math.cos(2 * Math.PI * time / e.period + e.phase) >= 0f ? 1f : -1f) : (crabVel[idx] >= 0f ? 1f : -1f);
+        float face = crabMode[idx] == 0 ? (e.amp * (float) StrictMath.cos(2 * Math.PI * time / e.period + e.phase) >= 0f ? 1f : -1f) : (crabVel[idx] >= 0f ? 1f : -1f);
         boolean turning = false;
         if (sees) {
             float want = dx > 0f ? 1f : dx < 0f ? -1f : face;
@@ -743,7 +747,7 @@ public final class Sim {
     /** The way the crab faces: the arc it moved this step while off its sweep, else the sweep's own direction. */
     public float crabFacing(int hi, Element e) {
         if (hi < crabVel.length && crabMode[hi] != 0) return crabVel[hi] >= 0f ? 1f : -1f;
-        return e.amp * (float) Math.cos(2 * Math.PI * time / e.period + e.phase) >= 0f ? 1f : -1f;
+        return e.amp * (float) StrictMath.cos(2 * Math.PI * time / e.period + e.phase) >= 0f ? 1f : -1f;
     }
     public boolean crabChasing(int hi) { return hi < crabMode.length && crabMode[hi] == 1; }
 
@@ -762,7 +766,7 @@ public final class Sim {
             if (hi_ < featDone.length && featDone[hi_]) continue;
             float dx = course.dsWrap(s, e.s);
             if (e.type == Element.Type.KEY) {
-                float ky = e.y + 0.05f * (float) Math.sin(time * 3f);
+                float ky = e.y + 0.05f * (float) StrictMath.sin(time * 3f);
                 if (Math.abs(dx) < 0.95f && ky > lo - 0.6f && ky < hi + 0.4f) { featDone[hi_] = true; keys |= 1 << e.color; lastKeyColor = e.color; events |= EV_KEY; }
             } else {
                 float half = e.w * 0.5f + hw;
@@ -793,7 +797,7 @@ public final class Sim {
         float age = time - aimFireT[hi];
         if (age < 0f || age > Element.AIM_LIFE) return null;
         float d = Element.AIM_MUZZLE + Element.AIM_SPEED * age;      // starts at the muzzle tip, not the barrel centre
-        return new float[]{h.s + (float) Math.cos(aimAng[hi]) * d, h.y + (float) Math.sin(aimAng[hi]) * d};
+        return new float[]{h.s + (float) StrictMath.cos(aimAng[hi]) * d, h.y + (float) StrictMath.sin(aimAng[hi]) * d};
     }
 
     /** Aimed cannons: track the player (turning at a limited rate) while awake, lock at AIM_LOCK of the cycle, fire at AIM_FIRE along exactly the locked direction. Asleep (barrel idles up) when the player is out of range. */
@@ -813,7 +817,7 @@ public final class Sim {
                 float flight = Math.max(0f, Math.min(1f, (float) Math.sqrt(dx * dx + dy * dy) / Element.AIM_SPEED));   // ~time for the ball to reach you
                 float lead = Element.AIM_LEAD * flight;
                 float tdx = dx + vx * lead, tdy = dy + vy * lead;                      // lead the player: aim where they are heading, so a cannon you have passed shoots across in front of you
-                float target = near ? (float) Math.atan2(tdy, tdx) : (float) Math.PI * 0.5f;
+                float target = near ? (float) StrictMath.atan2(tdy, tdx) : (float) Math.PI * 0.5f;
                 float d = angDiff(target, aimAng[hi]), step = Element.AIM_TURN * DT;
                 aimAng[hi] += Math.max(-step, Math.min(step, d));
             }
@@ -912,7 +916,7 @@ public final class Sim {
         vx = approach(vx, target, a * dt);
         if (wet) {                          // Build 71 (owner: "a goofy dance with no real chance of falling"): on ice your feet skid about - a lurch that comes and goes - and braking hard sets off a real slide
             boolean braking = Math.abs(vx) > 1.6f && (Math.abs(target) < 0.01f || Math.signum(target) != Math.signum(vx));
-            vx += (float) Math.sin(time * T.wetLurchRate) * T.wetLurch * dt;
+            vx += (float) StrictMath.sin(time * T.wetLurchRate) * T.wetLurch * dt;
             if (braking && slipCd <= 0f) { slipCd = 0.9f; vx *= T.wetSkid; events |= EV_SLIP; }
         }
         if (slipCd > 0f) slipCd = Math.max(0f, slipCd - dt);
@@ -1132,7 +1136,7 @@ public final class Sim {
         landSpeed = -vy;
         if (el.type == Element.Type.PAD || el.type == Element.Type.SPRING) {
             float v = in.jumpHeld ? T.padBounceHeld : T.padBounce;
-            if (el.type == Element.Type.SPRING) { vy = v * (float) Math.cos(el.amp); vx = v * (float) Math.sin(el.amp); if (Math.abs(vx) > 0.5f) facing = vx > 0 ? 1 : -1; }
+            if (el.type == Element.Type.SPRING) { vy = v * (float) StrictMath.cos(el.amp); vx = v * (float) StrictMath.sin(el.amp); if (Math.abs(vx) > 0.5f) facing = vx > 0 ? 1 : -1; }
             else vy = v;
             jumpedUp = false; mode = Mode.AIR; onElem = -1; lastPad = i; padSquash[i] = 0.25f;
             events |= EV_BOUNCE;

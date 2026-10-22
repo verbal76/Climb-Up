@@ -1,5 +1,15 @@
 # Handoff
 
+## Build 72 (version 1.2.0, rules version 3) - playtest candidate
+
+New since Build 71 (details in docs/DECISIONS.md, evidence in docs/VERIFICATION.md):
+* Ramps per the owner's notes: flush joins (no trip-hop), crumble 0.5 s, a wild shaking ramp with flips, the spinning ramp (replaces sinking), and the new downhill **conveyor ramp**; long safe bridges can be **plank conveyors rolling left**.
+* **One movement speed**: the stick gives direction only (owner Option B). The generator and solvers use the same input with a 100 ms human hold; courses are unchanged by it.
+* Colour grade (saturation, contrast) in the 3D shader, less flat lighting; the hero's shadow now shows at every graphics quality; larger HUD small lines and a clearer jump button on phones.
+* Desktop workflow: owner-only draft releases (`test_build`), like the Android workflow.
+* Tools: `SolverSweepProbe` (`SWEEP=1 ./gradlew :core:test --tests '*SolverSweepProbe*'`), `-Dclimb.touchUi=true` (touch layout on desktop), `climb.hazard=BELT` (start beside a conveyor bridge).
+
+
 ## Build 71 released for owner playtesting (21 October)
 - **Built 21 October 2026 from commit `cc39cd37c6cdc08cd4c006eea574d6ad9d521b6c`** (owner-authorised playtest release; tests and CI already green on this exact commit, so the desktop run used `skip_tests`, with its EXE and Linux launcher smoke checks still on). APK `v1.1.5-build71` (versionCode 71, 22,324,415 bytes, SHA-256 000084d8dd36a44b4f809eb28fa8839b3d8ba20eb09f5779cdae3cdc56567fa1, same certificate CE:DD:D6:86...; run 39615756545): https://github.com/verbal76/Climb-Up/releases/tag/v1.1.5-build71. Desktop `build-71-desktop` (Windows EXE zip 50,536,170 bytes 960fe72393482d3325b1e53a63f7466049fae721114dc79b3e50d9047306fc80; Linux tar.gz 55,386,075 bytes 6951329b60cba577bf94fa2c6465810fe2a758a26633ca3250f2558270822c8a; run 39615761394): https://github.com/verbal76/Climb-Up/releases/tag/build-71-desktop. Nothing sent to Steam. Not played on a device yet.
 

@@ -436,6 +436,18 @@ public final class Autopilot {
         return plan(sim, a, false, false);
     }
 
+    /** True if the move reaches the next link on a copy with every hazard of the course active (no planning window). */
+    static boolean clearOfEverything(Sim real, int a, PolicyFactory f) {
+        Sim s = real.copy(); s.act = null; s.hz = null; s.humanHold = HUMAN_HOLD;
+        Policy p = make(f); InputState in = new InputState(); int sb = s.setbacks();
+        for (int i = 0; i < (int) (20f / Sim.DT); i++) {
+            in.clear(); p.act(s, in); s.step(in);
+            if (s.setbacks() != sb) return false;
+            if (succeeded(s, a)) return true;
+        }
+        return true;      // undecided within the time: let the real run find out, as before
+    }
+
     static boolean hasMidHazard(Course c, int a) {
         Element p = c.get(a);
         if (!p.isPlatform()) return false;
@@ -648,16 +660,28 @@ public final class Autopilot {
                     if (q % 6 == 5 && real.mode == Sim.Mode.AIR) r = plan(real, a, false, false);
                 }
             }
-            if (!r.ok && real.mode == Sim.Mode.GROUND && real.onElem == a && !c.get(a).crumbles()) {
-                // like a person: nothing works from here right now (a crab in the way, a slider on the far side of its run), so stand and watch for a few seconds and size it up again
+            final Sim.Mode held = real.mode;
+            if (!r.ok && (held == Sim.Mode.GROUND || held == Sim.Mode.CABLE || held == Sim.Mode.ROPE) && real.onElem == a && !c.get(a).crumbles()) {
+                // like a person: nothing works from here right now (a crab in the way, a slider on the far side of its run, a cannonball due along the cable), so stay put, watch for a few seconds and size it up again
                 int before = real.setbacks();
-                for (int q = 0; q < 300 && !r.ok && real.mode == Sim.Mode.GROUND && real.onElem == a && real.setbacks() == before; q++) {
+                for (int q = 0; q < 300 && !r.ok && real.mode == held && real.onElem == a && real.setbacks() == before; q++) {
                     in.clear(); real.step(in);
                     if (q % 12 == 11) { r = plan(real, a, false, true); if (!r.ok) r = plan(real, a, false, false); }
                 }
-                if (!r.ok && (real.mode != Sim.Mode.GROUND || real.onElem != a)) continue;      // bumped off the spot while waiting: recover and size it up again (the loop's own limits still apply)
+                if (!r.ok && (real.mode != held || real.onElem != a)) continue;      // bumped off the spot while waiting: recover and size it up again (the loop's own limits still apply)
             }
             if (!r.ok) { rep.failedLink = a; rep.simTime = real.time; rep.failInfo = String.format("plan failed: mode=%s on=%d s=%.2f y=%.2f vx=%.2f vy=%.2f", real.mode, real.onElem, real.s, real.y, real.vx, real.vy); return rep; }
+            // like a person, who sees the whole screen: the planner tries moves among the nearby elements, so check the chosen one against every hazard (an aimed
+            // cannon or a cannonball from links back) and, if one would catch it, hold on a moment and size it up again
+            for (int look = 0; look < 25 && !clearOfEverything(real, a, r.factory); look++) {
+                if (real.mode != Sim.Mode.GROUND || real.onElem != a) break;
+                int before = real.setbacks();
+                for (int q = 0; q < 12 && real.setbacks() == before; q++) { in.clear(); real.step(in); }
+                if (real.setbacks() != before || real.mode != Sim.Mode.GROUND || real.onElem != a) break;
+                Result again = plan(real, a, false, true); if (!again.ok) again = plan(real, a, false, false);
+                if (again.ok) r = again;
+            }
+            if (real.mode != Sim.Mode.GROUND && real.mode != Sim.Mode.CABLE && real.mode != Sim.Mode.ROPE && !(real.mode == Sim.Mode.AIR && real.lastPad == a)) continue;      // knocked about while waiting: recover first
             Policy p = make(r.factory);
             int fallsBefore = real.setbacks();
             real.act = null;

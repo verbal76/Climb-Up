@@ -55,7 +55,7 @@ public final class DesktopPlatform implements Platform {
 
     @Override public boolean desktop() { return true; }
     @Override public File screenshotDir() { return DataDirs.screenshotDir(configFile.getParentFile()); }     // Pictures/Upwardly/Screenshots, else the data folder
-    @Override public boolean touchControls() { return false; }
+    @Override public boolean touchControls() { return Boolean.getBoolean("climb.touchUi"); }      // test hook: draw the phone's on-screen controls (screenshots of the touch layout)
     @Override public boolean networkAllowed() { return false; }
     @Override public String title() { return TITLE; }
     @Override public GameInput gameInput() { return input; }

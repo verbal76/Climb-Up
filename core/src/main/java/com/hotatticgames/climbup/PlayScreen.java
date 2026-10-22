@@ -692,9 +692,9 @@ public final class PlayScreen extends ScreenAdapter {
         } else {
             boolean seedLine = g.settings.showSeed && !demo && g.save.seed != 0;                 // Build 64: the course code under the clocks (SHOW COURSE SEED)
             ui.rect(m - 6, H - m - (seedLine ? 160f : 136f) * zk, 380 * zk + 12, (seedLine ? 160f : 136f) * zk + 6, new Color(0.05f, 0.07f, 0.14f, 0.55f));
-            if (seedLine) ui.text("SEED " + SeedCode.encode(g.save.seed), m, H - m - 152 * zk, 2.3f * zk, Ui.DIM);
+            if (seedLine) ui.text("SEED " + SeedCode.encode(g.save.seed), m, H - m - 152 * zk, 2.7f * zk, Ui.DIM);      // Build 72: was 2.3, too small to read on a phone
             ui.text(hs, m, H - m - 30 * zk, 4f * zk, Ui.TEXT);
-            ui.text("BEST " + (int) Math.max(g.save.bestHeight, maxAbs), m, H - m - 56 * zk, 2.6f * zk, Ui.DIM);
+            ui.text("BEST " + (int) Math.max(g.save.bestHeight, maxAbs), m, H - m - 56 * zk, 2.9f * zk, Ui.DIM);         // Build 72: was 2.6
             // speed-run clock: distance and time on the tower being worked towards, and the total time of the climb (always shown)
             float segM = (float) Math.max(0.0, maxAbs - g.save.towerStartHeight);
             if (g.save.finished) ui.text("INFINITY +" + (int) Math.max(0.0, maxAbs - g.tuning.finishCastle * g.tuning.castleSpacing) + " M", m, H - m - 80 * zk, 3f * zk, new Color(1f, 0.82f, 0.3f, 1f));
@@ -843,7 +843,7 @@ public final class PlayScreen extends ScreenAdapter {
         float jx = g.settings.leftHanded ? 230 : W - 230, jy = 190;
         boolean pressed = jumpPtr >= 0 || kJumpHeld;
         shapes.setColor(1f, 1f, 1f, ab * 0.7f); shapes.circle(jx, jy, 112, 40);
-        shapes.setColor(pressed ? 1f : 0.95f, pressed ? 0.75f : 0.5f, 0.12f, pressed ? 0.95f : (hc ? 0.85f : 0.55f)); shapes.circle(jx, jy, 104, 40);
+        shapes.setColor(pressed ? 1f : 0.95f, pressed ? 0.75f : 0.5f, 0.12f, pressed ? 0.95f : (hc ? 0.85f : 0.72f)); shapes.circle(jx, jy, 104, 40);     // Build 72: a stronger orange (0.55 washed out to beige over the sky and the white label vanished)
         shapes.setColor(1f, 1f, 1f, 0.9f);
         shapes.triangle(jx - 46, jy - 18, jx + 46, jy - 18, jx, jy + 40);   // jump arrow
         float sbx = jx, sby = jy + 230;
@@ -858,8 +858,8 @@ public final class PlayScreen extends ScreenAdapter {
         }
         shapes.end();
         ui.batch.begin();
-        ui.textC("JUMP", jx, jy - 78, 3.2f, new Color(1, 1, 1, hc ? 1f : 0.8f));
-        if (sim.clubTime > 0f) ui.textC("SWING", sbx, sby - 74, 3f, new Color(1, 1, 1, hc ? 1f : 0.85f));
+        ui.textC("JUMP", jx, jy - 80, 3.6f, Color.WHITE);
+        if (sim.clubTime > 0f) ui.textC("SWING", sbx, sby - 76, 3.4f, Color.WHITE);
     }
 
     /** Castle 10's door has been walked through: the time is recorded; END RUN returns to the title (fresh climb next time), CONTINUE keeps climbing for ever without further timing. */

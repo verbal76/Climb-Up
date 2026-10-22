@@ -306,6 +306,7 @@ public final class Sim {
     public void completeRespawn(int idx) {
         respawnPending = false;
         falls++; invuln = 0.7f;
+        lastPad = -1;          // Build 72: a launch from a pad before the fall is history; left set, the next hop off the checkpoint read as that pad's launch
         events |= EV_RESPAWN; teleported = true;
         // restore crumbled platforms so a retry is never stale or soft-locked
         java.util.Arrays.fill(crumbleT, -1f);

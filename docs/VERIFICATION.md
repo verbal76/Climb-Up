@@ -1,5 +1,14 @@
 # Verification (candidate 0.1.0) - what was actually run
 
+## Build 72 (rules version 3, one-speed stick, conveyors, colour grade) - what was actually run
+
+Linux sandbox, JDK 21, Gradle 8.14.3, Xvfb + Mesa software GL for the real renderer. Not run here: a physical phone, a Windows machine, a Steam Deck (owner playtest).
+
+* **Full core suite** (`./gradlew :core:test`): 351 tests; the final run (with the desktop suite) is recorded in the release notes of this build. Includes the new `ConveyorTest` (5) and `RampVarietiesTest` (6), the spinner-aware `RampSlopeTest`, `RunSnapshotTest` (ramp surface after a resume), `TowerStreamingTest` (383 m, worst drift 1.7 mm, first decision flip at step 24,524), the generation fingerprint `58ece4dd45fb787dfae1f63d`, and every whole-course solver test (Endless, Framed, OfficialWorldRules) under the one-speed stick.
+* **Whole-course solver sweep** (`SolverSweepProbe`, `SWEEP=1`): six seeds (1, 7, 21, 99, 130, 178), 78 framed slices each (start to castle 10), each slice played end to end by the solver with the player's controls (direction-only stick, a stick direction held at least 100 ms): **468 / 468 completed**. The first sweep found 3 solver gaps (waiting on a cable for a cannonball, a stale pad launch after a respawn, an aimed cannon outside the planning window); all three were fixed and the sweep repeated.
+* **Real renderer screenshots** (desktop under Xvfb): the spinning ramp on its turntable, the conveyor ramp (slats rolling downhill) and the plank conveyor bridge; before/after of the colour grade in two worlds (mean saturation +13-14%); the hero's shadow (now drawn at every graphics quality); the touch layout at phone proportions (`-Dclimb.touchUi=true`).
+* **Earlier Build 71 evidence still valid**: new-climb setup 1.2-1.5 s -> 36-56 ms (`TowerPrepareTest`), background autosave ordering and recovery (`BackgroundSaveTest`), model preload list (`PreloadListTest`), assisted runs never set a best (`AssistedRunTest`).
+
 ## Run and passed (Linux sandbox, JDK 21, Gradle 8.14.3)
 * `./gradlew :core:test` - 22 JUnit tests, all green:
   * Sim: jump apex vs physics, variable height, coyote + buffered jump, pad bounce, rope grab/climb/leap, ledge grab + pull-up, crumble fall/respawn,

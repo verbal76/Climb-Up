@@ -1318,12 +1318,15 @@ public final class WorldRenderer implements Disposable {
         // Drop shadow projected straight down onto the platform currently beneath the player. The player is the camera anchor (always screen-centred),
         // so x=0 keeps the blob directly under him every frame; it tracks the depth-mover in z, and fades + shrinks with height so it releases from the
         // take-off platform as he rises (it used to stay a solid blob on the spot he jumped from).
-        if (quality > 0) {
+        {           // Build 72 (owner: the hero's shadow): drawn at every graphics quality (it was skipped at LOW, which some machines and phones pick); one disc costs nothing
             float gy = groundBelow(sim, ps, py, alpha);
             if (gy > -1e8f && py - gy < 9f) {
                 float k = MathUtils.clamp(1f - (py - gy) / 9f, 0.2f, 1f);
-                shadowBlend.opacity = 0.30f * k;
-                shadow.transform.idt().translate(0, gy + SHADOW_LIFT + 0.4f * Math.abs(groundSlope) * (0.55f * k + 0.15f), 0.2f + heroZ).rotate(0, 0, 1, MathUtils.atan(groundSlope) * MathUtils.radiansToDegrees).scale(0.55f * k + 0.15f, 1f, 0.4f * k + 0.15f);
+                // Build 72 (owner: the hero's shadow): from the game camera's shallow angle the old 0.7 x 0.55 m blob flattened into a sliver hidden behind the feet; it is now
+                // wide and deep enough to show round the feet, and darker
+                float sw = 1.0f * k + 0.2f, sd = 0.85f * k + 0.2f;
+                shadowBlend.opacity = 0.42f * k;
+                shadow.transform.idt().translate(0, gy + SHADOW_LIFT + 0.4f * Math.abs(groundSlope) * sw, 0.2f + heroZ).rotate(0, 0, 1, MathUtils.atan(groundSlope) * MathUtils.radiansToDegrees).scale(sw, 1f, sd);
                 batch.render(shadow, env);
             }
         }

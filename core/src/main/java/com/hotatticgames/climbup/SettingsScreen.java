@@ -49,7 +49,10 @@ public final class SettingsScreen extends ScreenAdapter {
         Thread t = new Thread(() -> {
             try {
                 com.hotatticgames.climbup.sim.Tuning tuning = com.hotatticgames.climbup.sim.Tuning.parse(Gdx.files.internal("data/tuning.json").readString("UTF-8"));        // the bundled tuning, never an update's
-                byte[] in; try (java.io.InputStream i = new java.util.zip.GZIPInputStream(Gdx.files.internal(ReplayCheck.BUNDLED).read())) { java.io.ByteArrayOutputStream o = new java.io.ByteArrayOutputStream(); byte[] b = new byte[65536]; int n; while ((n = i.read(b)) > 0) o.write(b, 0, n); in = o.toByteArray(); }      // (readAllBytes needs Android 13)
+                // the Android build unpacks .gz assets and drops the extension (Build 74 APK holds replays/seed12.bin), the desktop keeps the .gz
+                com.badlogic.gdx.files.FileHandle gz = Gdx.files.internal(ReplayCheck.BUNDLED), raw = Gdx.files.internal(ReplayCheck.BUNDLED.substring(0, ReplayCheck.BUNDLED.length() - 3));
+                boolean packed = gz.exists();
+                byte[] in; try (java.io.InputStream i = packed ? new java.util.zip.GZIPInputStream(gz.read()) : raw.read()) { java.io.ByteArrayOutputStream o = new java.io.ByteArrayOutputStream(); byte[] b = new byte[65536]; int n; while ((n = i.read(b)) > 0) o.write(b, 0, n); in = o.toByteArray(); }      // (readAllBytes needs Android 13)
                 long t0 = System.nanoTime();
                 ReplayCheck.Climb c = ReplayCheck.replay(tuning, ReplayCheck.BUNDLED_SEED, in, false, 150f, f -> checkStatus = "RUNNING " + (int) (f * 100) + "%");
                 String ev = ReplayCheck.hex(c.events.digest()), st = ReplayCheck.hex(c.states.digest());

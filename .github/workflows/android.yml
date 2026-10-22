@@ -23,7 +23,8 @@ env:
 
 jobs:
   build:
-    if: github.ref == 'refs/heads/ccr-cb458cd1-w4dh5c'   # branch guard: a dispatch from any other branch can never publish
+    # branch guard: a dispatch from any other branch can never publish. Build 74 (owner): its own branch may make a private draft test APK only.
+    if: github.ref == 'refs/heads/ccr-cb458cd1-w4dh5c' || (github.ref == 'refs/heads/build-74-determinism' && inputs.test_build)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

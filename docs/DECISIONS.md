@@ -394,3 +394,32 @@ This replaces the earlier centre-mass placement instruction. The gem's lowest vi
 - **Cost:** no shadow map or extra framebuffer; the casters are drawn once more. It runs at every graphics quality (the old disc was skipped at LOW). The black disc is gone. The blob's landing marker (the growing shadow that shows where it will come down) is unchanged.
 - **Placement round the tower:** the clip footprint follows `place()` round the cylinder (a platform to the side sits further back), boxed in world x and z.
 - **Tests:** `ShadowPassTest` (projection onto flat and sloped planes, the shader injection); real-renderer screenshots: hero centred and half over an edge, crab, skull, and the dusk world.
+
+## Build 72 root cause: streaming vs whole-tower divergence (owner deep-research directive)
+
+- **Experiment** (`StreamingReplayTest`): one autopilot climb on seed 12 (26,000 steps, 411 m). Its exact inputs were replayed with no controller, (a) into the same tower and (b) into a streaming tower rebuilt around a different floating origin every 400 steps (60 rebuilds).
+- **Result: physics, not the controller (Case A).**
+  - (a) The same frame is identical bit for bit.
+  - (b) The first difference is one float ulp (about 1.5e-5 m) at step 400, the first origin shift. Before anything else differs, the gap grows to at most 1.1 mm.
+  - At step 24030 a landing happens one step apart (a 0.37 mm height difference at the moment of touchdown). 7 steps differ in mode or surface in all, and the open-loop gap peaks at 0.46 m. After that the gap closes again.
+  - The climb is the same climb: the same 341 surfaces are stood on in the same order, and it ends 0.2 mm apart.
+- **First causal divergence:** heights and arcs (`Sim.y`, `Sim.s`, every `Element.s/y`) are floats relative to the tower's origin (`Tower.originY`, `originS`). A rebuild re-expresses them around the new origin, and every later sum then rounds at a different magnitude. A rebuild that keeps `originY` still differs, at step 11601, because `originS` follows the window's lowest slice. Nothing is stale, misnumbered or skipped: element identities, crumble state and hazards remap exactly.
+- **Why the controller looked guilty:** the autopilot is a bang-bang controller. A millimetre of rounding eventually moves one decision by one step, so two independently controlled runs part there. That is an amplified symptom, not a second cause.
+- **Research** (`reports/Deterministic simulation divergence.md`, not in the repository):
+  - Java 17 float arithmetic is strict IEEE everywhere, so the same operations in the same frame reproduce. The game confirms this.
+  - Floating-origin rebasing preserves precision, not bit equivalence. The only exact cures are one absolute frame for the simulation, or fixed-point state. Doubles shrink the drift to about 1e-10 m but do not remove it.
+- **Decision: no physics change in Build 72.** Every exact cure changes the simulation's arithmetic, and so the generator's proofs and possibly seeded courses. That needs the owner's approval (the directive's list) and is offered as a follow-up.
+  - Nothing the player sees depends on two frames agreeing. A climb runs in one deterministic frame schedule. Run snapshots store absolute positions and identities, not inputs. Speedrun times come from the one live simulation.
+  - The proofs' routes have margins far above a millimetre (no frame-perfect inputs).
+- **Tests, reviewed:**
+  - **`TowerStreamingTest`'s flip detection:** it compares decisions before the step for any difference. This is kept, and now justified by the replay: a flip can only come from that rounding.
+  - **`RunSnapshot`'s `absS0`:** kept. It is state the step reads (where the step began), so a snapshot without it cannot resume exactly. It is optional, so older files load.
+  - **`StreamingReplayTest`** asserts:
+    - an exact same-frame replay;
+    - no difference before the first origin shift;
+    - under 2 mm until a timing difference;
+    - at most 20 steps of event differences;
+    - an identical surface sequence;
+    - a final gap under 0.1 m.
+- **humanHold (6 steps = 100 ms, autopilot only):** kept. Measured human key holds are about 72-202 ms (most 85-126 ms), and Mario AI holds actions 2 ticks (about 80 ms). Without a hold, a solver with a direction-only stick can dither every frame and get a half-speed walk no person can produce, and prove routes on it. It never touches the player's own simulation.
+- **Open question for the owner (not changed):** the simulation calls `Math.sin`, `Math.cos` and `Math.atan2` (35 sites in `Sim`, `Element`, `CourseGenerator`, `CheckpointGem`: movers, swings, the cylinder). Java only promises these to within about 1 ulp, and Android's runtime uses its own native routines. So a phone may build a slightly different course from the same seed code than the desktop does, if a proof sits on a knife edge. Switching them to `StrictMath` (identical everywhere) leaves the desktop generation fingerprint unchanged (tried: `DeterminismTest` passes, `58ece4dd45fb787dfae1f63d`). On a phone it could change a course, which is a seeded-generation change, so it waits for approval.

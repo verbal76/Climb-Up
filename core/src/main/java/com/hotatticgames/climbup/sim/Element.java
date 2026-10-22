@@ -15,7 +15,7 @@ public final class Element {
         BEE,
         /** Wooden bridge balanced on a pivot in its middle: tips toward whoever stands on it, so keep running. (tilt state lives in the Sim) */
         SEESAW,
-        /** Sloped walkway (amp = height gained per metre toward +s, w = horizontal length, y = height at its middle). skin: 0 plain, 1 crumbles, 2 shakes and bounces you, 3 sinks away when stepped on. */
+        /** Sloped walkway (amp = height gained per metre toward +s, w = horizontal length, y = height at its middle). skin: 0 plain, 1 crumbles, 2 shakes and bounces you, 3 spins like a record, 4 a conveyor belt running downhill. */
         RAMP,
         /** Platform that slides toward and away from the camera (amp = depth travel). You can only land on it while it is in your plane (|depth| <= Z_REACH); once you stand on it, it carries you. */
         MOVE_Z,
@@ -74,6 +74,10 @@ public final class Element {
     /** True for anything that changes with time (planner sweeps its phase). */
     /** Build 72 (owner): the spinning ramp (RAMP skin 3, was the sinking ramp) turns flat on its centre like a record: one turn every {@code period} seconds. */
     public boolean spins() { return type == Type.RAMP && skin == 3; }
+    /** Build 72 (owner): conveyor belts. A RAMP with skin 4 runs downhill; a STATIC with skin 4 is a wooden plank belt (a long bridge) running to the left. {@code phase} is the belt speed in m/s. */
+    public boolean belt() { return skin == 4 && (type == Type.RAMP || type == Type.STATIC); }
+    /** The belt's surface speed along +s: both kinds carry you toward -s (down the ramp, to the left on screen). */
+    public float beltV() { return belt() ? -phase : 0f; }
     /** The spinning ramp's heading at time t (radians): 0 = uphill toward +s, as a fixed ramp. */
     public float spinAngle(float t) { return phase + 6.2831855f * t / period; }
     /** A ramp's slope along the lane at time t: fixed, or for the spinning ramp the slope of its turning top where the lane crosses it (it flattens side-on and flips). */

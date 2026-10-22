@@ -97,5 +97,5 @@ public class DeterminismTest {
         System.out.println("GENERATION_FINGERPRINT rules=" + CourseGenerator.RULES_VERSION + " " + fp);      // in the test report, for the refresh
         assertEquals("generation changed: bump RULES_VERSION and refresh this fingerprint", RULES_3_FINGERPRINT, fp);
     }
-    private static final String RULES_3_FINGERPRINT = "65e69b97d75991dad6db77d8";     // Build 72 generation (rules version 3), seed 1, slices 0-5 (rules 2, Build 71: 1111401d1974d639878f2d4e; rules 1, Build 63-70: 9812f0f035707f8b19824fa8)
+    private static final String RULES_3_FINGERPRINT = "58ece4dd45fb787dfae1f63d";     // Build 72 generation (rules version 3), seed 1, slices 0-5 (rules 2, Build 71: 1111401d1974d639878f2d4e; rules 1, Build 63-70: 9812f0f035707f8b19824fa8)
 }

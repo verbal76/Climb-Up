@@ -31,6 +31,7 @@ import com.hotatticgames.climbup.sim.Tuning;
 public final class WorldRenderer implements Disposable {
     private static final class Part {
         ModelInstance inst; float du, dy, dz, sx = 1, sy = 1, sz = 1, yaw, roll; Color color; boolean fall; boolean tinted = true; boolean fixed; ColorAttribute tintAttr;
+        boolean belt; float beltSpan, beltSlope;   // Build 72: a conveyor slat that rides the belt, wrapping round within beltSpan (and along the ramp's slope)
         float localZ;   // optional pre-rotation translate along the model's own Z (model units, applied before scale): used to recentre an off-origin mesh (the ramp) so it can sit at the element centre without a big arc offset
     }
     private static final class Vis { Part[] parts; Element e; boolean built; }
@@ -38,7 +39,7 @@ public final class WorldRenderer implements Disposable {
     private final Tuning T;
     private final Course course;
     private final Models models;
-    private final ModelBatch batch = new ModelBatch(new com.badlogic.gdx.graphics.g3d.utils.DefaultShaderProvider(boneConfig()));
+    private final ModelBatch batch = new ModelBatch(new com.badlogic.gdx.graphics.g3d.utils.DefaultShaderProvider(Grade.config(boneConfig())));      // Build 72: colour-graded
     private final PerspectiveCamera cam = new PerspectiveCamera(40f, 16, 9);
     private final Environment env = new Environment();
     private final DirectionalLight sun = new DirectionalLight(), fillL = new DirectionalLight(), bounceL = new DirectionalLight();
@@ -181,7 +182,7 @@ public final class WorldRenderer implements Disposable {
         boolean snow = e.zone == 1 || e.zone == 3;
         String base = snow ? "block-snow" : "block-grass";
         switch (e.type) {
-            case SEESAW: bridgeParts(ps, e.w, true); break;
+            case SEESAW: bridgeParts(ps, e.w, true, false); break;
             case RAMP: {
                 float sc = e.len;
                 // The ramp wedge's walking surface runs model-Z 2.0 (high, top y=1.39) -> 4.1 (low); its centre is model-Z ~3.1.
@@ -197,10 +198,20 @@ public final class WorldRenderer implements Disposable {
                     Part rim = part(models.disc, 0f, plinth - 0.07f, 0f, rad * 1.06f, 2f, rad * 1.06f); rim.color = glow; rim.fall = true; rim.fixed = true; rim.tinted = false; rim.tintAttr.color.set(glow);
                     rim.inst.materials.get(0).set(ColorAttribute.createEmissive(glow.r * 0.6f, glow.g * 0.6f, glow.b * 0.6f, 1f)); ps.add(rim);
                 }
+                if (e.belt()) {             // Build 72 (owner): a conveyor belt running downhill: dark rubber slats with yellow-striped ones, rolling down the slope, and a roller at each end
+                    float L = e.w, pitch = 0.32f, th = (float) Math.atan(e.amp) * MathUtils.radiansToDegrees; int n = Math.max(6, Math.round(L / pitch));
+                    Color slat = new Color(0.20f, 0.21f, 0.25f, 1f), stripe = new Color(1f, 0.78f, 0.16f, 1f), roller = new Color(0.55f, 0.57f, 0.62f, 1f);
+                    for (int k = 0; k < n; k++) {
+                        float x = -L / 2f + (k + 0.5f) * L / n;
+                        Part sl = boxPart(x, e.amp * x + 0.035f, 0f, L / n * 0.72f, 0.07f, 1.25f, k % 4 == 0 ? stripe : slat);
+                        sl.roll = th; sl.belt = true; sl.beltSpan = L; sl.beltSlope = e.amp; ps.add(sl);
+                    }
+                    for (int sd = -1; sd <= 1; sd += 2) { Part rl = boxPart(sd * L / 2f, sd * e.amp * L / 2f - 0.02f, 0f, 0.22f, 0.22f, 1.35f, roller); rl.roll = 45f; ps.add(rl); }
+                }
                 break;
             }
             case STATIC: case GOAL: case CRUMBLE: {
-                if (e.skin == 1 && e.type == Element.Type.STATIC) { bridgeParts(ps, e.w, false); break; }
+                if ((e.skin == 1 || e.skin == 4) && e.type == Element.Type.STATIC) { bridgeParts(ps, e.w, false, e.skin == 4); break; }
                 int w = Math.max(1, Math.round(e.w));
                 boolean thick = w >= 5 || e.type == Element.Type.GOAL;
                 String name = thick ? base : base + "-low";
@@ -317,10 +328,19 @@ public final class WorldRenderer implements Disposable {
     }
 
     /** Wooden bridge: plank deck on two beams, back rail with posts; the seesaw also gets a stone fulcrum and red end caps. */
-    private void bridgeParts(Array<Part> ps, float w, boolean seesaw) {
+    private void bridgeParts(Array<Part> ps, float w, boolean seesaw, boolean belt) {
         Color wood1 = new Color(0.66f, 0.47f, 0.26f, 1f), wood2 = new Color(0.58f, 0.40f, 0.22f, 1f), beam = new Color(0.36f, 0.24f, 0.14f, 1f), rope = new Color(0.62f, 0.50f, 0.30f, 1f);
+        Color painted = new Color(0.86f, 0.36f, 0.16f, 1f);         // Build 72: on a plank conveyor every fourth plank is painted, so you can see the deck rolling left
         int n = Math.max(4, Math.round(w / 0.5f)); float pl = w / n;
-        for (int i = 0; i < n; i++) ps.add(boxPart(-w / 2f + (i + 0.5f) * pl, -0.10f, 0f, pl * 0.92f, 0.16f, 1.5f, i % 2 == 0 ? wood1 : wood2));
+        for (int i = 0; i < n; i++) {
+            Part pk = boxPart(-w / 2f + (i + 0.5f) * pl, -0.10f, 0f, pl * (belt ? 0.82f : 0.92f), 0.16f, 1.5f, belt && i % 4 == 0 ? painted : i % 2 == 0 ? wood1 : wood2);
+            if (belt) { pk.belt = true; pk.beltSpan = w; }
+            ps.add(pk);
+        }
+        if (belt) {           // a big iron roller under each end that the plank belt wraps round
+            Color iron = new Color(0.40f, 0.42f, 0.48f, 1f);
+            for (int sd = -1; sd <= 1; sd += 2) { Part rl = boxPart(sd * (w / 2f - 0.05f), -0.22f, 0f, 0.36f, 0.36f, 1.6f, iron); rl.roll = 45f; ps.add(rl); }
+        }
         ps.add(boxPart(0f, -0.26f, 0.45f, w, 0.16f, 0.2f, beam));
         ps.add(boxPart(0f, -0.26f, -0.45f, w, 0.16f, 0.2f, beam));
         int posts = Math.max(2, Math.round(w / 1.75f) + 1);
@@ -468,8 +488,9 @@ public final class WorldRenderer implements Disposable {
             skyTop.lerp(0.40f, 0.52f, 0.86f, 1f, gold); skyBot.lerp(1.00f, 0.80f, 0.56f, 1f, gold);
             tint.lerp(1.00f, 0.93f, 0.82f, 1f, gold); amb.lerp(0.66f, 0.58f, 0.52f, 1f, gold);
         }
-        ((ColorAttribute) env.get(ColorAttribute.AmbientLight)).color.set(amb);
-        Palette.blend(Palette.SUN, zoneF, lc); if (gold > 0f) lc.lerp(1.00f, 0.78f, 0.52f, 1f, gold); sun.color.set(lc); Palette.blendDir(Palette.SUN_DIR, zoneF, lv); if (gold > 0f) lv.lerp(GOLD_SUN, gold).nor(); sun.direction.set(lv);
+        Grade.saturate(skyTop); Grade.saturate(skyBot);          // Build 72 (owner): richer colour, the sky included
+        ((ColorAttribute) env.get(ColorAttribute.AmbientLight)).color.set(amb.r * Grade.AMBIENT, amb.g * Grade.AMBIENT, amb.b * Grade.AMBIENT, 1f);
+        Palette.blend(Palette.SUN, zoneF, lc); if (gold > 0f) lc.lerp(1.00f, 0.78f, 0.52f, 1f, gold); sun.color.set(lc.r * Grade.KEY, lc.g * Grade.KEY, lc.b * Grade.KEY, 1f); Palette.blendDir(Palette.SUN_DIR, zoneF, lv); if (gold > 0f) lv.lerp(GOLD_SUN, gold).nor(); sun.direction.set(lv);
         Palette.blend(Palette.FILL, zoneF, lc); fillL.color.set(lc);
         Palette.blend(Palette.BOUNCE, zoneF, lc); bounceL.color.set(lc);
         // the hero gets his own three-point rig: a stronger key, a fill, the bounce, and a contrasting rim light from behind so his silhouette always separates from the background
@@ -616,6 +637,10 @@ public final class WorldRenderer implements Disposable {
                 if (e.skin == 2) { float on = Math.min(1f, sim.onT[i] / Sim.RAMP_SHAKE_EVERY), a = reducedMotion ? 0f : 0.06f + 0.16f * on; shakeX = a * MathUtils.sin(time * 85f + p.du); y += a * 0.8f * MathUtils.sin(time * 97f); }   // Build 72: a much harder tremble
                 if (e.spins() && !p.fixed) extraYaw = p.yaw - e.spinAngle(sim.time) * MathUtils.radiansToDegrees;      // turning like a record (heading 0 = uphill toward +s)
             }
+            if (p.belt) {       // Build 72: a conveyor slat rides along the belt and wraps round to the far end
+                float span = p.beltSpan, u = ((p.du + span / 2f + e.beltV() * sim.time) % span + span) % span - span / 2f;
+                dy = p.dy + p.beltSlope * (u - p.du); du = u;
+            }
             if (e.type == Element.Type.SEESAW) {
                 y = e.y - Math.max(-0.1f, Math.min(0.22f, dip[i]));
                 if (!p.fixed) {         // tilt the plank about its pivot
@@ -645,7 +670,7 @@ public final class WorldRenderer implements Disposable {
             }
             if (e.type == Element.Type.PAD && p.dy > -0.05f) { float sq = sim.padSquash[i] / 0.25f; dy = p.dy - 0.18f * sq; }
             if (p.tintAttr != null && e.type == Element.Type.RAMP && p.fixed == false && p.tinted == false && p.color == null) {
-                if (e.skin == 1) p.tintAttr.color.set(1f, 0.78f, 0.6f, 1f); else if (e.skin == 2) p.tintAttr.color.set(1f, 0.9f, 0.55f, 1f); else if (e.skin == 3) p.tintAttr.color.set(0.8f, 0.95f, 1f, 1f); else p.tintAttr.color.set(Color.WHITE);
+                if (e.skin == 1) p.tintAttr.color.set(1f, 0.78f, 0.6f, 1f); else if (e.skin == 2) p.tintAttr.color.set(1f, 0.9f, 0.55f, 1f); else if (e.skin == 4) p.tintAttr.color.set(0.62f, 0.64f, 0.70f, 1f); else if (e.skin == 3) p.tintAttr.color.set(0.8f, 0.95f, 1f, 1f); else p.tintAttr.color.set(Color.WHITE);
             } else if (p.tintAttr != null) {
                 if (p.color != null && p.fall) p.tintAttr.color.set(p.color);          // crumbling tiles keep their warm tint
                 else if (p.tinted) p.tintAttr.color.set(tint);

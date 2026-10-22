@@ -1328,6 +1328,7 @@ public final class CourseGenerator {
                 float w = 6f + rnd.nextInt(3), dy = r(0f, 0.9f);
                 float gapIn = reach(dy) * lerp(0.45f, 0.85f, d) * r(0.9f, 1f) * (1f - 0.03f * attempt);
                 Element br = plat(S, eR + gapIn + w / 2f, y0 + dy, w, z); br.skin = 1;
+                if (w >= 7f && d > 0.12f && rnd.nextInt(10) < 4) { br.skin = 4; br.phase = lerp(1.0f, 2.6f, d) * r(0.95f, 1.05f); }      // Build 72 (owner): some long bridges are wooden plank conveyor belts running to the left
                 l.add(br);
                 if (z >= 1 && rnd.nextInt(5) < 3) {
                     float L = r(4.5f, 6f);
@@ -1344,12 +1345,13 @@ public final class CourseGenerator {
                 // a walkway up to a block that is taller than a jump; from the second world it may crumble, shake you about, or spin like a record (Build 72)
                 float sc = r(1.3f, 1.75f), L = 2.2f * sc, slope = RAMP_SLOPE, rise = slope * L;
                 int skin = 0;
-                if (z >= 1) { int roll = rnd.nextInt(8); skin = roll < 2 ? 0 : roll < 4 ? 1 : roll < 6 ? 2 : 3; }
+                if (z >= 1) { int roll = rnd.nextInt(10); skin = roll < 2 ? 0 : roll < 4 ? 1 : roll < 6 ? 2 : roll < 8 ? 3 : 4; }
                 Element rp = plat(Element.Type.RAMP, eR + L / 2f, y0 + rise / 2f, L, z); rp.amp = slope; rp.skin = skin; rp.len = sc;      // Build 72 (owner): its foot meets the platform it starts from
                 if (skin == 3) { rp.period = r(2.2f, 3.0f); rp.phase = r(0f, 6.28f); }       // one turn every 2.2-3 s
+                if (skin == 4) rp.phase = lerp(1.3f, 3.4f, d) * r(0.95f, 1.05f);                // Build 72 (owner): a conveyor belt running downhill, faster the harder the climb (run speed is 5.6 m/s)
                 l.add(rp);
                 float wB = 3f + rnd.nextInt(2);
-                if (z >= 1 && rnd.nextInt(10) < 4) {         // ski jump: leap off the top of the ramp across a gap to a block up there
+                if (z >= 1 && skin != 4 && rnd.nextInt(10) < 4) {          // (no ski jump off a belt: it would steal the run-up)         // ski jump: leap off the top of the ramp across a gap to a block up there
                     float dyJ = r(0f, 0.7f), gapJ = reach(dyJ) * lerp(0.5f, 0.85f, d) * r(0.92f, 1f) * (1f - 0.04f * attempt);
                     l.add(plat(S, rp.s + L / 2f + gapJ + wB / 2f, y0 + rise + dyJ, wB, z));
                     break;

@@ -51,6 +51,7 @@ public final class RecordsData {
         public float totalSeedPrev = 0f;           // Build 64: the seed's best full run BEFORE this one (0 = none)
         public float infinity = 0f;                // metres beyond the tenth tower in this run
         public boolean infinityPb = false;
+        public boolean assisted = false;           // owner (Build 71): an assist was on while this run was timed; its times are kept here but set no best
         public Run() {}
         Run(long seed, int rules) { this.seed = seed; this.rules = rules; }
         public int legsDone() { int n = 0; for (int i = 0; i < LEGS; i++) if (legs[i] > 0f) n = i + 1; return n; }
@@ -99,6 +100,11 @@ public final class RecordsData {
         if (index < 0 || index >= LEGS || !good(seconds)) return false;
         Run r = run(seed, rules);
         r.legs[index] = seconds;
+        if (r.assisted) {                          // an assisted leg is timed and compared, never a best
+            SeedBests s = seedBests(seed, rules);
+            r.legSeedPrev[index] = s != null ? s.bestLegs[index] : 0f;
+            return false;
+        }
         boolean pb = bestLegs[index] <= 0f || seconds < bestLegs[index];
         if (pb) { bestLegs[index] = seconds; r.legPb[index] = true; }
         if (rules > 0) {
@@ -118,6 +124,11 @@ public final class RecordsData {
         Run r = run(seed, rules);
         boolean first = !r.finished;
         r.finished = true; r.total = total;
+        if (r.assisted) {                          // an assisted finish completes the run but is never a best
+            SeedBests s = seedBests(seed, rules);
+            if (first) r.totalSeedPrev = s != null ? s.bestTotal : 0f;
+            return false;
+        }
         boolean pb = bestTotal <= 0f || total < bestTotal;
         if (pb) { bestTotal = total; r.totalPb = true; }
         if (rules > 0 && first) {
@@ -128,6 +139,9 @@ public final class RecordsData {
         }
         return pb;
     }
+
+    /** Owner (Build 71): the run on this seed is assisted from now on (see RunRecord.noteAssist); legs and a finish recorded after this set no best. */
+    public void markAssisted(long seed) { run(seed, current != null && current.seed == seed ? current.rules : 0).assisted = true; }
 
     /** The climb beyond castle 10 has reached {@code metres}. Call as often as you like; only the furthest counts. Returns true while this run holds the record. */
     public boolean infinity(long seed, float metres) {

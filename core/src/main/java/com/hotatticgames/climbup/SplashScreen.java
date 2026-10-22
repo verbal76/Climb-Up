@@ -38,6 +38,7 @@ public final class SplashScreen extends ScreenAdapter {
         boolean tap = g.ui.anyTap();
         g.ui.end();
         g.autoShot("splash", dt);
+        g.models.preload(30f);                      // Build 71 (owner): the world's models load during the splash, not mid-climb (the logo is still; ~30 ms a frame keeps its fade smooth)
         if (t >= DUR || (tap && t > 0.3f)) g.setScreen(new TitleScreen(g));
     }
 

@@ -19,7 +19,10 @@ public final class SaveStore {
 
     private Json json() { Json j = new Json(JsonWriter.OutputType.json); j.setIgnoreUnknownFields(true); return j; }
 
-    public void writeAtomic(String name, String text) throws IOException {
+    public void writeAtomic(String name, String text) throws IOException { DiskWriter.drain(); writeNow(name, text); }
+    /** Build 71: the same atomic write, on the background writer, behind every write queued before it (the text is fixed now). */
+    public void writeAtomicLater(String name, String text) { DiskWriter.later(() -> { try { writeNow(name, text); } catch (IOException ignored) { /* as a direct write: the previous file stays */ } }); }
+    private void writeNow(String name, String text) throws IOException {
         File tmp = new File(dir, name + ".tmp"), dst = new File(dir, name);
         Files.write(tmp.toPath(), text.getBytes(StandardCharsets.UTF_8));
         try { Files.move(tmp.toPath(), dst.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING); }
@@ -27,6 +30,7 @@ public final class SaveStore {
     }
 
     private String read(String name) {
+        DiskWriter.drain();
         File f = new File(dir, name);
         if (!f.exists()) return null;
         try { return new String(Files.readAllBytes(f.toPath()), StandardCharsets.UTF_8); } catch (IOException e) { return null; }
@@ -34,11 +38,13 @@ public final class SaveStore {
 
     /** Keeps a copy of a file under another name once (never overwritten): what a save looked like before a one-way upgrade. */
     public void backupOnce(String name, String copy) {
+        DiskWriter.drain();
         File f = new File(dir, name), c = new File(dir, copy);
         if (!f.exists() || c.exists()) return;
         try { Files.copy(f.toPath(), c.toPath()); } catch (IOException ignored) { }
     }
     private void backupCorrupt(String name) {
+        DiskWriter.drain();
         File f = new File(dir, name);
         try { Files.move(f.toPath(), new File(dir, name + ".corrupt").toPath(), StandardCopyOption.REPLACE_EXISTING); } catch (IOException ignored) { f.delete(); }
         recoveredFromCorruption = true;
@@ -47,6 +53,10 @@ public final class SaveStore {
     public void saveGame(SaveData d) { d.syncRecords(); try { Json j = json(); j.setUsePrototypes(false); writeAtomic("save.json", j.toJson(d)); }   // every field, so the version number is always written (a default-valued version would be left out and read back as 0)
          catch (IOException ignored) { } }
     public void saveSettings(Settings s) { try { writeAtomic("settings.json", json().toJson(s)); } catch (IOException ignored) { } }
+
+    /** Build 71: {@link #saveGame} for the periodic autosave: the text is made now, the disk write happens on the background writer. */
+    public void saveGameLater(SaveData d) { d.syncRecords(); Json j = json(); j.setUsePrototypes(false); writeAtomicLater("save.json", j.toJson(d)); }
+    public void saveSettingsLater(Settings s) { writeAtomicLater("settings.json", json().toJson(s)); }
 
     public SaveData loadGame() {
         String t = read("save.json");
@@ -77,6 +87,11 @@ public final class SaveStore {
         if (r == null || !r.valid()) return false;
         try { writeAtomic("run.json", r.toJson()); return true; } catch (IOException e) { return false; }
     }
+    /** Build 71: {@link #saveRun} for the periodic autosave (the snapshot's text is made now). Returns false, writing nothing, when it is not valid. */
+    public boolean saveRunLater(RunSnapshot r) {
+        if (r == null || !r.valid()) return false;
+        writeAtomicLater("run.json", r.toJson()); return true;
+    }
     /** The stored snapshot, or null if there is none or it is damaged (a damaged one is set aside as run.json.corrupt). */
     public RunSnapshot loadRun() {
         String t = read("run.json");
@@ -85,11 +100,11 @@ public final class SaveStore {
         if (r == null) backupCorrupt("run.json");
         return r;
     }
-    public void deleteRun() { new File(dir, "run.json").delete(); new File(dir, "run.json.tmp").delete(); }
+    public void deleteRun() { DiskWriter.drain(); new File(dir, "run.json").delete(); new File(dir, "run.json.tmp").delete(); }
 
-    public void eraseAll() { new File(dir, "save.json").delete(); new File(dir, "settings.json").delete(); deleteRun(); }
+    public void eraseAll() { DiskWriter.drain(); new File(dir, "save.json").delete(); new File(dir, "settings.json").delete(); deleteRun(); }
     /** Removes only this folder's player files (save, run snapshot), never the shared settings. */
-    public void erasePlayer() { new File(dir, "save.json").delete(); new File(dir, "save.json.corrupt").delete(); deleteRun(); }
+    public void erasePlayer() { DiskWriter.drain(); new File(dir, "save.json").delete(); new File(dir, "save.json.corrupt").delete(); deleteRun(); }
 
     private static SaveData sanitize(SaveData d) {
         d.courseIndex = Math.max(0, d.courseIndex); d.checkpoint = Math.max(0, d.checkpoint);

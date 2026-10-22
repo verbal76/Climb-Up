@@ -59,6 +59,33 @@ public final class Tower {
     private Future<CourseGenerator.Framed> pending;
     private static final ExecutorService POOL = Executors.newSingleThreadExecutor(r -> { Thread t = new Thread(r, "tower-gen"); t.setDaemon(true); t.setPriority(Thread.MIN_PRIORITY); return t; });
     private Ref cpRef; private int lastCp = -2;
+
+    // ---- the first slice of the next climb, made ahead of time (Build 71 owner decision: no freeze when a climb begins)
+    /** One slice 0 being made in the background for a known seed and tuning (one at a time: a newer request replaces it). */
+    private static final class Prepared { final long seed; final Tuning t; final Future<CourseGenerator.Framed> slice; Prepared(long s, Tuning t, Future<CourseGenerator.Framed> f) { seed = s; this.t = t; slice = f; } }
+    private static volatile Prepared prepared;
+    private static final ExecutorService PREP = Executors.newSingleThreadExecutor(r -> { Thread th = new Thread(r, "tower-prep"); th.setDaemon(true); th.setPriority(Thread.MIN_PRIORITY); return th; });
+
+    /**
+     * Starts making slice 0 of a climb on {@code seed} in the background, so that {@code new Tower(seed, t)} does not have to make it on the frame that
+     * begins the climb (about 1.2 s on desktop). Generation is a pure function of seed, slice and tuning, so the slice is exactly the one the constructor
+     * would make itself. Repeating the request for the same seed and tuning does nothing.
+     */
+    public static void prepare(long seed, Tuning t) {
+        Prepared p = prepared;
+        if (p != null && p.seed == seed && p.t == t) return;
+        prepared = new Prepared(seed, t, PREP.submit((Callable<CourseGenerator.Framed>) () -> CourseGenerator.chunkFramed(seed, 0, null, t)));
+    }
+
+    /** Slice 0 for this climb: the prepared one when it is for this seed and tuning (waiting for the rest of it if it is still being made), else made now. */
+    private static CourseGenerator.Framed firstSlice(long seed, Tuning t) {
+        Prepared p = prepared;
+        if (p != null && p.seed == seed && p.t == t) {
+            prepared = null;
+            try { return p.slice.get(); } catch (Exception e) { /* make it here instead; a real generator fault then surfaces exactly as before */ }
+        }
+        return CourseGenerator.chunkFramed(seed, 0, null, t);
+    }
     private final java.util.HashSet<Long> doneFeat = new java.util.HashSet<>();      // keys taken, gates opened, crabs knocked off: remembered across unloading a slice
     public int openedUpTo;                                // castles up to this number are open, wherever the player later falls to
 
@@ -66,7 +93,7 @@ public final class Tower {
     public Tower(long seed, Tuning t) {
         this.seed = seed; this.T = t;
         world = new Course(seed, t.circumference()); world.gemCheckpoints = t.castleSpacing > 0f;
-        append(CourseGenerator.chunkFramed(seed, 0, null, t));
+        append(firstSlice(seed, t));
         rebuild(0, 0, 0.0, 0.0);
     }
 

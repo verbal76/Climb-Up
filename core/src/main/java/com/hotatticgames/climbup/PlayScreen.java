@@ -155,6 +155,7 @@ public final class PlayScreen extends ScreenAdapter {
         if (gi() != null) gi().controllerLost();          // a pad unplugged on the menus before this climb began is no reason to start it paused (found by the Build 64 scenario)
         g.audio.playlist(Audio.GAME_TRACKS);
         runTime = 0; maxAbs = absNow(); milestone = (int) (maxAbs / 50f);
+        if (!demo && tower != null && g.save.assisted && g.save.seed != 0) g.save.records().markAssisted(g.save.seed);      // a resumed assisted climb stays assisted in the times table too
         if (!demo && tower != null) g.save.records().catchUp(g.save.seed, runRules(), g.save.splits, g.save.towers, g.save.finished, g.save.finishTime);          // times table: a climb begun before the records existed
         if (!demo) {        // seed the cross-session achievement counters from Steam's stored stats (all 0 when there is no Steam)
             com.hotatticgames.climbup.platform.Achievements a = g.platform.achievements();
@@ -311,7 +312,7 @@ public final class PlayScreen extends ScreenAdapter {
                 if (gi() != null) gi().stepDone();
                 runTime += Sim.DT;
                 if (runTime > 15f && g.ota != null) g.ota.confirm();          // live play with the current (possibly OTA) content: a freshly applied update is now trusted
-                if (!demo) { if (!clockLive && (in.moveX != 0f || in.jumpPressed || in.moveY != 0f)) clockLive = true; RunRecord.tick(g.save, Sim.DT, clockLive); if (absNow() > maxAbs) maxAbs = absNow(); if (maxAbs > g.save.climbHeight) g.save.climbHeight = (float) maxAbs; ResumeState.capture(g.save, sim); }
+                if (!demo) { if (!clockLive && (in.moveX != 0f || in.jumpPressed || in.moveY != 0f)) clockLive = true; RunRecord.tick(g.save, Sim.DT, clockLive); if (clockLive) RunRecord.noteAssist(g.save, g.settings.assistSlow || g.settings.assistForgive); if (absNow() > maxAbs) maxAbs = absNow(); if (maxAbs > g.save.climbHeight) g.save.climbHeight = (float) maxAbs; ResumeState.capture(g.save, sim); }
                 int ev = sim.consumeEvents();
                 if (PerfProbe.ON) PerfProbe.events |= ev;
                 handleEvents(ev);
@@ -328,7 +329,7 @@ public final class PlayScreen extends ScreenAdapter {
             int ms = (int) (maxAbs / 50f);
             if (ms > milestone) { milestone = ms; toast = ms * 50 + " M!"; toastT = 1.6f; g.audio.play("checkpoint", 0.55f, 1.35f); world.particles.burst(sim.s, sim.y + 1f, 12, gold, 2.6f, 3.2f, 0.1f, -0.5f, 1f); }
             for (int pi = pops.size() - 1; pi >= 0; pi--) { Pop pp = pops.get(pi); pp.age += dt; pp.liftShown += (pp.lift - pp.liftShown) * Math.min(1f, dt * 14f); if (pp.age > 1.1f) pops.remove(pi); }
-            autosaveT += dt; if (autosaveT > 8f) { autosaveT = 0; g.persist(); saveRun(); if (PerfProbe.ON) PerfProbe.saved = true; }
+            autosaveT += dt; if (autosaveT > 8f) { autosaveT = 0; g.autosave(tower != null && !demo && state != State.FINISHED ? tower : null, sim); if (PerfProbe.ON) PerfProbe.saved = true; }      // disk writes on the background writer (Build 71)
             ambientSounds(dt);
             juice(dt);
             updateTips(dt);
@@ -417,16 +418,16 @@ public final class PlayScreen extends ScreenAdapter {
         sd.towers = n + 1;
         RecordsData.Run cur = null;
         if (n < RecordsData.LEGS) { sd.records().legDone(sd.seed, runRules(), n, split); cur = sd.records().current; }          // times table: this leg, its global and its on-this-course bests
-        boolean hadSplit = sd.bestSplit > 0f, pbSplit = !hadSplit || split < sd.bestSplit;
+        boolean hadSplit = sd.bestSplit > 0f, pbSplit = !sd.assisted && (!hadSplit || split < sd.bestSplit);       // owner (Build 71): an assisted run's towers are timed but set no best
         if (pbSplit) sd.bestSplit = split;
         if (sd.bestTotals.length <= n) sd.bestTotals = java.util.Arrays.copyOf(sd.bestTotals, n + 1);
-        boolean hadTotal = sd.bestTotals[n] > 0f, pbTotal = !hadTotal || total < sd.bestTotals[n];
+        boolean hadTotal = sd.bestTotals[n] > 0f, pbTotal = !sd.assisted && (!hadTotal || total < sd.bestTotals[n]);
         if (pbTotal) sd.bestTotals[n] = total;
         sd.towerStartClock = sd.runClock; sd.towerStartHeight = (float) Math.max(0.0, maxAbs);
         toast = keyName(sim.lastGateColor) + " CASTLE OPENED!"; toastT = 3.2f;
         boolean showPb = g.settings.showBestTimes;                                   // Build 64: SHOW BEST TIMES hides every best and comparison here; the split itself and the clock stay
         String vsSeed = showPb && cur != null && cur.seed == sd.seed && n < RecordsData.LEGS && cur.legSeedPrev[n] > 0f ? "  " + fmtDelta(split - cur.legSeedPrev[n]) + " VS COURSE BEST" : "";
-        toastSub = "TOWER " + (n + 1) + "  " + fmtTime(split) + vsSeed + (showPb && pbSplit && hadSplit ? "  FASTEST TOWER!" : "") + "    TOTAL " + fmtTime(total) + (showPb && pbTotal && hadTotal ? "  PACE PB!" : "");
+        toastSub = "TOWER " + (n + 1) + "  " + fmtTime(split) + vsSeed + (showPb && pbSplit && hadSplit ? "  FASTEST TOWER!" : "") + "    TOTAL " + fmtTime(total) + (showPb && pbTotal && hadTotal ? "  PACE PB!" : "") + (sd.assisted ? "  ASSISTED" : "");
         g.persist();
     }
 
@@ -867,7 +868,7 @@ public final class PlayScreen extends ScreenAdapter {
         ui.textC("CASTLE " + g.tuning.finishCastle + " REACHED!", W / 2, y + ph - 76, 4.8f, Ui.ACCENT);
         ui.textC("FINISH TIME", W / 2, y + ph - 150, 3.4f, Ui.DIM);
         ui.textC(fmtTime(sd.finishTime), W / 2, y + ph - 216, 8f, new Color(0.45f, 1f, 0.55f, 1f));
-        ui.textC(finishNewBest ? "NEW RECORD!" : "BEST " + fmtTime(sd.bestFinish), W / 2, y + ph - 270, 3.6f, finishNewBest ? new Color(1f, 0.85f, 0.3f, 1f) : Ui.DIM);
+        ui.textC(sd.assisted ? "ASSISTED RUN - NOT A RECORD" : finishNewBest ? "NEW RECORD!" : "BEST " + fmtTime(sd.bestFinish), W / 2, y + ph - 270, 3.6f, finishNewBest ? new Color(1f, 0.85f, 0.3f, 1f) : Ui.DIM);
         if (sd.seed != 0) {                                                            // Build 64: the course this time was set on, and (SHOW BEST TIMES) how it compares with the best on it; two lines, both inside the panel
             RecordsData.Run cur = sd.records().current; boolean mine = cur != null && cur.seed == sd.seed;
             String vs = g.settings.showBestTimes && mine && cur.totalSeedPrev > 0f ? fmtDelta(sd.finishTime - cur.totalSeedPrev) + " VS COURSE BEST " + fmtTime(cur.totalSeedPrev) : g.settings.showBestTimes && mine && cur.totalSeedPb ? "FIRST FINISH ON THIS COURSE" : "";

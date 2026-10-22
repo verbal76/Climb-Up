@@ -33,6 +33,7 @@ public final class TitleScreen extends ScreenAdapter {
     private boolean has;      // a climb in progress that can really be resumed
 
     @Override public void show() {
+        g.prepareNextClimb();                       // a new climb started from here begins at once (Build 71)
         confirmNew = false; showMore = false; visits++;
         Tower tw = null; int idx = 0;
         has = g.climbValid();
@@ -60,6 +61,7 @@ public final class TitleScreen extends ScreenAdapter {
 
     @Override public void render(float dt) {
         time += Math.min(dt, 0.1f);
+        g.models.preload(4f);                       // Build 71: whatever the splash did not get to, a little each frame (a no-op once all are loaded)
         world.render(sim, 1f, dt, time, true);
         Ui ui = g.ui; ui.begin();
         float W = ui.w(), H = ui.h();

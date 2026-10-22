@@ -36,6 +36,12 @@ public final class PerfRun implements ApplicationListener {
     private static final int SECONDS = Integer.getInteger("perf.seconds", 300), W = Integer.getInteger("perf.w", 1280), H = Integer.getInteger("perf.h", 720);
     private static final int CAP = Integer.getInteger("perf.cap", 0), FALL_EVERY = Integer.getInteger("perf.fallEvery", 0), RESTART_EVERY = Integer.getInteger("perf.restartEvery", 0);
     private static final boolean FINISH = Boolean.getBoolean("perf.finish");
+    /** perf.prepare (default true): 5 s before each restart, ask for the next climb's first slice as the title screen does; false measures the old cold start. */
+    private static final boolean PREPARE = !"false".equals(System.getProperty("perf.prepare"));
+    private boolean prepared;
+    /** perf.preload (default true): load every world model before the climb, as the splash does; false measures the old on-demand loading. */
+    private static final boolean PRELOAD = !"false".equals(System.getProperty("perf.preload"));
+    private double preloadMs; private int loadsAtStart;
     private static final long SEED = Long.getLong("perf.seed", 7L);
     private static final String OUT = System.getProperty("perf.out", "build/perf/perf.csv"), TAG = System.getProperty("perf.tag", "run");
     private static final float WARMUP = 10f;
@@ -71,6 +77,8 @@ public final class PerfRun implements ApplicationListener {
         DesktopPlatform dp = new DesktopPlatform(data, () -> src);
         game = new ClimbGame(data, dp);
         game.create();
+        if (PRELOAD) { long p0 = System.nanoTime(); while (!game.models.preload(1000f)) { } preloadMs = (System.nanoTime() - p0) / 1e6; }      // what the splash and title do before a climb (Build 71)
+        loadsAtStart = game.models.loads;
         startRun();
         GL20 gl = Gdx.gl;
         System.out.println("PERF env GL_RENDERER=" + gl.glGetString(GL20.GL_RENDERER) + " GL_VERSION=" + gl.glGetString(GL20.GL_VERSION) + " java=" + System.getProperty("java.version")
@@ -96,7 +104,8 @@ public final class PerfRun implements ApplicationListener {
         clock = (t0 - startNs) / 1e9f;
         if (clock >= nextFall) { PerfProbe.forceFall = true; falls++; nextFall += FALL_EVERY; }
         boolean restarting = false;
-        if (clock >= nextRestart) { long r0 = System.nanoTime(); startRun(); restartLog.add(String.format(Locale.US, "%.1f", (System.nanoTime() - r0) / 1e6)); restarts++; nextRestart += RESTART_EVERY; restarting = true; }
+        if (PREPARE && !prepared && clock >= nextRestart - 5f) { game.prepareNextClimb(); prepared = true; }      // as the title screen does while it is up (Build 71)
+        if (clock >= nextRestart) { prepared = false; long r0 = System.nanoTime(); startRun(); restartLog.add(String.format(Locale.US, "%.1f", (System.nanoTime() - r0) / 1e6)); restarts++; nextRestart += RESTART_EVERY; restarting = true; }
         long g0 = System.nanoTime();
         game.render();
         if (FINISH) Gdx.gl.glFinish();
@@ -183,6 +192,7 @@ public final class PerfRun implements ApplicationListener {
         if (!restartLog.isEmpty()) System.out.println("PERF " + TAG + " restart setup ms: " + restartLog);
         double maxY = 0; for (double[] r : s) maxY = Math.max(maxY, r[14]);
         System.out.printf(Locale.US, "PERF %s climbed to %.0f m%n", TAG, maxY);
+        System.out.printf(Locale.US, "PERF %s models: preload %s, %d loaded before the climb, %d loaded during it%n", TAG, PRELOAD ? String.format(Locale.US, "%.0f ms", preloadMs) : "off", loadsAtStart, game.models.loads - loadsAtStart);
     }
 
     @Override public void resize(int w, int h) { game.resize(w, h); }

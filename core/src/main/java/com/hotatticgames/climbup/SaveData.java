@@ -49,6 +49,7 @@ public final class SaveData {
     public float bestFinish = 0f;                // fastest finish ever (0 = none)
     public float bestSplit = 0f;                 // fastest single tower ever (0 = none)
     public float[] bestTotals = new float[0];    // fastest run clock at the Nth unlock, ever
+    public boolean assisted = false;             // owner (Build 71): this climb's clock has run with an assist on (slower speed or jump forgiveness); its times stay with the run but never become bests
     // personal records (times table, infinity distance): one self-contained object owned by whoever owns this save, stored as its own JSON text (see RecordsData)
     public String recordsJson = "";
     private transient RecordsData recordsObj;

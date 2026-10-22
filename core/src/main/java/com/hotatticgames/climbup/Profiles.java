@@ -96,6 +96,7 @@ public final class Profiles {
     public boolean delete(int id) {
         Entry e = get(id); if (e == null) return false;
         list.remove(e);
+        DiskWriter.drain();                          // a queued autosave must not write into the folder after it is gone
         deleteTree(dirOf(id));
         if (list.isEmpty()) { lastId = 0; add(FIRST_NAME); }
         else if (lastId == id) { lastId = list.get(0).id; writeIndex(); }
@@ -105,7 +106,7 @@ public final class Profiles {
 
     /** Removes every player (ERASE) and starts again with an empty first player. */
     public void deleteAll() {
-        deleteTree(new File(root, "players")); list.clear(); lastId = 0;
+        DiskWriter.drain(); deleteTree(new File(root, "players")); list.clear(); lastId = 0;
         add(FIRST_NAME);
     }
 

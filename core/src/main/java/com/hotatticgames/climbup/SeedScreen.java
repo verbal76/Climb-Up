@@ -39,7 +39,9 @@ public final class SeedScreen extends ScreenAdapter {
     boolean type(char c) {
         char u = Character.toUpperCase(c);
         if (code.length() >= SeedCode.LENGTH || SeedCode.ALPHABET.indexOf(u) < 0) return false;
-        code.append(u); message = ""; return true;
+        code.append(u); message = "";
+        if (code.length() == SeedCode.LENGTH && SeedCode.problem(code.toString()) == null) com.hotatticgames.climbup.sim.Tower.prepare(SeedCode.decode(code.toString()), g.tuning);     // a whole valid code: make its first slice while OK is pressed (Build 71)
+        return true;
     }
     void backspace() { if (code.length() > 0) code.setLength(code.length() - 1); message = ""; }
     String current() { return code.toString(); }

@@ -63,6 +63,7 @@ public class ClimbGame extends Game {
         audio = new Audio(settings);
         models = new Models();
         platform.attach(this);
+        prepareNextClimb();                        // the first slice of a new climb is made while the splash and the title are up
         String start = System.getProperty("climb.start", demo ? "play" : "splash");
         switch (start) {
             case "title": setScreen(new TitleScreen(this)); break;
@@ -224,13 +225,32 @@ public class ClimbGame extends Game {
             save.seed = 0;
         }
         String sd = System.getProperty("climb.seed");
-        long seed = pendingSeed != null ? pendingSeed : sd != null ? Long.parseLong(sd) : (System.nanoTime() ^ (System.currentTimeMillis() * 0x9E3779B97F4A7C15L)) & 0x7fffffffL | 1L;   // Build 64: a typed course code wins; the random draw is unchanged
+        long seed = pendingSeed != null ? pendingSeed : sd != null ? Long.parseLong(sd) : takeRandomSeed();   // Build 64: a typed course code wins; the random draw is unchanged (Build 71: drawn ahead, see prepareNextClimb)
         pendingSeed = null;
         r.tower = new Tower(seed, tuning); r.startIdx = 0;
         Legacy.stampNewClimb(save, VERSION, appBuild, Legacy.today());
         save.seed = seed; save.cpSlice = 0; save.cpLocal = 0;
         try { history.reset(seed); syncHistory(r.tower); } catch (java.io.IOException e) { /* cannot store the climb: it still plays, it just cannot be resumed */ save.seed = 0; }
         return r;
+    }
+
+    private Long nextRandomSeed;
+    private static long drawSeed() { return (System.nanoTime() ^ (System.currentTimeMillis() * 0x9E3779B97F4A7C15L)) & 0x7fffffffL | 1L; }
+    /** The seed of the next random climb: the one drawn ahead by {@link #prepareNextClimb}, or a fresh draw. */
+    private long takeRandomSeed() { Long s = nextRandomSeed; nextRandomSeed = null; return s != null ? s : drawSeed(); }
+
+    /**
+     * Build 71 (owner: no freeze when a climb begins, no extra loading screen): the first slice of the climb a RANDOM RUN would start is made in the background
+     * while the splash and the title are up, so starting it is instant. The seed is drawn now instead of on the tap (equally random); a typed course code
+     * prepares its own slice (SeedScreen). Calling it again before that climb starts does nothing.
+     */
+    public void prepareNextClimb() {
+        if (demo || tuning == null) return;
+        String sd = System.getProperty("climb.seed");
+        long seed;
+        if (sd != null) seed = Long.parseLong(sd);
+        else { if (nextRandomSeed == null) nextRandomSeed = drawSeed(); seed = nextRandomSeed; }
+        com.hotatticgames.climbup.sim.Tower.prepare(seed, tuning);
     }
 
     /** Appends every slice the tower has generated since the last call to the history file. */
@@ -269,6 +289,24 @@ public class ClimbGame extends Game {
     }      // records (bestSplit, bestTotals, bestFinish, lastFinish) are kept
 
     public void persist() { if (store != null) store.saveGame(save); if (settingsStore != null) settingsStore.saveSettings(settings); }
+
+    /**
+     * Build 71 (owner): the periodic autosave. The same files as {@link #persist} and {@link #saveRun}, built now from the live state, written by the
+     * background writer in order (DiskWriter), so the render thread never waits on the disk. Every other save (pause, leaving, checkpoints, the app going to
+     * the background) still writes directly and first lets the queued writes finish, so nothing older can land after it.
+     */
+    public void autosave(Tower tower, com.hotatticgames.climbup.sim.Sim sim) {
+        if (store != null) store.saveGameLater(save);
+        if (settingsStore != null) settingsStore.saveSettingsLater(settings);
+        if (tower == null || save.seed == 0 || save.seed != tower.seed || store == null) return;
+        if (history != null) for (int k = history.count(); k < tower.sliceCount(); k++) history.appendLater(tower.blob(k));
+        RunSnapshot r = RunSnapshot.capture(sim, tower, save.seed);
+        if (r == null) { store.deleteRun(); return; }
+        store.saveRunLater(r);
+        ResumeState.capture(save, sim);
+        save.cpSlice = r.cpSlice; save.cpLocal = r.cpLocal;
+        store.saveGameLater(save);
+    }
 
     /** Loads the shared settings and the player list, and opens the player who played last (also what the tests start from). */
     void initStores() {

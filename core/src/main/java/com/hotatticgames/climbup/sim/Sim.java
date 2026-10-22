@@ -366,8 +366,18 @@ public final class Sim {
 
     // ---------------------------------------------------------------- step
 
+    /** Below this the stick is centred. Every input (touch stick, pad, keys, the generator's and test autopilot's moves) is read the same way. */
+    public static final float STICK_DEAD = 0.05f;
+    /**
+     * Owner (Build 71): one consistent movement speed; the stick sets the direction, not how fast. A tilt past {@link #STICK_DEAD} is a full push, so
+     * running, air control, ropes and cables all move at their single tuned speed. The course generator's proofs were checked to give the same courses
+     * with this rule (docs/PERF_AUDIT_BUILD71.md), so no course changed.
+     */
+    public static float direction(float v) { return Math.abs(v) < STICK_DEAD ? 0f : Math.signum(v); }
+
     public void step(InputState in) {
         if (respawnPending) return;          // frozen until the window has been rebuilt around the checkpoint
+        in.moveX = direction(in.moveX); in.moveY = direction(in.moveY);      // owner (Build 71): the stick gives direction only, at the one movement speed
         float dt = DT;
         ps0 = s; py0 = y; teleported = false;
         time += dt;

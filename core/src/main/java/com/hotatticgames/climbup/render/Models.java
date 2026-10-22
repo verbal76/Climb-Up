@@ -64,10 +64,33 @@ public final class Models implements Disposable {
         return mb.end();
     }
 
+    // ---- Build 71 (owner): every world model is loaded during the splash and title, a little each frame, instead of in the frame that first draws it mid-climb
+    /** All the Quaternius pack models (assets/pack), the Kenney models (assets/models) and the space scenery (assets/space, without the astronaut characters, which HeroRig loads). */
+    static final String[] PRELOAD_PACK = {"arrow_up", "bee_anim", "blob_anim", "bomb", "bouncer", "bridge_modular", "bridge_small", "cannon", "cannonball", "chest", "cloud_1", "cloud_2", "cloud_3", "coin", "crab", "crab_anim", "cube_crate", "cube_spikes", "door", "gem_blue", "gem_green", "gem_pink", "goal_flag", "hazard_cylinder", "hazard_saw", "hazard_spiketrap", "key", "lever", "pipe_straight", "rockplatform_tall", "rockplatforms_medium", "skull", "skull_anim", "spikes", "spikyball", "star", "thunder", "tower", "tower2"};
+    static final String[] PRELOAD_OBJ = {"block-grass-long", "block-grass-low-long", "block-grass-low-narrow", "block-grass-low", "block-grass-narrow", "block-grass", "block-moving-blue", "block-moving-large", "block-moving", "block-snow-long", "block-snow-low-long", "block-snow-low-narrow", "block-snow-low", "block-snow-narrow", "block-snow", "button-round", "chest", "coin-gold", "crate-item-strong", "fence-low-straight", "flag", "flowers", "grass", "heart", "jewel", "key", "ladder-long", "mushrooms", "plant", "platform-fortified", "platform", "poles", "rocks", "sign", "spike-block", "stones", "trap-spikes", "tree-pine-small", "tree-pine-snow-small", "tree-pine-snow", "tree-pine", "tree-snow", "tree"};
+    static final String[] PRELOAD_SPACE = {"planet_1", "planet_10", "planet_11", "planet_2", "planet_3", "planet_4", "planet_5", "planet_6", "planet_7", "planet_8", "planet_9", "ramp", "rock_1", "rock_2", "rock_3", "rock_4", "rock_large_1", "rock_large_2", "rock_large_3", "spaceship_barbarathebee", "spaceship_fernandotheflamingo", "spaceship_finnthefrog", "spaceship_raetheredpanda"};
+    private int preloaded;
+    /** Models read from disk so far (diagnostics: after the preload, a climb should add none). */
+    public int loads;
+
+    /** Loads the next not-yet-loaded world models for about {@code budgetMs} (at least one per call). Returns true once every one is loaded; models a frame asks for first still load on demand. */
+    public boolean preload(float budgetMs) {
+        int total = PRELOAD_PACK.length + PRELOAD_OBJ.length + PRELOAD_SPACE.length;
+        long end = System.nanoTime() + (long) (budgetMs * 1e6f);
+        while (preloaded < total) {
+            int i = preloaded++;
+            if (i < PRELOAD_PACK.length) pack(PRELOAD_PACK[i]);
+            else if ((i -= PRELOAD_PACK.length) < PRELOAD_OBJ.length) obj(PRELOAD_OBJ[i]);
+            else space(PRELOAD_SPACE[i - PRELOAD_OBJ.length]);
+            if (System.nanoTime() >= end) break;
+        }
+        return preloaded >= total;
+    }
+
     public Model obj(String name) {
         Model m = map.get(name);
         if (m == null) {
-            m = loader.loadModel(Gdx.files.internal("models/" + name + ".obj"), true);
+            m = loader.loadModel(Gdx.files.internal("models/" + name + ".obj"), true); loads++;
             for (com.badlogic.gdx.graphics.g3d.Material mat : m.materials) {
                 TextureAttribute ta = (TextureAttribute) mat.get(TextureAttribute.Diffuse);
                 if (ta != null) {
@@ -83,7 +106,7 @@ public final class Models implements Disposable {
     public Model pack(String name) {
         Model m = pack.get(name);
         if (m == null) {
-            m = new com.badlogic.gdx.graphics.g3d.loader.G3dModelLoader(new com.badlogic.gdx.utils.JsonReader()).loadModel(Gdx.files.internal("pack/" + name + ".g3dj"));
+            m = new com.badlogic.gdx.graphics.g3d.loader.G3dModelLoader(new com.badlogic.gdx.utils.JsonReader()).loadModel(Gdx.files.internal("pack/" + name + ".g3dj")); loads++;
             pack.put(name, m);
         }
         return m;
@@ -93,7 +116,7 @@ public final class Models implements Disposable {
     public Model space(String name) {
         Model m = pack.get("space/" + name);
         if (m == null) {
-            m = new com.badlogic.gdx.graphics.g3d.loader.G3dModelLoader(new com.badlogic.gdx.utils.JsonReader()).loadModel(Gdx.files.internal("space/" + name + ".g3dj"));
+            m = new com.badlogic.gdx.graphics.g3d.loader.G3dModelLoader(new com.badlogic.gdx.utils.JsonReader()).loadModel(Gdx.files.internal("space/" + name + ".g3dj")); loads++;
             pack.put("space/" + name, m);
         }
         return m;

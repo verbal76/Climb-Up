@@ -19,26 +19,39 @@ public final class HistoryStore {
     private static final int MAGIC = 0x434C4D48;      // "CLMH"
     private final File file;
     private int count = -1; private long seed;
+    private volatile boolean writeFailed;             // Build 71: a background append failed; count() then re-reads what is really on disk
 
     public HistoryStore(File dir) { this.file = new File(dir, "history.bin"); }
 
     /** Starts a new history for this seed (the old one is replaced). */
     public void reset(long seed) throws IOException {
+        DiskWriter.drain();
         File tmp = new File(file.getPath() + ".tmp");
         try (DataOutputStream o = new DataOutputStream(new FileOutputStream(tmp))) { o.writeInt(MAGIC); o.writeLong(seed); }
         if (!tmp.renameTo(file)) { file.delete(); if (!tmp.renameTo(file)) throw new IOException("cannot replace history"); }
         this.seed = seed; count = 0;
     }
 
-    public void append(byte[] blob) throws IOException {
+    public void append(byte[] blob) throws IOException { DiskWriter.drain(); appendNow(blob); if (count >= 0) count++; }
+
+    /**
+     * Build 71: {@link #append} for the periodic autosave, on the background writer, in order behind every write before it. The slice counts as stored at
+     * once (so the next autosave does not hand it over again); if the write fails, {@link #count} finds out from the file and the slice is handed over again.
+     */
+    public void appendLater(byte[] blob) {
+        if (count >= 0) count++;
+        DiskWriter.later(() -> { if (writeFailed) return; try { appendNow(blob); } catch (IOException e) { writeFailed = true; } });      // after a failure nothing more is appended until the slices are handed over again, so they stay in order
+    }
+
+    private void appendNow(byte[] blob) throws IOException {
         ByteArrayOutputStream rec = new ByteArrayOutputStream(blob.length + 4);
         new DataOutputStream(rec).writeInt(blob.length); rec.write(blob);
         try (FileOutputStream f = new FileOutputStream(file, true)) { f.write(rec.toByteArray()); f.getFD().sync(); }
-        if (count >= 0) count++;
     }
 
     /** The stored slices if the file belongs to this seed, otherwise null. */
     public List<byte[]> read(long wantSeed) {
+        DiskWriter.drain();
         if (!file.exists()) return null;
         List<byte[]> out = new ArrayList<>();
         try (DataInputStream in = new DataInputStream(new java.io.BufferedInputStream(new FileInputStream(file)))) {
@@ -56,6 +69,9 @@ public final class HistoryStore {
         return out;
     }
 
-    public int count() { return Math.max(0, count); }
-    public void delete() { file.delete(); count = -1; }
+    public int count() {
+        if (writeFailed) { DiskWriter.drain(); List<byte[]> on = read(seed); count = on == null ? 0 : on.size(); writeFailed = false; }       // a background append failed: once the queue is empty, trust the file
+        return Math.max(0, count);
+    }
+    public void delete() { DiskWriter.drain(); file.delete(); count = -1; }
 }

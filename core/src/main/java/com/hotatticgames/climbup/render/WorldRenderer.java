@@ -188,10 +188,14 @@ public final class WorldRenderer implements Disposable {
                 // Lay it IN the walking lane centred on the element: du=0 keeps the mesh's origin at the element centre so place()'s tower-rotation barely turns it
                 // (a large arc offset used to swing the whole rigid wedge ~30 deg around the cylinder, tilting it out of the lane in depth -> "I'm outside the ramp"). localZ recentres the off-origin mesh onto that origin.
                 // sy=0.84 matches the wedge's steeper native slope to the sim's RAMP_SLOPE (0.576); sx shapes the ~1.35 m depth centred on the lane; dy drops the surface mid-point onto e.y.
-                Part rp = part(models.space("ramp"), 0f, -0.571f * sc, 0f, 0.72f * sc, 0.84f * sc, sc); rp.yaw = -90f; rp.localZ = -3.1f; rp.tinted = false; ps.add(rp);
-                if (e.skin == 3) {          // sinking ramps carry two glowing hover pads
-                    Color glow = new Color(0.30f, 0.85f, 1f, 1f), pad = new Color(0.30f, 0.32f, 0.40f, 1f);
-                    for (int sd = -1; sd <= 1; sd += 2) { ps.add(boxPart(sd * e.halfW() * 0.62f, e.amp * sd * e.halfW() * 0.62f - 0.42f, 0f, 0.7f, 0.18f, 1.1f, pad)); ps.add(boxPart(sd * e.halfW() * 0.62f, e.amp * sd * e.halfW() * 0.62f - 0.56f, 0f, 0.5f, 0.08f, 0.8f, glow)); }
+                // Build 72 (owner): the spinning ramp is as deep as it is long, so the lane always crosses its full length whichever way it faces
+                Part rp = part(models.space("ramp"), 0f, -0.571f * sc, 0f, (e.spins() ? 1.17f : 0.72f) * sc, 0.84f * sc, sc); rp.yaw = -90f; rp.localZ = -3.1f; rp.tinted = false; ps.add(rp);
+                if (e.spins()) {            // it turns on a round turntable: a dark plinth with a glowing rim, which stays still
+                    Color glow = new Color(0.30f, 0.85f, 1f, 1f), pad = new Color(0.22f, 0.24f, 0.32f, 1f);
+                    float rad = e.halfW() * 2.3f, plinth = -e.amp * e.halfW() - 0.12f;
+                    Part pl = part(models.disc, 0f, plinth, 0f, rad, 6f, rad); pl.color = pad; pl.fall = true; pl.fixed = true; pl.tinted = false; pl.tintAttr.color.set(pad); ps.add(pl);
+                    Part rim = part(models.disc, 0f, plinth - 0.07f, 0f, rad * 1.06f, 2f, rad * 1.06f); rim.color = glow; rim.fall = true; rim.fixed = true; rim.tinted = false; rim.tintAttr.color.set(glow);
+                    rim.inst.materials.get(0).set(ColorAttribute.createEmissive(glow.r * 0.6f, glow.g * 0.6f, glow.b * 0.6f, 1f)); ps.add(rim);
                 }
                 break;
             }
@@ -608,8 +612,9 @@ public final class WorldRenderer implements Disposable {
             float du = p.du, dy = p.dy, extraYaw = p.yaw; float sy = p.sy, roll = p.roll;
             float y = e.isPlatform() ? ey - Math.max(-0.1f, Math.min(0.22f, dip[i])) : ey;
             if (e.type == Element.Type.RAMP) {
-                y = e.y - (e.skin == 3 ? sim.tilt[i] : 0f);
-                if (e.skin == 2) { float on = Math.min(1f, sim.onT[i] / Sim.RAMP_SHAKE_EVERY), a = reducedMotion ? 0f : 0.025f + 0.07f * on; shakeX = a * MathUtils.sin(time * 85f + p.du); y += a * 0.8f * MathUtils.sin(time * 97f); }
+                y = e.y;
+                if (e.skin == 2) { float on = Math.min(1f, sim.onT[i] / Sim.RAMP_SHAKE_EVERY), a = reducedMotion ? 0f : 0.06f + 0.16f * on; shakeX = a * MathUtils.sin(time * 85f + p.du); y += a * 0.8f * MathUtils.sin(time * 97f); }   // Build 72: a much harder tremble
+                if (e.spins() && !p.fixed) extraYaw = p.yaw - e.spinAngle(sim.time) * MathUtils.radiansToDegrees;      // turning like a record (heading 0 = uphill toward +s)
             }
             if (e.type == Element.Type.SEESAW) {
                 y = e.y - Math.max(-0.1f, Math.min(0.22f, dip[i]));

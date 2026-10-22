@@ -218,14 +218,14 @@ public final class Autopilot {
     // ------------------------------------------------------------------ planning
 
     static boolean movingNear(Course c, int a) {
-        for (int i = a; i <= Math.min(c.routeSize() - 1, a + 2); i++) if (c.get(i).isMoving()) return true;
+        for (int i = a; i <= Math.min(c.routeSize() - 1, a + 2); i++) if (c.get(i).isMoving() || c.get(i).spins()) return true;
         int a0 = anchorIdx(c, a); for (Element h : c.hazards) if (h.anchor >= a0 && h.anchor <= a0 + 2 && h.isMoving()) return true;
         return false;
     }
 
     static float maxPeriod(Course c, int a) {
         float p = 0;
-        for (int i = a; i <= Math.min(c.routeSize() - 1, a + 2); i++) if (c.get(i).isMoving()) p = Math.max(p, c.get(i).period);
+        for (int i = a; i <= Math.min(c.routeSize() - 1, a + 2); i++) if (c.get(i).isMoving() || c.get(i).spins()) p = Math.max(p, c.get(i).period);
         int a0 = anchorIdx(c, a); for (Element h : c.hazards) if (h.anchor >= a0 && h.anchor <= a0 + 2 && h.isMoving()) p = Math.max(p, h.period);
         return p;
     }
@@ -670,7 +670,20 @@ public final class Autopilot {
     /** Drives a live Sim one step at a time using the same planner; resyncs after respawns. */
     public static final class Driver {
         int a; Policy p; boolean settling; int fallsSeen;
+        int holdT, waited, waitedAt = -1, brakeAt = -1, brakeT, stalled; boolean inner;
         public boolean failed;
+        /** Plays the crossing ahead on a copy: true if it reaches solid footing past the crumbling run with no setback. */
+        static boolean crossingClear(Sim s0, int a) {
+            Sim s = s0.copy(); Driver d = new Driver(s); d.inner = true; InputState in = new InputState(); int sb = s.setbacks();
+            for (int i = 0; i < 60 * 8; i++) {
+                d.drive(s, in);
+                if (d.failed) return false;
+                s.step(in);
+                if (s.setbacks() != sb) return false;
+                if (s.mode == Sim.Mode.GROUND && s.onElem > a && s.onElem < s.course.routeSize() && !s.course.get(s.onElem).crumbles()) return true;
+            }
+            return false;
+        }
         private final Policy pull = new PullPolicy();
         public Driver(Sim s) { a = Math.max(0, s.onElem); fallsSeen = s.setbacks(); }
         public int link() { return a; }
@@ -689,11 +702,20 @@ public final class Autopilot {
                 if (s.mode == Sim.Mode.LEDGE || s.mode == Sim.Mode.PULLUP) { settling = true; pull.act(s, in); return; }
                 a = s.mode == Sim.Mode.AIR ? s.lastPad : s.onElem;
             }
+            if (brakeT > 0 && p == null && s.mode == Sim.Mode.GROUND && s.onElem == a) { brakeT--; return; }
+            if (p == null && !inner && s.mode == Sim.Mode.GROUND && s.onElem == a && a + 1 < s.course.routeSize() && s.course.get(a + 1).crumbles() && !s.course.get(a).crumbles()) {
+                // like a person: crumbling footing leaves no time to wait out a hazard, so size up the whole crossing from solid ground and wait here until it is clear
+                if (waitedAt != a) { waitedAt = a; waited = 0; holdT = 0; }
+                if (holdT > 0) { holdT--; return; }
+                if (waited < 600 && !crossingClear(s, a)) { holdT = 6; waited += 6; return; }
+            }
             if (p == null) {
                 if (s.mode == Sim.Mode.AIR && s.lastPad != a && s.lastPad > a) a = s.lastPad;
                 int[] win0 = s.act;
                 Result r = plan(s, a, false, true);
                 s.act = win0;
+                if (brakeAt != a) { brakeAt = a; stalled = 0; }
+                if (!r.ok && stalled < 360 && s.mode == Sim.Mode.GROUND && s.onElem == a && !s.course.get(a).crumbles()) { brakeT = 6; stalled += 6; return; }   // like a person: no move works right now (still moving, or a cannonball on its way), so stand still a moment and size it up again
                 if (!r.ok) { failed = true; return; }
                 if (r.factory == null) return;          // the end of the route: nothing left to plan, stand still
                 p = make(r.factory);

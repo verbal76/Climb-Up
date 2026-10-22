@@ -230,7 +230,7 @@ public final class Sim {
                 ey0[i] = ey1[i] = e.y + tilt[i] * x;
             } else if (e.type == Element.Type.RAMP) {
                 float hw = e.halfW(), x = Math.max(-hw, Math.min(hw, course.dsWrap(s, es1[i])));
-                ey0[i] = ey1[i] = e.y + e.amp * x - (e.skin == 3 ? tilt[i] : 0f);
+                ey0[i] = ey1[i] = e.y + e.rampSlope(time) * x;
             }
         }
         sideIn = -1;
@@ -352,12 +352,19 @@ public final class Sim {
 
     // ---------------------------------------------------------------- helpers
 
-    public static final float RAMP_SINK_DELAY = 0.35f, RAMP_SINK_MAX = 3.2f, RAMP_SINK_SPEED = 2.2f, RAMP_SHAKE_EVERY = 0.55f;
+    /** Build 72 (owner: "it should bounce you all around"): a shaking ramp kicks you this soon after you step on, and again each time you land back on it. */
+    public static final float RAMP_SHAKE_EVERY = 0.25f;
+    /** Build 72 (owner): the spinning ramp's sideways push on whoever stands on it, at most this fast (m/s); it swings left and right with the turn and carries into a jump. */
+    public static final float SPIN_CARRY = 2.6f;
+    /** Build 72 (owner: "you trip-hop over it"): walking off a surface onto a fixed neighbour at most this much higher (or a little lower) carries straight on. */
+    public static final float STEP_ACROSS = 0.2f;
 
     private float dsTo(int i) { return course.dsWrap(es1[i], s); }  // element - player
 
     public float platformVy(int i) { return (ey1[i] - ey0[i]) / DT; }
-    public float platformVs(int i) { return course.dsWrap(es1[i], es0[i]) / DT; }
+    public float platformVs(int i) { return course.dsWrap(es1[i], es0[i]) / DT + spinCarry(i); }
+    /** The spinning ramp's sideways push now (0 for anything else). */
+    public float spinCarry(int i) { Element e = course.get(i); return e.spins() ? SPIN_CARRY * (float) Math.sin(e.spinAngle(time)) : 0f; }
 
     public boolean attachedTo(int idx) {
         if (idx < 0) return false;
@@ -392,9 +399,7 @@ public final class Sim {
                 float hw = e.halfW(), x = Math.max(-hw, Math.min(hw, course.dsWrap(s, es1[i])));
                 boolean on = mode == Mode.GROUND && onElem == i;
                 onT[i] = on ? onT[i] + dt : Math.max(0f, onT[i] - 1.5f * dt);
-                float d0 = e.skin == 3 ? tilt[i] : 0f, d1 = d0;
-                if (e.skin == 3) { d1 = approach(d0, on && onT[i] > RAMP_SINK_DELAY ? RAMP_SINK_MAX : 0f, (on ? RAMP_SINK_SPEED : 0.7f) * dt); tilt[i] = d1; }
-                ey0[i] = e.y + e.amp * x - d0; ey1[i] = e.y + e.amp * x - d1;
+                ey0[i] = e.y + e.rampSlope(time - dt) * x; ey1[i] = e.y + e.rampSlope(time) * x;
             }
             if (padSquash[i] > 0) padSquash[i] = Math.max(0, padSquash[i] - dt);
             if (e.crumbles()) {
@@ -869,7 +874,7 @@ public final class Sim {
         int e = onElem;
         // ride the platform
         float dsP = course.dsWrap(es1[e], es0[e]);
-        s += dsP; y = ey1[e];
+        s += dsP + spinCarry(e) * dt; y = ey1[e];
         // horizontal control
         float target = in.moveX * T.runSpeed;
         boolean saw = course.get(e).type == Element.Type.SEESAW;
@@ -902,6 +907,8 @@ public final class Sim {
             doJump(boost);
             return;
         }
+        int nb = stepAcross(e);
+        if (nb >= 0) { int ev0 = events; land(nb, in, surfaceAt(nb)); if ((ev0 & EV_LAND) == 0) events &= ~EV_LAND; return; }       // walked straight on: no landing
         // leave the edge?
         Element el = course.get(e);
         float off = Math.abs(course.dsWrap(s, es1[e]));
@@ -915,7 +922,7 @@ public final class Sim {
         if (el.type == Element.Type.RAMP && el.skin == 2 && onT[e] >= RAMP_SHAKE_EVERY) {      // a shaking ramp throws you around
             int n = (int) tilt[e]; tilt[e] = n + 1; onT[e] = 0f;
             int h = (n * 73856093 + e * 19349663) >>> 7;
-            vx = (h % 3 == 0 ? -1f : 1f) * (2.2f + (h % 5) * 0.5f); vy = 7.5f + (h % 4) * 0.8f;
+            vx = (h % 3 == 0 ? -1f : 1f) * (3.0f + (h % 5) * 0.6f); vy = 10f + (h % 4) * 1.2f;      // Build 72 (owner): hard enough to make you fight for it
             mode = Mode.AIR; onElem = -1; jumpedUp = false; coyote = 0; events |= EV_BOUNCE;
             return;
         }
@@ -1012,6 +1019,35 @@ public final class Sim {
      * falls straight through it. So when nothing else caught the body, a ramp whose surface at the body's NEW position has reached its feet (they were above that ramp before the move) is landed on there.
      * Only bodies that would have sunk into the slope are affected; every landing the test above makes is unchanged.
      */
+    /**
+     * Build 72 (owner: "the ramps don't line up with the block at the top, you trip-hop onto it"): at the end of the surface you are walking on, a fixed
+     * neighbour whose top meets it at about the same height (at most {@link #STEP_ACROSS} higher) is simply walked onto, instead of being climbed like a ledge.
+     * Moving platforms and the spinning ramp are never stepped onto this way.
+     */
+    private int stepAcross(int e) {
+        Element cur = course.get(e);
+        if (Math.abs(course.dsWrap(s, es1[e])) < cur.halfW() - 0.15f) return -1;
+        int best = -1; float bestTop = -1e9f;
+        for (int k = 0, cnt = act == null ? course.size() : act.length; k < cnt; k++) {
+            int i = act == null ? k : act[k];
+            if (i == e || gone[i]) continue;
+            Element el = course.get(i);
+            boolean fixed = el.type == Element.Type.STATIC || el.type == Element.Type.CRUMBLE || el.type == Element.Type.GOAL || (el.type == Element.Type.RAMP && !el.spins());
+            if (!fixed || Math.abs(course.dsWrap(s, es1[i])) > el.halfW()) continue;
+            float top = surfaceAt(i);
+            if (top < y - 0.05f || top > y + STEP_ACROSS || top <= bestTop) continue;
+            best = i; bestTop = top;
+        }
+        return best;
+    }
+    /** The top of element i where the body now stands (a ramp's slope at the body's own position). */
+    private float surfaceAt(int i) {
+        Element el = course.get(i);
+        if (el.type != Element.Type.RAMP) return ey1[i];
+        float hw = el.halfW();
+        return el.y + el.rampSlope(time) * Math.max(-hw, Math.min(hw, course.dsWrap(s, es1[i])));
+    }
+
     private boolean landOnSlope(InputState in, float py) {
         int best = -1; float bestSurf = -1e9f;
         for (int k = 0, cnt = act == null ? course.size() : act.length; k < cnt; k++) {
@@ -1020,7 +1056,7 @@ public final class Sim {
             if (el.type != Element.Type.RAMP || gone[i]) continue;
             float hw = el.halfW(), x = course.dsWrap(s, es1[i]);
             if (Math.abs(x) > hw + T.edgeOverhang) continue;
-            float surf = el.y + el.amp * Math.max(-hw, Math.min(hw, x)) - (el.skin == 3 ? tilt[i] : 0f);
+            float surf = el.y + el.rampSlope(time) * Math.max(-hw, Math.min(hw, x));
             if (py >= ey0[i] - 0.08f && y <= surf + 0.0001f && surf > bestSurf) { bestSurf = surf; best = i; }
         }
         if (best < 0) return false;

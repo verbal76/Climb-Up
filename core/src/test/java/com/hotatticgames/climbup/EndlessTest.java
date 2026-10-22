@@ -52,7 +52,7 @@ public class EndlessTest {
             }
         }
         System.out.println("hazard mix: " + hz + " early=" + lowHaz + " late=" + highHaz);
-        assertEquals("nothing hazardous in the first 90 m", 0, countBelow(t, 90f));
+        assertEquals("nothing hazardous below the hazard start height", 0, countBelow(t, t.hazardStartY));
         assertTrue("later slices carry more hazards than the first ones", highHaz > lowHaz);
         for (Element.Type ty : new Element.Type[]{Element.Type.SAW_V, Element.Type.SAW_H, Element.Type.SPIKE_TRAP, Element.Type.SPIKE_BLOCK, Element.Type.CANNON})
             assertTrue("hazard kind appears: " + ty, hz.getOrDefault(ty, 0) > 0);

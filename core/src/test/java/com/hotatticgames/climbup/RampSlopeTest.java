@@ -17,7 +17,7 @@ public class RampSlopeTest {
         Tuning t = TestUtil.tuning();
         Course c = new Course(0, t.circumference());
         Element start = new Element(Element.Type.STATIC, 4f, 0f, 2f); start.checkpoint = true; c.add(start);
-        Element r = new Element(Element.Type.RAMP, 10f, MID, W); r.amp = AMP; r.skin = skin; r.len = 1f; c.add(r);
+        Element r = new Element(Element.Type.RAMP, 10f, MID, W); r.amp = AMP; r.skin = skin; r.len = 1f; if (skin == 3) r.period = 2.6f; c.add(r);
         Sim s = Sim.startOn(c, t, 1);
         s.mode = Sim.Mode.GROUND; s.onElem = 1;
         return s;
@@ -26,7 +26,7 @@ public class RampSlopeTest {
     private static float surface(Sim s, int skin) {
         Element r = s.course.get(1); float hw = r.halfW();
         float x = Math.max(-hw, Math.min(hw, s.course.dsWrap(s.s, s.es1[1])));
-        return r.y + r.amp * x - (skin == 3 ? s.tilt[1] : 0f);
+        return r.y + r.rampSlope(s.time) * x;      // the spinning ramp's slope turns with it
     }
 
     @Test public void runningUphillAndJumpingAtAnyMomentNeverSinksIntoTheSlope() throws Exception {

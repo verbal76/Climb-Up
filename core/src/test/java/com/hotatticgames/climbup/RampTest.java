@@ -59,16 +59,4 @@ public class RampTest {
         for (int i = 0; i < 90; i++) { in.clear(); s.step(in); if ((s.consumeEvents() & Sim.EV_BOUNCE) != 0) bounced = true; }
         assertTrue("standing on a shaking ramp bounces you", bounced);
     }
-
-    @Test public void sinkingRampDropsAwayAndRecovers() throws Exception {
-        Tuning t = TestUtil.tuning();
-        Course c = course(t, 3);
-        Sim s = Sim.startOn(c, t, 1);
-        InputState in = new InputState();
-        for (int i = 0; i < 90; i++) { in.clear(); s.step(in); }
-        assertTrue("it sinks under a standing player: " + s.tilt[1], s.tilt[1] > 1f);
-        s.s = c.wrap(6f); s.y = 0f; s.vy = 0; s.vx = 0; s.mode = Sim.Mode.GROUND; s.onElem = 0;       // step off to the start platform
-        for (int i = 0; i < 400; i++) { in.clear(); s.step(in); }
-        assertEquals(0f, s.tilt[1], 1e-3f);
-    }
 }

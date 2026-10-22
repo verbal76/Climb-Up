@@ -72,6 +72,13 @@ public final class Element {
     public float slab() { return w >= 5f || type == Type.GOAL ? 1f : 0.5f; }
     public boolean isPlatform() { return type != Type.ROPE && type != Type.CABLE && !isHazard(); }
     /** True for anything that changes with time (planner sweeps its phase). */
+    /** Build 72 (owner): the spinning ramp (RAMP skin 3, was the sinking ramp) turns flat on its centre like a record: one turn every {@code period} seconds. */
+    public boolean spins() { return type == Type.RAMP && skin == 3; }
+    /** The spinning ramp's heading at time t (radians): 0 = uphill toward +s, as a fixed ramp. */
+    public float spinAngle(float t) { return phase + 6.2831855f * t / period; }
+    /** A ramp's slope along the lane at time t: fixed, or for the spinning ramp the slope of its turning top where the lane crosses it (it flattens side-on and flips). */
+    public float rampSlope(float t) { return spins() ? amp * (float) Math.cos(spinAngle(t)) : amp; }
+
     public boolean isMoving() {
         switch (type) { case MOVE_H: case MOVE_V: case MOVE_Z: case SWING: case SAW_H: case SAW_V: case PENDULUM: case CANNON: case SPIKE_TRAP: case SPIKE_DROP: case CRAB: case BEE: case MORTAR: case AIMED: case SKULL: case BLOB: return true; default: return false; }
     }

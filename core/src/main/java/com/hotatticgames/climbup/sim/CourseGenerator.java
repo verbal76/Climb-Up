@@ -48,9 +48,9 @@ public final class CourseGenerator {
      * generator (the crab rules of Build 63 changed what a seed produced, so runs from earlier builds carry version 0, "old rules", and are not compared).
      * {@code GeneratorFingerprintTest} fails when generation changes without a bump.
      */
-    public static final int RULES_VERSION = 2;      // 2 = Build 71: the bee homes in, skulls and green blobs, mortars out of step at random
+    public static final int RULES_VERSION = 3;      // 3 = Build 72: flush ramps, faster crumbling, a wilder shaking ramp, the spinning ramp; 2 = Build 71: the bee homes in, skulls and green blobs, mortars out of step at random
     /** The rules version a climb started on a given build used (0 = unknown or before the stamps: not comparable). */
-    public static int rulesOfBuild(int build) { return build >= 71 ? 2 : build >= 63 ? 1 : 0; }
+    public static int rulesOfBuild(int build) { return build >= 72 ? 3 : build >= 71 ? 2 : build >= 63 ? 1 : 0; }
 
     private CourseGenerator(long seed, Tuning t, long salt) {
         T = t; this.salt = salt; rnd = new Random(seed * 0x9E3779B97F4A7C15L + 12345 + salt * 0x632BE59BD9B4E019L); c = new Course(seed, t.circumference());
@@ -1341,12 +1341,12 @@ public final class CourseGenerator {
                 break;
             }
             case RAMP: {
-                // a walkway up to a block that is taller than a jump; from the second world it may crumble, shake you about, or sink away
+                // a walkway up to a block that is taller than a jump; from the second world it may crumble, shake you about, or spin like a record (Build 72)
                 float sc = r(1.3f, 1.75f), L = 2.2f * sc, slope = RAMP_SLOPE, rise = slope * L;
                 int skin = 0;
                 if (z >= 1) { int roll = rnd.nextInt(8); skin = roll < 2 ? 0 : roll < 4 ? 1 : roll < 6 ? 2 : 3; }
-                float gapIn = r(0.05f, 0.45f);
-                Element rp = plat(Element.Type.RAMP, eR + gapIn + L / 2f, y0 + rise / 2f, L, z); rp.amp = slope; rp.skin = skin; rp.len = sc;
+                Element rp = plat(Element.Type.RAMP, eR + L / 2f, y0 + rise / 2f, L, z); rp.amp = slope; rp.skin = skin; rp.len = sc;      // Build 72 (owner): its foot meets the platform it starts from
+                if (skin == 3) { rp.period = r(2.2f, 3.0f); rp.phase = r(0f, 6.28f); }       // one turn every 2.2-3 s
                 l.add(rp);
                 float wB = 3f + rnd.nextInt(2);
                 if (z >= 1 && rnd.nextInt(10) < 4) {         // ski jump: leap off the top of the ramp across a gap to a block up there
@@ -1354,7 +1354,7 @@ public final class CourseGenerator {
                     l.add(plat(S, rp.s + L / 2f + gapJ + wB / 2f, y0 + rise + dyJ, wB, z));
                     break;
                 }
-                Element blk = plat(S, rp.s + L / 2f + wB / 2f + r(0f, 0.25f), y0 + rise + r(0f, 0.1f), wB, z);
+                Element blk = plat(S, rp.s + L / 2f + wB / 2f, y0 + rise, wB, z);         // Build 72 (owner): flush with the top of the ramp and touching it, so you walk straight on
                 l.add(blk);
                 break;
             }

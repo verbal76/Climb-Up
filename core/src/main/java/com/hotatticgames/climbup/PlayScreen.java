@@ -141,7 +141,7 @@ public final class PlayScreen extends ScreenAdapter {
                 if (hzType != null) sim.s += Float.parseFloat(System.getProperty("climb.startDs", "0"));     // test hook: stand this much further along the start platform (camera angle on the hazard)
                 if (run.resumed) { sim.deferRespawn = true; sim.setRange(0, course.size() - 1); ResumeState.restore(g.save, sim, tower); }
             }
-            if (hStart > 0) { int i = 0; while (i < course.size() - 1 && course.get(i + 1).y < hStart) i++; while (i > 0 && course.get(i).anchor >= 0) i--; sim = Sim.startOn(course, g.tuning, i); sim.checkpoint = i; sim.keysFree = false; sim.keys = 0; }
+            if (hStart > 0 && hzType == null) { int i = 0; while (i < course.size() - 1 && course.get(i + 1).y < hStart) i++; while (i > 0 && course.get(i).anchor >= 0) i--; sim = Sim.startOn(course, g.tuning, i); sim.checkpoint = i; sim.keysFree = false; sim.keys = 0; }
             if (tower != null) { tower.openedUpTo = g.save.openedUpTo; sim.deferRespawn = true; sim.floorOverride = tower.floorLocal(); }
             sim.setRange(0, course.size() - 1); simSize = course.size(); if (tower != null) seenRebuilds = tower.rebuilds;
         }
@@ -486,7 +486,7 @@ public final class PlayScreen extends ScreenAdapter {
             Element le = course.get(sim.onElem);
             float edge = Math.abs(course.dsWrap(sim.s, sim.es1[sim.onElem])) - le.halfW();
             if (le.type == Element.Type.SEESAW) { g.audio.play("bonk", 0.7f, 0.65f); world.particles.burst(sim.s, sim.y, 6, brown, 1.6f, 1.2f, 0.12f, 6f, 0.5f); }
-            if (le.type == Element.Type.RAMP && le.skin == 3) { g.audio.play("steam", 0.5f, 1.0f); world.particles.burst(sim.s, sim.y - 0.4f, 8, cyan, 1.4f, 0.8f, 0.1f, 1f, 0.6f); }
+            if (le.type == Element.Type.RAMP && le.spins()) { g.audio.play("whoosh", 0.5f, 1.1f); world.particles.burst(sim.s, sim.y - 0.2f, 8, cyan, 1.6f, 0.8f, 0.1f, 1f, 0.6f); }
             if (le.type == Element.Type.RAMP && le.skin == 2) { g.audio.play("bonk", 0.5f, 1.2f); }
             if (le.isPlatform() && edge > 0.06f && sim.landSpeed > 5f) { pop(CLOSE[MathUtils.random(CLOSE.length - 1)], gold); freeze(0.07f); world.shake(0.5f); vibrate(25, 1); }
         }
@@ -618,7 +618,7 @@ public final class PlayScreen extends ScreenAdapter {
         {"ramp", "RAMPS LEAD UP TO BLOCKS TOO TALL TO JUMP. JUST RUN UP."},
         {"rampcrumble", "THIS RAMP CRUMBLES WHEN YOU STAND ON IT. RUN!"},
         {"rampshake", "A SHAKY RAMP BOUNCES YOU AROUND. KEEP MOVING AND AIM FOR THE TOP."},
-        {"rampsink", "A HOVER RAMP SINKS AWAY UNDER YOUR WEIGHT. GET UP BEFORE IT GOES."},
+        {"rampspin", "A SPINNING RAMP! IT TURNS LIKE A RECORD AND FLINGS YOU SIDEWAYS. TIME YOUR JUMP."},
         {"seesaw", "THE BRIDGE TIPS UNDER YOU. KEEP RUNNING ACROSS BEFORE IT DUMPS YOU OFF."},
         {"gate", "A COLOURED CASTLE NEEDS THE KEY OF ITS COLOUR. THE KEY IS HIDDEN BELOW THE PATH BEFORE IT: DROP DOWN, FIND IT, CLIMB BACK."},
     };
@@ -636,7 +636,7 @@ public final class PlayScreen extends ScreenAdapter {
             String key = null;
             switch (e.type) {
                 case PAD: key = "pad"; break; case ROPE: key = "rope"; break; case CRUMBLE: key = "crumble"; break;
-                case MOVE_H: case MOVE_V: key = "move"; break; case CABLE: key = "cable"; break; case SWING: key = "swing"; break; case SPRING: key = "spring"; break; case SEESAW: key = "seesaw"; break; case RAMP: key = e.skin == 1 ? "rampcrumble" : e.skin == 2 ? "rampshake" : e.skin == 3 ? "rampsink" : "ramp"; break;
+                case MOVE_H: case MOVE_V: key = "move"; break; case CABLE: key = "cable"; break; case SWING: key = "swing"; break; case SPRING: key = "spring"; break; case SEESAW: key = "seesaw"; break; case RAMP: key = e.skin == 1 ? "rampcrumble" : e.skin == 2 ? "rampshake" : e.skin == 3 ? "rampspin" : "ramp"; break;
                 default: if (course.isCheckpoint(e) && i > 0) key = "checkpoint";
             }
             if (key == null && i == 1) key = "jump";

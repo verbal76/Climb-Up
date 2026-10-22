@@ -4,6 +4,13 @@ name: Cross-platform course generation check
 # canonical fingerprints of the stored slices (every platform, rope, pad, castle and hazard with its phase). Any difference fails the run.
 on:
   workflow_dispatch:
+  push:            # whenever generation, its tuning or this check changes (a manual dispatch needs the file on the default branch)
+    branches: [ccr-cb458cd1-w4dh5c]
+    paths:
+      - '.github/workflows/determinism.yml'
+      - 'core/src/main/java/com/hotatticgames/climbup/sim/**'
+      - 'assets/data/tuning.json'
+      - 'core/src/test/java/com/hotatticgames/climbup/GenPrint.java'
 permissions:
   contents: read
 

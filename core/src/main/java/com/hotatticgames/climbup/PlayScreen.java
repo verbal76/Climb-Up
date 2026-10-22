@@ -461,10 +461,9 @@ public final class PlayScreen extends ScreenAdapter {
     /** m:ss.t (h:mm:ss.t from an hour). */
     /** Build 64: the generation rules the climb in progress was generated under (a Build 63 climb is dated from its build; older ones are unknown, 0, and never compared). */
     private int runRules() { return g.save.climbRules > 0 ? g.save.climbRules : com.hotatticgames.climbup.sim.CourseGenerator.rulesOfBuild(g.save.climbBuild); }
-    /** A faster/slower difference with its sign always written: "-0.5" is faster, "+1:02.3" slower. */
-    /** A signed time difference to the nearest tenth: "-0:04.8" faster, "+2:03.4" slower (fmtTime truncates, so the rounding happens there). */
+    /** A signed time difference in the speedrun format: "-0:04.800" faster, "+2:03.433" slower (see ClockText). */
     public static String fmtDelta(float d) { return ClockText.delta(d); }
-    /** m:ss.t, h:mm:ss.t from an hour, "N DAYS hh:mm:ss.t" from a day (Build 66, for marathon sessions); see {@link ClockText}. */
+    /** m:ss.mmm, h:mm:ss.mmm from an hour, "N DAYS hh:mm:ss.mmm" from a day (Build 74: speedrun format); see {@link ClockText}. */
     public static String fmtTime(float sec) { return ClockText.time(sec); }
 
     private boolean fallCaptioned;

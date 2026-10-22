@@ -478,7 +478,7 @@ Requirement: the same seed, the same inputs on the same simulation steps, give t
 **Timing (owner decision):**
 - The clock is the integer step count at 60 steps/s (`SaveData.runTicks`), independent of frame rate, device speed and wall time. Resolution is 1/60 s ≈ 16.667 ms. No interpolated sub-step finish.
 - **Rankings and ties:** compared in whole steps (`RunRecord.ticksOf`/`faster`: finish, legs, totals, per-seed bests, splits, the Express Elevator achievement). Every stored time is a step count / 60, recovered exactly below 18 hours.
-- **Display:** the HUD/times text is derived from the step count (6 steps per tenth). The game shows **m:ss.t** (tenths, truncated), not MM:SS.mmm. Unchanged pending the owner's decision.
+- **Display (owner: the standard speedrun format):** the clock is in-game time (IGT: simulation steps only; pauses, menus, loading and frame rate never count). It is shown as **m:ss.mmm / h:mm:ss.mmm / N DAYS hh:mm:ss.mmm**, with the milliseconds converted from the step count and rounded to the nearest millisecond (one step = 0:00.017). The resolution stays 1/60 s. Differences use the same format with a sign. Times screen, HUD, pause and finish all checked in the desktop scenario screenshots (PASS, 103 checks).
 
 **Not changed:**
 - simulation rate, movement, physics, course generation (fingerprints identical), saves and records (same fields; comparisons only);

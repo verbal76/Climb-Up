@@ -44,7 +44,7 @@ public final class RunSummaryScreen extends ScreenAdapter {
             float x = i < perCol ? left : right, y = top - (i % perCol) * step;
             boolean done = run.legs[i] > 0f, pb = run.legPb[i];
             ui.text("TOWER " + (i + 1), x, y, px, Ui.TEXT);
-            String t = done ? PlayScreen.fmtTime(run.legs[i]) : "--:--.-";
+            String t = done ? PlayScreen.fmtTime(run.legs[i]) : "--:--.---";
             ui.text(t, x + 9 * 6 * px, y, px, done ? (pb ? green : Ui.TEXT) : Ui.DIM);
             if (pb) ui.text("PB", x + (9 + t.length() + 1) * 6 * px, y, px, gold);
         }

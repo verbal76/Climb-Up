@@ -340,9 +340,9 @@ public class RecordsTest {
 
     // ------------------------------------------------------------------ what the screens show
     @Test public void timesAreWrittenPlainlyAndMissingOnesAsDashes() {
-        assertEquals("--:--.-", TimesScreen.time(0f));
-        assertEquals("1:01.5", TimesScreen.time(61.5f));
-        assertEquals("1:02:03.4", TimesScreen.time(3723.4f));
+        assertEquals("--:--.---", TimesScreen.time(0f));
+        assertEquals("1:01.500", TimesScreen.time(61.5f));          // Build 74: speedrun format, milliseconds
+        assertEquals("1:02:03.400", TimesScreen.time(3723.4f));
         assertEquals("--", TimesScreen.metres(0f));
         assertEquals("1234 M", TimesScreen.metres(1234.9f));
     }

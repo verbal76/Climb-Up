@@ -35,9 +35,9 @@ public final class TimesScreen extends ScreenAdapter {
     @Override public void resize(int w, int h) { g.ui.resize(w, h); }
 
     /** m:ss.t or a dash for "no time yet". */
-    static String time(float s) { return s > 0f ? PlayScreen.fmtTime(s) : "--:--.-"; }
+    static String time(float s) { return s > 0f ? PlayScreen.fmtTime(s) : "--:--.---"; }
     static String metres(float m) { return m > 0f ? (long) m + " M" : "--"; }
-    /** The signed difference of a run's time against a best ("-0:01.5" faster, "+0:03.2" slower), or a dash when either is missing. */
+    /** The signed difference of a run's time against a best ("-0:01.500" faster, "+0:03.200" slower), or a dash when either is missing. */
     static String diff(float run, float best) { return run > 0f && best > 0f ? PlayScreen.fmtDelta(run - best) : "--"; }
     /** Green for faster, red for slower; the "--" placeholder and FIRST are dim (a dash is not a minus). */
     /** A time (or distance) with its NEW / PB tag after it: the tag is smaller and sits a short gap after the number, never touching it or the next column (Build 67). */
@@ -108,7 +108,7 @@ public final class TimesScreen extends ScreenAdapter {
             ui.text("TOWER " + (i + 1), x0, y, px, Ui.TEXT);
             ui.text(time(rec.bestLegs[i]), xBest, y, px, gold);
             tagged(ui, time(seedT), spb && seedT == runT && runT > 0f ? "NEW" : "", xSeed, y, px, Ui.TEXT, Ui.ACCENT);      // NEW: this run set the course best (the pixel font has no asterisk)
-            tagged(ui, runT > 0f ? time(runT) : "--:--.-", pb ? "PB" : "", xRun, y, px, pb ? Ui.GOOD : runT > 0f ? Ui.TEXT : Ui.DIM, Ui.GOOD);
+            tagged(ui, runT > 0f ? time(runT) : "--:--.---", pb ? "PB" : "", xRun, y, px, pb ? Ui.GOOD : runT > 0f ? Ui.TEXT : Ui.DIM, Ui.GOOD);
             String d = runT > 0f && prev > 0f ? diff(runT, prev) : runT > 0f && sb != null ? "FIRST" : "--";
             ui.text(d, xDiff, y, px, diffColour(d, faster, slower));
             if (i < legs - 1) y -= step;
@@ -120,7 +120,7 @@ public final class TimesScreen extends ScreenAdapter {
         ui.text("TOTAL", x0, y, px, Ui.TEXT);
         ui.text(time(rec.bestTotal), xBest, y, px, gold);
         tagged(ui, time(seedTotal), fin && run.totalSeedPb && seedTotal == run.total ? "NEW" : "", xSeed, y, px, Ui.TEXT, Ui.ACCENT);
-        tagged(ui, fin ? time(run.total) : "--:--.-", fin && run.totalPb ? "PB" : "", xRun, y, px, fin && run.totalPb ? Ui.GOOD : fin ? Ui.TEXT : Ui.DIM, Ui.GOOD);
+        tagged(ui, fin ? time(run.total) : "--:--.---", fin && run.totalPb ? "PB" : "", xRun, y, px, fin && run.totalPb ? Ui.GOOD : fin ? Ui.TEXT : Ui.DIM, Ui.GOOD);
         String dt2 = fin && run.totalSeedPrev > 0f ? diff(run.total, run.totalSeedPrev) : fin && sb != null ? "FIRST" : "--";
         ui.text(dt2, xDiff, y, px, diffColour(dt2, faster, slower));
         y -= step;

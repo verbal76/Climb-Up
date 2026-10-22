@@ -42,13 +42,13 @@ public final class CreatureShot {
                 Set<String> done = new LinkedHashSet<>();
                 if (CABLE) { cables(t, models, fbo, done); System.out.println("CREATURESHOT captured=" + done); fbo.dispose(); models.dispose(); return; }
                 Course prev = null;
-                for (int k = 0; k < 60 && done.size() < 9; k++) {
+                for (int k = 0; k < 60 && done.size() < 10; k++) {
                     Course course = CourseGenerator.chunk(SEED, k, prev, t); prev = course;
                     int target = -1; Element.Type kind = null;
                     for (int i = 0; i < course.hazards.size(); i++) {
                         Element h = course.hazards.get(i);
                         if ((h.type == Element.Type.SKULL && !done.contains("skull_dash")) || (h.type == Element.Type.BLOB && !done.contains("blob_land"))
-                                || (h.type == Element.Type.BEE && !done.contains("bee_dive"))) { target = i; kind = h.type; break; }
+                                || (h.type == Element.Type.BEE && !done.contains("bee_dive")) || (h.type == Element.Type.CRAB && !done.contains("crab_near"))) { target = i; kind = h.type; break; }
                     }
                     if (target < 0) continue;
                     Element h = course.hazards.get(target);
@@ -77,6 +77,7 @@ public final class CreatureShot {
                             else if (sim.blobShadow(target) >= 0f && sim.blobShadow(target) < 0.2f) label = "blob_shadow";
                             else if (st == 4 && sim.mobT[target] < 0.12f) label = "blob_land";
                         } else if (kind == Element.Type.BEE && h.beeDive(sim.time) > 0.6f) label = "bee_dive";
+                        else if (kind == Element.Type.CRAB && sim.onElem == h.anchor) label = "crab_near";      // Build 72: the crab's and the hero's shadows side by side
                         if (label != null && !done.contains(label)) {
                             for (int q = 0; q < 3; q++) render(wr, sim, time);          // let particles and rigs catch up
                             capture(wr, sim, time, fbo, label); done.add(label);

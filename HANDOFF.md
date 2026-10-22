@@ -1,3 +1,11 @@
+## Current state (2026-10-22, Build 72 playtest hold)
+
+- **Build 72 for playtesting:** the private draft releases from `0bf3bf8` (1.2.0, versionCode 72). Android APK SHA-256 `29bf7c23528f7dc035e6643a2e494a9eaeff022a23ccda681e272bb84202c448`; the Windows + Linux build is from the same commit. Do not publish them, and do not replace them without the owner's approval.
+- **After the drafts:** `eb8fdaf` adds `StreamingReplayTest` and docs only (CI green). The next commit adds the shadow-light lean (renderer only); it needs new builds, and those wait for the owner's approval.
+- **Open physics risk:**
+  - Origin-shift float drift: millimetres, one landing a step apart in a 411 m replay. The cause is in DECISIONS; the owner deferred any fix.
+  - `Math.sin`/`cos`/`atan2` may differ between Android and desktop (seed codes); deferred.
+
 # Handoff
 
 ## Build 72 (version 1.2.0, rules version 3) - playtest candidate

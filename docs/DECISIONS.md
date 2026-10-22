@@ -423,3 +423,14 @@ This replaces the earlier centre-mass placement instruction. The gem's lowest vi
     - a final gap under 0.1 m.
 - **humanHold (6 steps = 100 ms, autopilot only):** kept. Measured human key holds are about 72-202 ms (most 85-126 ms), and Mario AI holds actions 2 ticks (about 80 ms). Without a hold, a solver with a direction-only stick can dither every frame and get a half-speed walk no person can produce, and prove routes on it. It never touches the player's own simulation.
 - **Open question for the owner (not changed):** the simulation calls `Math.sin`, `Math.cos` and `Math.atan2` (35 sites in `Sim`, `Element`, `CourseGenerator`, `CheckpointGem`: movers, swings, the cylinder). Java only promises these to within about 1 ulp, and Android's runtime uses its own native routines. So a phone may build a slightly different course from the same seed code than the desktop does, if a proof sits on a knife edge. Switching them to `StrictMath` (identical everywhere) leaves the desktop generation fingerprint unchanged (tried: `DeterminismTest` passes, `58ece4dd45fb787dfae1f63d`). On a phone it could change a course, which is a seeded-generation change, so it waits for approval.
+- **Owner decision on StrictMath: deferred.** Physics changes only once a change has been shown to resolve the origin-shift divergence. Note that `StrictMath` would not do that by itself. It addresses a different risk: the phone and the desktop may disagree. The origin-shift drift is plain float re-rounding, so a targeted follow-up would need to:
+  - simulate in one absolute frame, or use fixed-point;
+  - prove it with `StreamingReplayTest`, which would then have to show a streaming replay that is bit-exact.
+
+## Build 72 shadow lean (owner: short creatures show the light's direction too)
+
+- The shadow light's sideways lean had been only 7-20% of a caster's height, since it followed each world's sun. So a crab (about 0.4 m tall) cast its shadow almost straight down. It now has a floor of `SHADOW_SIDE` = 0.35, plus a little of the sun, which gives about 0.4 in every world. The crab's shadow now falls clearly to one side.
+- The hero's shadow gets longer to the same side. It still starts at the feet, and is still cut off at platform edges.
+- Cost: none. It is the same draws with a different projection matrix.
+- Checks: before/after real-renderer shots (`CreatureShot` now also captures a crab next to the hero), and `ShadowPassTest` plus the render tests.
+- Not in the Build 72 drafts. It needs new builds whenever the owner approves them.

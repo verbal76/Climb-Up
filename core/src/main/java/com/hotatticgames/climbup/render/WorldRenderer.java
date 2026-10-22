@@ -1340,6 +1340,8 @@ public final class WorldRenderer implements Disposable {
     private final Color shadowCol = new Color();
     /** Strength of a shadow on the ground right under its caster; it fades out by SHADOW_REACH above it. */
     public static final float SHADOW_ALPHA = 0.42f, SHADOW_REACH = 9f;
+    /** The least sideways lean of the shadow light (per unit of height): enough for a crab's shadow to show which way the light falls. */
+    public static final float SHADOW_SIDE = 0.35f;
 
     /** A creature drawn this frame casts its shadow on whatever platform is under it (arc s, feet at y). */
     private void castShadow(ModelInstance m, float s, float y) { casterInst.add(m); casterPos.add(s); casterPos.add(y); }
@@ -1348,7 +1350,8 @@ public final class WorldRenderer implements Disposable {
     private void drawShadows(Sim sim, float alpha, float camS, float py, float zoneF) {
         if (shadowPass == null) shadowPass = new ShadowPass(32);
         // toward the light: mostly overhead so a shadow sits under its caster (where a jump will land), leaning a little with the world's sun and toward the camera so it shows past the feet
-        float lx = -0.25f * sun.direction.x, ly = 1f, lz = -0.40f, ln = (float) Math.sqrt(lx * lx + ly * ly + lz * lz);
+        // (owner: short creatures like the crab show the direction too, so the sideways lean has a floor of SHADOW_SIDE in every world)
+        float lx = -Math.signum(sun.direction.x) * SHADOW_SIDE - 0.15f * sun.direction.x, ly = 1f, lz = -0.40f, ln = (float) Math.sqrt(lx * lx + ly * ly + lz * lz);
         lx /= ln; ly /= ln; lz /= ln;
         if (heroCaster) shadowFor(sim, alpha, camS, hero.shadowParts(), camS, py, lx, ly, lz);
         for (int k = 0; k < casterInst.size(); k++) shadowFor(sim, alpha, camS, new ModelInstance[]{casterInst.get(k)}, casterPos.get(2 * k), casterPos.get(2 * k + 1), lx, ly, lz);

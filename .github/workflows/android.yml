@@ -23,8 +23,9 @@ env:
 
 jobs:
   build:
-    # branch guard: a dispatch from any other branch can never publish. Build 74 (owner): its own branch may make a private draft test APK only.
-    if: github.ref == 'refs/heads/ccr-cb458cd1-w4dh5c' || (github.ref == 'refs/heads/build-74-determinism' && inputs.test_build)
+    # branch guard: a dispatch from any other branch can never publish. Build 74 (owner, 2026-10-22): its own branch publishes too, and every build
+    # is a full (published) release so it shows in the owner's GitHub app.
+    if: github.ref == 'refs/heads/ccr-cb458cd1-w4dh5c' || github.ref == 'refs/heads/build-74-determinism'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

@@ -458,6 +458,7 @@ This replaces the earlier centre-mass placement instruction. The gem's lowest vi
   - the raw jeageroni SFX files in this public repository.
 
 ## Build 74: cross-platform determinism and competitive timing (owner directive, 2026-10-22)
+- **Releases (owner, 2026-10-22):** every build is a full, published GitHub Release (not a draft) so it shows in the owner's GitHub app. Build 74 publishes from `build-74-determinism`. The release signing key (`ANDROID_RELEASE_*`) was created by the owner and verified by `key-check.yml` (new key, opens with its password and alias; public fingerprint 9C:2F:B5:BB:...:B1:AE). The four original `ANDROID_KEYSTORE_*`/`ANDROID_KEY_*` secrets stay: they sign the proof of rotation.
 
 Requirement: the same seed, the same inputs on the same simulation steps, give the same run, the same finish step and the same recorded time on Windows, Linux and Android.
 

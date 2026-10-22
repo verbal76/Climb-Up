@@ -1,0 +1,22 @@
+build/
+.gradle/
+*.class
+local.properties
+.idea/
+*.iml
+android/build/
+.DS_Store
+screenshots/tmp/
+android/libs/
+
+# never commit signing material (the public OTA key assets/ota/ota_public_key.b64 is the only key file that belongs in the repo)
+ci-secrets/
+*.p8
+*.pem
+OTA_SIGNING_*
+ANDROID_KEY*
+
+# runtime scratch the desktop launcher leaves beside the assets when run from there (screenshot/probe runs): LWJGL's native-library cache and JVM crash logs
+assets/.lwjgl/
+assets/hs_err_pid*.log
+__pycache__/

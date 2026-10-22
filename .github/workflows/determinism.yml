@@ -1,0 +1,62 @@
+name: Cross-platform course generation check
+# VALIDATION ONLY (publishes nothing, builds no release). Build 73 (owner): the same seed must build the same course on Android and on the desktop.
+# Generates the same seeds on the desktop JVM and on Android's runtime (ART, an x86_64 emulator) with the game's own generator and compares the
+# canonical fingerprints of the stored slices (every platform, rope, pad, castle and hazard with its phase). Any difference fails the run.
+on:
+  workflow_dispatch:
+  push:            # whenever generation, its tuning or this check changes (a manual dispatch needs the file on the default branch)
+    branches: [ccr-cb458cd1-w4dh5c]
+    paths:
+      - '.github/workflows/determinism.yml'
+      - 'core/src/main/java/com/hotatticgames/climbup/sim/**'
+      - 'assets/data/tuning.json'
+      - 'core/src/test/java/com/hotatticgames/climbup/GenPrint.java'
+permissions:
+  contents: read
+
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '17' }
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Compile the generator and the fingerprint tool
+        run: ./gradlew :core:testClasses --no-daemon -q
+      - name: Fingerprint on the desktop JVM
+        run: |
+          set -e
+          GDX=$(find ~/.gradle -name 'gdx-1.14.2.jar' | head -1)
+          java -cp "core/build/classes/java/main:core/build/classes/java/test:$GDX" com.hotatticgames.climbup.GenPrint assets/data/tuning.json | tee jvm.txt
+          grep -q "GENPRINT all" jvm.txt
+      - name: Dex the same classes for Android
+        run: |
+          set -e
+          GDX=$(find ~/.gradle -name 'gdx-1.14.2.jar' | head -1)
+          mkdir -p fp/classes && cp -r core/build/classes/java/main/. fp/classes/
+          mkdir -p fp/classes/com/hotatticgames/climbup && cp core/build/classes/java/test/com/hotatticgames/climbup/GenPrint.class fp/classes/com/hotatticgames/climbup/
+          (cd fp/classes && jar cf ../core.jar .)
+          BT=$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -1)
+          mkdir -p fp/dex && "$BT/d8" --release --min-api 34 --output fp/dex fp/core.jar "$GDX" 2>&1 | grep -v -i "warning" || true
+          (cd fp/dex && zip -q ../fp.jar classes*.dex) && ls -l fp/fp.jar
+      - name: Enable KVM for the emulator
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Fingerprint on Android (ART, API 34) and compare
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot
+          script: |
+            adb push fp/fp.jar /data/local/tmp/fp.jar
+            adb push assets/data/tuning.json /data/local/tmp/tuning.json
+            adb shell "CLASSPATH=/data/local/tmp/fp.jar app_process /data/local/tmp com.hotatticgames.climbup.GenPrint /data/local/tmp/tuning.json" | tr -d '\r' | tee art.txt
+            adb shell getprop ro.build.fingerprint
+            grep GENPRINT jvm.txt > a.txt; grep GENPRINT art.txt > b.txt; diff a.txt b.txt && echo "SAME COURSES ON ANDROID AND DESKTOP"

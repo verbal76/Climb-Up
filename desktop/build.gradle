@@ -1,0 +1,168 @@
+plugins { id 'application' }
+tasks.withType(JavaCompile).configureEach { options.release = 17 }
+application { mainClass = 'com.hotatticgames.climbup.desktop.DesktopLauncher' }
+dependencies {
+    implementation project(':core')
+    implementation "com.badlogicgames.gdx:gdx-backend-lwjgl3:$gdxVersion"
+    implementation "com.badlogicgames.gdx:gdx-platform:$gdxVersion:natives-desktop"
+    implementation "com.badlogicgames.gdx-controllers:gdx-controllers-core:$controllersVersion"
+    implementation "com.badlogicgames.gdx-controllers:gdx-controllers-desktop:$controllersVersion"
+    // Steam achievements (Windows/desktop only; never added to :core or :android). Bundles the Steamworks SDK
+    // redistributable natives. MIT-licensed wrapper over Valve's Steamworks SDK (a platform-SDK exception to the
+    // CC0 asset policy - it is required to ship on Steam and makes no network calls of its own).
+    implementation "com.code-disaster.steamworks4j:steamworks4j:1.9.0"
+    testImplementation 'junit:junit:4.13.2'
+}
+tasks.named("test") { testLogging { events "passed", "failed", "skipped"; exceptionFormat "full" } }
+tasks.named("run") {
+    workingDir = file('../assets')
+    systemProperties System.properties.findAll { it.key.toString().startsWith('climb.') }
+}
+
+// End-to-end run of the real desktop build in a real window (CI runs it under Xvfb with software OpenGL; locally: xvfb-run -a ./gradlew :desktop:scenario).
+tasks.register('scenario', JavaExec) {
+    group = 'verification'
+    description = 'Drives the desktop game through menus, rebinding, play, controller plug/unplug, resize and fullscreen, saving screenshots.'
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.hotatticgames.climbup.desktop.Scenario'
+    workingDir = file('../assets')
+    args = [project.findProperty('scenarioData') ?: "${buildDir}/scenario/data".toString(), project.findProperty('scenarioShots') ?: "${buildDir}/scenario/shots".toString()]
+    systemProperties System.properties.findAll { it.key.toString().startsWith('scenario.') || it.key.toString().startsWith('climb.') }
+}
+
+// Captures the Settings screen's desktop tabs at many window sizes/aspect ratios plus the TEXT SIZE stepper extremes, for layout inspection.
+tasks.register('settingsShots', JavaExec) {
+    group = 'verification'
+    description = 'Screenshots every desktop Settings tab across aspect ratios 4:3..32:9, a 4K TV and small windows (see SettingsShots).'
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.hotatticgames.climbup.desktop.SettingsShots'
+    workingDir = file('../assets')
+    args = [project.findProperty('settingsShotsData') ?: "${buildDir}/settingsshots/data".toString(), project.findProperty('settingsShotsShots') ?: "${buildDir}/settingsshots/shots".toString()]
+    systemProperties System.properties.findAll { it.key.toString().startsWith('scenario.') || it.key.toString().startsWith('climb.') }
+}
+
+// Drives the real player rig (every character) through a long rope climb in a real GL context and fails if any arm/leg bone shrinks (the grip scale-leak regression). CI runs it under Xvfb; locally: xvfb-run -a ./gradlew :desktop:gripProbe.
+tasks.register('gripProbe', JavaExec) {
+    group = 'verification'
+    description = 'Climbs a long rope with every character and asserts the arm/leg bones never shrink over a sustained grip (see GripProbe).'
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.hotatticgames.climbup.desktop.GripProbe'
+    workingDir = file('../assets')
+    systemProperties System.properties.findAll { it.key.toString().startsWith('climb.') }
+}
+
+// Renders every character in each grip/stance it reaches (idle, rope/cable hang+move, ledge, pull-up) to PNGs, with a
+// reference bar on the line, for human inspection of the grip poses. Locally: xvfb-run -a -s "-screen 0 320x240x24" ./gradlew :desktop:rigShot
+tasks.register('rigShot', JavaExec) {
+    group = 'verification'
+    description = 'Screenshots every character in each grip pose to desktop/build/rigshot/ (see RigShot).'
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.hotatticgames.climbup.desktop.RigShot'
+    workingDir = file('../assets')
+    systemProperties System.properties.findAll { it.key.toString().startsWith('climb.') }
+}
+
+// Build 67: renders every character's head and shoulders (the real rig, idle, the hero lights) to transparent PNGs in assets/ui/portraits/,
+// the pictures the settings screen shows beside the CHARACTER row. Re-run after a character changes: xvfb-run -a -s "-screen 0 320x240x24" ./gradlew :desktop:portraits
+tasks.register('portraits', JavaExec) {
+    group = 'build'
+    description = 'Re-shoots the character portraits into assets/ui/portraits/ (see PortraitShot).'
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.hotatticgames.climbup.desktop.PortraitShot'
+    workingDir = file('../assets')
+    systemProperties System.properties.findAll { it.key.toString().startsWith('climb.') }
+}
+
+// Renders the cannon model posed like drawPackAimed at several aim angles with the ball's real flight direction marked,
+// to confirm the muzzle points where the ball goes. Locally: xvfb-run -a -s "-screen 0 320x240x24" ./gradlew :desktop:cannonShot
+tasks.register('cannonShot', JavaExec) {
+    group = 'verification'
+    description = 'Screenshots the cannon at several aim angles with the ball path, to check muzzle alignment (see CannonShot).'
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.hotatticgames.climbup.desktop.CannonShot'
+    workingDir = file('../assets')
+    systemProperties System.properties.findAll { it.key.toString().startsWith('climb.') }
+}
+
+tasks.register('fullShot', JavaExec) {
+    group = 'verification'
+    description = 'Renders real rope/cable climbs through the REAL WorldRenderer to PNGs (true in-game grip), see FullShot.'
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.hotatticgames.climbup.desktop.FullShot'
+    workingDir = file('../assets')
+    systemProperties System.properties.findAll { it.key.toString().startsWith('climb.') }
+}
+
+// ---- Windows distribution -------------------------------------------------------------------------------------------------------------------------------------------
+// One self-contained jar for jpackage: the shared game, the LWJGL3 backend and ONLY the Windows natives (Linux/macOS natives are left out of the shipped build).
+tasks.register('windowsJar', Jar) {
+    group = 'distribution'
+    description = 'upwardly.jar for the Windows app-image (see tools/windows/package.ps1).'
+    archiveFileName = 'upwardly.jar'
+    dependsOn configurations.runtimeClasspath, ':core:jar'     // the filtered file collection below carries no task dependencies of its own
+    destinationDirectory = layout.buildDirectory.dir('windows/input')
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    manifest { attributes 'Main-Class': 'com.hotatticgames.climbup.desktop.DesktopLauncher', 'Implementation-Title': 'Upwardly', 'Implementation-Version': appVersionName + (project.findProperty('buildNumber') ? '+' + project.findProperty('buildNumber') : '') }
+    from(sourceSets.main.output)
+    from({
+        configurations.runtimeClasspath.filter { f ->
+            def n = f.name
+            !(n.contains('natives-linux') || n.contains('natives-macos') || n.contains('natives-freebsd'))
+        }.collect { it.isDirectory() ? it : zipTree(it) }
+    }) { exclude 'META-INF/*.SF', 'META-INF/*.RSA', 'META-INF/*.DSA', 'module-info.class', 'META-INF/versions/**/module-info.class'
+         exclude '**/libgdx*.so', '**/libgdx*.dylib', '**/libjamepad*.so', '**/libjamepad*.dylib', '**/*.dylib', '**/linux/**', '**/macos/**', 'libglfw*', 'liblwjgl*' }
+}
+
+// ---- Linux distribution ---------------------------------------------------------------------------------------------------------------------------------------------
+// The SAME shared game, the LWJGL3 backend and ONLY the Linux x86-64 natives (Windows .dll / macOS .dylib are left out). Packaged by tools/linux/package.sh with jpackage into a native app-image + Upwardly Build NN Linux.tar.gz. Suitable for Steam Deck / Steam Machine (native Linux, not Proton).
+tasks.register('linuxJar', Jar) {
+    group = 'distribution'
+    description = 'upwardly.jar for the Linux app-image (Linux natives only); see tools/linux/package.sh.'
+    archiveFileName = 'upwardly.jar'
+    dependsOn configurations.runtimeClasspath, ':core:jar'
+    destinationDirectory = layout.buildDirectory.dir('linux/input')
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    manifest { attributes 'Main-Class': 'com.hotatticgames.climbup.desktop.DesktopLauncher', 'Implementation-Title': 'Upwardly', 'Implementation-Version': appVersionName + (project.findProperty('buildNumber') ? '+' + project.findProperty('buildNumber') : '') }
+    from(sourceSets.main.output)
+    from({
+        configurations.runtimeClasspath.filter { f ->
+            def n = f.name
+            !(n.contains('natives-windows') || n.contains('natives-macos') || n.contains('natives-freebsd'))
+        }.collect { it.isDirectory() ? it : zipTree(it) }
+    }) { exclude 'META-INF/*.SF', 'META-INF/*.RSA', 'META-INF/*.DSA', 'module-info.class', 'META-INF/versions/**/module-info.class'
+         exclude '**/*.dll', '**/*.dylib', '**/windows/**', '**/macos/**', '**/macosx/**' }
+}
+
+// Build 71: the skull, the green blob and the homing bee through the real renderer while the autopilot plays their decks. Locally: xvfb-run -a -s "-screen 0 320x240x24" ./gradlew :desktop:creatureShot
+tasks.register('creatureShot', JavaExec) {
+    group = 'verification'
+    description = 'Screenshots the Build 71 creatures (skull, green blob, bee) in play to desktop/build/creatureshot/ (see CreatureShot).'
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.hotatticgames.climbup.desktop.CreatureShot'
+    workingDir = file('../assets')
+    systemProperties System.properties.findAll { it.key.toString().startsWith('climb.') }
+}
+
+// Build 71 (owner, checkpoint gem height rule): measures every character's head height and the gem's real drawn bottom over its bob, and shoots the
+// hero walking under the gem from both sides at its lowest, middle and highest bob. Locally: xvfb-run -a -s "-screen 0 1280x720x24" ./gradlew :desktop:gemShot
+tasks.register('gemShot', JavaExec) {
+    group = 'verification'
+    description = 'Checkpoint gem height vs the characters, and walk-under shots, to assets/build/gemshot/ (see GemShot).'
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.hotatticgames.climbup.desktop.GemShot'
+    workingDir = file('../assets')
+    systemProperties System.properties.findAll { it.key.toString().startsWith('climb.') }
+}
+
+// Performance audit (dev only): the real game with the autopilot, every frame's interval, stage times, GC and allocation logged (see PerfRun).
+// Locally: xvfb-run -a -s "-screen 0 1920x1080x24" ./gradlew :desktop:perfRun -Dperf.seconds=600 -Dperf.cap=60
+tasks.register('perfRun', JavaExec) {
+    group = 'verification'
+    description = 'Frame-time / stage / GC audit of the real game under the autopilot (see PerfRun).'
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.hotatticgames.climbup.desktop.PerfRun'
+    workingDir = file('../assets')
+    jvmArgs = ['-Xms256m', '-Xmx1024m', '-XX:+UseG1GC']      // the shipped desktop launchers' options (tools/linux/package.sh, tools/windows/package.ps1)
+    if (System.getProperty('perf.jfr')) jvmArgs += ["-XX:FlightRecorderOptions=stackdepth=512", "-XX:StartFlightRecording=settings=profile,filename=${System.getProperty('perf.jfr')}"]      // optional Flight Recorder profile (samples and allocation sites)
+    systemProperties System.properties.findAll { it.key.toString().startsWith('climb.') || it.key.toString().startsWith('perf.') }
+}

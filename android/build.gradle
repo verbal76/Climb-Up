@@ -32,8 +32,9 @@ android {
         }
     }
     packaging { jniLibs { useLegacyPackaging = false } }
-    buildTypes { release { minifyEnabled false } }
-    lint { abortOnError false }
+    // Build 73 (production): the released APK is the release build type (not debuggable), signed with the same identity so it installs over every earlier build.
+    buildTypes { release { minifyEnabled false; signingConfig signingConfigs.debug } }
+    lint { abortOnError false; checkReleaseBuilds false }
 }
 
 configurations { natives }

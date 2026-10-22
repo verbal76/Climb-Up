@@ -80,7 +80,7 @@ jobs:
       - run: pip install pillow
       - name: Package (jar, jlink runtime, EXE, assets, checksums, Steam layout)
         shell: powershell
-        run: powershell -File tools/windows/package.ps1 -BuildNumber ${{ env.BUILD_NUMBER }} -Channel experimental
+        run: powershell -File tools/windows/package.ps1 -BuildNumber ${{ env.BUILD_NUMBER }} -Channel ${{ inputs.test_build && 'experimental' || 'release' }}
       - name: Print what was built
         shell: powershell
         run: |

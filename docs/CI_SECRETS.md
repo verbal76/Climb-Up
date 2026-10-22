@@ -5,7 +5,29 @@
 - Builds 4-36 were signed with a different throw-away key on every CI run; those keys no longer exist, so those installs cannot be updated in place (uninstall once, which loses local data).
 - This key is a *public* debug key (its private half is in the repository). That is acceptable for sideloaded family tests and is the identity every installed copy has, so it must **not** be replaced or regenerated: Android refuses an update signed by a different key. The cost: anyone can build an APK that Android will accept as an update to the installed game if the owner chooses to install it. A private release key would fix that but forces everyone to uninstall once; not recommended before a store release.
 
-## The six Actions secrets
+## Build 73: a private release key, with key rotation (owner decision, 2026-10-22)
+For the public production release the owner chose to move to a private key without breaking updates. `tools/ci/rotate_sign.sh` (run by `android.yml`) signs every APK from Build 73 on as follows:
+- **Android 8.x (API 26-27):** the old public identity (`CE:DD:D6:86...`), as before. These versions cannot rotate keys.
+- **Android 9+ (API 28+):** the new private key, plus a proof of rotation (signing lineage) signed by the old key. The phone accepts it as an update and, from then on, trusts only the new key. The old key gets **no rollback capability**, so an APK signed only with the public key can no longer update an installed copy.
+- **Gate:** the workflow then installs the last published APK (Build 71) on an Android 14 emulator, updates it in place with the new APK (same first-install time, data kept) and launches the game (`tools/ci/update_test.sh`). The release fails otherwise.
+- **Keep the new keystore and its passwords safe and backed up (two places).** If it is lost, no later build can update an installed copy on Android 9+.
+
+### Creating the key (owner, once, on your own computer; never in chat or in the repository)
+1. Install a Java JDK if you have none (for example Eclipse Temurin 17), which provides `keytool`.
+2. Run: `keytool -genkeypair -v -keystore upwardly-release.jks -alias upwardly -keyalg RSA -keysize 4096 -validity 10000 -dname "CN=Hot Attic Games, O=Hot Attic Games"`. Choose a strong store password; use the same one for the key when asked.
+3. Base64 it on one line. PowerShell: `[Convert]::ToBase64String([IO.File]::ReadAllBytes("upwardly-release.jks")) | Set-Clipboard`. macOS/Linux: `base64 -w0 upwardly-release.jks` (macOS: `base64 -i upwardly-release.jks`).
+4. GitHub, repository Settings > Secrets and variables > Actions > New repository secret, four times:
+
+| Secret | Value |
+|---|---|
+| `ANDROID_RELEASE_KEYSTORE_BASE64` | the one-line base64 from step 3 |
+| `ANDROID_RELEASE_KEYSTORE_PASSWORD` | the store password |
+| `ANDROID_RELEASE_KEY_ALIAS` | `upwardly` |
+| `ANDROID_RELEASE_KEY_PASSWORD` | the key password (the same as the store password if you pressed Enter) |
+
+Without them the Android build stops at the signing step with a message naming the missing secret; nothing is published.
+
+## The six Actions secrets (Builds 37-72; still used for the Android 8.x signature and the OTA)
 | Secret | Value | Format |
 |---|---|---|
 | `ANDROID_KEYSTORE_BASE64` | the existing `android/debug.keystore`, byte for byte | base64, one line (3,556 chars) |

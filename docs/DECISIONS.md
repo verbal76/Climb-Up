@@ -434,3 +434,25 @@ This replaces the earlier centre-mass placement instruction. The gem's lowest vi
 - Cost: none. It is the same draws with a different projection matrix.
 - Checks: before/after real-renderer shots (`CreatureShot` now also captures a crab next to the hero), and `ShadowPassTest` plus the render tests.
 - Not in the Build 72 drafts. It needs new builds whenever the owner approves them.
+
+## Build 73: production release (owner directive, 2026-10-22)
+
+- **Version:** 1.3.0, versionCode 73 (`build.gradle`, `ClimbGame.VERSION`). The course rules stay at version 3 (`rulesOfBuild(73) = 3`), so seeds, course codes and records from Build 72 keep their meaning.
+- **Android package:** the release build type (not debuggable; the workflow fails if it is), named `upwardly-1.3.0-build73.apk`. Builds up to 72 were the debuggable debug type. No minification, so the code is unchanged.
+- **Release lint:** turned off (`checkReleaseBuilds false`), as for debug builds before.
+- **Signing:**
+  - The owner chose a private key with Android key rotation. Every APK until now was signed with a keystore that is public in this repository.
+  - Android 9+ gets the new private key plus a proof of rotation; Android 8.x keeps the old identity (`docs/CI_SECRETS.md`).
+  - Gate: an emulator updates the published Build 71 in place to the new APK and launches it.
+  - The Android release waits for the owner to add the four `ANDROID_RELEASE_*` secrets. The desktop release does not depend on them.
+- **Desktop packages:** built on the `release` channel; owner test builds stay `experimental`.
+- **Phone vs desktop course generation (release concern, closed):**
+  - `GenPrint` fingerprints 8 seeds x 12 slices (the stored slice blobs: every platform, rope, pad, castle and hazard with its phase).
+  - The result is identical on the desktop JVM with `Math`, with `StrictMath` (fdlibm, the reference that Android's libm also derives from), and with every `sin`/`cos`/`atan2` result nudged one ulp up or down.
+  - So generation does not depend on the last bit of those functions on any platform.
+  - `determinism.yml` runs the same tool on Android's runtime (ART, API 34 emulator) and compares the two outputs.
+- **Origin-shift drift:** no simulation file changed after the `StreamingReplayTest` evidence (`eb8fdaf`; the shadow lean is rendering only), so that evidence applies to Build 73 unchanged. It is a known, documented limitation, not a blocker.
+- **Pending before any store or commercial release (unchanged, owner):** these assets are already public in builds 59-72, and a free GitHub release does not change that.
+  - written permission for the hamster model;
+  - Suno terms for the music;
+  - the raw jeageroni SFX files in this public repository.

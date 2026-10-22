@@ -49,34 +49,59 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
       - name: Unit tests (headless simulation, generator, persistence, OTA incl. end-to-end over local HTTP)
         run: ./gradlew :core:test --no-daemon
-      - name: Assemble debug APK (signed with the Build 42 identity)
+      - name: Assemble the release APK (not debuggable; signed with the Build 42 identity)
         env:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-        run: ./gradlew :android:assembleDebug --no-daemon -PwithAndroid
-      - name: Name, verify and fingerprint the APK
+        run: ./gradlew :android:assembleRelease --no-daemon -PwithAndroid
+      - name: Name, sign with key rotation, verify and fingerprint the APK
+        env:
+          ANDROID_RELEASE_KEYSTORE_BASE64: ${{ secrets.ANDROID_RELEASE_KEYSTORE_BASE64 }}
+          ANDROID_RELEASE_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEYSTORE_PASSWORD }}
+          ANDROID_RELEASE_KEY_ALIAS: ${{ secrets.ANDROID_RELEASE_KEY_ALIAS }}
+          ANDROID_RELEASE_KEY_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEY_PASSWORD }}
         run: |
           set -e
-          SRC=$(ls android/build/outputs/apk/debug/*.apk | head -1)
+          SRC=$(ls android/build/outputs/apk/release/*.apk | head -1)
           VER=$(grep -oP "appVersionName = '\K[^']+" build.gradle)
-          OUT=android/build/outputs/apk/debug/upwardly-${VER}-build${{ env.BUILD_NUMBER }}-debug.apk
-          cp "$SRC" "$OUT"; rm -f "$SRC"
+          OUT=android/build/outputs/apk/release/upwardly-${VER}-build${{ env.BUILD_NUMBER }}.apk
+          tools/ci/rotate_sign.sh "$SRC" "$OUT"; rm -f "$SRC"     # Build 73: private key for Android 9+, proof of rotation from the old identity
           BT=$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -1)
           echo "SOURCE_SHA=${{ github.sha }}"
           echo "APK=$(basename $OUT)"
           sha256sum "$OUT"
-          "$BT/aapt2" dump badging "$OUT" | grep -E "^package|sdkVersion|targetSdkVersion|uses-permission|launchable-activity|native-code"
+          "$BT/aapt2" dump badging "$OUT" > badging.txt; grep -E "^package|sdkVersion|targetSdkVersion|uses-permission|launchable-activity|native-code" badging.txt
+          if grep -q "application-debuggable" badging.txt; then echo "::error::the released APK must not be debuggable"; exit 1; fi
+          echo "not debuggable"
           "$BT/apksigner" verify --verbose --print-certs "$OUT" > cert.txt; head -8 cert.txt
           GOT=$(grep -m1 "certificate SHA-256 digest" cert.txt | sed 's/.*: //' | tr 'a-f' 'A-F' | sed 's/../&:/g; s/:$//')
           echo "SIGNING_CERT_SHA256=$GOT"
-          if [ "$GOT" != "$EXPECTED_CERT_SHA256" ]; then echo "::error::APK is not signed with the installed Build 42 identity (expected $EXPECTED_CERT_SHA256)"; exit 1; fi
-          echo "signing certificate matches installed Build 42"
+          if [ "$GOT" != "$EXPECTED_CERT_SHA256" ]; then echo "::error::APK is not signed with the installed Build 42 identity for Android 8.x (expected $EXPECTED_CERT_SHA256)"; exit 1; fi
+          echo "Android 8.x signer matches installed Build 42; Android 9+ signer $ROTATED_SIGNER_SHA256 (rotated from it)"
           unzip -l "$OUT" | grep -E "\.so$|classes.*dex|assets/pack|assets/ota" | head -20
       - uses: actions/upload-artifact@v4
         with:
-          name: upwardly-debug-apk-${{ env.BUILD_NUMBER }}
-          path: android/build/outputs/apk/debug/*.apk
+          name: upwardly-apk-${{ env.BUILD_NUMBER }}
+          path: android/build/outputs/apk/release/*.apk
+      - name: Fetch the last published APK (Build 71) for the update test
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release download v1.1.5-build71 -p '*.apk' -O previous.apk && ls -l previous.apk
+      - name: Enable KVM for the emulator
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: On an emulator, update Build 71 in place to this APK (same app, data kept) and launch it
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot
+          script: bash tools/ci/update_test.sh previous.apk "$(ls android/build/outputs/apk/release/*.apk)"
       - name: Build, sign and verify the OTA baseline (the content bundled in this APK)
         env:
           OTA_SIGNING_PRIVATE_KEY: ${{ secrets.OTA_SIGNING_PRIVATE_KEY }}
@@ -91,12 +116,13 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -e
-          APK=$(ls android/build/outputs/apk/debug/*.apk)
+          APK=$(ls android/build/outputs/apk/release/*.apk)
           SHA=$(sha256sum "$APK" | cut -d' ' -f1)
           VER=$(grep -oP "appVersionName = '\K[^']+" build.gradle)
           RT=$(grep -oP "RUNTIME = \K[0-9]+" core/src/main/java/com/hotatticgames/climbup/ota/OtaConfig.java)
           BV=$(grep -oP "BUNDLED_CONTENT_VERSION = \K[0-9]+" core/src/main/java/com/hotatticgames/climbup/ota/OtaConfig.java)
-          printf 'Physical-test build ${{ env.BUILD_NUMBER }} (sideload; signed with the same certificate as every build since 37, so it installs over the previous one).\n\nVersion: %s build ${{ env.BUILD_NUMBER }}\nSource: ${{ github.sha }}\nPackage: com.hotatticgames.climbup, versionName %s, versionCode ${{ env.BUILD_NUMBER }}\nSHA-256: %s\nSigning certificate SHA-256: %s\nOTA: signed manifests, runtime %s, bundled content version %s\n' "$VER" "$VER" "$SHA" "$EXPECTED_CERT_SHA256" "$RT" "$BV" > notes.md
+          if [ "${{ inputs.test_build }}" = "true" ]; then KIND='Physical-test build'; else KIND='Production release, build'; fi
+          printf "$KIND"' ${{ env.BUILD_NUMBER }} (sideload; signed with the same certificate as every build since 37, so it installs over the previous one).\n\nVersion: %s build ${{ env.BUILD_NUMBER }}\nSource: ${{ github.sha }}\nPackage: com.hotatticgames.climbup, versionName %s, versionCode ${{ env.BUILD_NUMBER }}\nSHA-256: %s\nSigning certificate SHA-256: %s\nOTA: signed manifests, runtime %s, bundled content version %s\n' "$VER" "$VER" "$SHA" "$EXPECTED_CERT_SHA256" "$RT" "$BV" > notes.md
           if [ "${{ inputs.test_build }}" = "true" ]; then
             # owner test build: a DRAFT release (collaborators only, creates no tag, never public) carries the APK
             gh release create "v${VER}-build${{ env.BUILD_NUMBER }}" "$APK" --target ${{ github.sha }} --title "Upwardly v${VER} (build ${{ env.BUILD_NUMBER }}) — Android APK (owner test build, draft)" --notes-file notes.md --draft

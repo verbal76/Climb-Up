@@ -20,8 +20,8 @@ Each workflow currently numbers from its own `github.run_number`. For one **coor
 platforms into ONE release/tag `build-NN` (designed below; not yet built because it needs a hosted-runner dry run).
 
 ## Artifact naming (§7)
-Player-facing files use `Upwardly Build NN <Platform>.<ext>` (desktop) and `upwardly-<version>-buildNN-debug.apk` (Android):
-- `upwardly-<version>-buildNN-debug.apk`  (Android release "Upwardly build NN apk" — implemented)
+Player-facing files use `Upwardly Build NN <Platform>.<ext>` (desktop) and `upwardly-<version>-buildNN.apk` (Android; builds up to 72 were `...-debug.apk`, the debuggable build type):
+- `upwardly-<version>-buildNN.apk`  (Android release "Upwardly build NN apk"; from Build 73 the release build type, not debuggable, key-rotated, see `docs/CI_SECRETS.md`)
 - `Upwardly Build NN EXE.zip`  (desktop release — implemented)
 - `Upwardly Build NN Linux.tar.gz`  (desktop release — implemented)
 Branch names / CI ids live in `build-manifest.json`, not in filenames.

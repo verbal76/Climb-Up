@@ -102,7 +102,8 @@ jobs:
       - name: Windows (desktop JVM)
         run: |
           set -e
-          GDX=$(find ~/.gradle -name 'gdx-1.14.2.jar' | head -1); CP="core/build/classes/java/main;core/build/classes/java/test;$GDX"
+          GDX=$(find "$(cygpath -u "$GRADLE_USER_HOME")" -name 'gdx-1.14.2.jar' | head -1); [ -n "$GDX" ] || { echo "::error::libGDX jar not found under GRADLE_USER_HOME"; exit 1; }
+          CP="core/build/classes/java/main;core/build/classes/java/test;$(cygpath -w "$GDX")"
           java -cp "$CP" com.hotatticgames.climbup.GenPrint assets/data/tuning.json | tr -d '\r' | tee windows.txt
           for r in core/src/test/resources/replays/*.bin.gz; do
             n=$(basename "$r" .bin.gz); seed=$(echo "$n" | sed -E 's/seed([0-9]+).*/\1/'); f=nofalls; case "$n" in *falls*) f=falls;; esac

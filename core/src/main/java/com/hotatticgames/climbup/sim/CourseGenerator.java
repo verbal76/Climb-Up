@@ -48,9 +48,9 @@ public final class CourseGenerator {
      * generator (the crab rules of Build 63 changed what a seed produced, so runs from earlier builds carry version 0, "old rules", and are not compared).
      * {@code GeneratorFingerprintTest} fails when generation changes without a bump.
      */
-    public static final int RULES_VERSION = 3;      // 3 = Build 72: flush ramps, faster crumbling, a wilder shaking ramp, the spinning ramp; 2 = Build 71: the bee homes in, skulls and green blobs, mortars out of step at random
+    public static final int RULES_VERSION = 4;      // 4 = Build 76: faster plank conveyor bridges; 3 = Build 72: flush ramps, faster crumbling, a wilder shaking ramp, the spinning ramp; 2 = Build 71: the bee homes in, skulls and green blobs, mortars out of step at random
     /** The rules version a climb started on a given build used (0 = unknown or before the stamps: not comparable). */
-    public static int rulesOfBuild(int build) { return build >= 72 ? 3 : build >= 71 ? 2 : build >= 63 ? 1 : 0; }
+    public static int rulesOfBuild(int build) { return build >= 76 ? 4 : build >= 72 ? 3 : build >= 71 ? 2 : build >= 63 ? 1 : 0; }
 
     private CourseGenerator(long seed, Tuning t, long salt) {
         T = t; this.salt = salt; rnd = new Random(seed * 0x9E3779B97F4A7C15L + 12345 + salt * 0x632BE59BD9B4E019L); c = new Course(seed, t.circumference());
@@ -1328,7 +1328,7 @@ public final class CourseGenerator {
                 float w = 6f + rnd.nextInt(3), dy = r(0f, 0.9f);
                 float gapIn = reach(dy) * lerp(0.45f, 0.85f, d) * r(0.9f, 1f) * (1f - 0.03f * attempt);
                 Element br = plat(S, eR + gapIn + w / 2f, y0 + dy, w, z); br.skin = 1;
-                if (w >= 7f && d > 0.12f && rnd.nextInt(10) < 4) { br.skin = 4; br.phase = lerp(1.0f, 2.6f, d) * r(0.95f, 1.05f); }      // Build 72 (owner): some long bridges are wooden plank conveyor belts running to the left
+                if (w >= 7f && d > 0.12f && rnd.nextInt(10) < 4) { br.skin = 4; br.phase = lerp(1.6f, 3.4f, d) * r(0.95f, 1.05f); }      // Build 72 (owner): some long bridges are wooden plank conveyor belts running to the left; Build 76 (owner: "I can just walk right over"): 1.0-2.6 -> 1.6-3.4 m/s
                 l.add(br);
                 if (z >= 1 && rnd.nextInt(5) < 3) {
                     float L = r(4.5f, 6f);

@@ -31,7 +31,7 @@ import com.hotatticgames.climbup.sim.Tuning;
 public final class WorldRenderer implements Disposable {
     private static final class Part {
         ModelInstance inst; float du, dy, dz, sx = 1, sy = 1, sz = 1, yaw, roll; Color color; boolean fall; boolean tinted = true; boolean fixed; ColorAttribute tintAttr;
-        boolean belt; float beltSpan, beltSlope;   // Build 72: a conveyor slat that rides the belt, wrapping round within beltSpan (and along the ramp's slope)
+        boolean belt; float beltSpan, beltSlope, beltInset;   // Build 72: a conveyor slat that rides the belt, wrapping round within beltSpan (and along the ramp's slope); Build 76: cut off beltInset short of each end (the rollers)
         float localZ;   // optional pre-rotation translate along the model's own Z (model units, applied before scale): used to recentre an off-origin mesh (the ramp) so it can sit at the element centre without a big arc offset
     }
     private static final class Vis { Part[] parts; Element e; boolean built; }
@@ -328,7 +328,7 @@ public final class WorldRenderer implements Disposable {
         int n = Math.max(4, Math.round(w / 0.5f)); float pl = w / n;
         for (int i = 0; i < n; i++) {
             Part pk = boxPart(-w / 2f + (i + 0.5f) * pl, -0.10f, 0f, pl * (belt ? 0.82f : 0.92f), 0.16f, 1.5f, belt && i % 4 == 0 ? painted : i % 2 == 0 ? wood1 : wood2);
-            if (belt) { pk.belt = true; pk.beltSpan = w; }
+            if (belt) { pk.belt = true; pk.beltSpan = w; pk.beltInset = 0.31f; }      // Build 76 (owner): stop at the rollers instead of passing through them
             ps.add(pk);
         }
         if (belt) {           // a big iron roller under each end that the plank belt wraps round
@@ -581,7 +581,7 @@ public final class WorldRenderer implements Disposable {
         try {
             if (sceneFbo == null || sceneFbo.getWidth() != w || sceneFbo.getHeight() != h) {
                 if (sceneFbo != null) sceneFbo.dispose();
-                sceneFbo = new com.badlogic.gdx.graphics.glutils.FrameBuffer(com.badlogic.gdx.graphics.Pixmap.Format.RGBA8888, w, h, true);
+                sceneFbo = new com.badlogic.gdx.graphics.glutils.FrameBuffer(com.badlogic.gdx.graphics.Pixmap.Format.RGBA8888, w, h, true, true);      // with stencil, for the shadows (ShadowPass)
                 sceneFbo.getColorBufferTexture().setFilter(com.badlogic.gdx.graphics.Texture.TextureFilter.Linear, com.badlogic.gdx.graphics.Texture.TextureFilter.Linear);
             }
             sceneFbo.begin();
@@ -625,7 +625,7 @@ public final class WorldRenderer implements Disposable {
         boolean gone = sim.gone[i];
         float crumble = sim.crumbleT[i];
         for (Part p : v.parts) {
-            float du = p.du, dy = p.dy, extraYaw = p.yaw; float sy = p.sy, roll = p.roll;
+            float du = p.du, dy = p.dy, extraYaw = p.yaw; float sx = p.sx, sy = p.sy, roll = p.roll;
             float y = e.isPlatform() ? ey - Math.max(-0.1f, Math.min(0.22f, dip[i])) : ey;
             if (e.type == Element.Type.RAMP) {
                 y = e.y;
@@ -634,6 +634,10 @@ public final class WorldRenderer implements Disposable {
             }
             if (p.belt) {       // Build 72: a conveyor slat rides along the belt and wraps round to the far end
                 float span = p.beltSpan, u = ((p.du + span / 2f + e.beltV() * sim.time) % span + span) % span - span / 2f;
+                // Build 76 (owner: the planks clipped through the end rollers): the slat is cut where it reaches a roller, so it shrinks into one end and grows out of the other
+                float lo = Math.max(u - p.sx / 2f, -span / 2f + p.beltInset), hi = Math.min(u + p.sx / 2f, span / 2f - p.beltInset);
+                if (hi - lo < 0.02f) continue;
+                u = (lo + hi) / 2f; sx = hi - lo;
                 dy = p.dy + p.beltSlope * (u - p.du); du = u;
             }
             if (e.type == Element.Type.SEESAW) {
@@ -671,7 +675,7 @@ public final class WorldRenderer implements Disposable {
                 else if (p.tinted) p.tintAttr.color.set(tint);
                 else p.tintAttr.color.set(Color.WHITE);
             }
-            place(p.inst, es + du + shakeX, y + dy + fallY, p.dz + (e.type == Element.Type.MOVE_Z ? e.zAt(sim.time) : 0f), camS, p.sx, sy, p.sz, extraYaw, roll);
+            place(p.inst, es + du + shakeX, y + dy + fallY, p.dz + (e.type == Element.Type.MOVE_Z ? e.zAt(sim.time) : 0f), camS, sx, sy, p.sz, extraYaw, roll);
             if (p.localZ != 0f) p.inst.transform.translate(0f, 0f, p.localZ);     // recentre an off-origin mesh along its own Z (applied before scale): see Part.localZ / the ramp
             batch.render(p.inst, env);
         }

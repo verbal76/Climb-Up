@@ -1,5 +1,7 @@
 package com.hotatticgames.climbup;
 
+import static com.hotatticgames.climbup.ReplayCheck.*;
+
 import com.hotatticgames.climbup.sim.*;
 import java.io.*;
 import java.nio.file.Files;
@@ -18,66 +20,14 @@ import java.util.zip.GZIPOutputStream;
  * record &lt;tuning.json&gt; &lt;seed&gt; &lt;max steps&gt; &lt;out.bin.gz&gt; [falls]  - the autopilot plays and its inputs are written (one byte a step)<br>
  * replay &lt;tuning.json&gt; &lt;seed&gt; &lt;in.bin.gz&gt; [falls] [lookahead m]          - the inputs are played back with no controller
  * <p>
- * Where the autopilot (a stand-in for a player, with known gaps) makes no progress for {@link #STUCK} steps, the recording carries a SKIP step that moves
+ * Where the autopilot (a stand-in for a player, with known gaps) makes no progress for {@link ReplayCheck#STUCK} steps, the recording carries a SKIP step that moves
  * the checkpoint three platforms on and respawns there (as the developer probe in PlayScreen does), replayed at the same step; the climb still runs on the
  * real simulation from start to the castle-10 finish. It is a harness action, the same on every platform, and it is counted in the report.
  * <p>
  * "falls" sends the hero back to the checkpoint every 20,000 steps (what the sim does after a missed jump), so respawns are exercised at fixed steps.
  */
 public final class ReplayTool {
-    static final int FALL_EVERY = 20000, FINGERPRINT_EVERY = 10000, STUCK = 4000; static final byte SKIP = (byte) 0x80;
-
-    static final class Climb {
-        final Tower tw; final Sim s; final float lookahead; final boolean falls;
-        double maxAbs; int size; long clock, finishStep = -1, finishClock = -1; boolean live; int doors, respawns, rebuildsSeen, skips;
-        final MessageDigest events, states; final StringBuilder doorLog = new StringBuilder();
-        Climb(Tuning t, long seed, boolean falls, float lookahead) throws Exception {
-            this.falls = falls; this.lookahead = lookahead;
-            tw = new Tower(seed, t); tw.admitAbs = PlayScreen.ADMIT_AHEAD; while (tw.topAbsY() < lookahead) tw.extend();
-            s = Sim.startOn(tw.world, t, 0); s.deferRespawn = true; s.keysFree = true; s.floorOverride = tw.floorLocal(); s.setRange(0, tw.world.size() - 1); size = tw.world.size();
-            events = MessageDigest.getInstance("SHA-256"); states = MessageDigest.getInstance("SHA-256");
-        }
-        /** PlayScreen.keepTower: before every step. The tower is grown synchronously here (the game grows it ahead on a background thread). */
-        void keep() {
-            tw.admitAbs = maxAbs + PlayScreen.ADMIT_AHEAD;                                   // as PlayScreen.keepTower
-            while (tw.topAbsY() < maxAbs + lookahead) { tw.requestNext(); while (tw.generating()) Thread.onSpinWait(); tw.poll(); }   // generation ahead (here: synchronously, as far as asked)
-            tw.maintain(s);
-            if (tw.world.size() != size) { s.setRange(0, tw.world.size() - 1); size = tw.world.size(); }
-        }
-        void step(long k, InputState in) {
-            boolean moved = in.moveX != 0f || in.jumpPressed || in.moveY != 0f;
-            s.step(in);
-            if (!live && moved) live = true;
-            if (live && finishStep < 0) clock++;
-            int ev = s.consumeEvents();
-            if (ev != 0) { putLong(events, k); putLong(events, ev); }
-            if ((ev & Sim.EV_RESPAWN) != 0) respawns++;
-            if ((ev & Sim.EV_DOOR) != 0) { doors++; doorLog.append(' ').append(k); }
-            if ((ev & Sim.EV_FINISH) != 0 && finishStep < 0) { finishStep = k; finishClock = clock; }
-            if (falls && k % FALL_EVERY == FALL_EVERY - 1) s.respawn();
-            maxAbs = Math.max(maxAbs, tw.absY(s.y));
-            if (k % FINGERPRINT_EVERY == FINGERPRINT_EVERY - 1) fingerprint();
-        }
-        /** The SKIP harness action: checkpoint three platforms on, back to it. */
-        void skip() {
-            Course w = tw.world; int idx = Math.min(w.routeSize() - 1, Math.max(s.bestElem, s.onElem) + 3);
-            while (idx < w.routeSize() - 1 && !w.get(idx).isPlatform()) idx++;
-            s.checkpoint = idx; s.respawn(); skips++;
-        }
-        void fingerprint() {
-            putLong(states, Double.doubleToLongBits(tw.absY(s.y))); putLong(states, Double.doubleToLongBits(tw.originS + s.s));
-            putLong(states, Float.floatToIntBits(s.vx)); putLong(states, Float.floatToIntBits(s.vy)); putLong(states, s.mode.ordinal());
-            putLong(states, s.onElem >= 0 ? tw.elemKeyAt(s.onElem) : -1L); putLong(states, Float.floatToIntBits(s.time));
-        }
-    }
-
-    static void putLong(MessageDigest md, long v) { for (int i = 0; i < 8; i++) md.update((byte) (v >>> (8 * i))); }
-    static String hex(byte[] d) { StringBuilder sb = new StringBuilder(); for (int i = 0; i < 12; i++) sb.append(String.format("%02x", d[i])); return sb.toString(); }
-
-    static int code(float v) { return v > 0f ? 1 : v < 0f ? 2 : 0; }
-    static float dir(int c) { return c == 1 ? 1f : c == 2 ? -1f : 0f; }
-    static byte pack(InputState in) { return (byte) (code(in.moveX) | code(in.moveY) << 2 | (in.jumpPressed ? 16 : 0) | (in.jumpHeld ? 32 : 0) | (in.swingPressed ? 64 : 0)); }
-    static void unpack(byte b, InputState in) { in.clear(); in.moveX = dir(b & 3); in.moveY = dir((b >> 2) & 3); in.jumpPressed = (b & 16) != 0; in.jumpHeld = (b & 32) != 0; in.swingPressed = (b & 64) != 0; }
+    
 
     public static void main(String[] a) throws Exception {
         Tuning t = Tuning.parse(new String(Files.readAllBytes(Paths.get(a[1])), "UTF-8"));
@@ -129,26 +79,12 @@ public final class ReplayTool {
                 c.step(k, in);
             }
             try (OutputStream o = new GZIPOutputStream(new FileOutputStream(a[4]))) { o.write(buf.toByteArray()); }
-            report("record", seed, buf.size(), c);
+            System.out.println(report("record", seed, buf.size(), c));
         } else {
             boolean falls = a.length > 4 && a[4].equals("falls"); float look = a.length > 5 ? Float.parseFloat(a[5]) : 150f;
             byte[] inputs; try (InputStream i = new GZIPInputStream(new FileInputStream(a[3]))) { inputs = readAll(i); }
-            Climb c = new Climb(t, seed, falls, look); c.s.humanHold = Autopilot.HUMAN_HOLD;             // the stick handling the recording ran under
-            InputState in = new InputState();
-            for (int k = 0; k < inputs.length && c.finishStep < 0; k++) {
-                c.keep();
-                if (inputs[k] == SKIP) { c.skip(); in.clear(); } else unpack(inputs[k], in);
-                c.step(k, in);
-            }
-            report("replay", seed, inputs.length, c);
+            System.out.println(report("replay", seed, inputs.length, ReplayCheck.replay(t, seed, inputs, falls, look, null)));
         }
-    }
-
-    static void report(String mode, long seed, long steps, Climb c) {
-        float shown = (float) (c.finishClock >= 0 ? c.finishClock : c.clock) / RunRecord.STEPS_PER_SECOND;
-        System.out.println("REPLAYPRINT " + mode + " seed=" + seed + " steps=" + steps + " falls=" + c.falls + " height=" + (long) c.maxAbs + " doors=" + c.doors + " [" + c.doorLog.toString().trim() + "]"
-            + " respawns=" + c.respawns + " skips=" + c.skips + " finishStep=" + c.finishStep + " clockSteps=" + (c.finishClock >= 0 ? c.finishClock : c.clock) + " time=" + ClockText.time(shown)
-            + " events=" + hex(c.events.digest()) + " states=" + hex(c.states.digest()));
     }
 
     static byte[] readAll(InputStream i) throws IOException { ByteArrayOutputStream o = new ByteArrayOutputStream(); byte[] b = new byte[65536]; int n; while ((n = i.read(b)) > 0) o.write(b, 0, n); return o.toByteArray(); }

@@ -38,6 +38,30 @@ public final class SettingsScreen extends ScreenAdapter {
     }
     private static final String[] Q = {"LOW", "MEDIUM", "HIGH"}, HAP = {"OFF", "LOW", "HIGH"};
 
+    // ---- Build 74 (owner): the hidden determinism check. Replays the bundled seed 12 climb (ReplayCheck) on this device's own runtime, on a background
+    // thread, and shows its finish step, run clock and hashes next to what Linux, Windows and the Android emulator print, so a real phone can be compared.
+    private int versionTaps;
+    private static volatile boolean checkRunning;
+    private static volatile String checkStatus = "REPLAYS A RECORDED CLIMB TO THE FINISH (A FEW MINUTES) AND COMPARES IT WITH THE DESKTOP.";
+    private void startCheck() {
+        if (checkRunning) return;
+        checkRunning = true; checkStatus = "STARTING...";
+        Thread t = new Thread(() -> {
+            try {
+                com.hotatticgames.climbup.sim.Tuning tuning = com.hotatticgames.climbup.sim.Tuning.parse(Gdx.files.internal("data/tuning.json").readString("UTF-8"));        // the bundled tuning, never an update's
+                byte[] in; try (java.io.InputStream i = new java.util.zip.GZIPInputStream(Gdx.files.internal(ReplayCheck.BUNDLED).read())) { java.io.ByteArrayOutputStream o = new java.io.ByteArrayOutputStream(); byte[] b = new byte[65536]; int n; while ((n = i.read(b)) > 0) o.write(b, 0, n); in = o.toByteArray(); }      // (readAllBytes needs Android 13)
+                long t0 = System.nanoTime();
+                ReplayCheck.Climb c = ReplayCheck.replay(tuning, ReplayCheck.BUNDLED_SEED, in, false, 150f, f -> checkStatus = "RUNNING " + (int) (f * 100) + "%");
+                String ev = ReplayCheck.hex(c.events.digest()), st = ReplayCheck.hex(c.states.digest());
+                boolean same = c.finishStep == ReplayCheck.EXPECT_FINISH_STEP && c.finishClock == ReplayCheck.EXPECT_CLOCK_STEPS && ev.equals(ReplayCheck.EXPECT_EVENTS) && st.equals(ReplayCheck.EXPECT_STATES);
+                checkStatus = (same ? "MATCHES THE DESKTOP. " : "DIFFERS FROM THE DESKTOP. ") + "FINISH STEP " + c.finishStep + "  CLOCK " + c.finishClock + " STEPS  TIME "
+                    + ClockText.time((float) (c.finishClock / (double) RunRecord.STEPS_PER_SECOND)) + "  EVENTS " + ev + "  STATES " + st + "  (" + (System.nanoTime() - t0) / 1_000_000_000L + " S)";
+            } catch (Throwable e) { checkStatus = "CHECK FAILED: " + e; }
+            finally { checkRunning = false; }
+        }, "determinism-check");
+        t.setDaemon(true); t.setPriority(Thread.MIN_PRIORITY); t.start();
+    }
+
     public float rowTop() { return rowY; }
     public void skip(float dy) { rowY -= dy; }
 
@@ -116,7 +140,13 @@ public final class SettingsScreen extends ScreenAdapter {
             toggle("REDUCED MOTION", s.reducedMotion, () -> s.reducedMotion = !s.reducedMotion);
             toggle("CONTEXTUAL TIPS", s.tips, () -> s.tips = !s.tips);
         } else if (page == 2) {                                     // ABOUT (+ the data reset on desktop, whose controls live in the launcher's own tab)
-            rowY -= 24; ui.textC(g.platform.title() + "  " + Legacy.versionLine(ClimbGame.VERSION, ClimbGame.appBuild), W / 2, rowY + 30, 4.5f, Ui.TEXT); rowY -= 72;
+            rowY -= 24; ui.textC(g.platform.title() + "  " + Legacy.versionLine(ClimbGame.VERSION, ClimbGame.appBuild), W / 2, rowY + 30, 4.5f, Ui.TEXT);
+            if (ui.tappedIn(0, rowY, W, 72)) versionTaps++;                 // Build 74: seven taps on the version line show the determinism check
+            rowY -= 72;
+            if (versionTaps >= 7) {
+                row("DETERMINISM CHECK", checkRunning ? "RUNNING" : "RUN", null, null, this::startCheck);
+                rowY = aboutLines(checkStatus, 2.4f, W, rowY, 54);
+            }
             if (g.platform.networkAllowed()) {
                 rowY = aboutLines("CONTENT: " + g.ota.describe(), 3.0f, W, rowY, 54);
                 rowY = aboutLines("UPDATES ARE SIGNED AND VERIFIED. " + (g.otaClient.status.isEmpty() ? "" : g.otaClient.status.toUpperCase()), 2.4f, W, rowY, 54);

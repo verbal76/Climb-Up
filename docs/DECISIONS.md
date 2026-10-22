@@ -490,3 +490,8 @@ Requirement: the same seed, the same inputs on the same simulation steps, give t
 - The seed 12 replay is identical with generation 150 m, 400 m and 1,000 m ahead.
 - `determinism.yml` replays the files on Linux, Windows (desktop JVMs) and Android (ART, x86_64 emulator) and requires byte-identical output.
 - A real ARM phone is not covered (owner did not choose the in-app check).
+- **Hidden determinism check for a real phone (owner, Pixel 10 Pro XL):** SETTINGS > ABOUT, tap the version line seven times → DETERMINISM CHECK → RUN.
+  - It replays the bundled seed 12 climb (`assets/replays/seed12.bin.gz`, the same file CI replays) on the device's own runtime, on a background thread, through the same `ReplayCheck` code CI uses.
+  - It shows the finish step, the run clock, the event and state hashes, and whether they MATCH the desktop.
+  - Expected: finish step 472,941, clock 472,942 steps (2:11:22.367); `BundledReplayTest` pins these values.
+  - This is the only way to cover ARM64, where Android's StrictMath runs as native code.

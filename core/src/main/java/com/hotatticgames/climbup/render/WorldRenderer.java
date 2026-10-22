@@ -72,8 +72,6 @@ public final class WorldRenderer implements Disposable {
     private float camY, camShake, shakeT, camPull;
     private double originY, originS;          // the world is expressed relative to a floating origin; absolute height = originY + local y (see Tower)
     private final Color skyTop = new Color(), skyBot = new Color(), tint = new Color(), amb = new Color();
-    private final ModelInstance shadow;
-    private final BlendingAttribute shadowBlend;      // the drop shadow's opacity, faded per-frame with the player's height
     private float renderS, renderY;
     public float lastCamS;
     public int cloudsBroken;          // PlayScreen reads and clears this to play the poof sound
@@ -107,10 +105,6 @@ public final class WorldRenderer implements Disposable {
                 "tree-pine-snow-small", "tree-snow", "stones", "sign"}) models.obj(n);
         for (String n : new String[]{"ramp", "rock_1", "rock_2", "rock_3", "rock_4", "rock_large_1", "rock_large_2", "rock_large_3"}) models.space(n);
         particles = new Particles(models);
-        shadow = new ModelInstance(models.disc);
-        shadowBlend = new BlendingAttribute(0.28f);
-        shadow.materials.get(0).set(ColorAttribute.createDiffuse(0f, 0f, 0f, 1f), shadowBlend);
-        shadow.materials.get(0).set(ColorAttribute.createEmissive(0, 0, 0, 1));
     }
 
     public void setOrigin(double y, double s) { originY = y; originS = s; }
@@ -571,6 +565,7 @@ public final class WorldRenderer implements Disposable {
         if (showPlayer) drawPlayer(sim, dt, time, ps, py, alpha);
         particles.render(batch, env, ps, T, course);
         batch.end();
+        drawShadows(sim, alpha, ps, py, zoneF);
         if (scaled) endScaledScene();
         drawVignette(Palette.blendF(Palette.VIGNETTE, zoneF));
     }
@@ -1189,14 +1184,16 @@ public final class WorldRenderer implements Disposable {
                 float crabX = rsim != null ? rsim.crabAt(rhz, h) : h.sAt(t);
                 float face = rsim != null ? rsim.crabFacing(rhz, h) : (h.amp * (float) Math.cos(2 * Math.PI * t / h.period + h.phase) >= 0f ? 1f : -1f);
                 boolean chasing = rsim != null && rsim.crabChasing(rhz);
-                drawRig(rig(h, "crab_anim", "Walk"), crabX, h.y - dipY, 0f, camS, 0.34f, face >= 0f ? 90f : -90f, 0f, chasing ? 2.4f : 1.6f);
+                Rig crabRig = rig(h, "crab_anim", "Walk"); castShadow(crabRig.inst, crabX, h.y - dipY);
+                drawRig(crabRig, crabX, h.y - dipY, 0f, camS, 0.34f, face >= 0f ? 90f : -90f, 0f, chasing ? 2.4f : 1.6f);
                 break;
             }
             case BEE: {
                 if (done || !h.beePresent(t)) break;
                 float bs = h.beeS(t), by = h.beeY(t), vel = h.beeS(t + 0.05f) - bs;
                 if (rsim != null) { float[] b = rsim.beeAt(rhz, h, false); vel = b[0] - bs + vel; bs = b[0]; by = b[1]; }     // Build 71: where the simulation has it (homing on you, swooping in its dive)
-                drawRig(rig(h, "bee_anim", "Flying"), bs, by, 0f, camS, 0.36f, vel >= 0 ? 70f : -70f, MathUtils.clamp(vel * 120f, -25f, 25f) * (vel >= 0 ? -1f : 1f), 1f);
+                Rig beeRig = rig(h, "bee_anim", "Flying"); castShadow(beeRig.inst, bs, by);
+                drawRig(beeRig, bs, by, 0f, camS, 0.36f, vel >= 0 ? 70f : -70f, MathUtils.clamp(vel * 120f, -25f, 25f) * (vel >= 0 ? -1f : 1f), 1f);
                 break;
             }
             case SKULL: {
@@ -1208,7 +1205,8 @@ public final class WorldRenderer implements Disposable {
                 float dir = rsim != null && st > 0 ? rsim.mobDir[rhz] : -1f;
                 if (st == 2 && !reducedMotion) ks += 0.04f * MathUtils.sin(time * 70f);                 // it shivers as it winds up
                 float sc = 0.6f, yaw = (dir >= 0f ? -1f : 1f) * SKULL_YAW;                              // its face mostly toward you, a little toward where it is going, so both eyes show
-                drawRig(rig(h, "skull_anim", st == 3 ? "Bite_Front" : "Idle"), ks, ky - 0.62f * sc, 0f, camS, sc, yaw, st == 3 ? -dir * 12f : 0f, st == 3 ? 2f : 1f);
+                Rig skullRig = rig(h, "skull_anim", st == 3 ? "Bite_Front" : "Idle"); castShadow(skullRig.inst, ks, ky - 0.62f * sc);
+                drawRig(skullRig, ks, ky - 0.62f * sc, 0f, camS, sc, yaw, st == 3 ? -dir * 12f : 0f, st == 3 ? 2f : 1f);
                 float glow = st == 2 || st == 3 ? 1f : 0.65f + 0.2f * MathUtils.sin(time * 4f);
                 for (int e = -1; e <= 1; e += 2) {                                                       // the eyes: two glowing sockets with dark pupils on the face (which looks at you)
                     float es = ks + dir * SKULL_EYE_FWD + e * SKULL_EYE_GAP, ez = SKULL_EYE_Z, ew = 0.14f;
@@ -1244,6 +1242,7 @@ public final class WorldRenderer implements Disposable {
                 r.inst.transform.idt().translate(T.radius * MathUtils.sin(phi), surf + lift, -T.radius + T.radius * MathUtils.cos(phi))
                         .rotate(0, 1, 0, phi * MathUtils.radiansToDegrees + (face >= 0f ? 40f : -40f)).scale(sc * sx, sc * sy, sc * sx);
                 batch.render(r.inst, env);
+                if (st != 3) castShadow(r.inst, bs, surf + lift);           // (in its leap it is off the top of the screen: the landing marker shows where it will come down)
                 break;
             }
             case CLUB: {
@@ -1315,21 +1314,8 @@ public final class WorldRenderer implements Disposable {
         float phi = 0f; // player is the anchor: always at centre, tangent = camera-facing
         float heroZ = 0f;
         if ((sim.mode == Sim.Mode.GROUND) && sim.onElem >= 0 && course.get(sim.onElem).type == Element.Type.MOVE_Z) heroZ = -course.get(sim.onElem).zAt(sim.time);      // carried toward / away from the camera with the platform
-        // Drop shadow projected straight down onto the platform currently beneath the player. The player is the camera anchor (always screen-centred),
-        // so x=0 keeps the blob directly under him every frame; it tracks the depth-mover in z, and fades + shrinks with height so it releases from the
-        // take-off platform as he rises (it used to stay a solid blob on the spot he jumped from).
-        {           // Build 72 (owner: the hero's shadow): drawn at every graphics quality (it was skipped at LOW, which some machines and phones pick); one disc costs nothing
-            float gy = groundBelow(sim, ps, py, alpha);
-            if (gy > -1e8f && py - gy < 9f) {
-                float k = MathUtils.clamp(1f - (py - gy) / 9f, 0.2f, 1f);
-                // Build 72 (owner: the hero's shadow): from the game camera's shallow angle the old 0.7 x 0.55 m blob flattened into a sliver hidden behind the feet; it is now
-                // wide and deep enough to show round the feet, and darker
-                float sw = 1.0f * k + 0.2f, sd = 0.85f * k + 0.2f;
-                shadowBlend.opacity = 0.42f * k;
-                shadow.transform.idt().translate(0, gy + SHADOW_LIFT + 0.4f * Math.abs(groundSlope) * sw, 0.2f + heroZ).rotate(0, 0, 1, MathUtils.atan(groundSlope) * MathUtils.radiansToDegrees).scale(sw, 1f, sd);
-                batch.render(shadow, env);
-            }
-        }
+        groundBelow(sim, ps, py, alpha);          // (the ground slope under the hero, for his stance on ramps; his shadow is drawn in drawShadows, at every graphics quality)
+        heroCaster = true;
         float onRampLift = 0f;
         if (quality > 0 && sim.mode == Sim.Mode.GROUND && sim.onElem >= 0 && course.get(sim.onElem).type == Element.Type.RAMP) onRampLift = 0.07f;      // the ramp's edge never cuts across his legs
         float wy = py + onRampLift; heroY = py;
@@ -1346,6 +1332,85 @@ public final class WorldRenderer implements Disposable {
     }
 
     private float groundSlope; private boolean groundOnRamp;       // of the surface groundBelow found: the shadow lies along it
+    // ------------------------------------------------------------------ dynamic shadows (Build 72, owner)
+    private ShadowPass shadowPass;
+    private boolean heroCaster;
+    private final java.util.ArrayList<ModelInstance> casterInst = new java.util.ArrayList<>();
+    private final com.badlogic.gdx.utils.FloatArray casterPos = new com.badlogic.gdx.utils.FloatArray();
+    private final Color shadowCol = new Color();
+    /** Strength of a shadow on the ground right under its caster; it fades out by SHADOW_REACH above it. */
+    public static final float SHADOW_ALPHA = 0.42f, SHADOW_REACH = 9f;
+
+    /** A creature drawn this frame casts its shadow on whatever platform is under it (arc s, feet at y). */
+    private void castShadow(ModelInstance m, float s, float y) { casterInst.add(m); casterPos.add(s); casterPos.add(y); }
+
+    /** Draws every caster's real shadow (the hero's and the creatures') flattened onto the platform under it and cut off at its edges: see ShadowPass. */
+    private void drawShadows(Sim sim, float alpha, float camS, float py, float zoneF) {
+        if (shadowPass == null) shadowPass = new ShadowPass(32);
+        // toward the light: mostly overhead so a shadow sits under its caster (where a jump will land), leaning a little with the world's sun and toward the camera so it shows past the feet
+        float lx = -0.25f * sun.direction.x, ly = 1f, lz = -0.40f, ln = (float) Math.sqrt(lx * lx + ly * ly + lz * lz);
+        lx /= ln; ly /= ln; lz /= ln;
+        if (heroCaster) shadowFor(sim, alpha, camS, hero.shadowParts(), camS, py, lx, ly, lz);
+        for (int k = 0; k < casterInst.size(); k++) shadowFor(sim, alpha, camS, new ModelInstance[]{casterInst.get(k)}, casterPos.get(2 * k), casterPos.get(2 * k + 1), lx, ly, lz);
+        heroCaster = false; casterInst.clear(); casterPos.clear();
+    }
+
+    private void shadowFor(Sim sim, float alpha, float camS, ModelInstance[] parts, float s, float y, float lx, float ly, float lz) {
+        int gi = groundIdx(sim, s, y, alpha);
+        if (gi < 0) return;
+        Element e = course.get(gi);
+        float top = groundTop;
+        float k = MathUtils.clamp(1f - (y - top) / SHADOW_REACH, 0f, 1f);
+        if (k <= 0.02f) return;
+        // the platform in world space, as place() puts it round the tower: its centre, its slope along the tangent there (ramps, seesaws), and its footprint
+        float es = e.isMoving() ? sim.es0[gi] + course.dsWrap(sim.es1[gi], sim.es0[gi]) * alpha : sim.es1[gi];
+        float dz = e.type == Element.Type.MOVE_Z ? e.zAt(sim.time) : 0f, phi = wrapDiff(es, camS) / T.radius, rr = T.radius - dz;
+        float cs = MathUtils.cos(phi), sn = MathUtils.sin(phi);
+        float xc = rr * sn, zc = -T.radius + rr * cs, hw = e.halfW(), hd = shadowHalfDepth(e);
+        float slope = e.type == Element.Type.RAMP ? e.rampSlope(sim.time) : e.type == Element.Type.SEESAW ? sim.tilt[gi] : 0f;
+        float yc = e.type == Element.Type.RAMP ? e.y : e.type == Element.Type.SEESAW ? e.y - Math.max(-0.1f, Math.min(0.22f, dip[gi])) : top;
+        // plane y = yc + slope * u + lift, u = the distance along the tangent (cos phi, 0, -sin phi) from the centre:
+        //   -slope*cs*x + y + slope*sn*z - (yc + lift - slope*cs*xc + slope*sn*zc) = 0
+        float lift = 0.025f;
+        float a = -slope * cs, c = slope * sn, d = -(yc + lift - slope * cs * xc + slope * sn * zc);
+        // the footprint, turned with the tower there, boxed in world x and z
+        float bx = hw * Math.abs(cs) + hd * Math.abs(sn), bz = hd * Math.abs(cs) + hw * Math.abs(sn);
+        shadowCol.set(0.03f, 0.04f, 0.09f, SHADOW_ALPHA * k);
+        shadowPass.draw(cam, parts, a, 1f, c, d, lx, ly, lz, xc - bx, xc + bx, zc - bz, zc + bz, shadowCol);
+    }
+
+    /** Half the front-to-back depth of a platform's walkable top, as built in build(). */
+    private static float shadowHalfDepth(Element e) {
+        switch (e.type) {
+            case PAD: case SPRING: return 0.62f;
+            case RAMP: return e.spins() ? 0.6f * e.len * 1.17f : 0.62f;
+            case SEESAW: return 0.74f;
+            case STATIC: return e.skin == 2 ? 2.0f : (e.skin == 1 || e.skin == 4) ? 0.74f : 0.85f;
+            default: return 0.85f;
+        }
+    }
+
+    private float groundTop;
+    /** The platform whose surface is closest below (s, y), as drawn this frame (its top in groundTop), or -1. */
+    private int groundIdx(Sim sim, float s, float y, float alpha) {
+        int bestI = -1; float best = -1e9f;
+        for (int i = Math.max(0, sim.winLo); i <= Math.min(vis.size() - 1, sim.winHi); i++) {
+            Element e = vis.get(i).e;
+            if (!e.isPlatform() || sim.gone[i]) continue;
+            float es = e.isMoving() ? sim.es0[i] + course.dsWrap(sim.es1[i], sim.es0[i]) * alpha : sim.es1[i];
+            float dx = course.dsWrap(s, es);
+            if (Math.abs(dx) > e.halfW() + 0.6f) continue;           // (a caster half over the edge still shades the part of the platform under it)
+            float top;
+            if (e.type == Element.Type.RAMP) top = e.y + e.rampSlope(sim.time) * Math.max(-e.halfW(), Math.min(e.halfW(), dx));
+            else if (e.type == Element.Type.SEESAW) top = e.y + sim.tilt[i] * Math.max(-e.halfW(), Math.min(e.halfW(), dx));
+            else top = (e.isMoving() ? sim.ey0[i] + (sim.ey1[i] - sim.ey0[i]) * alpha : sim.ey1[i]) - Math.max(-0.1f, Math.min(0.22f, dip[i]));
+            if (top > y + 0.08f || y - top > SHADOW_REACH) continue;
+            if (top > best) { best = top; bestI = i; }
+        }
+        groundTop = best;
+        return bestI;
+    }
+
     private float groundBelow(Sim sim, float ps, float py, float alpha) {
         float best = -1e9f; groundSlope = 0f; groundOnRamp = false;
         for (int i = Math.max(0, sim.winLo); i <= Math.min(vis.size() - 1, sim.winHi); i++) {
@@ -1421,7 +1486,7 @@ public final class WorldRenderer implements Disposable {
     public float getCamY() { return camY; }
 
     @Override public void dispose() {
-        batch.dispose(); shapes.dispose(); sb.dispose(); hero.dispose(); bg.dispose(); if (sceneFbo != null) sceneFbo.dispose(); if (vignette != null) vignette.dispose();
+        batch.dispose(); shapes.dispose(); sb.dispose(); hero.dispose(); bg.dispose(); if (shadowPass != null) shadowPass.dispose(); if (sceneFbo != null) sceneFbo.dispose(); if (vignette != null) vignette.dispose();
         for (Model m : markerModels) if (m != null) m.dispose();
     }
 }

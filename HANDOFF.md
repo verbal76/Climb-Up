@@ -5,7 +5,7 @@
 New since Build 71 (details in docs/DECISIONS.md, evidence in docs/VERIFICATION.md):
 * Ramps per the owner's notes: flush joins (no trip-hop), crumble 0.5 s, a wild shaking ramp with flips, the spinning ramp (replaces sinking), and the new downhill **conveyor ramp**; long safe bridges can be **plank conveyors rolling left**.
 * **One movement speed**: the stick gives direction only (owner Option B). The generator and solvers use the same input with a 100 ms human hold; courses are unchanged by it.
-* Colour grade (saturation, contrast) in the 3D shader, less flat lighting; the hero's shadow now shows at every graphics quality; larger HUD small lines and a clearer jump button on phones.
+* Colour grade (saturation, contrast) in the 3D shader, less flat lighting; **real shadows** of the hero and the creatures (their own shapes, cut off at platform edges: `render/ShadowPass`) at every graphics quality; larger HUD small lines and a clearer jump button on phones.
 * Desktop workflow: owner-only draft releases (`test_build`), like the Android workflow.
 * Tools: `SolverSweepProbe` (`SWEEP=1 ./gradlew :core:test --tests '*SolverSweepProbe*'`), `-Dclimb.touchUi=true` (touch layout on desktop), `climb.hazard=BELT` (start beside a conveyor bridge).
 

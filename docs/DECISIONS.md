@@ -385,3 +385,12 @@ This replaces the earlier centre-mass placement instruction. The gem's lowest vi
 ## Build 72 - phone readability
 
 - Checked the touch layout at phone proportions (2340x1080-class, simulated density) with the new `-Dclimb.touchUi=true` desktop screenshot hook. The BEST and SEED lines of the height box are larger (2.9 and 2.7, from 2.6 and 2.3), and the jump button fill is a stronger orange (it washed out to beige over the sky and the white JUMP label disappeared); the JUMP and SWING labels are full white and slightly larger.
+
+## Build 72 - dynamic shadows (owner: "make it an actual dynamic shadow")
+
+- **Owner choices:** real shadows for the hero and the creatures (crab, blob, skull, bee), in Build 72 (the build was held for it).
+- **How** (`render/ShadowPass`): each caster's own model, posed and animated exactly as drawn, is drawn again flattened onto the plane of the platform under it, along the light (a planar projection matrix in libGDX's default vertex shader), in one translucent colour. The fragment shader discards everything outside the platform's top footprint, so a hero half over an edge casts half a shadow and nothing ever floats over a gap. Ramps and seesaws use their sloped plane. Overlapping limbs darken only once (the flattened triangles share one plane, and the depth test is strictly-less).
+- **Light:** mostly overhead, leaning a little with the world's sun and toward the camera, so a shadow sits under its caster (where a jump will land) and shows past the feet. Strength 0.42 on the ground under the caster, fading out 9 m above it.
+- **Cost:** no shadow map or extra framebuffer; the casters are drawn once more. It runs at every graphics quality (the old disc was skipped at LOW). The black disc is gone. The blob's landing marker (the growing shadow that shows where it will come down) is unchanged.
+- **Placement round the tower:** the clip footprint follows `place()` round the cylinder (a platform to the side sits further back), boxed in world x and z.
+- **Tests:** `ShadowPassTest` (projection onto flat and sloped planes, the shader injection); real-renderer screenshots: hero centred and half over an edge, crab, skull, and the dusk world.

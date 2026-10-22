@@ -934,6 +934,9 @@ public final class HeroRig implements Disposable {
         return b.toString();
     }
 
+    /** The models that make up the hero as drawn this frame (for its shadow: see ShadowPass). */
+    public ModelInstance[] shadowParts() { return handBall && ballL != null ? new ModelInstance[]{inst, ballL, ballR} : new ModelInstance[]{inst}; }
+
     public void render(ModelBatch batch, Environment env) {
         batch.render(inst, env);
         if (handBall && ballL != null) { batch.render(ballL, env); batch.render(ballR, env); }

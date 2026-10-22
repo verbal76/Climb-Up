@@ -466,8 +466,15 @@ public final class Scenario implements ApplicationListener {
     private static int luma(java.awt.image.BufferedImage i, int x, int y) { int p = i.getRGB(x, y); return (((p >> 16) & 255) + ((p >> 8) & 255) + (p & 255)) / 3; }
     /** Orange logo pixels along one row of the picture (the UPWARDLY logo is orange on sky; nothing else that colour sits at the bottom of the title). */
     private static int orangeOnRow(java.awt.image.BufferedImage i, int y) { int n = 0; for (int x = 0; x < i.getWidth(); x += 2) { int p = i.getRGB(x, y), r = (p >> 16) & 255, g = (p >> 8) & 255, b = p & 255; if (r > 180 && g > 100 && g < 210 && b < 90) n++; } return n; }
-    /** Upright title: the logo row (18 % down) carries orange, its mirror (82 % down, the MORE button and the platforms) carries none. */
-    private static boolean logoUpright(File f) { java.awt.image.BufferedImage i = readPng(f); return i != null && orangeOnRow(i, (int) (i.getHeight() * 0.18f)) > 20 && orangeOnRow(i, (int) (i.getHeight() * 0.82f)) < 5; }
+    /**
+     * Upright title: the logo row (18 % down) carries plenty of orange, clearly more than its mirror (82 % down, the MORE button and the platforms). Build 72: since
+     * the colour grade the platforms' warm sides count as a little orange too, so a flipped picture is told by the logo's row, not by an orange-free bottom.
+     */
+    private static boolean logoUpright(File f) {
+        java.awt.image.BufferedImage i = readPng(f); if (i == null) return false;
+        int top = orangeOnRow(i, (int) (i.getHeight() * 0.18f)), bottom = orangeOnRow(i, (int) (i.getHeight() * 0.82f));
+        return top > 20 && top > 2 * bottom;
+    }
     private static String orangeNote(File f) { java.awt.image.BufferedImage i = readPng(f); return i == null ? "unreadable" : "orange at 18%: " + orangeOnRow(i, (int) (i.getHeight() * 0.18f)) + ", at 82%: " + orangeOnRow(i, (int) (i.getHeight() * 0.82f)); }
     private static int centreLuma(File f) { java.awt.image.BufferedImage i = readPng(f); return i == null ? -1 : luma(i, i.getWidth() / 2, i.getHeight() / 2); }
     /** Mean luminance of the top-left corner where the height plate sits (x 30..300, y 30..140 of a 1280-wide picture, scaled with it); the vignette makes bare sky read about 135 there, the plate about 90. */

@@ -10,6 +10,10 @@ on:
         description: "Build number for the package names, tag and release title (blank = this run's number). Set it to the Android build's number so all three artifacts of one commit share it."
         type: string
         default: ""
+      test_build:
+        description: "Owner test build: attach the packages to a DRAFT GitHub Release (visible to collaborators only, no tag, nothing public). Off = the normal published release."
+        type: boolean
+        default: false
       skip_tests:
         description: "Skip the test job (core, desktop, scenario, limb guard) for an art-only rebuild whose commit already passed them elsewhere. The Windows EXE and Linux launcher smoke checks still run. Default off."
         type: boolean
@@ -203,5 +207,11 @@ jobs:
           TAG="build-${N}-desktop"
           NOTES="Upwardly Build ${N} — desktop (Windows EXE + native Linux x86-64). Same game as the Android APK, built from the SAME commit ${{ github.sha }}. Self-contained (no Java needed). Linux is native (Steam Deck / Steam Machine), not Proton.\n\nNot verified on real hardware: controllers, real GPU/fullscreen, audio, Steam Deck."
           printf '%b' "$NOTES" > notes.md
-          gh release create "$TAG" "$EXE" "$LINUX" build-manifest.json checksums.sha256 --repo "$REPO" --target "${{ github.sha }}" --title "Upwardly Build ${N} — Desktop (Windows + Linux)" --notes-file notes.md --latest=false
-          echo "published https://github.com/$REPO/releases/tag/$TAG"
+          if [ "${{ inputs.test_build }}" = "true" ]; then
+            # owner test build: a DRAFT release (collaborators only, creates no tag, never public) carries the packages, as in the Android workflow
+            gh release create "$TAG" "$EXE" "$LINUX" build-manifest.json checksums.sha256 --repo "$REPO" --target "${{ github.sha }}" --title "Upwardly Build ${N} — Desktop (Windows + Linux) (owner test build, draft)" --notes-file notes.md --draft
+            echo "draft release created for $TAG (visible to collaborators only)"
+          else
+            gh release create "$TAG" "$EXE" "$LINUX" build-manifest.json checksums.sha256 --repo "$REPO" --target "${{ github.sha }}" --title "Upwardly Build ${N} — Desktop (Windows + Linux)" --notes-file notes.md --latest=false
+            echo "published https://github.com/$REPO/releases/tag/$TAG"
+          fi

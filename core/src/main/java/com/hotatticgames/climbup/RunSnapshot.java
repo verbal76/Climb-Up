@@ -37,6 +37,9 @@ public final class RunSnapshot {
     public long[] hKey = new long[0];
     public float[] hState = new float[0];
     public float slipCd;      // features done (keys taken, gates opened, crabs knocked off)
+    // Build 72: where the hero stood at the start of the last step: ramps and seesaws report their surface there (optional: older files fall back to absS)
+    public boolean hasS0;
+    public double absS0;
 
     public RunSnapshot() {}
 
@@ -52,7 +55,7 @@ public final class RunSnapshot {
         r.facing = sim.facing; r.ledgeSide = sim.ledgeSide; r.falls = sim.falls; r.hits = sim.hits; r.keys = sim.keys; r.lastKeyColor = sim.lastKeyColor;
         r.mode = (sim.mode == Sim.Mode.GROUND && sim.onElem < 0) ? Sim.Mode.AIR.name() : sim.mode.name();      // standing on a spike slab's top: restored just above it, it lands again at once
         r.jumpedUp = sim.jumpedUp; r.prevJumpHeld = sim.prevJumpHeld; r.won = sim.won; r.finishedRun = sim.finishedRun;
-        r.absS = tower.originS + sim.s; r.absY = tower.absY(sim.y); r.lastGroundAbs = tower.absY(sim.lastGroundY); r.maxAbs = tower.absY(sim.maxHeight);
+        r.absS = tower.originS + sim.s; r.hasS0 = true; r.absS0 = tower.originS + sim.ps0; r.absY = tower.absY(sim.y); r.lastGroundAbs = tower.absY(sim.lastGroundY); r.maxAbs = tower.absY(sim.maxHeight);
         r.pullFromAbsS = tower.originS + sim.pullFromS; r.pullFromAbsY = tower.absY(sim.pullFromY); r.pullToAbsS = tower.originS + sim.pullToS; r.pullToAbsY = tower.absY(sim.pullToY);
         r.onKey = tower.elemKeyAt(sim.onElem); r.lastPadKey = tower.elemKeyAt(sim.lastPad); r.bestKey = tower.elemKeyAt(sim.bestElem);
         Tower.Ref cp = sim.checkpoint >= 0 && sim.checkpoint < sim.course.size() ? tower.refOf(sim.checkpoint) : tower.checkpointRef();
@@ -165,7 +168,7 @@ public final class RunSnapshot {
         }
         tower.addDone(doneKeys);
         tower.applyDone(sim);
-        sim.syncElements();
+        sim.syncElements(hasS0 ? sim.course.wrap((float) (absS0 - tower.originS)) : sim.s);
         return true;
     }
 }

@@ -28,20 +28,32 @@ public final class Autopilot {
 
     // ------------------------------------------------------------------ policies
 
+    /** Build 72 (one movement speed): a person steers a direction-only stick by holding toward the target and letting go once over it. */
     static float steer(Sim s, int b, int mode) {
         float d = s.course.dsWrap(s.es1[b], s.s);
         Element el = s.course.get(b);
         if (mode == 1) return Math.signum(d);
         if (mode == 2) { // aim at the near edge of the target platform
             float near = d - Math.signum(d) * (el.isPlatform() ? Math.max(0f, el.halfW() - 0.3f) : 0f);
-            return Math.max(-1f, Math.min(1f, near / 0.4f));
+            return Math.abs(near) < 0.2f ? 0f : Math.signum(near);
         }
-        return Math.max(-1f, Math.min(1f, d / 0.45f));
+        return Math.abs(d) < 0.25f ? 0f : Math.signum(d);
     }
+    /** How many steps a stand-in for a person holds a stick direction before changing it (100 ms): see {@link Sim#humanHold}. */
+    public static final int HUMAN_HOLD = 6;
+    /** A slow walk on a direction-only stick: a person feathers it, pushing and letting go in turns (each at least {@link #HUMAN_HOLD} steps). */
+    static float feather(float t, float speed) {
+        if (speed >= 0.99f) return 1f;
+        int on = HUMAN_HOLD, off = Math.max(HUMAN_HOLD, Math.round(HUMAN_HOLD * (1f - speed) / Math.max(0.1f, speed)));
+        int k = (int) (t / Sim.DT + 0.5f) % (on + off);
+        return k < on ? 1f : 0f;
+    }
+    /** Walking to a spot on a direction-only stick: push toward it and let go when close; the brake stops you within a few centimetres of a quarter metre. */
+    static float walkTo(float d) { return Math.abs(d) < 0.3f ? 0f : Math.signum(d); }
 
     static final class GroundPolicy implements Policy {
         final int a, b, dir, steerMode; final float wait, offset, hold; float speed = 1f;
-        float t, holdT; int phase;
+        float t, t2, holdT; int phase;
         GroundPolicy(int a, int b, int dir, float wait, float offset, float hold, int steerMode) {
             this.a = a; this.b = b; this.dir = dir; this.wait = wait; this.offset = offset; this.hold = hold; this.steerMode = steerMode;
         }
@@ -55,15 +67,15 @@ public final class Autopilot {
                     float edge = s.es1[a] + dir * (el.halfW() - Math.min(offset, Math.max(0f, el.w - 0.5f)));
                     float ds = s.course.dsWrap(edge, s.s);
                     float ahead = ds * dir;
-                    if (ahead > 0.06f) { in.moveX = dir * speed; return; }
-                    if (ahead < -0.3f) { in.moveX = -dir * 0.6f; return; }
-                    in.moveX = dir * speed; in.jumpPressed = true; in.jumpHeld = true; phase = 2; holdT = 0; return;
+                    if (ahead > 0.06f) { in.moveX = dir * feather(t2 += Sim.DT, speed); return; }
+                    if (ahead < -0.3f) { in.moveX = -dir; return; }
+                    in.moveX = dir * (speed >= 0.99f ? 1f : feather(t2, speed)); in.jumpPressed = true; in.jumpHeld = true; phase = 2; holdT = 0; return;
                 }
             }
             if (phase == 2) {
                 holdT += Sim.DT;
                 in.jumpHeld = holdT < hold;
-                in.moveX = (steerMode == 3 ? dir : steer(s, b, steerMode)) * speed;
+                in.moveX = steerMode == 3 ? dir : steer(s, b, steerMode);
             }
         }
     }
@@ -263,7 +275,7 @@ public final class Autopilot {
     static Sim trialEnd(Sim base, int a, PolicyFactory f, float limit) { return trialEnd(base, a, -1, f, limit); }
 
     static Sim trialEnd(Sim base, int a, int tgt, PolicyFactory f, float limit) {
-        Sim s = base.copy();
+        Sim s = base.copy(); s.humanHold = HUMAN_HOLD;
         if (tgt >= 0) s.setWindowNear(anchorIdx(s.course, a) - 2, anchorIdx(s.course, a) + 6, a, tgt);     // plus earlier route platforms the climb passed that hang over a side branch
         else s.setWindow(a - 1, a + 6);
         Policy p = make(f);
@@ -416,8 +428,8 @@ public final class Autopilot {
         for (int q = 0; q < waitTicks && sim.mode == Sim.Mode.GROUND; q++) { in.clear(); sim.step(in); }
         for (int q = 0; q < 240 && sim.mode == Sim.Mode.GROUND; q++) {
             float d = c.dsWrap(toS, sim.s);
-            if (Math.abs(d) < 0.08f && Math.abs(sim.vx) < 0.4f) break;
-            in.clear(); in.moveX = Math.abs(d) < 0.08f ? 0f : Math.signum(d) * (Math.abs(d) < 0.8f ? 0.4f : 1f); sim.step(in);
+            if (Math.abs(d) < 0.45f && Math.abs(sim.vx) < 0.4f) break;
+            in.clear(); in.moveX = walkTo(d); sim.step(in);
         }
         for (int q = 0; q < 40 && sim.mode == Sim.Mode.GROUND && Math.abs(sim.vx) > 0.05f; q++) { in.clear(); sim.step(in); }
         if (sim.mode != Sim.Mode.GROUND || sim.onElem != a || sim.setbacks() != sb) return null;
@@ -447,8 +459,8 @@ public final class Autopilot {
                 float toS = c.wrap(real.es1[a] + off);
                 for (int q = 0; q < 240 && real.mode == Sim.Mode.GROUND; q++) {
                     float d = c.dsWrap(toS, real.s);
-                    if (Math.abs(d) < 0.08f && Math.abs(real.vx) < 0.4f) break;
-                    in.clear(); in.moveX = Math.abs(d) < 0.08f ? 0f : Math.signum(d) * (Math.abs(d) < 0.8f ? 0.4f : 1f); real.step(in);
+                    if (Math.abs(d) < 0.45f && Math.abs(real.vx) < 0.4f) break;
+                    in.clear(); in.moveX = walkTo(d); real.step(in);
                 }
                 for (int q = 0; q < 40 && real.mode == Sim.Mode.GROUND && Math.abs(real.vx) > 0.05f; q++) { in.clear(); real.step(in); }
                 if (real.mode != Sim.Mode.GROUND || real.onElem != a) break;
@@ -539,7 +551,7 @@ public final class Autopilot {
     }
     private static Report runInner(Course c, Tuning t, float maxSimSeconds) {
         Report rep = new Report();
-        Sim real = Sim.startOn(c, t, 0); lastReal = real;
+        Sim real = Sim.startOn(c, t, 0); lastReal = real; real.humanHold = HUMAN_HOLD;
         real.keysFree = false; real.keys = 0;       // the solver must fetch every key it needs
         for (Element g : c.hazards) if (g.type == Element.Type.GATE) {      // endless: a castle's key lies in an earlier section, carried here
             boolean own = false; for (Element k : c.hazards) if (k.type == Element.Type.KEY && k.color == g.color && k.anchor < g.anchor) own = true;     // colours repeat: a key found above a gate opens a later castle, not this one
@@ -585,8 +597,8 @@ public final class Autopilot {
                 float toS = c.wrap(real.es1[a] - el.halfW() + (tryBack == 0 ? 0.35f : 0.8f));
                 for (int q = 0; q < 240 && real.mode == Sim.Mode.GROUND; q++) {
                     float d = c.dsWrap(toS, real.s);
-                    if (Math.abs(d) < 0.12f && Math.abs(real.vx) < 0.4f) break;
-                    in.clear(); in.moveX = Math.abs(d) < 0.12f ? 0f : Math.signum(d) * (Math.abs(d) < 0.8f ? 0.4f : 1f); real.step(in);
+                    if (Math.abs(d) < 0.45f && Math.abs(real.vx) < 0.4f) break;
+                    in.clear(); in.moveX = walkTo(d); real.step(in);
                 }
                 for (int q = 0; q < 30 && real.mode == Sim.Mode.GROUND && Math.abs(real.vx) > 0.05f; q++) { in.clear(); real.step(in); }
                 if (real.mode != Sim.Mode.GROUND || real.onElem != a) break;
@@ -600,8 +612,8 @@ public final class Autopilot {
                     float toS = c.wrap(real.es1[a] + off);
                     for (int q = 0; q < 240 && real.mode == Sim.Mode.GROUND; q++) {
                         float d = c.dsWrap(toS, real.s);
-                        if (Math.abs(d) < 0.08f && Math.abs(real.vx) < 0.4f) break;
-                        in.clear(); in.moveX = Math.abs(d) < 0.08f ? 0f : Math.signum(d) * (Math.abs(d) < 0.8f ? 0.4f : 1f); real.step(in);
+                        if (Math.abs(d) < 0.45f && Math.abs(real.vx) < 0.4f) break;
+                        in.clear(); in.moveX = walkTo(d); real.step(in);
                     }
                     for (int q = 0; q < 40 && real.mode == Sim.Mode.GROUND && Math.abs(real.vx) > 0.05f; q++) { in.clear(); real.step(in); }
                     if (real.mode != Sim.Mode.GROUND || real.onElem != a) break;
@@ -635,6 +647,15 @@ public final class Autopilot {
                     in.clear(); real.step(in);
                     if (q % 6 == 5 && real.mode == Sim.Mode.AIR) r = plan(real, a, false, false);
                 }
+            }
+            if (!r.ok && real.mode == Sim.Mode.GROUND && real.onElem == a && !c.get(a).crumbles()) {
+                // like a person: nothing works from here right now (a crab in the way, a slider on the far side of its run), so stand and watch for a few seconds and size it up again
+                int before = real.setbacks();
+                for (int q = 0; q < 300 && !r.ok && real.mode == Sim.Mode.GROUND && real.onElem == a && real.setbacks() == before; q++) {
+                    in.clear(); real.step(in);
+                    if (q % 12 == 11) { r = plan(real, a, false, true); if (!r.ok) r = plan(real, a, false, false); }
+                }
+                if (!r.ok && (real.mode != Sim.Mode.GROUND || real.onElem != a)) continue;      // bumped off the spot while waiting: recover and size it up again (the loop's own limits still apply)
             }
             if (!r.ok) { rep.failedLink = a; rep.simTime = real.time; rep.failInfo = String.format("plan failed: mode=%s on=%d s=%.2f y=%.2f vx=%.2f vy=%.2f", real.mode, real.onElem, real.s, real.y, real.vx, real.vy); return rep; }
             Policy p = make(r.factory);
@@ -685,10 +706,14 @@ public final class Autopilot {
             return false;
         }
         private final Policy pull = new PullPolicy();
-        public Driver(Sim s) { a = Math.max(0, s.onElem); fallsSeen = s.setbacks(); }
+        public Driver(Sim s) { a = Math.max(0, s.onElem); fallsSeen = s.setbacks(); s.humanHold = HUMAN_HOLD; }
         public int link() { return a; }
         /** The world was rebuilt around the player (floating origin / window change): carry the link over to the new element numbering and re-plan from the current state. */
-        public void rebase(Tower.Remap m) { if (a >= 0 && a < m.elem.length && m.elem[a] >= 0) a = m.elem[a]; else a = Math.max(0, a); p = null; settling = false; }
+        public void rebase(Tower.Remap m) {
+            if (a >= 0 && a < m.elem.length && m.elem[a] >= 0) a = m.elem[a]; else a = Math.max(0, a); p = null; settling = false;
+            brakeAt = remap(m, brakeAt); waitedAt = remap(m, waitedAt);          // these name elements too: carry them into the new numbering
+        }
+        private static int remap(Tower.Remap m, int i) { return i >= 0 && i < m.elem.length ? m.elem[i] : -1; }
 
         public void drive(Sim s, InputState in) {
             in.clear();

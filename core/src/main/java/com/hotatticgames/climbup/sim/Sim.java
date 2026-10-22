@@ -204,6 +204,7 @@ public final class Sim {
         crumbleT = o.crumbleT.clone(); gone = o.gone.clone(); goneT = o.goneT.clone(); padSquash = o.padSquash.clone(); tilt = o.tilt.clone(); onT = o.onT.clone();
         clubTime = o.clubTime; swingT = o.swingT; shoveCd = o.shoveCd; crabS = o.crabS; crabY = o.crabY; keys = o.keys; keysFree = o.keysFree; featDone = o.featDone.clone(); aimAng = o.aimAng.clone(); aimFireT = o.aimFireT.clone(); aimArmed = o.aimArmed.clone(); crabPos = o.crabPos.clone(); crabVel = o.crabVel.clone(); crabMode = o.crabMode.clone(); crabStuck = o.crabStuck.clone(); crabCool = o.crabCool.clone(); crabTurn = o.crabTurn.clone(); crabSeen = o.crabSeen.clone(); mobState = o.mobState.clone(); mobT = o.mobT.clone(); mobS = o.mobS.clone(); mobY = o.mobY.clone(); mobDir = o.mobDir.clone(); mobTgt = o.mobTgt.clone(); mobSeen = o.mobSeen.clone(); squashT = o.squashT; slipCd = o.slipCd; finishedRun = o.finishedRun; lastGateNo = o.lastGateNo; lastKeyColor = o.lastKeyColor; lastGateColor = o.lastGateColor;
         act = o.act; hz = o.hz; winLo = o.winLo; winHi = o.winHi; invuln = o.invuln; hits = o.hits; hitS = o.hitS; hitY = o.hitY;
+        humanHold = o.humanHold; heldX = o.heldX; heldY = o.heldY; heldXT = o.heldXT; heldYT = o.heldYT;
     }
 
     public Sim copy() { return new Sim(this); }
@@ -221,15 +222,18 @@ public final class Sim {
      * After a saved state was written into this sim (time, position, tilt of seesaws and ramps): puts every element where it is at {@link #time}, so the first step sees no phantom platform motion.
      * Slopes and tipping planks report their surface at the player's own position, exactly as {@link #step} does.
      */
-    public void syncElements() {
+    public void syncElements() { syncElements(s); }
+
+    /** As {@link #syncElements()}, with ramps and seesaws measured where the hero stood at the start of the step ({@code surfaceS}), exactly as {@link #step} measures them. */
+    public void syncElements(float surfaceS) {
         refreshElements();
         for (int i = 0; i < course.size(); i++) {
             Element e = course.get(i);
             if (e.type == Element.Type.SEESAW) {
-                float hw = e.halfW(), x = Math.max(-hw, Math.min(hw, course.dsWrap(s, es1[i])));
+                float hw = e.halfW(), x = Math.max(-hw, Math.min(hw, course.dsWrap(surfaceS, es1[i])));
                 ey0[i] = ey1[i] = e.y + tilt[i] * x;
             } else if (e.type == Element.Type.RAMP) {
-                float hw = e.halfW(), x = Math.max(-hw, Math.min(hw, course.dsWrap(s, es1[i])));
+                float hw = e.halfW(), x = Math.max(-hw, Math.min(hw, course.dsWrap(surfaceS, es1[i])));
                 ey0[i] = ey1[i] = e.y + e.rampSlope(time) * x;
             }
         }
@@ -374,8 +378,28 @@ public final class Sim {
 
     // ---------------------------------------------------------------- step
 
+    /** Below this the stick is centred. */
+    public static final float STICK_DEAD = 0.05f;
+    /**
+     * Owner (Build 72, "Option B"): one consistent movement speed. The stick gives the direction, not how fast: any tilt past {@link #STICK_DEAD} is a full
+     * push, for touch, pad, keys and the autopilots alike, so running, air control, ropes and cables all move at their one tuned speed.
+     */
+    public static float direction(float v) { return Math.abs(v) < STICK_DEAD ? 0f : Math.signum(v); }
+    /**
+     * The course generator's proofs and the solvers stand in for a person, and a person cannot flick a stick back and forth every frame: when this is above 0
+     * (only the autopilots set it; the player's own climb leaves it at 0) a stick direction is held at least this many steps before it can change.
+     */
+    public int humanHold;
+    private float heldX, heldY; private int heldXT, heldYT;
+
     public void step(InputState in) {
         if (respawnPending) return;          // frozen until the window has been rebuilt around the checkpoint
+        float dX = direction(in.moveX), dY = direction(in.moveY);
+        if (humanHold > 0 && dX != heldX && heldXT < humanHold) dX = heldX;
+        if (humanHold > 0 && dY != heldY && heldYT < humanHold) dY = heldY;
+        if (dX != heldX) { heldX = dX; heldXT = 0; } else if (heldXT < 1 << 20) heldXT++;
+        if (dY != heldY) { heldY = dY; heldYT = 0; } else if (heldYT < 1 << 20) heldYT++;
+        in.moveX = dX; in.moveY = dY;
         float dt = DT;
         ps0 = s; py0 = y; teleported = false;
         time += dt;

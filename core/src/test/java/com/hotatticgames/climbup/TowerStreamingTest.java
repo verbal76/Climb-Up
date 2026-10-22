@@ -187,10 +187,12 @@ public class TowerStreamingTest {
                 if (a.world.size() != za[0]) { sa.setRange(0, a.world.size() - 1); za[0] = a.world.size(); }
                 if (b.world.size() != zb[0]) { sb.setRange(0, b.world.size() - 1); zb[0] = b.world.size(); }
             }
-            boolean preSame = Math.abs(a.absY(sa.y) - b.absY(sb.y)) < 1e-4 && Math.abs(a.world.dsWrap(sa.s, sb.s)) < 1e-4 && sa.vx == sb.vx && sa.vy == sb.vy;
-            da.drive(sa, ia); sa.step(ia); sa.consumeEvents();
-            db.drive(sb, ib); sb.step(ib); sb.consumeEvents();
-            if (preSame && (Math.abs(ia.moveX - ib.moveX) > 1e-6 || ia.jumpPressed != ib.jumpPressed || ia.jumpHeld != ib.jumpHeld || ia.moveY != ib.moveY)) { flipStep = step; break; }
+            da.drive(sa, ia); db.drive(sb, ib);
+            // compare the controllers' decisions before Sim.step reads them. Sim.step holds a stick direction like a person (Build 72), so a decision taken while the worlds already differed by
+            // rounding (within TOL) can surface steps later: any differing decision is the flip, not only one taken from identical states
+            if ((Math.abs(ia.moveX - ib.moveX) > 1e-6 || ia.jumpPressed != ib.jumpPressed || ia.jumpHeld != ib.jumpHeld || ia.moveY != ib.moveY)) { flipStep = step; break; }
+            sa.step(ia); sa.consumeEvents();
+            sb.step(ib); sb.consumeEvents();
             double ya = a.absY(sa.y), yb = b.absY(sb.y), ds = Math.abs(a.world.dsWrap(sa.s, sb.s));
             worst = Math.max(worst, Math.max(Math.abs(ya - yb), ds));
             if (Math.abs(ya - yb) > TOL || ds > TOL || (sa.mode != sb.mode && step > 0 && Math.abs(ya - yb) > TOL))

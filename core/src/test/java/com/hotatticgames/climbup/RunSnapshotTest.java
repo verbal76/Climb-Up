@@ -104,7 +104,7 @@ public class RunSnapshotTest {
                 assertEquals("crumble clock " + i, a.crumbleT[i], b.crumbleT[j], 0f);
                 assertEquals("gone " + i, a.gone[i], b.gone[j]);
                 assertEquals("platform x " + i, a.es1[i], b.es1[j], 1e-4f);
-                assertEquals("platform y " + i, ta.absY(a.ey1[i]), tb.absY(b.ey1[j]), 1e-4);
+                assertEquals("platform y " + i + " " + a.course.get(i).type + "/" + a.course.get(i).skin + " (player on " + a.onElem + ")", ta.absY(a.ey1[i]), tb.absY(b.ey1[j]), 1e-4);
             }
             shown++; step += 400;
         }

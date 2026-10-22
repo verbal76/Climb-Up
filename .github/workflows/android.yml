@@ -76,7 +76,8 @@ jobs:
           "$BT/aapt2" dump badging "$OUT" > badging.txt; grep -E "^package|sdkVersion|targetSdkVersion|uses-permission|launchable-activity|native-code" badging.txt
           if grep -q "application-debuggable" badging.txt; then echo "::error::the released APK must not be debuggable"; exit 1; fi
           echo "not debuggable"
-          "$BT/apksigner" verify --verbose --print-certs "$OUT" > cert.txt; head -8 cert.txt
+          # the Android 8.x view (v2 block): since Build 73 a plain --print-certs shows the rotated v3 signer first
+          "$BT/apksigner" verify --verbose --print-certs --max-sdk-version 27 "$OUT" > cert.txt; head -8 cert.txt
           GOT=$(grep -m1 "certificate SHA-256 digest" cert.txt | sed 's/.*: //' | tr 'a-f' 'A-F' | sed 's/../&:/g; s/:$//')
           echo "SIGNING_CERT_SHA256=$GOT"
           if [ "$GOT" != "$EXPECTED_CERT_SHA256" ]; then echo "::error::APK is not signed with the installed Build 42 identity for Android 8.x (expected $EXPECTED_CERT_SHA256)"; exit 1; fi

@@ -205,3 +205,26 @@ time should be larger in absolute terms (slower string formatting on ART) but ha
 * **Memory: no leak.** The harness's "heap after the last young GC" rose 27 → 72 MB, but that figure counts dead old-generation objects G1 had not yet collected.
   * Full-GC class histograms of the clean repeat show the live set at **8.7 MB (2 min) → 9.8 MB (7 min) → 11.2 MB (12 min)**, across 4 restarts and 15 falls.
   * All of the growth is `double[]`: the harness's own per-frame rows (2.65 MB, 16,986 rows). Nothing else grew by more than 25 KB.
+
+## Option B investigation: one movement speed (owner-approved direction, not yet implemented)
+
+The shipped code keeps Build 71 movement. The measurements below ran in a separate worktree in which `Sim.step` reads both stick axes as direction only. Because the course generator's proofs and the solver drive the same `Sim`, they get exactly the player's input there.
+
+* **Course generation and course codes.** I compared every framed slice (exactly what a course code reproduces) from the start to castle 10 for seeds 1, 7, 21, 99, 130 and 178: 470 slices in total.
+  * Direction-only and Build 71 gave **bit-identical slices, 470 of 470**, with the same generation time.
+  * Course codes would keep meaning the same courses, so no `RULES_VERSION` bump is needed.
+  * Per-seed and global records stay valid, and climbs in progress resume on the same tower.
+* **The generator's proofs.** Every link is proven with direction-only input: the generator accepted the same modules with it.
+* **The whole-course solver** (the stand-in for a person playing a slice end to end) is where the change matters. In CI with direction-only input it failed on:
+  * EndlessTest, seed 1 slice 6 (unframed chain);
+  * FramedGenerationTest, seed 5 slice 6;
+  * OfficialWorldRulesTest, seed 1.
+
+  The typical case is planning the next move while airborne off a spring (6.9 m/s): the solver used partial air steering there. A player with a direction-only stick handles this by coasting and tapping back to brake, a normal human technique that needs no frame-perfect input. The solver needs policies that do that, used only in the whole-course run so that generation (and so course codes) stays identical.
+* **Found along the way (already in Build 71, independent of the stick).** Three of the 470 slices are not completed by the whole-course solver even with today's analog stick:
+  * seed 1, slice 67 (air plan after a spring);
+  * seed 1, slice 72 (ground plan);
+  * seed 21, slice 44 (air plan after a spring).
+
+  CI's solver tests do not climb that high. Each link is proven on its own, so these are probably solver limitations rather than impossible jumps, but that is not verified. They have to be resolved as part of this work.
+* **TowerStreamingTest** diverged slightly under direction-only input (streaming against whole tower: y 149.3458 against 149.3437 after 56 window rebuilds). This is a determinism question that must be explained before shipping.

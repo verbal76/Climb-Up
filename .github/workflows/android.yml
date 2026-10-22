@@ -130,8 +130,8 @@ jobs:
             # owner test build: a DRAFT release (collaborators only, creates no tag, never public) carries the APK
             gh release create "v${VER}-build${{ env.BUILD_NUMBER }}" "$APK" --target ${{ github.sha }} --title "Upwardly v${VER} (build ${{ env.BUILD_NUMBER }}) — Android APK (owner test build, draft)" --notes-file notes.md --draft
           else
-            # release name as the owner specified for the published test releases: "Upwardly build NN apk"
-            gh release create "v${VER}-build${{ env.BUILD_NUMBER }}" "$APK" --target ${{ github.sha }} --title "Upwardly build ${{ env.BUILD_NUMBER }} apk" --notes-file notes.md --latest
+            # owner: one release per build with the APK, EXE and Linux build together ("Upwardly build NN"); windows.yml adds to the same tag
+            REPO=${{ github.repository }} bash tools/ci/publish_release.sh "v${VER}-build${{ env.BUILD_NUMBER }}" "${{ env.BUILD_NUMBER }}" notes.md "$APK"
           fi
       - name: Publish the OTA baseline (only if the channel does not already carry this version or a newer one)
         if: ${{ inputs.test_build != true }}   # an owner test build never touches the OTA channel

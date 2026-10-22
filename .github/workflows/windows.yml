@@ -212,6 +212,6 @@ jobs:
             gh release create "$TAG" "$EXE" "$LINUX" build-manifest.json checksums.sha256 --repo "$REPO" --target "${{ github.sha }}" --title "Upwardly Build ${N} — Desktop (Windows + Linux) (owner test build, draft)" --notes-file notes.md --draft
             echo "draft release created for $TAG (visible to collaborators only)"
           else
-            gh release create "$TAG" "$EXE" "$LINUX" build-manifest.json checksums.sha256 --repo "$REPO" --target "${{ github.sha }}" --title "Upwardly Build ${N} — Desktop (Windows + Linux)" --notes-file notes.md --latest=false
-            echo "published https://github.com/$REPO/releases/tag/$TAG"
+            # owner: one release per build with the APK, EXE and Linux build together, under the Android workflow's tag
+            bash tools/ci/publish_release.sh "v${VER}-build${N}" "$N" notes.md "$EXE" "$LINUX" build-manifest.json checksums.sha256
           fi

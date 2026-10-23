@@ -1207,7 +1207,7 @@ public final class WorldRenderer implements Disposable {
                 int st = rsim != null && rhz < rsim.mobState.length ? rsim.mobState[rhz] : 1;
                 float ks = rsim != null && st > 0 ? rsim.mobS[rhz] : h.s + end, ky = dY + (rsim != null && st > 0 ? rsim.mobY[rhz] : Element.SKULL_HOVER + 0.12f * MathUtils.sin(time * 2.6f + h.phase));
                 float dir = rsim != null && st > 0 ? rsim.mobDir[rhz] : -1f;
-                if (st == 2 && !reducedMotion) ks += 0.04f * MathUtils.sin(time * 70f);                 // it shivers as it winds up
+                if (st == 2 && !reducedMotion && rsim.mobT[rhz] > Element.SKULL_LOOP_T) ks += 0.04f * MathUtils.sin(time * 70f);      // it shivers as it swoops down for the dash (after its loop-the-loop, Build 77)
                 float sc = 0.6f, yaw = (dir >= 0f ? -1f : 1f) * SKULL_YAW;                              // its face mostly toward you, a little toward where it is going, so both eyes show
                 Rig skullRig = rig(h, "skull_anim", st == 3 ? "Bite_Front" : "Idle"); castShadow(skullRig.inst, ks, ky - 0.62f * sc);
                 drawRig(skullRig, ks, ky - 0.62f * sc, 0f, camS, sc, yaw, st == 3 ? -dir * 12f : 0f, st == 3 ? 2f : 1f);
@@ -1217,7 +1217,7 @@ public final class WorldRenderer implements Disposable {
                     drawBox(es, ky + SKULL_EYE_UP, ez, camS, ew, ew, 0.04f, 1f, 0.35f + 0.4f * glow, 0.1f);
                     drawBox(es + dir * 0.025f, ky + SKULL_EYE_UP + 0.035f, ez - 0.03f, camS, ew * 0.45f, ew * 0.45f, 0.03f, 0.05f, 0.08f, 0.1f);
                 }
-                if (st == 3 || (st == 2 && rsim != null && rsim.mobT[rhz] > Element.SKULL_WINDUP * 0.6f)) {     // the misty trail
+                if (st == 3 || (st == 2 && rsim != null && rsim.mobT[rhz] > Element.SKULL_LOOP_T)) {     // the misty trail
                     for (int q = 0; q < 3; q++) { mistCol.set(0.82f, 0.9f, 1f, 0.55f); particles.spawn(ks - dir * MathUtils.random(0.2f, 0.6f), ky + MathUtils.random(-0.3f, 0.3f), -dir * MathUtils.random(0.2f, 0.8f), MathUtils.random(0.1f, 0.5f), mistCol, MathUtils.random(0.12f, 0.22f), -0.3f, MathUtils.random(0.45f, 0.8f)); }
                 }
                 break;

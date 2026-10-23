@@ -604,6 +604,11 @@ public final class CourseGenerator {
             Autopilot.Result res = Autopilot.planPair(base, a, b, true);
             if (!res.ok || res.margin() < Math.min(T.minLinkMargin, 0.05f)) return false;
         }
+        if (Sim.startOn(c, T, a).hasSkull()) {       // a skull may be waiting at either end of its deck: prove the link from the centre with it parked at the other end too (Build 77, rules 5)
+            Sim base = Sim.startOn(c, T, a); base.parkSkullsAtFarEnd();
+            Autopilot.Result res = Autopilot.planPair(base, a, b, true);
+            if (!res.ok || res.margin() < Math.min(T.minLinkMargin, 0.05f)) return false;
+        }
         return true;
     }
     private boolean pairOkAir(int a, int b) { return pairOk(a, b); }

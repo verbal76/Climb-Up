@@ -170,10 +170,13 @@ public final class Element {
     public float beeDive(float t) { float u = beeU(t); return u > 0.38f && u < 0.62f ? (float) StrictMath.sin((u - 0.38f) / 0.24f * Math.PI) : 0f; }
 
     // ---- skull (Build 71): body radius, heights of its centre above the deck while hovering and while dashing, dash speed, and the phase lengths
-    public static final float SKULL_R = 0.42f, SKULL_HOVER = 1.75f, SKULL_LOW = 0.55f, SKULL_SPEED = 10f;
-    public static final float SKULL_NOTICE = 0.35f, SKULL_WINDUP = 0.55f, SKULL_TURN = 0.5f, SKULL_REST = 1.3f, SKULL_END = 0.7f;
+    public static final float SKULL_R = 0.42f, SKULL_HOVER = 1.75f, SKULL_LOW = 0.55f, SKULL_SPEED = 13f;      // Build 77 (owner: "come at you faster"): 10 -> 13 m/s
+    public static final float SKULL_NOTICE = 0.35f, SKULL_WINDUP = 1.2f, SKULL_TURN = 0.5f, SKULL_REST = 1.3f, SKULL_END = 0.7f;
     /** A dash that catches you throws you this hard along its way, and up. */
-    public static final float SKULL_LAUNCH_X = 11f, SKULL_LAUNCH_Y = 7.5f;
+    public static final float SKULL_LAUNCH_X = 14f, SKULL_LAUNCH_Y = 9.5f;      // Build 77 (owner: "mush you farther"): +30% (was 11 / 7.5)
+    /** Build 77 (owner: when it turns to face you it loops and swoops before it dashes): the wind-up is a vertical loop-the-loop of this radius over the
+     *  first SKULL_LOOP_T seconds, then a swoop down to dash height, drawing back a little first, for the rest of SKULL_WINDUP. */
+    public static final float SKULL_LOOP_R = 0.6f, SKULL_LOOP_T = 0.75f, SKULL_SWOOP_BACK = 0.5f;
 
     // ---- green blob (Build 71): landing half-width, phase lengths, how far up it leaps (off the top of the screen), how long its shadow shows before it lands
     public static final float BLOB_R = 0.6f, BLOB_NOTICE = 0.3f, BLOB_WOBBLE = 0.8f, BLOB_AIR = 1.7f, BLOB_SHADOW = 0.55f, BLOB_REST = 1.2f, BLOB_APEX = 11f, BLOB_END = 0.8f;

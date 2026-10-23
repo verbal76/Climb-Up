@@ -209,6 +209,19 @@ public final class Sim {
 
     public Sim copy() { return new Sim(this); }
 
+    /** Every skull resting, ready, at the other end of its deck from where it starts: where it waits after it has dashed at someone crossing its deck
+     *  (Build 77). Proofs that only saw the starting end missed this (seed 8: a key detour beside a skull's deck). */
+    public void parkSkullsAtFarEnd() {
+        for (int k = 0; k < course.hazards.size() && k < mobState.length; k++) {
+            Element e = course.hazards.get(k);
+            if (e.type != Element.Type.SKULL) continue;
+            Element deck = deckOf(e);
+            float dS = deck != null ? es1[e.anchor] : e.s, half = deck != null ? deck.halfW() : Math.max(2f, e.w * 0.5f);
+            mobState[k] = 1; mobS[k] = course.wrap(dS - Math.max(0.5f, half - Element.SKULL_END)); mobDir[k] = 1f; mobT[k] = Element.SKULL_REST; mobY[k] = Element.SKULL_HOVER; mobSeen[k] = 0f;
+        }
+    }
+    public boolean hasSkull() { for (Element e : course.hazards) if (e.type == Element.Type.SKULL) return true; return false; }
+
     /** Course may grow while generating; keeps arrays in sync by constructing a fresh Sim instead. */
     private void refreshElements() {
         for (int i = 0; i < course.size(); i++) {
@@ -577,10 +590,18 @@ public final class Sim {
                 }
                 break;
             }
-            case 2: {
-                float k = smooth01(mobT[idx] / Element.SKULL_WINDUP);
-                mobY[idx] = Element.SKULL_HOVER + (Element.SKULL_LOW - Element.SKULL_HOVER) * k;
-                if (mobT[idx] >= Element.SKULL_WINDUP) { mobState[idx] = 3; mobT[idx] = 0f; events |= EV_DASH; }
+            case 2: {          // Build 77: a loop-the-loop where it hovers, then a swoop down (drawing back a little) to dash height. It always winds up at the end opposite its target.
+                float base = course.wrap(dS - mobDir[idx] * end), t = mobT[idx];
+                if (t < Element.SKULL_LOOP_T) {
+                    double th = 2.0 * Math.PI * smooth01(t / Element.SKULL_LOOP_T);
+                    mobS[idx] = course.wrap(base - mobDir[idx] * Element.SKULL_LOOP_R * (float) StrictMath.sin(th));
+                    mobY[idx] = Element.SKULL_HOVER + Element.SKULL_LOOP_R * (1f - (float) StrictMath.cos(th));
+                } else {
+                    float k = smooth01((t - Element.SKULL_LOOP_T) / (Element.SKULL_WINDUP - Element.SKULL_LOOP_T));
+                    mobS[idx] = course.wrap(base - mobDir[idx] * Element.SKULL_SWOOP_BACK * (float) StrictMath.sin(Math.PI * k));
+                    mobY[idx] = Element.SKULL_HOVER + (Element.SKULL_LOW - Element.SKULL_HOVER) * k;
+                }
+                if (t >= Element.SKULL_WINDUP) { mobS[idx] = base; mobY[idx] = Element.SKULL_LOW; mobState[idx] = 3; mobT[idx] = 0f; events |= EV_DASH; }
                 break;
             }
             case 3: {

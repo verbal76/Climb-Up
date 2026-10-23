@@ -81,10 +81,12 @@ public final class Background implements Disposable {
 
     public void resize(int w, int h) { this.w = w; this.h = h; }
 
-    public void render(SpriteBatch sb, ShapeRenderer sr, Color top, Color bot, float camS, float camY, float zoneF, float circumference, boolean reduced, float time) {
+    public void render(SpriteBatch sb, ShapeRenderer sr, Color top, Color mid, Color bot, float camS, float camY, float zoneF, float circumference, boolean reduced, float time) {
         sr.getProjectionMatrix().setToOrtho2D(0, 0, w, h);
         sr.begin(ShapeRenderer.ShapeType.Filled);
-        sr.rect(0, 0, w, h, bot, bot, top, top);
+        float hm = h * Palette.SKY_MID_AT;          // three stops (Build 77): bottom -> middle -> top
+        sr.rect(0, 0, w, hm, bot, bot, mid, mid);
+        sr.rect(0, hm, w, h - hm, mid, mid, top, top);
         sr.end();
         sb.getProjectionMatrix().setToOrtho2D(0, 0, w, h);
         sb.enableBlending();

@@ -142,7 +142,13 @@ public final class PlayScreen extends ScreenAdapter {
                 if (hzType != null) sim.s += Float.parseFloat(System.getProperty("climb.startDs", "0"));     // test hook: stand this much further along the start platform (camera angle on the hazard)
                 if (run.resumed) { sim.deferRespawn = true; sim.setRange(0, course.size() - 1); ResumeState.restore(g.save, sim, tower); }
             }
-            if (hStart > 0 && hzType == null) { int i = 0; while (i < course.size() - 1 && course.get(i + 1).y < hStart) i++; while (i > 0 && course.get(i).anchor >= 0) i--; sim = Sim.startOn(course, g.tuning, i); sim.checkpoint = i; sim.keysFree = false; sim.keys = 0; }
+            if (hStart > 0 && hzType == null) {
+                // Build 77 (owner): the world picker starts you at the castle where the world begins (castle hStart / spacing), on the platform past its door, with no keys:
+                // the next castle's key lies ahead in its section. (It used to walk the element list to a height: local heights vs an absolute one, and side platforms in the list.)
+                int i = tower.afterCastle((int) (hStart / g.tuning.castleSpacing));
+                if (i < 0) { i = 0; double oy = tower.originY; while (i < course.routeSize() - 1 && course.get(i + 1).y + oy < hStart) i++; }
+                sim = Sim.startOn(course, g.tuning, i); sim.checkpoint = i; sim.keysFree = false; sim.keys = 0;
+            }
             if (tower != null) { tower.openedUpTo = g.save.openedUpTo; sim.deferRespawn = true; sim.floorOverride = tower.floorLocal(); }
             sim.setRange(0, course.size() - 1); simSize = course.size(); if (tower != null) seenRebuilds = tower.rebuilds;
         }

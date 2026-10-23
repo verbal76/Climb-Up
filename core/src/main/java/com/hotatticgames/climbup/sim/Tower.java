@@ -191,6 +191,14 @@ public final class Tower {
     /** Whether a slice is being generated on the background thread right now (diagnostics). */
     public boolean generating() { return pending != null && !pending.isDone(); }
 
+    /** Build 77 (owner, hidden world picker): the route platform right after castle {@code n}'s deck - where you stand once through its door, the normal way into the
+     *  section above it (its key lies ahead, in that section). -1 if castle n is not in the window. Found by the castle's number, not by a height, so the floating origin
+     *  and the order of the elements (side platforms come after the route) do not matter. */
+    public int afterCastle(int n) {
+        for (Element h : world.hazards) if (h.type == Element.Type.GATE && h.skin == n && h.anchor >= 0 && h.anchor + 1 < world.routeSize()) return h.anchor + 1;
+        return -1;
+    }
+
     public void extend() {
         requestNext();
         try { pending.get(); } catch (Exception e) { throw new IllegalStateException(e); }

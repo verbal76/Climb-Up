@@ -5,8 +5,16 @@ import com.badlogic.gdx.math.MathUtils;
 
 /** Per-zone sky/fog/tint colours, blended continuously by climb height. */
 public final class Palette {
-    public static final Color[] SKY_TOP = {c(0.30f, 0.62f, 0.95f), c(0.52f, 0.72f, 0.95f), c(0.22f, 0.16f, 0.42f), c(0.03f, 0.05f, 0.16f), c(0.005f, 0.005f, 0.04f)};
-    public static final Color[] SKY_BOT = {c(0.80f, 0.93f, 1.00f), c(0.90f, 0.96f, 1.00f), c(0.99f, 0.58f, 0.40f), c(0.14f, 0.20f, 0.44f), c(0.06f, 0.03f, 0.16f)};
+    // Build 77 (owner): Meadow Base and Frost Ridge are MORNING - the inverse of Dusk Spire's sunset: darker muted violet low down with a pale-yellow hint
+    // in the lavender above it, opening up into a brighter, richer blue at the top (Frost Ridge a little later and cooler). The sky is three stops: bottom,
+    // SKY_MID at SKY_MID_AT of the height, top. Dusk Spire, Night Summit and Deep Space keep their two-colour skies exactly (their middle stop lies on that line).
+    public static final float SKY_MID_AT = 0.35f;
+    public static final Color[] SKY_TOP = {c(0.36f, 0.66f, 1.00f), c(0.42f, 0.72f, 1.00f), c(0.22f, 0.16f, 0.42f), c(0.03f, 0.05f, 0.16f), c(0.005f, 0.005f, 0.04f)};
+    public static final Color[] SKY_BOT = {c(0.56f, 0.48f, 0.68f), c(0.64f, 0.60f, 0.78f), c(0.99f, 0.58f, 0.40f), c(0.14f, 0.20f, 0.44f), c(0.06f, 0.03f, 0.16f)};
+    public static final Color[] SKY_MID = {c(0.76f, 0.70f, 0.82f), c(0.74f, 0.74f, 0.90f), onLine(2), onLine(3), onLine(4)};
+    /** 1 for the morning worlds (their own middle stop), 0 where the sky is a plain two-colour gradient. */
+    public static final float[] SKY_MORNING = {1f, 1f, 0f, 0f, 0f};
+    private static Color onLine(int z) { return new Color(SKY_BOT[z]).lerp(SKY_TOP[z], SKY_MID_AT); }
     public static final Color[] TINT = {c(1f, 1f, 1f), c(1f, 1f, 1f), c(1f, 0.84f, 0.80f), c(0.72f, 0.80f, 1f), c(0.66f, 0.74f, 1f)};
     public static final Color[] AMBIENT = {c(0.62f, 0.62f, 0.66f), c(0.64f, 0.66f, 0.72f), c(0.58f, 0.46f, 0.52f), c(0.36f, 0.40f, 0.58f), c(0.40f, 0.42f, 0.62f)};
     // lighting rig per world: key (sun / moon), fill from the opposite side, a warm-or-cool bounce from below (fake global illumination for undersides), and the hero's rim light (a colour that contrasts with the world so he never melts into it)

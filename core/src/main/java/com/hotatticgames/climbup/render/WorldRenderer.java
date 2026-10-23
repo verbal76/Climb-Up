@@ -72,7 +72,7 @@ public final class WorldRenderer implements Disposable {
 
     private float camY, camShake, shakeT, camPull;
     private double originY, originS;          // the world is expressed relative to a floating origin; absolute height = originY + local y (see Tower)
-    private final Color skyTop = new Color(), skyBot = new Color(), tint = new Color(), amb = new Color();
+    private final Color skyTop = new Color(), skyBot = new Color(), skyMid = new Color(), tint = new Color(), amb = new Color();
     private float renderS, renderY;
     public float lastCamS;
     public int cloudsBroken;          // PlayScreen reads and clears this to play the poof sound
@@ -476,14 +476,20 @@ public final class WorldRenderer implements Disposable {
         float bgY = (float) ((camY + originY) % 65536.0);          // continuous across origin moves (and across the shift, nothing pops); wraps only every 65 km
         float zf = (float) Math.max(0.0, (camY + originY) / T.zoneHeight);      // Build 70 (owner): below the start is still the start area (Meadow), never the last world wrapped round
         float zoneF = Math.min(Palette.ZONES - 0.001f, ((zf % Palette.ZONES) + Palette.ZONES) % Palette.ZONES);        // the five worlds repeat for ever
-        Palette.blend(Palette.SKY_TOP, zoneF, skyTop); Palette.blend(Palette.SKY_BOT, zoneF, skyBot);
+        Palette.blend(Palette.SKY_TOP, zoneF, skyTop); Palette.blend(Palette.SKY_BOT, zoneF, skyBot); Palette.blend(Palette.SKY_MID, zoneF, skyMid);
+        if (zoneF < 2f) {         // Build 77 (owner): the sun comes up as you climb the two morning worlds - the violet low sky slowly lifts and lightens
+            float rise = MathUtils.clamp(zoneF / 1.8f, 0f, 1f) * 0.35f;
+            skyBot.lerp(skyMid, rise); skyMid.lerp(skyTop, rise * 0.4f);
+        }
         Palette.blend(Palette.TINT, zoneF, tint); Palette.blend(Palette.AMBIENT, zoneF, amb);
         float gold = goldenHour(zoneF);            // Build 71 (owner): castle 1 to castle 2 is a late-afternoon Meadow, not just more of the start
         if (gold > 0f) {
-            skyTop.lerp(0.40f, 0.52f, 0.86f, 1f, gold); skyBot.lerp(1.00f, 0.80f, 0.56f, 1f, gold);
+            skyTop.lerp(0.46f, 0.66f, 0.96f, 1f, gold * 0.6f); skyBot.lerp(0.86f, 0.70f, 0.62f, 1f, gold * 0.6f); skyMid.lerp(0.90f, 0.82f, 0.74f, 1f, gold * 0.6f);      // Build 77: in the morning worlds the golden stretch warms the low sky to cream, not sunset orange
             tint.lerp(1.00f, 0.93f, 0.82f, 1f, gold); amb.lerp(0.66f, 0.58f, 0.52f, 1f, gold);
         }
-        Grade.saturate(skyTop); Grade.saturate(skyBot);          // Build 72 (owner): richer colour, the sky included
+        Grade.saturate(skyTop); Grade.saturate(skyBot); Grade.saturate(skyMid);
+        { float mw = Palette.blendF(Palette.SKY_MORNING, zoneF); float r0 = MathUtils.lerp(skyBot.r, skyTop.r, Palette.SKY_MID_AT), g0 = MathUtils.lerp(skyBot.g, skyTop.g, Palette.SKY_MID_AT), b0 = MathUtils.lerp(skyBot.b, skyTop.b, Palette.SKY_MID_AT);
+          skyMid.set(MathUtils.lerp(r0, skyMid.r, mw), MathUtils.lerp(g0, skyMid.g, mw), MathUtils.lerp(b0, skyMid.b, mw), 1f); }      // two-colour skies stay exactly as they were          // Build 72 (owner): richer colour, the sky included
         ((ColorAttribute) env.get(ColorAttribute.AmbientLight)).color.set(amb.r * Grade.AMBIENT, amb.g * Grade.AMBIENT, amb.b * Grade.AMBIENT, 1f);
         Palette.blend(Palette.SUN, zoneF, lc); if (gold > 0f) lc.lerp(1.00f, 0.78f, 0.52f, 1f, gold); sun.color.set(lc.r * Grade.KEY, lc.g * Grade.KEY, lc.b * Grade.KEY, 1f); Palette.blendDir(Palette.SUN_DIR, zoneF, lv); if (gold > 0f) lv.lerp(GOLD_SUN, gold).nor(); sun.direction.set(lv);
         Palette.blend(Palette.FILL, zoneF, lc); fillL.color.set(lc);
@@ -518,7 +524,7 @@ public final class WorldRenderer implements Disposable {
         if (!scaled) Gdx.gl.glViewport(0, 0, Gdx.graphics.getBackBufferWidth(), Gdx.graphics.getBackBufferHeight());
         Gdx.gl.glClearColor(skyBot.r, skyBot.g, skyBot.b, 1f);
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT | GL20.GL_DEPTH_BUFFER_BIT);
-        bg.render(sb, shapes, skyTop, skyBot, ps, bgY, zoneF, T.circumference(), reducedMotion, time);
+        bg.render(sb, shapes, skyTop, skyMid, skyBot, ps, bgY, zoneF, T.circumference(), reducedMotion, time);
         Gdx.gl.glClear(GL20.GL_DEPTH_BUFFER_BIT);
         if (quality > 0 && GfxHooks.skyEffects) bg.renderGlow(sb, zoneF);
         if (quality > 0) {                 // planets and sky ships far behind the tower (wide-range camera, drawn first)

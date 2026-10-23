@@ -35,7 +35,9 @@ elif p == ["releases"] and method == "POST":
     r = {"id": st["next"], "assets": [], "draft": True, "body": "", **d}; st["releases"].append(r); out = r
 elif len(p) == 2 and p[0] == "releases" and method == "GET": out = rel(int(p[1]))
 elif len(p) == 2 and p[0] == "releases" and method == "PATCH":
-    r = rel(int(p[1])); r.update(json.loads(body()))
+    r = rel(int(p[1])); d = json.loads(body())
+    if r.get("draft") and "tag_name" not in d: d["tag_name"] = "untagged-%d" % r["id"]   # what GitHub does to a draft (seen on Build 78)
+    r.update(d)
     if os.environ.get("FAKE_REFUSE_PUBLISH") and r.get("draft") is False: r["draft"] = True; save(); print("HTTP 403", file=sys.stderr); sys.exit(1)
     if r.get("draft") is False: r["html_url"] = "https://example/" + r["tag_name"]
     out = r

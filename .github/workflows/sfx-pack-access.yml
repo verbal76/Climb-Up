@@ -197,6 +197,9 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    concurrency:            # the same lock the two Build 78 publish jobs hold (they were refused; this job without it was not)
+      group: upwardly-release-publish
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
       - name: The real publish script with a fake tag and two dummy packages (stays a draft, no APK), then delete the draft
@@ -206,9 +209,9 @@ jobs:
         run: |
           TAG="v0.0.0-build9${{ github.run_id }}"
           head -c 1000 /dev/urandom > "Upwardly Build 9 EXE.zip"; head -c 1000 /dev/urandom > "Upwardly Build 9 Linux.tar.gz"; echo "probe notes" > notes.md
-          GH_DEBUG=api bash -x tools/ci/publish_release.sh "$TAG" 9 notes.md "Upwardly Build 9 EXE.zip" "Upwardly Build 9 Linux.tar.gz" 2>&1 | grep -v "^> \|Authorization" | tail -80 || true
-          ID=$(gh api --paginate "repos/$REPO/releases?per_page=100" -q ".[] | select(.tag_name == \"$TAG\") | .id" | head -1)
-          [ -z "$ID" ] || { gh api -X DELETE "repos/$REPO/releases/$ID" && echo "deleted probe draft $ID"; }
+          GH_DEBUG=api bash tools/ci/publish_release.sh "$TAG" 9 notes.md "Upwardly Build 9 EXE.zip" "Upwardly Build 9 Linux.tar.gz" 2>&1 | grep -E "^\* Request to|^< HTTP|gh: |::notice|::error|uploaded" || true
+          # remove every probe draft (title "Upwardly build 9", always a draft), including the one an earlier probe left behind
+          for ID in $(gh api --paginate "repos/$REPO/releases?per_page=100" -q '.[] | select(.draft and .name == "Upwardly build 9") | .id'); do gh api -X DELETE "repos/$REPO/releases/$ID" && echo "deleted probe draft $ID"; done
       - env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}

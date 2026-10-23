@@ -33,14 +33,15 @@ upload() {  # upload <release id> <file>: replaces a file of the same name, then
 }
 
 # the release for this tag, published or draft (a draft is not found by tag name)
-REL=$(gh api --paginate "repos/$REPO/releases?per_page=100" -q ".[] | select(.tag_name == \"$TAG\") | [.id, .draft, .target_commitish] | @tsv" | head -1)
+# by tag, or (a draft can show as "untagged-..." after an update) by its title; every update below re-sends tag, title and commit so it keeps them
+REL=$(gh api --paginate "repos/$REPO/releases?per_page=100" -q ".[] | select(.tag_name == \"$TAG\" or (.draft and .name == \"$TITLE\")) | [.id, .draft, .target_commitish] | @tsv" | head -1)
 if [ -n "$REL" ]; then
   ID=$(printf '%s' "$REL" | cut -f1)
   [ "$(printf '%s' "$REL" | cut -f2)" = "true" ] || { echo "::error::release $TAG is already public; a build never changes a published release"; exit 1; }
   if [ "$(printf '%s' "$REL" | cut -f3)" != "$GITHUB_SHA" ]; then
     echo "candidate draft $TAG is from $(printf '%s' "$REL" | cut -f3): removing its files and re-pointing it at $GITHUB_SHA"
     for a in $(gh api "repos/$REPO/releases/$ID/assets?per_page=100" -q '.[].id'); do gh api -X DELETE "repos/$REPO/releases/assets/$a"; done
-    jq -n --arg sha "$GITHUB_SHA" '{target_commitish:$sha, body:""}' | gh api -X PATCH "repos/$REPO/releases/$ID" --input - -q .id >/dev/null
+    jq -n --arg t "$TITLE" --arg tag "$TAG" --arg sha "$GITHUB_SHA" '{name:$t, tag_name:$tag, target_commitish:$sha, body:""}' | gh api -X PATCH "repos/$REPO/releases/$ID" --input - -q .id >/dev/null
   fi
 else
   # the id comes straight from the create call: a draft just made can be missing from the release list for a moment (Build 76: an empty id, then a 404)
@@ -54,7 +55,7 @@ OLD=$(gh api "repos/$REPO/releases/$ID" -q .body)
 if [ -z "$OLD" ]; then BODY=$(cat "$NOTES")
 elif printf '%s' "$OLD" | grep -qF "$(head -1 "$NOTES")"; then BODY="$OLD"
 else BODY=$(printf '%s\n\n---\n\n%s' "$OLD" "$(cat "$NOTES")"); fi
-jq -n --arg b "$BODY" '{body:$b}' | gh api -X PATCH "repos/$REPO/releases/$ID" --input - -q .id >/dev/null
+jq -n --arg t "$TITLE" --arg tag "$TAG" --arg sha "$GITHUB_SHA" --arg b "$BODY" '{name:$t, tag_name:$tag, target_commitish:$sha, body:$b}' | gh api -X PATCH "repos/$REPO/releases/$ID" --input - -q .id >/dev/null
 
 # the gate: all three packages on the candidate?
 ASSETS=$(gh api "repos/$REPO/releases/$ID/assets?per_page=100" -q '.[] | [.name, .digest] | @tsv')

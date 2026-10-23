@@ -384,9 +384,36 @@ public final class CourseGenerator {
             if (b2 >= 0 && (best < 0 || Math.abs(c.get(b2).y - castleTarget) < Math.abs(c.get(best).y - castleTarget))) best = b2;
             if (b2 == c.size() - 1) break;          // the new rest is suitable
         }
+        if (best < 0 || Math.abs(c.get(best).y - castleTarget) > GEM_MAX_DEV) { int w = widenForGem(); if (w >= 0) best = w; }
         if (best < 0) throw new IllegalStateException("no platform for the gem near " + castleTarget);
         Element g = c.get(best); g.skin = 3; g.checkpoint = true; gemBest = best;
     }
+    /** The official rule: the halfway red gem stands within this height of the exact midpoint. */
+    private static final float GEM_MAX_DEV = 4.5f;
+    /**
+     * Build 76: when no rest could be added near the midpoint (every spot blocked by the spiral layer a revolution above or below: seed 8, gem 9, 7.2 m high
+     * once the faster plank conveyors reshaped that section) and the climb carried past it, a route platform near the midpoint that is only too narrow
+     * to stand and wait on is widened to the gem's minimum width, if it then still clears the other layers and both links through it are proven again.
+     * Returns its index, or -1 (the slice is unchanged).
+     */
+    private int widenForGem() {
+        int best = -1; float bestDev = GEM_MAX_DEV;
+        for (int i = Math.max(1, ctx); i < c.routeSize() - 1; i++) {
+            Element e = c.get(i);
+            if (e.type != Element.Type.STATIC || e.skin != 0 || e.wet() || e.w >= GEM_MIN_W || e.anchor >= 0 || Autopilot.hasMidHazard(c, i)) continue;
+            float d = Math.abs(e.y - castleTarget);
+            if (d > bestDev) continue;
+            float old = e.w; e.w = GEM_MIN_W;
+            boolean ok = clearOfOtherLayers(i);
+            for (int k = i - 1; k <= i + 1 && ok; k += 2) { Element n = c.get(k); ok = Math.abs(n.y - e.y) > 1.0f || Math.abs(c.dsWrap(e.s, n.s)) - e.halfW() - n.halfW() > 0.2f; }      // never into a neighbour
+            for (int j = i - 1; j <= i && ok; j++) { Sim sim = Sim.startOn(c, T, j); quietStart(sim, j); Autopilot.Result res = Autopilot.plan(sim, j, true); ok = res.ok && res.margin() >= 0.12f; }
+            e.w = old;
+            if (ok) { best = i; bestDev = d; }
+        }
+        if (best >= 0) c.get(best).w = GEM_MIN_W;
+        return best;
+    }
+    private static final float GEM_MIN_W = 3.5f;
     /** How far below the exact midpoint the climb may still be when the red gem platform is chosen: a rest added then lands within about 4 m of the midpoint instead of up to a whole module above it. */
     private static final float GEM_LEAD = 4f;
     private int bestGemCandidate() {
@@ -745,9 +772,8 @@ public final class CourseGenerator {
     private void addRest(int zone, boolean gem) {
         for (int round = 0; round < 4; round++) {
             Element last = c.get(c.size() - 1);
-            for (int attempt = 0; attempt < (gem && round == 0 ? 22 : 8); attempt++) {
-                // Build 76: before climbing a whole module, the gem's rest also tries up to 1.6 m lower (seed 8 put gem 9 6.3 m high once the faster conveyor bridges reshaped its section)
-                float dy = attempt >= 14 ? r(-1.6f, 0f) : attempt >= 8 ? r(-0.8f, 0.2f) : r(0.3f, 1.0f) * (1f - attempt * 0.08f);
+            for (int attempt = 0; attempt < (gem && round == 0 ? 14 : 8); attempt++) {
+                float dy = attempt >= 8 ? r(-0.8f, 0.2f) : r(0.3f, 1.0f) * (1f - attempt * 0.08f);
                 float gap = reach(Math.max(0f, dy)) * (0.5f - Math.min(attempt, 7) * 0.03f);
                 float w = attempt < 4 ? 5 + rnd.nextInt(2) : (attempt < 6 ? 4 : attempt < 8 ? 3 : 4);
                 Element e = plat(Element.Type.STATIC, last.s + last.w / 2 + gap + w / 2, last.y + dy, w, zone);

@@ -71,9 +71,9 @@ jobs:
     if: always() && (github.ref == 'refs/heads/ccr-cb458cd1-w4dh5c' || github.ref == 'refs/heads/build-74-determinism') && (needs.tests.result == 'success' || (inputs.skip_tests && needs.tests.result == 'skipped'))
     needs: tests
     runs-on: windows-latest
-    # contents: write only so this job can LIST a draft "Sfx" release for the optional sound-pack fetch; nothing in this job publishes
+    # contents: read is all the sound-pack fetch needs while the "Sfx" release is published (a DRAFT release would need contents: write); nothing in this job publishes
     permissions:
-      contents: write
+      contents: read
       actions: read
     steps:
       - uses: actions/checkout@v4
@@ -82,14 +82,11 @@ jobs:
       - uses: actions/setup-python@v5
         with: { python-version: '3.12' }
       - run: pip install pillow
-      - name: Fetch the licensed sound pack for this build (never stored in the repo; required for a production build, optional for an owner test build)
-        continue-on-error: ${{ inputs.test_build == true }}
+      - name: Fetch the licensed sound pack (the owner's "Sfx" release in this repository, GITHUB_TOKEN, SHA-256 checked; the build fails if it is missing or corrupted)
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
-          PACK_TOKEN: ${{ secrets.LICENSED_ASSETS_TOKEN }}   # read-only token for the private licensed-assets repository (Build 78)
-          PACK_REQUIRED: ${{ inputs.test_build != true && '1' || '' }}
         run: |
           (command -v ffmpeg >/dev/null 2>&1 || choco install ffmpeg --no-progress -y >/dev/null 2>&1) || true
           export PATH="$PATH:/c/ProgramData/chocolatey/bin"
@@ -156,22 +153,19 @@ jobs:
     if: always() && (github.ref == 'refs/heads/ccr-cb458cd1-w4dh5c' || github.ref == 'refs/heads/build-74-determinism') && (needs.tests.result == 'success' || (inputs.skip_tests && needs.tests.result == 'skipped'))
     needs: tests
     runs-on: ubuntu-latest
-    # contents: write only so this job can LIST a draft "Sfx" release for the optional sound-pack fetch; nothing in this job publishes
+    # contents: read is all the sound-pack fetch needs while the "Sfx" release is published (a DRAFT release would need contents: write); nothing in this job publishes
     permissions:
-      contents: write
+      contents: read
       actions: read
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: '17' }
-      - name: Fetch the licensed sound pack for this build (never stored in the repo; required for a production build, optional for an owner test build)
-        continue-on-error: ${{ inputs.test_build == true }}
+      - name: Fetch the licensed sound pack (the owner's "Sfx" release in this repository, GITHUB_TOKEN, SHA-256 checked; the build fails if it is missing or corrupted)
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
-          PACK_TOKEN: ${{ secrets.LICENSED_ASSETS_TOKEN }}   # read-only token for the private licensed-assets repository (Build 78)
-          PACK_REQUIRED: ${{ inputs.test_build != true && '1' || '' }}
         run: |
           (command -v ffmpeg >/dev/null 2>&1 || sudo apt-get install -y --no-install-recommends ffmpeg >/dev/null 2>&1) || true
           tools/ci/fetch_pack_sfx.sh --download

@@ -17,12 +17,10 @@ jobs:
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: '17' }
       - uses: gradle/actions/setup-gradle@v4
-      - name: Licensed sound pack is reachable by the build workflows (download + SHA-256 only, nothing converted, kept or published)
+      - name: Licensed sound pack is reachable by the build workflows (the owner's "Sfx" release, GITHUB_TOKEN with contents read; download + SHA-256 only, nothing converted or kept)
         env:
-          PACK_TOKEN: ${{ secrets.LICENSED_ASSETS_TOKEN }}
-        run: |
-          if [ -z "$PACK_TOKEN" ]; then echo "::warning::LICENSED_ASSETS_TOKEN is not set: the build workflows still read the pack from its old public location"; exit 0; fi
-          tools/ci/fetch_pack_sfx.sh --check
+          GH_TOKEN: ${{ github.token }}
+        run: tools/ci/fetch_pack_sfx.sh --check
       - name: Core regression suite (sim, generator+solver, persistence, OTA protocol, rig math)
         run: ./gradlew :core:test --no-daemon
       - name: Desktop unit tests (input mapping, bindings, persistence, navigation, display)

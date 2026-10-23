@@ -51,14 +51,11 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
       - name: Unit tests (headless simulation, generator, persistence, OTA incl. end-to-end over local HTTP)
         run: ./gradlew :core:test --no-daemon
-      - name: Fetch the licensed sound pack for this build (never stored in the repo; required for a production build, optional for an owner test build)
-        continue-on-error: ${{ inputs.test_build == true }}
+      - name: Fetch the licensed sound pack (the owner's "Sfx" release in this repository, GITHUB_TOKEN, SHA-256 checked; the build fails if it is missing or corrupted)
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
-          PACK_TOKEN: ${{ secrets.LICENSED_ASSETS_TOKEN }}   # read-only token for the private licensed-assets repository (Build 78)
-          PACK_REQUIRED: ${{ inputs.test_build != true && '1' || '' }}
         run: |
           (command -v ffmpeg >/dev/null 2>&1 || sudo apt-get install -y --no-install-recommends ffmpeg >/dev/null 2>&1) || true
           tools/ci/fetch_pack_sfx.sh --download

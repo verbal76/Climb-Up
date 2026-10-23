@@ -11,7 +11,7 @@ public final class Cues {
      * THE one test for "this element is a conveyor, so it hums": plank conveyor bridges (STATIC skin 4) and downhill conveyor ramps (RAMP skin 4),
      * i.e. {@link Element#belt()}. Extend it here when another kind of belt (for example a balance-conveyor bridge) is added.
      */
-    public static boolean isConveyor(Element e) { return e != null && e.belt(); }
+    public static boolean isConveyor(Element e) { return e != null && (e.belt() || e.tiltBelt()); }      // plank bridges, downhill ramps and the balance conveyor (Build 77)
 
     public enum Surface { STONE, DIRT, GRASS, WOOD }
 

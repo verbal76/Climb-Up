@@ -10,10 +10,13 @@ set -euo pipefail
 TAG="$1"; N="$2"; NOTES="$3"; shift 3
 TITLE="Upwardly build ${N}"
 # the release for this tag, published or draft (a draft is not found by tag name)
-ID=$(gh api "repos/$REPO/releases?per_page=50" -q ".[] | select(.tag_name == \"$TAG\") | .id" | head -1)
+ID=$(gh api --paginate "repos/$REPO/releases?per_page=100" -q ".[] | select(.tag_name == \"$TAG\") | .id" | head -1)
 if [ -z "$ID" ]; then
-  gh release create "$TAG" "$@" --repo "$REPO" --target "$GITHUB_SHA" --title "$TITLE" --notes-file "$NOTES" --draft
-  ID=$(gh api "repos/$REPO/releases?per_page=50" -q ".[] | select(.tag_name == \"$TAG\") | .id" | head -1)
+  # the id comes straight from the create call: a draft just made can be missing from the release list for a moment (Build 76: an empty id, then a 404)
+  jq -n --arg t "$TITLE" --rawfile b "$NOTES" --arg tag "$TAG" --arg sha "$GITHUB_SHA" '{name:$t, body:$b, tag_name:$tag, target_commitish:$sha, draft:true}' > draft.json
+  ID=$(gh api -X POST "repos/$REPO/releases" --input draft.json -q .id)
+  [ -n "$ID" ] || { echo "::error::could not create the draft release"; exit 1; }
+  for f in "$@"; do gh api -X POST "https://uploads.github.com/repos/$REPO/releases/$ID/assets?name=$(basename "$f" | sed 's/ /%20/g')" -H "Content-Type: application/octet-stream" --input "$f" -q .browser_download_url; done
   BODY=$(cat "$NOTES")
 else
   for f in "$@"; do        # replace this workflow's files if a re-run uploads them again

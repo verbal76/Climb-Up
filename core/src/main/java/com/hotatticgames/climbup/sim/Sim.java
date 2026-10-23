@@ -376,7 +376,11 @@ public final class Sim {
     private float platformDs(int i) { Element e = course.get(i); return e.isMoving() ? e.sOffsetAt(time) - e.sOffsetAt(time - DT) : course.dsWrap(es1[i], es0[i]); }
     /** The spinning ramp's sideways push now (0 for anything else). */
     /** How fast the surface itself carries a body along +s: a spinning ramp's sideways push, or a conveyor belt. */
-    public float surfaceCarry(int i) { Element e = course.get(i); return e.spins() ? SPIN_CARRY * (float) StrictMath.sin(e.spinAngle(time)) : e.beltV(); }
+    public float surfaceCarry(int i) {
+        Element e = course.get(i);
+        if (e.tiltBelt()) return -tilt[i] / T.seesawMaxTilt * e.phase;        // Build 77: the balance conveyor runs downhill, as fast as it is tipped (level: still)
+        return e.spins() ? SPIN_CARRY * (float) StrictMath.sin(e.spinAngle(time)) : e.beltV();
+    }
 
     public boolean attachedTo(int idx) {
         if (idx < 0) return false;
@@ -398,6 +402,9 @@ public final class Sim {
      */
     public int humanHold;
     private float heldX, heldY; private int heldXT, heldYT;
+    /** The stick as {@link #startOn} leaves it (just let go, so a new direction waits out {@link #humanHold}): lets a solver repeat a move exactly as the
+     *  generator proved it. It can only delay inputs, never add any (Build 77). */
+    public void restartHold() { heldXT = 0; heldYT = 0; }
 
     public void step(InputState in) {
         if (respawnPending) return;          // frozen until the window has been rebuilt around the checkpoint
@@ -424,7 +431,9 @@ public final class Sim {
             else if (e.type == Element.Type.SEESAW) {          // surface height is reported at the player's own position along the plank
                 float hw = e.halfW(), x = Math.max(-hw, Math.min(hw, course.dsWrap(s, es1[i])));
                 boolean on = mode == Mode.GROUND && onElem == i;
-                float kp = tilt[i], tgt = on ? -Math.max(-1f, Math.min(1f, x / hw)) * T.seesawMaxTilt : 0f;
+                float xr = x;
+                if (e.tiltBelt()) { float dz = Math.min(T.beltSeesawDead, hw * 0.5f); xr = Math.signum(x) * Math.max(0f, Math.abs(x) - dz) * hw / (hw - dz); }     // Build 77 (owner): a calm middle, so one step off the pivot doesn't slam it down
+                float kp = tilt[i], tgt = on ? -Math.max(-1f, Math.min(1f, xr / hw)) * T.seesawMaxTilt : 0f;
                 float kn = approach(kp, tgt, (on ? T.seesawRate : T.seesawRelax) * dt);
                 tilt[i] = kn; ey0[i] = e.y + kp * x; ey1[i] = e.y + kn * x;
             } else if (e.type == Element.Type.RAMP) {          // sloped walkway: surface height at the player's own position along it

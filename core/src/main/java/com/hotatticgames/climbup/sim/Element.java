@@ -78,6 +78,9 @@ public final class Element {
     public boolean belt() { return skin == 4 && (type == Type.RAMP || type == Type.STATIC); }
     /** The belt's surface speed along +s: both kinds carry you toward -s (down the ramp, to the left on screen). */
     public float beltV() { return belt() ? -phase : 0f; }
+    /** Build 77 (owner): the balance conveyor - a tipping bridge (SEESAW skin 4) whose plank belt runs toward whichever end is down, {@code phase} m/s at full tilt.
+     *  Its speed follows the tilt (live sim state), so it is not in {@link #beltV()}: see Sim#surfaceCarry. */
+    public boolean tiltBelt() { return type == Type.SEESAW && skin == 4; }
     /** The spinning ramp's heading at time t (radians): 0 = uphill toward +s, as a fixed ramp. */
     public float spinAngle(float t) { return phase + 6.2831855f * t / period; }
     /** A ramp's slope along the lane at time t: fixed, or for the spinning ramp the slope of its turning top where the lane crosses it (it flattens side-on and flips). */

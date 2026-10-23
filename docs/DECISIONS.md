@@ -566,3 +566,16 @@ Requirement: the same seed, the same inputs on the same simulation steps, give t
   or its files as such, and the source zip is no longer public. Residual point: like any game asset, the clips can be extracted from a
   package by someone determined; that is normal for licensed game audio and not distribution of the pack. Not used: the pack's music and the
   patron-only sounds. Credit is on the Credits screen.
+
+## Build 78 first attempt: publish refused (2026-10-23)
+
+- Both build workflows on e57036e built and tested green; both publish jobs (Android release, desktop release) stopped at their first GitHub
+  call with `gh: Resource not accessible by integration (HTTP 403)`, once each and again on one re-run each. Their logs show the token had
+  `Contents: write`. Nothing was created: no Build 78 release or draft exists.
+- Not reproduced: the same `publish_release.sh` with a fake tag ran clean from a push-triggered job, from a hand-dispatched job and while
+  holding the shared publish lock (runs 40004773866, 40005206740, 40005402672); each probe deleted its draft. No tag v1.3.0-build78 exists
+  and the repository has no rulesets. Cause unknown.
+- Found while probing (fixed in a23bb0c): an update of a DRAFT release that omits `tag_name` makes GitHub list it as `untagged-...`, so the
+  other platform's run could not find the draft by tag and would have made a second one. Every update now re-sends tag, title and commit,
+  and the lookup also matches a draft by its title. The offline test's fake GitHub reproduces the reset.
+- The e57036e runs can only re-run their own (unfixed) script, so Build 78 is dispatched again from the current head.

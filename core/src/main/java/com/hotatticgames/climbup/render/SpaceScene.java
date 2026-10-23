@@ -31,6 +31,15 @@ public final class SpaceScene {
     private final ModelInstance[] planets = new ModelInstance[PLANETS];
     private final ModelInstance[] rocks = new ModelInstance[ROCKS];
     private final ModelInstance[] ships = new ModelInstance[SHIPS.length];
+    // Build 78 (owner): in Deep Space an astronaut now and then tumbles across the far sky, cartwheeling like the hero's big-bounce flip, at a random
+    // angle, and drifts out of range. Never the astronaut the player is using. Far layer only, so it can never come between the camera and the course.
+    private static final String[] ASTRONAUTS = {"astronaut_finnthefrog", "astronaut_raetheredpanda", "astronaut_fernandotheflamingo", "astronaut_barbarathebee"};
+    private final ModelInstance[] astros = new ModelInstance[ASTRONAUTS.length];
+    private final com.badlogic.gdx.graphics.g3d.utils.AnimationController[] astroAnim = new com.badlogic.gdx.graphics.g3d.utils.AnimationController[ASTRONAUTS.length];
+    private final float[] astroMid = new float[ASTRONAUTS.length];     // half the model's height (model units): the cartwheel turns about its middle
+    /** The character the player is using (Characters index; 2..5 are the astronauts): that astronaut never floats by. */
+    public int playerCharacter = -1;
+    private float astroT = -1, astroDur, astroAng, astroOff, astroDist, astroSpin, astroYaw, nextAstro = 12f; private int astro;
     private final float[] planetExt = new float[PLANETS], rockExt = new float[ROCKS];      // horizontal radius of each model (model units): how far it reaches from its own centre
     private final java.util.Random rnd = new java.util.Random(31);   // cosmetic only
 
@@ -53,7 +62,7 @@ public final class SpaceScene {
     private float spaceW, zoneNow;                  // how deep in the space world we are (0..1)
     public boolean whoosh;                 // set for one frame when the close ship passes the player (the play screen plays the sound)
 
-    private final Vector3 tmp = new Vector3(), right = new Vector3(), up = new Vector3(), fwd = new Vector3();
+    private final Vector3 tmp = new Vector3(), right = new Vector3(), up = new Vector3(), fwd = new Vector3(), back = new Vector3();
 
     public SpaceScene(Models models, Camera farCam, float radius) {
         if (Boolean.getBoolean("climb.spaceFast")) { nextSky = 0.5f; nextBuzz = 2.5f; }       // test hook
@@ -63,6 +72,13 @@ public final class SpaceScene {
         for (int i = 0; i < PLANETS; i++) planetExt[i] = reach(planets[i]);
         for (int i = 0; i < ROCKS; i++) rockExt[i] = reach(rocks[i]);
         for (int i = 0; i < SHIPS.length; i++) ships[i] = fade(new ModelInstance(models.space(SHIPS[i])));
+        for (int i = 0; i < ASTRONAUTS.length; i++) {
+            astros[i] = new ModelInstance(models.space(ASTRONAUTS[i]));
+            astroAnim[i] = new com.badlogic.gdx.graphics.g3d.utils.AnimationController(astros[i]);
+            astroAnim[i].setAnimation("Jump_Idle", -1);                  // the tucked mid-air pose the hero uses while airborne
+            com.badlogic.gdx.math.collision.BoundingBox bb = new com.badlogic.gdx.math.collision.BoundingBox(); astros[i].calculateBoundingBox(bb);
+            astroMid[i] = 0.5f * (bb.min.y + bb.max.y);
+        }
         env.set(new ColorAttribute(ColorAttribute.AmbientLight, 0.62f, 0.62f, 0.70f, 1f));
         env.add(new DirectionalLight().set(1f, 0.96f, 0.88f, -0.5f, -0.6f, -0.6f));
         final float[] bandDist = {130f, 190f, 260f, 350f, 460f}; final int[] bandCount = {2, 2, 3, 3, 2};
@@ -95,8 +111,15 @@ public final class SpaceScene {
     /** Called every frame (before the render calls). */
     public void update(float dt, float playerY, boolean reduced) {
         clock += dt; whoosh = false;
-        if (reduced) { skyT = -1; buzzT = -1; return; }
-        if (FREEZE >= 0) { skyT = FREEZE * 24f; skyDur = 24f; skyDist = 300f; skyDir = 1f; buzzT = FREEZE * BUZZ_TIME; buzzDir = 1f; buzzY = 1.5f; return; }
+        if (reduced) { skyT = -1; buzzT = -1; astroT = -1; return; }
+        if (FREEZE >= 0) { skyT = FREEZE * 24f; skyDur = 24f; skyDist = 300f; skyDir = 1f; buzzT = FREEZE * BUZZ_TIME; buzzDir = 1f; buzzY = 1.5f;
+            astroT = FREEZE * 16f; astroDur = 16f; astroAng = 0.5f; astroOff = 0.1f; astroDist = 40f; astroSpin = 70f; astroYaw = 15f; astro = otherAstro(0); astroAnim[astro].update(dt); return; }
+        // astronauts: Deep Space only, one every 20-40 s
+        if (astroT < 0) { if (spaceW > 0.5f) { nextAstro -= dt; if (nextAstro <= 0) {
+            astroT = 0; astroDur = 14f + rnd.nextFloat() * 8f; astroAng = rnd.nextFloat() * MathUtils.PI2; astroOff = (rnd.nextFloat() - 0.5f) * 1.1f;
+            astroDist = 36f + rnd.nextFloat() * 14f; astroSpin = (rnd.nextBoolean() ? 1f : -1f) * (45f + rnd.nextFloat() * 50f); astroYaw = (rnd.nextFloat() - 0.5f) * 40f;
+            astro = otherAstro(rnd.nextInt(ASTRONAUTS.length)); } } }
+        else { astroT += dt; astroAnim[astro].update(dt); if (astroT > astroDur) { astroT = -1; nextAstro = 20f + rnd.nextFloat() * 20f; } }
         if (skyT < 0) { nextSky -= dt * (1f + spaceW); if (nextSky <= 0) { skyT = 0; skyDur = 20f + rnd.nextFloat() * 14f; skyY = rnd.nextFloat(); skyDist = 240f + rnd.nextFloat() * 120f; skyDir = rnd.nextBoolean() ? 1f : -1f; skyShip = rnd.nextInt(SHIPS.length); } }
         else { skyT += dt; if (skyT >= skyDur) { skyT = -1; nextSky = 8f + rnd.nextFloat() * 14f; } }
         if (buzzT < 0) { nextBuzz -= dt; if (nextBuzz <= 0) { buzzT = 0; buzzDir = rnd.nextBoolean() ? 1f : -1f; buzzY = 0.8f + rnd.nextFloat() * 2.2f; buzzShip = rnd.nextInt(SHIPS.length); buzzSounded = false; } }
@@ -152,6 +175,25 @@ public final class SpaceScene {
             sh.transform.idt().translate(tmp).rotate(0, 1, 0, (skyDir > 0 ? 90f : -90f) * SHIP_NOSE).rotate(0, 0, 1, 8f * MathUtils.sin(skyT * 0.7f)).scale(sc, sc, sc);
             alpha(sh, a); batch.render(sh, env);
         }
+        if (astroT >= 0 && spaceW > 0.05f) {
+            // a straight drift across the view at a random angle, from beyond one edge to beyond the other, sinking 30% farther away as it goes
+            float u = astroT / astroDur, dist = astroDist * (1f + 0.3f * u);
+            float halfH = dist * MathUtils.tanDeg(far instanceof com.badlogic.gdx.graphics.PerspectiveCamera ? ((com.badlogic.gdx.graphics.PerspectiveCamera) far).fieldOfView * 0.5f : 20f);
+            float halfW = halfH * far.viewportWidth / Math.max(1f, far.viewportHeight), reach = (float) Math.sqrt(halfW * halfW + halfH * halfH) + 4f;
+            float dx = MathUtils.cos(astroAng), dy = MathUtils.sin(astroAng), along = (u * 2f - 1f) * reach, side = astroOff * halfH;
+            tmp.set(far.position).mulAdd(fwd, dist).mulAdd(right, dx * along - dy * side).mulAdd(up, dy * along + dx * side);
+            ModelInstance m = astros[astro]; float sc = 2.2f;
+            m.transform.set(right, up, back.set(fwd).scl(-1f), tmp)                                  // faces the camera
+                    .rotate(0, 0, 1, astroSpin * astroT).rotate(0, 1, 0, astroYaw + 25f * MathUtils.sin(astroT * 0.4f))           // the cartwheel, with a slow turn
+                    .scale(sc, sc, sc).translate(0, -astroMid[astro], 0);
+            batch.render(m, env);
+        }
+    }
+
+    /** An astronaut other than the one the player is using, starting the search at {@code i}. */
+    private int otherAstro(int i) {
+        for (int k = 0; k < ASTRONAUTS.length; k++) { int c = (i + k) % ASTRONAUTS.length; if (c + 2 != playerCharacter) return c; }
+        return i;
     }
 
     /** Planets and rocks that float inside the spiral (turning with it) and the ship that buzzes the player, drawn with the game camera. */

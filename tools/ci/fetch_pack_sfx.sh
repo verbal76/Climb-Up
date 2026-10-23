@@ -14,6 +14,9 @@
 set -uo pipefail
 EXPECT_SHA=d94e9fd53240fb2787dee72fcfdc2ee23f51113beb489d59c12e586ba711692a
 ASSET=Minifantasy_Forgotten_Plains_SFX.zip
+TAG=Sfx
+# test hook (.github/workflows/sfx-pack-access.yml): --check another tag / asset / hash, to prove draft access with a throwaway release
+if [ -n "${SFX_TEST_TAG:-}" ]; then TAG="$SFX_TEST_TAG"; ASSET="$SFX_TEST_ASSET"; EXPECT_SHA="$SFX_TEST_SHA"; fi
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 MODE="${1:-}"
 fail() { echo "::error::pack sfx: $*"; exit 1; }
@@ -29,9 +32,9 @@ if [ "$MODE" = "--download" ] || [ "$MODE" = "--check" ]; then
   SRC="${REPO:-${GITHUB_REPOSITORY:-verbal76/Climb-Up}}"
   ZIP="$WORK/pack.zip"
   # find the asset on the "Sfx" release (the list endpoint also shows a draft to a token that may see it), then download it by id
-  "$PY" -I - "$SRC" "$ASSET" "$ZIP" <<'PYEOF' || exit 1
+  "$PY" -I - "$SRC" "$ASSET" "$ZIP" "$TAG" <<'PYEOF' || exit 1
 import json, os, sys, urllib.request, urllib.error
-repo, name, out = sys.argv[1:4]
+repo, name, out, tag = sys.argv[1:5]
 tok = os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN") or ""
 def req(url, accept):
     r = urllib.request.Request(url, headers={"Accept": accept, "X-GitHub-Api-Version": "2022-11-28", "User-Agent": "upwardly-ci"})
@@ -43,15 +46,15 @@ try:
     for page in range(1, 11):
         rels = json.load(req("https://api.github.com/repos/%s/releases?per_page=100&page=%d" % (repo, page), "application/vnd.github+json"))
         for rel in rels:
-            if rel.get("tag_name") == "Sfx":
+            if rel.get("tag_name") == tag:
                 asset = next((a for a in rel.get("assets", []) if a.get("name") == name), None)
-                if asset is None: die("release 'Sfx' in %s has no asset %s" % (repo, name))
-                print("pack sfx: release 'Sfx' (%s) asset %s, %d bytes" % ("draft" if rel.get("draft") else "published", name, asset["size"]))
+                if asset is None: die("release '%s' in %s has no asset %s" % (tag, repo, name))
+                print("pack sfx: release '%s' (%s) asset %s, %d bytes" % (tag, "draft" if rel.get("draft") else "published", name, asset["size"]))
                 break
         if asset or len(rels) < 100: break
 except urllib.error.HTTPError as e:
     die("listing the releases of %s failed: HTTP %d (%s)" % (repo, e.code, "the token cannot read this repository" if e.code in (401, 403, 404) else e.reason))
-if asset is None: die("no release tagged 'Sfx' in %s that this token can see (a draft release needs contents: write)" % repo)
+if asset is None: die("no release tagged '%s' in %s that this token can see (a draft release needs contents: write)" % (tag, repo))
 try:
     with req("https://api.github.com/repos/%s/releases/assets/%d" % (repo, asset["id"]), "application/octet-stream") as r, open(out, "wb") as f:
         while True:

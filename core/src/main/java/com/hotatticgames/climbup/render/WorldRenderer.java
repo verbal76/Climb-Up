@@ -15,6 +15,7 @@ import com.badlogic.gdx.graphics.g3d.utils.ModelBuilder;
 import com.badlogic.gdx.graphics.g3d.environment.DirectionalLight;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.math.MathUtils;
+import com.badlogic.gdx.math.Matrix4;
 import com.badlogic.gdx.utils.Array;
 import com.badlogic.gdx.utils.Disposable;
 import com.hotatticgames.climbup.sim.Course;
@@ -959,11 +960,13 @@ public final class WorldRenderer implements Disposable {
         return r;
     }
 
-    private void drawRig(Rig r, float arc, float y, float dz, float camS, float scale, float yaw, float roll, float speed) {
+    private void drawRig(Rig r, float arc, float y, float dz, float camS, float scale, float yaw, float roll, float speed) { drawRig(r, arc, y, dz, camS, scale, scale, scale, yaw, roll, speed); }
+
+    private void drawRig(Rig r, float arc, float y, float dz, float camS, float sx, float sy, float sz, float yaw, float roll, float speed) {
         r.ctrl.update(frameDt * speed);
         float phi = wrapDiff(arc, camS) / T.radius, rr = T.radius - dz;
         r.inst.transform.idt().translate(rr * MathUtils.sin(phi), y, -T.radius + rr * MathUtils.cos(phi))
-                .rotate(0, 1, 0, phi * MathUtils.radiansToDegrees + yaw).rotate(0, 0, 1, roll).scale(scale, scale, scale);
+                .rotate(0, 1, 0, phi * MathUtils.radiansToDegrees + yaw).rotate(0, 0, 1, roll).scale(sx, sy, sz);
         batch.render(r.inst, env);
     }
 
@@ -976,6 +979,15 @@ public final class WorldRenderer implements Disposable {
         drawBox(es, ey - 0.62f, -e.amp * 0.0f, camS, 0.12f, 0.1f, e.amp * 2f + 1.6f, 0.30f + 0.5f * live, 0.34f + 0.4f * live, 0.44f);
         drawBox(es - e.halfW() - 0.2f, ey - 0.62f, e.amp + 0.8f, camS, 0.2f, 0.9f, 0.2f, 0.3f, 0.32f, 0.4f);
         drawBox(es - e.halfW() - 0.2f, ey - 0.62f, -e.amp - 0.8f, camS, 0.2f, 0.9f, 0.2f, 0.3f, 0.32f, 0.4f);
+    }
+
+    /** A coloured block placed in a rig's model space (the base transform already holds its position, yaw, tilt and scale). */
+    private void eyeBox(Matrix4 base, float lx, float ly, float lz, float w, float h, float d, float cr, float cg, float cb) {
+        int key = ((int) (cr * 255) << 16) | ((int) (cg * 255) << 8) | (int) (cb * 255);
+        ModelInstance st = boxByColour.get(key);
+        if (st == null) { st = new ModelInstance(models.box); st.materials.get(0).set(ColorAttribute.createDiffuse(cr, cg, cb, 1f)); boxByColour.put(key, st); }
+        st.transform.set(base).translate(lx, ly, lz).scale(w, h, d);
+        batch.render(st, env);
     }
 
     private void drawBox(float arc, float y, float dz, float camS, float w, float h, float d, float cr, float cg, float cb) {
@@ -1024,9 +1036,11 @@ public final class WorldRenderer implements Disposable {
         float in = MathUtils.clamp((zoneF - 0.45f) / 0.05f, 0f, 1f), out = 1f - MathUtils.clamp((zoneF - 0.8f) / 0.2f, 0f, 1f);
         return in * in * (3f - 2f * in) * out;
     }
-    /** The skull's turn toward the camera (degrees from facing along its way) and where its eyes sit on its face; tuned on CreatureShot captures. */
-    private static final float SKULL_YAW = Float.parseFloat(System.getProperty("climb.skullYaw", "160")), SKULL_EYE_GAP = Float.parseFloat(System.getProperty("climb.skullEyeGap", "0.13")),
-            SKULL_EYE_Z = Float.parseFloat(System.getProperty("climb.skullEyeZ", "-0.5")), SKULL_EYE_UP = Float.parseFloat(System.getProperty("climb.skullEyeUp", "0.05")), SKULL_EYE_FWD = Float.parseFloat(System.getProperty("climb.skullEyeFwd", "0.62"));
+    /** Build 77: how far the skull's face turns toward its way of travel (degrees; the model's face looks straight at the camera at yaw -22 (the skull turns against the tower curve to face you, measured on CreatureShot renders), so +22 going right and -22 going left), and where its two eye sockets sit
+     *  in the model's own space (measured from skull_anim's mesh: centres at x = +-0.36, y = 0.84; the eyes are drawn with the skull's own transform so they stay in the sockets at any yaw, tilt or squash). */
+    private static final float SKULL_YAW = Float.parseFloat(System.getProperty("climb.skullYaw", "22")), SKULL_EYE_X = Float.parseFloat(System.getProperty("climb.skullEyeX", "0.36")),
+            SKULL_EYE_Y = Float.parseFloat(System.getProperty("climb.skullEyeY", "0.82")), SKULL_EYE_Z = Float.parseFloat(System.getProperty("climb.skullEyeZ", "0.4")),
+            SKULL_EYE_W = Float.parseFloat(System.getProperty("climb.skullEyeW", "0.46")), SKULL_EYE_H = Float.parseFloat(System.getProperty("climb.skullEyeH", "0.42"));
     private Sim rsim; private int rhz;            // the simulation and hazard index being drawn (aimed cannons draw the sim's own aim, crabs where the sim has them)
 
     /** Build 71 (owner): how far the platform a trap sits on has dipped from a landing (the same spring the platform is drawn with); traps on it move with it. */
@@ -1208,14 +1222,21 @@ public final class WorldRenderer implements Disposable {
                 float ks = rsim != null && st > 0 ? rsim.mobS[rhz] : h.s + end, ky = dY + (rsim != null && st > 0 ? rsim.mobY[rhz] : Element.SKULL_HOVER + 0.12f * MathUtils.sin(time * 2.6f + h.phase));
                 float dir = rsim != null && st > 0 ? rsim.mobDir[rhz] : -1f;
                 if (st == 2 && !reducedMotion && rsim.mobT[rhz] > Element.SKULL_LOOP_T) ks += 0.04f * MathUtils.sin(time * 70f);      // it shivers as it swoops down for the dash (after its loop-the-loop, Build 77)
-                float sc = 0.6f, yaw = (dir >= 0f ? -1f : 1f) * SKULL_YAW;                              // its face mostly toward you, a little toward where it is going, so both eyes show
-                Rig skullRig = rig(h, "skull_anim", st == 3 ? "Bite_Front" : "Idle"); castShadow(skullRig.inst, ks, ky - 0.62f * sc);
-                drawRig(skullRig, ks, ky - 0.62f * sc, 0f, camS, sc, yaw, st == 3 ? -dir * 12f : 0f, st == 3 ? 2f : 1f);
+                float sc = 0.6f, yaw = -22f + (dir >= 0f ? SKULL_YAW : -SKULL_YAW) * (st == 3 ? 0.6f : 1f) - wrapDiff(ks, camS) / T.radius * MathUtils.radiansToDegrees;      // its face toward YOU wherever it is round the cylinder, turned a little toward where it is going (mirrored per direction)
+                float mt = rsim != null ? rsim.mobT[rhz] : 0f, roll = 0f, qx = 1f, qy = 1f;               // personality (renderer only): a lazy wobble and breathing while it hovers, a lean through the loop, a stretch in the dash
+                if (!reducedMotion) {
+                    if (st <= 1) { ky += 0.05f * MathUtils.sin(time * 5.3f + h.phase); roll = 7f * MathUtils.sin(time * 2.1f + h.phase); qy = 1f + 0.05f * MathUtils.sin(time * 5.3f + h.phase + 1.2f); qx = 2f - qy; }
+                    else if (st == 2 && mt < Element.SKULL_LOOP_T) { float a = MathUtils.PI2 * mt / Element.SKULL_LOOP_T; roll = -dir * 22f * MathUtils.sin(a); qy = 1f + 0.1f * MathUtils.sin(a * 2f); qx = 2f - qy; }
+                    else if (st == 2) { float k = (mt - Element.SKULL_LOOP_T) / (Element.SKULL_WINDUP - Element.SKULL_LOOP_T); qy = 1f - 0.12f * k; qx = 1f + 0.12f * k; roll = dir * 10f * k; }   // crouching to spring
+                    else if (st == 3) { qx = 1.18f; qy = 0.9f; roll = -dir * 12f; }
+                    else if (st == 4) { qy = 1f + 0.08f * MathUtils.sin(mt * 18f) * Math.max(0f, 1f - mt * 2f); qx = 2f - qy; }
+                }
+                Rig skullRig = rig(h, "skull_anim", "Idle"); castShadow(skullRig.inst, ks, ky - 0.62f * sc);
+                drawRig(skullRig, ks, ky - 0.62f * sc, 0f, camS, sc * qx, sc * qy, sc * (st == 3 ? 1f : 0.5f * (qx + qy)), yaw, roll, st == 3 ? 2f : 1f);
                 float glow = st == 2 || st == 3 ? 1f : 0.65f + 0.2f * MathUtils.sin(time * 4f);
-                for (int e = -1; e <= 1; e += 2) {                                                       // the eyes: two glowing sockets with dark pupils on the face (which looks at you)
-                    float es = ks + dir * SKULL_EYE_FWD + e * SKULL_EYE_GAP, ez = SKULL_EYE_Z, ew = 0.14f;
-                    drawBox(es, ky + SKULL_EYE_UP, ez, camS, ew, ew, 0.04f, 1f, 0.35f + 0.4f * glow, 0.1f);
-                    drawBox(es + dir * 0.025f, ky + SKULL_EYE_UP + 0.035f, ez - 0.03f, camS, ew * 0.45f, ew * 0.45f, 0.03f, 0.05f, 0.08f, 0.1f);
+                for (int e = -1; e <= 1; e += 2) {                                                       // the eyes: a glowing block filling each socket with a dark pupil, placed in the skull's own space
+                    eyeBox(skullRig.inst.transform, e * SKULL_EYE_X, SKULL_EYE_Y, SKULL_EYE_Z, SKULL_EYE_W, SKULL_EYE_H, 0.1f, 1f, 0.35f + 0.4f * glow, 0.1f);
+                    eyeBox(skullRig.inst.transform, e * SKULL_EYE_X + dir * 0.07f, SKULL_EYE_Y + 0.04f, SKULL_EYE_Z + 0.07f, SKULL_EYE_W * 0.45f, SKULL_EYE_H * 0.5f, 0.06f, 0.05f, 0.08f, 0.1f);
                 }
                 if (st == 3 || (st == 2 && rsim != null && rsim.mobT[rhz] > Element.SKULL_LOOP_T)) {     // the misty trail
                     for (int q = 0; q < 3; q++) { mistCol.set(0.82f, 0.9f, 1f, 0.55f); particles.spawn(ks - dir * MathUtils.random(0.2f, 0.6f), ky + MathUtils.random(-0.3f, 0.3f), -dir * MathUtils.random(0.2f, 0.8f), MathUtils.random(0.1f, 0.5f), mistCol, MathUtils.random(0.12f, 0.22f), -0.3f, MathUtils.random(0.45f, 0.8f)); }

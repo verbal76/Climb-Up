@@ -19,7 +19,7 @@ jobs:
       mode: ${{ steps.m.outputs.mode }}
     steps:
       - id: m
-        run: echo "mode=check" >> "$GITHUB_OUTPUT"      # done 2026-10-23: verify (run 40002288773), make-draft (run 40002427931)
+        run: echo "mode=probe-create" >> "$GITHUB_OUTPUT"      # done 2026-10-23: verify (run 40002288773), make-draft (run 40002427931)
 
   # ---------------- verify: a throwaway draft release
   test-draft:
@@ -189,3 +189,21 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
         run: tools/ci/fetch_pack_sfx.sh --check
+
+  # ---------------- probe-create: can a job with only contents: write create (then delete) a draft release whose tag looks like a build tag?
+  probe-create:
+    needs: mode
+    if: needs.mode.outputs.mode == 'probe-create'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          for TAG in "probe-${{ github.run_id }}" "v0.0.0-build0probe${{ github.run_id }}"; do
+            echo "== $TAG"
+            OUT=$(jq -n --arg tag "$TAG" --arg sha "${{ github.sha }}" '{name:"probe (deleted by this run)", body:"", tag_name:$tag, target_commitish:$sha, draft:true}' | gh api -X POST "repos/$REPO/releases" --input - -q .id 2>&1) && echo "created draft $OUT" || { echo "RESULT create refused: $OUT"; continue; }
+            gh api -X DELETE "repos/$REPO/releases/$OUT" && echo "deleted $OUT"
+          done

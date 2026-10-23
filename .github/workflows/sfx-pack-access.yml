@@ -19,7 +19,7 @@ jobs:
       mode: ${{ steps.m.outputs.mode }}
     steps:
       - id: m
-        run: echo "mode=verify" >> "$GITHUB_OUTPUT"
+        run: echo "mode=make-draft" >> "$GITHUB_OUTPUT"
 
   # ---------------- verify: a throwaway draft release
   test-draft:

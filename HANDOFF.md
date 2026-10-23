@@ -8,24 +8,23 @@
 
 # Handoff
 
-## Build 77 status (2026-10-23, overnight) - RELEASE BLOCKED, nothing built or published
+## Build 77 status (2026-10-23) - PUBLISHED
 
-Source: build-74-determinism @ 56c8d05 (pushed, clean). Rules version 5. All approved Build 77 work is merged:
-skull (speed, loop+swoop, knockback, eyes in sockets), balance conveyor (Castles 6-10), sound pack (fetched at build
-time) + original sounds + conveyor hum, night/space clouds, morning sky (Meadow, Frost; Dusk unchanged), world picker
-start at the opening castle, replays re-recorded (seed 12: 425348 / 1:58:09.150; seed 21: 529553).
+Release v1.3.0-build77 (public, not draft) from build-74-determinism @ e1c8b55 (game code identical to 311fb2b; e1c8b55
+only widens the desktop title-upright scenario check). Assets: upwardly-1.3.0-build77.apk (SHA-256 c35d3d1d1f0b055d5b8a
+ae45c6e0b4a5ca68c638b101581b26e0279bfce570ca), Upwardly.Build.77.EXE.zip, Upwardly.Build.77.Linux.tar.gz, checksums.
+Runs: Android 39911402687, desktop 39911400270 (both green; emulator in-place update from Build 71 passed).
 
-Gate that failed (CI run 39900180811 and the local full suite, identical: 498 tests, 2 failures, all desktop tests pass;
-cross-platform determinism workflow passed):
-1. OfficialWorldRulesTest.everyRunIsDifferentAndDifficultyIsNotNormalised: obstacle load spread 1052..1157 needs
-   hi >= 1.1 x lo (1157.2); missed by 0.2. The test means the first 1,100 m but TestUtil's shared cache has grown the
-   slices to 5,300 m by then, so it measures whole runs. New courses above 3,000 m (balance conveyors) moved it.
-2. OfficialWorldRulesTest.everyKeyIsReachableAndEveryCastleCompletableAfterCollectingIt: seed 2, about 3,648 m, link 36
-   (a rope up to a platform guarded by an AIMED cannon, anchor 37): the solver is knocked back again and again.
-   No skull or balance conveyor there; the layout is new because generation above the first balance conveyor changed.
-   Root cause not yet established (generator proof vs solver retry).
+Release blockers fixed overnight (311fb2b):
+1. everyRunIsDifferent...: TestUtil.slices' shared cache returned slices far above the height asked for, so the test
+   measured whole runs. Fix: slices() returns only the slices up to the requested top.
+2. Seed 2 link 36 (rope to an aimed-cannon platform): a knock at the rope top left the solver in BEAM mode on the rope
+   with no step taken, so it looped. Fix: solver climbs down from a rope-top beam and retries (test solver only; the
+   generator and game rules are unchanged).
 
-Next: root-cause failure 2, decide the right fix for 1 (owner review), rerun the class, then the release workflow.
+Known issues: the release notes' Android section names 311fb2b and the first run's APK hash (stale; the real APK is
+from e1c8b55, hash above). The "Sfx" pack release is public; the pack licence forbids redistribution - owner should
+make it a draft (the workflows only need it readable by the token).
 
 ## Build 72 (version 1.2.0, rules version 3) - playtest candidate
 

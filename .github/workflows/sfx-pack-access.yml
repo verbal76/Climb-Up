@@ -11,6 +11,7 @@ on:
   push:
     branches: [build-74-determinism]
     paths: ['.github/workflows/sfx-pack-access.yml']
+  workflow_dispatch:      # same jobs from a manual dispatch (Build 78's two publish jobs were refused only in dispatched runs)
 permissions: {}
 jobs:
   mode:

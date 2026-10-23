@@ -371,7 +371,9 @@ public final class Sim {
     private float dsTo(int i) { return course.dsWrap(es1[i], s); }  // element - player
 
     public float platformVy(int i) { return (ey1[i] - ey0[i]) / DT; }
-    public float platformVs(int i) { return course.dsWrap(es1[i], es0[i]) / DT + surfaceCarry(i); }
+    public float platformVs(int i) { return platformDs(i) / DT + surfaceCarry(i); }
+    /** How far element i moved along the arc in the last step: from its own motion (Element#sOffsetAt), the same whatever origin the frame has (Build 76). */
+    private float platformDs(int i) { Element e = course.get(i); return e.isMoving() ? e.sOffsetAt(time) - e.sOffsetAt(time - DT) : course.dsWrap(es1[i], es0[i]); }
     /** The spinning ramp's sideways push now (0 for anything else). */
     /** How fast the surface itself carries a body along +s: a spinning ramp's sideways push, or a conveyor belt. */
     public float surfaceCarry(int i) { Element e = course.get(i); return e.spins() ? SPIN_CARRY * (float) StrictMath.sin(e.spinAngle(time)) : e.beltV(); }
@@ -903,7 +905,7 @@ public final class Sim {
     private void stepGround(InputState in, float dt) {
         int e = onElem;
         // ride the platform
-        float dsP = course.dsWrap(es1[e], es0[e]);
+        float dsP = platformDs(e);
         s += dsP + surfaceCarry(e) * dt; y = ey1[e];
         // horizontal control
         float target = in.moveX * T.runSpeed;

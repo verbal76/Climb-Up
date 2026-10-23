@@ -222,13 +222,20 @@ public final class Element {
     private float ang(float t) { return (float) (2 * Math.PI * t / period + phase); }
 
     /** Center arc position at time t (unwrapped, relative to course space). */
-    public float sAt(float t) {
+    public float sAt(float t) { return s + sOffsetAt(t); }
+
+    /**
+     * How far the element is from its rest position s at time t (0 for anything that does not move along the arc). Build 76: the simulation takes a mover's
+     * displacement per step from this, not from the difference of two {@link #sAt} values, whose rounding depends on how large s is in the current frame
+     * (the streaming tower's local origin or the whole tower's), and a platform's speed is that difference divided by one step.
+     */
+    public float sOffsetAt(float t) {
         switch (type) {
-            case MOVE_H: return s + amp * (float) StrictMath.sin(ang(t));
-            case SWING: case PENDULUM: return s + len * (float) StrictMath.sin(amp * StrictMath.sin(ang(t)));
-            case SAW_H: case CRAB: return s + amp * (float) StrictMath.sin(ang(t));
-            case CANNON: { float c = cyc(t); return c < CANNON_FLIGHT ? s + dir * len * (c / CANNON_FLIGHT) : s; }
-            default: return s;
+            case MOVE_H: return amp * (float) StrictMath.sin(ang(t));
+            case SWING: case PENDULUM: return len * (float) StrictMath.sin(amp * StrictMath.sin(ang(t)));
+            case SAW_H: case CRAB: return amp * (float) StrictMath.sin(ang(t));
+            case CANNON: { float c = cyc(t); return c < CANNON_FLIGHT ? dir * len * (c / CANNON_FLIGHT) : 0f; }
+            default: return 0f;
         }
     }
 

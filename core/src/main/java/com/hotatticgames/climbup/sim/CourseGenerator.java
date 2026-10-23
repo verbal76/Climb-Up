@@ -745,8 +745,9 @@ public final class CourseGenerator {
     private void addRest(int zone, boolean gem) {
         for (int round = 0; round < 4; round++) {
             Element last = c.get(c.size() - 1);
-            for (int attempt = 0; attempt < (gem && round == 0 ? 14 : 8); attempt++) {
-                float dy = attempt >= 8 ? r(-0.8f, 0.2f) : r(0.3f, 1.0f) * (1f - attempt * 0.08f);
+            for (int attempt = 0; attempt < (gem && round == 0 ? 22 : 8); attempt++) {
+                // Build 76: before climbing a whole module, the gem's rest also tries up to 1.6 m lower (seed 8 put gem 9 6.3 m high once the faster conveyor bridges reshaped its section)
+                float dy = attempt >= 14 ? r(-1.6f, 0f) : attempt >= 8 ? r(-0.8f, 0.2f) : r(0.3f, 1.0f) * (1f - attempt * 0.08f);
                 float gap = reach(Math.max(0f, dy)) * (0.5f - Math.min(attempt, 7) * 0.03f);
                 float w = attempt < 4 ? 5 + rnd.nextInt(2) : (attempt < 6 ? 4 : attempt < 8 ? 3 : 4);
                 Element e = plat(Element.Type.STATIC, last.s + last.w / 2 + gap + w / 2, last.y + dy, w, zone);

@@ -545,4 +545,24 @@ Requirement: the same seed, the same inputs on the same simulation steps, give t
 - **Found:** the `Sfx` release is published (not a draft) in this public repository, asset `Minifantasy_Forgotten_Plains_SFX.zip`, 47,813,471 bytes, GitHub digest sha256 d94e9fd5..., equal to the SHA-256 the script pins. A published release in the same repository is readable by GITHUB_TOKEN with `contents: read` (and, because the repository is public, by anyone). A draft release is listed only to a token that can write, so it would need `contents: write`. The builds already used GITHUB_TOKEN (the personal-token path was never set up); the desktop fetch jobs held `contents: write` only to see a draft.
 - **Changed:** `tools/ci/fetch_pack_sfx.sh` finds the asset on the `Sfx` release through the REST API with GITHUB_TOKEN only (the personal-token path is gone), downloads it by id, checks the size against the release and the SHA-256 against the pinned value, and fails the run with a clear `::error::` on every problem (no release or asset, no access, download failure, wrong size or hash, unzip or conversion failure, fewer than 20 clips). The `continue-on-error` and the test-build leniency are gone from all three build jobs. The Windows and Linux build jobs drop from `contents: write` to `contents: read`. The Android build job keeps the workflow's `contents: write`, because the same job publishes the OTA baseline release. `ci.yml` (contents: read) checks the download and hash on every push. The authorization header is never forwarded to the storage host the download redirects to.
 - **Verified here (narrow):** a real download with SHA-256 match; a repository without the release fails; a corrupted zip fails on the SHA-256; the full download-and-convert path writes 20 clips. The push's CI run is the proof that GITHUB_TOKEN with `contents: read` reads it inside Actions.
-- **Still open (owner decision):** while the release is published in a public repository, anyone can download the pack, which its licence forbids. Making it a draft hides it from the public and keeps it in place, but then the fetch needs `contents: write` on the Windows and Linux jobs (a one-line change each).
+- **Owner chose option 2 (draft), below.**
+
+## Build 78: the Sfx release is a draft; builds fetch it with GITHUB_TOKEN (contents: write) (owner, 2026-10-23)
+
+- **Verified first, with a throwaway draft** (`.github/workflows/sfx-pack-access.yml`, run 40002288773; the throwaway was deleted by the run): a
+  `contents: read` GITHUB_TOKEN cannot see a draft in the list (fetch refused) and gets HTTP 403 even for a direct asset download by id; an
+  anonymous request gets 404; a `contents: write` GITHUB_TOKEN fetches it and passes the SHA-256 check on Linux and Windows. So the minimum is
+  `contents: write`: Android build job (already the workflow's, also needed for the OTA release), Windows job and Linux job.
+- **Then the owner's release** (run 40002427931): release 421373876 tagged `Sfx`, asset 667670730 (47,813,471 bytes, sha256 d94e9fd5...) made a
+  draft with nothing deleted, moved or re-uploaded (same release id, asset id and digest after). Anonymous checks from the GitHub runner:
+  download page 404, release by tag 404, asset by id 404. With GITHUB_TOKEN the pack was fetched from the draft and converted to all 20 clips on
+  Linux and on Windows.
+- **Caution for later checks:** requests from the development sandbox go through a proxy that adds GitHub credentials (rate limit 15,000, drafts
+  visible), so "anonymous" tests must run somewhere without them (the GitHub runner, or a browser logged out).
+- `ci.yml` no longer checks the pack on every push (it is read-only and cannot see a draft); a missing or corrupt pack fails the build workflows.
+- **Licence** (verbatim in `assets/licenses/Leohpaz_Minifantasy_ForgottenPlains_Audio.txt`, from the owner's screenshots of the itch.io page):
+  personal or commercial projects may use the base pack and the exclusive content; the asset pack may not be sold or distributed, even for
+  free; credit appreciated. Upwardly uses 20 converted clips inside the game, which is use in a commercial project; it does not offer the pack
+  or its files as such, and the source zip is no longer public. Residual point: like any game asset, the clips can be extracted from a
+  package by someone determined; that is normal for licensed game audio and not distribution of the pack. Not used: the pack's music and the
+  patron-only sounds. Credit is on the Credits screen.

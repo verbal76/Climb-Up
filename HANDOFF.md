@@ -16,7 +16,7 @@ the notes). Phone (owner's Pixel) determinism check MATCHES the desktop (finish 
 
 Closeout work (commit after 2143ec9, see DECISIONS "Build 77 closeout"):
 * Release gate: publish_release.sh drafts, checks the same commit, publishes only with all three packages; offline test tools/ci/test_publish_release.sh.
-* Sound pack: fetched from this repo's own "Sfx" release with GITHUB_TOKEN (contents: read), SHA-256 checked, every build fails if missing/corrupt (DECISIONS "Sound pack through GITHUB_TOKEN"). Licence exposure open: the release is public.
+* Sound pack: the "Sfx" release is a DRAFT (not public); builds fetch it with GITHUB_TOKEN (contents: write on the Android, Windows and Linux jobs), SHA-256 checked, every build fails if missing/corrupt (DECISIONS "the Sfx release is a draft").
 * Steam Linux upload script finds v<ver>-buildN releases.
 
 Waiting on the owner: (1) paste the corrected Android notes into the Build 77 release; (2) create the private repo, upload the pack zip to its

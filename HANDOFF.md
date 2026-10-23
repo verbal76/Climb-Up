@@ -8,6 +8,25 @@
 
 # Handoff
 
+## Build 77 status (2026-10-23, overnight) - RELEASE BLOCKED, nothing built or published
+
+Source: build-74-determinism @ 56c8d05 (pushed, clean). Rules version 5. All approved Build 77 work is merged:
+skull (speed, loop+swoop, knockback, eyes in sockets), balance conveyor (Castles 6-10), sound pack (fetched at build
+time) + original sounds + conveyor hum, night/space clouds, morning sky (Meadow, Frost; Dusk unchanged), world picker
+start at the opening castle, replays re-recorded (seed 12: 425348 / 1:58:09.150; seed 21: 529553).
+
+Gate that failed (CI run 39900180811 and the local full suite, identical: 498 tests, 2 failures, all desktop tests pass;
+cross-platform determinism workflow passed):
+1. OfficialWorldRulesTest.everyRunIsDifferentAndDifficultyIsNotNormalised: obstacle load spread 1052..1157 needs
+   hi >= 1.1 x lo (1157.2); missed by 0.2. The test means the first 1,100 m but TestUtil's shared cache has grown the
+   slices to 5,300 m by then, so it measures whole runs. New courses above 3,000 m (balance conveyors) moved it.
+2. OfficialWorldRulesTest.everyKeyIsReachableAndEveryCastleCompletableAfterCollectingIt: seed 2, about 3,648 m, link 36
+   (a rope up to a platform guarded by an AIMED cannon, anchor 37): the solver is knocked back again and again.
+   No skull or balance conveyor there; the layout is new because generation above the first balance conveyor changed.
+   Root cause not yet established (generator proof vs solver retry).
+
+Next: root-cause failure 2, decide the right fix for 1 (owner review), rerun the class, then the release workflow.
+
 ## Build 72 (version 1.2.0, rules version 3) - playtest candidate
 
 New since Build 71 (details in docs/DECISIONS.md, evidence in docs/VERIFICATION.md):

@@ -198,6 +198,17 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
+      - name: The real publish script with a fake tag and two dummy packages (stays a draft, no APK), then delete the draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          TAG="v0.0.0-build9${{ github.run_id }}"
+          head -c 1000 /dev/urandom > "Upwardly Build 9 EXE.zip"; head -c 1000 /dev/urandom > "Upwardly Build 9 Linux.tar.gz"; echo "probe notes" > notes.md
+          GH_DEBUG=api bash -x tools/ci/publish_release.sh "$TAG" 9 notes.md "Upwardly Build 9 EXE.zip" "Upwardly Build 9 Linux.tar.gz" 2>&1 | grep -v "^> \|Authorization" | tail -80 || true
+          ID=$(gh api --paginate "repos/$REPO/releases?per_page=100" -q ".[] | select(.tag_name == \"$TAG\") | .id" | head -1)
+          [ -z "$ID" ] || { gh api -X DELETE "repos/$REPO/releases/$ID" && echo "deleted probe draft $ID"; }
       - env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}

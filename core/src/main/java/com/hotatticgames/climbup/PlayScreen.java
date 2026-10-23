@@ -1,6 +1,7 @@
 package com.hotatticgames.climbup;
 
 import com.hotatticgames.climbup.audio.Audio;
+import com.hotatticgames.climbup.audio.Cues;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Input;
 import com.badlogic.gdx.InputAdapter;
@@ -339,13 +340,14 @@ public final class PlayScreen extends ScreenAdapter {
     }
 
     private final java.util.HashMap<Element, Integer> cycleSeen = new java.util.HashMap<>();
-    private float sawT;
+    private float sawT, crabT;
 
     /** Hazards you can hear: cannon booms, spikes snapping up, the saw's whir. Volume falls off with distance. */
     private void hazardSounds(float dt) {
-        sawT -= dt;
+        sawT -= dt; crabT -= dt;
         for (int k = 0, cnt = sim.hz == null ? course.hazards.size() : sim.hz.length; k < cnt; k++) {
-            Element h = course.hazards.get(sim.hz == null ? k : sim.hz[k]);
+            int hk = sim.hz == null ? k : sim.hz[k];
+            Element h = course.hazards.get(hk);
             float d = Math.abs(course.dsWrap(h.sAt(sim.time), sim.s)) + Math.abs(h.y - sim.y) * 0.6f;
             if (d > 14f) continue;
             float vol = Math.max(0f, 1f - d / 14f);
@@ -360,8 +362,30 @@ public final class PlayScreen extends ScreenAdapter {
                     }
                     break;
                 }
+                case SPIKE_DROP: {      // the chained stone slams home (a quarter of the way through its cycle)
+                    int cyc = (int) Math.floor(sim.time / h.period + h.phase / 6.2832f - 0.30f);
+                    Integer prev = cycleSeen.put(h, cyc);
+                    if (prev != null && prev != cyc) { g.audio.play("slam", 0.8f * vol + 0.05f, 1f); g.audio.playPack("hit_brick", 0.45f * vol, 0.8f); say("[THUD]"); }
+                    break;
+                }
+                case CRAB:
+                    if (crabT <= 0f && d < 8f) { crabT = 0.9f + MathUtils.random(0.7f); g.audio.play("clack", 0.3f * vol, 0.9f + MathUtils.random(0.25f)); }
+                    break;
+                case SKULL: {           // an eerie moan when it changes mood (hover, wind-up, turn) nearby; the dash itself is EV_DASH
+                    int st = hk < sim.mobState.length ? sim.mobState[hk] : 0;
+                    Integer prev = cycleSeen.put(h, st);
+                    if (prev != null && prev != st && st != 3 && st != 0 && d < 12f) g.audio.play("skull", 0.4f * vol + 0.05f, 0.9f + MathUtils.random(0.2f));
+                    break;
+                }
+                case BLOB: {            // wobbles before it leaps
+                    int st = hk < sim.mobState.length ? sim.mobState[hk] : 0;
+                    Integer prev = cycleSeen.put(h, st);
+                    if (prev != null && prev != st && st == 2 && d < 12f) { g.audio.play("wobble", 0.6f * vol + 0.05f, 1f); say("[WOBBLE]"); }
+                    break;
+                }
                 case BEE:
                     if (h.beePresent(sim.time) && sawT <= 0f && d < 11f) { sawT = 0.3f; g.audio.play("buzz", 0.4f * vol, 0.9f + MathUtils.random(0.2f)); }
+                    { int diving = h.beePresent(sim.time) && h.beeDive(sim.time) > 0.5f ? 1 : 0; Integer prev = cycleSeen.put(h, diving); if (prev != null && prev == 0 && diving == 1 && d < 11f) g.audio.play("dive", 0.5f * vol + 0.05f, 1f); }
                     break;
                 case SAW_H: case SAW_V:
                     if (sawT <= 0f && d < 9f) { sawT = 0.45f; g.audio.play("saw", 0.35f * vol, 0.95f + MathUtils.random(0.1f)); }
@@ -372,8 +396,35 @@ public final class PlayScreen extends ScreenAdapter {
         if (cycleSeen.size() > 64) cycleSeen.clear();
     }
 
+    private Element underfoot() { return sim.onElem >= 0 && sim.onElem < course.size() ? course.get(sim.onElem) : null; }
+
+    private float humT, humNear; private boolean humOn;
+    /** Conveyor motor hum: the nearest belt in the simulated window sets the loudness (scanned ten times a second); one looping instance, faded by Audio. */
+    private void conveyorHum(float dt) {
+        humT -= dt;
+        if (humT <= 0f) {
+            humT = 0.1f;
+            Element on = underfoot();
+            humOn = sim.mode == Sim.Mode.GROUND && Cues.isConveyor(on);
+            float best = Float.MAX_VALUE;
+            int[] act = sim.act;
+            for (int k = 0, n = act == null ? course.size() : act.length; k < n; k++) {
+                int i = act == null ? k : act[k];
+                if (i >= course.size() || !Cues.isConveyor(course.get(i))) continue;
+                Element b = course.get(i);
+                float dx = Math.max(0f, Math.abs(course.dsWrap(sim.es1[i], sim.s)) - b.halfW()), dy = Math.abs(sim.ey1[i] - sim.y) * 1.4f;
+                best = Math.min(best, (float) Math.sqrt(dx * dx + dy * dy));
+            }
+            humNear = best;
+        }
+        g.audio.hum(Cues.humLevel(humNear, humOn), dt);
+    }
+
     private void ambientSounds(float dt) {
         hazardSounds(dt);
+        conveyorHum(dt);
+        int zone = (int) Math.floorMod((long) Math.floor(Math.max(0.0, absNow()) / sim.T.zoneHeight), (long) com.hotatticgames.climbup.render.Palette.ZONES);
+        g.audio.ambience(Cues.ambience(zone), dt);
         if (sim.mode == Sim.Mode.LEDGE) {   // he is really trying not to fall
             gruntT -= dt;
             if (gruntT <= 0) {
@@ -383,7 +434,7 @@ public final class PlayScreen extends ScreenAdapter {
                 say("[STRAINING]"); vibrate(8, 2);
             }
         } else gruntT = 0.35f;
-        if (sim.mode == Sim.Mode.GROUND && Math.abs(sim.vx) > 2f) { stepT -= dt; if (stepT <= 0) { stepT = 0.27f; g.audio.play("step", 0.35f, 0.9f + MathUtils.random(0.2f)); world.particles.burst(sim.s - sim.facing * 0.3f, sim.y + 0.05f, 2, dust, 0.5f, 0.7f, 0.09f, 3f, 0.35f); } }
+        if (sim.mode == Sim.Mode.GROUND && Math.abs(sim.vx) > 2f) { stepT -= dt; if (stepT <= 0) { stepT = Cues.stepInterval(sim.vx); if (!g.audio.playPack(Cues.stepGroup(Cues.surface(underfoot())), 0.5f, 0.92f + MathUtils.random(0.16f))) g.audio.play("step", 0.35f, 0.9f + MathUtils.random(0.2f)); world.particles.burst(sim.s - sim.facing * 0.3f, sim.y + 0.05f, 2, dust, 0.5f, 0.7f, 0.09f, 3f, 0.35f); } }
         if (sim.mode == Sim.Mode.ROPE && Math.abs(in.moveY) > 0.3f) { ropeT -= dt; if (ropeT <= 0) { ropeT = 0.32f; g.audio.play("rope", 0.4f, 0.9f + MathUtils.random(0.2f)); } }
     }
 
@@ -498,7 +549,7 @@ public final class PlayScreen extends ScreenAdapter {
             world.platformLanded(sim.onElem, sim.landSpeed);
             Element le = course.get(sim.onElem);
             float edge = Math.abs(course.dsWrap(sim.s, sim.es1[sim.onElem])) - le.halfW();
-            if (le.type == Element.Type.SEESAW) { g.audio.play("bonk", 0.7f, 0.65f); world.particles.burst(sim.s, sim.y, 6, brown, 1.6f, 1.2f, 0.12f, 6f, 0.5f); }
+            if (le.type == Element.Type.SEESAW) { g.audio.play("bonk", 0.7f, 0.65f); g.audio.playPack("hit_wood", 0.5f, 0.85f); world.particles.burst(sim.s, sim.y, 6, brown, 1.6f, 1.2f, 0.12f, 6f, 0.5f); }
             if (le.type == Element.Type.RAMP && le.spins()) { g.audio.play("whoosh", 0.5f, 1.1f); world.particles.burst(sim.s, sim.y - 0.2f, 8, cyan, 1.6f, 0.8f, 0.1f, 1f, 0.6f); }
             if (le.type == Element.Type.RAMP && le.skin == 2) { g.audio.play("bonk", 0.5f, 1.2f); }
             if (le.isPlatform() && edge > 0.06f && sim.landSpeed > 5f) { pop(CLOSE[MathUtils.random(CLOSE.length - 1)], gold); freeze(0.07f); world.shake(0.5f); vibrate(25, 1); }
@@ -512,13 +563,15 @@ public final class PlayScreen extends ScreenAdapter {
         if ((ev & Sim.EV_JUMP) != 0) { g.audio.play("jump", 0.7f, 0.95f + MathUtils.random(0.1f)); world.particles.burst(s, y, 4, dust, 1.4f, 1.2f, 0.12f, 6f, 0.4f); vibrate(8, 2); }
         if ((ev & Sim.EV_LAND) != 0) {
             float k = MathUtils.clamp(sim.landSpeed / 16f, 0.3f, 1f);
-            g.audio.play("land", 0.4f + 0.5f * k, 0.9f + MathUtils.random(0.15f)); world.particles.burst(s, y, (int) (6 * k) + 2, dust, 2f, 1.5f, 0.14f, 7f, 0.45f);
+            { float lv = 0.4f + 0.5f * k, lp = 0.9f + MathUtils.random(0.15f);
+              if (!g.audio.playPack(Cues.landGroup(Cues.surface(underfoot())), Math.min(1f, lv * 1.1f), lp)) g.audio.play("land", lv, lp); }
+            world.particles.burst(s, y, (int) (6 * k) + 2, dust, 2f, 1.5f, 0.14f, 7f, 0.45f);
             if (sim.landSpeed > 15f) { world.shake(0.4f); vibrate(18, 1); }
         }
         if ((ev & Sim.EV_BOUNCE) != 0) { g.audio.play("bounce", 0.9f, 1f); world.particles.burst(s, y, 10, cyan, 3.2f, 3.2f, 0.12f, 4f, 0.6f); world.shake(0.5f); vibrate(30, 1); say("[BOING]"); }
         if ((ev & Sim.EV_GRAB) != 0) { g.audio.play("grab", 0.8f, 1f); vibrate(22, 1); say("[GRAB]"); }
         if ((ev & Sim.EV_PULL) != 0) { g.audio.play("pull", 0.7f, 1f); }
-        if ((ev & Sim.EV_CRUMBLE) != 0) { g.audio.play("crumble", 0.7f, 1f); world.particles.burst(s, y - 0.2f, 12, brown, 2.2f, 1f, 0.16f, 12f, 0.8f); say("[CRUMBLE]"); }
+        if ((ev & Sim.EV_CRUMBLE) != 0) { g.audio.play("crumble", 0.7f, 1f); g.audio.playPack("hit_wood", 0.4f, 0.8f); world.particles.burst(s, y - 0.2f, 12, brown, 2.2f, 1f, 0.16f, 12f, 0.8f); say("[CRUMBLE]"); }
         if ((ev & Sim.EV_CHECKPOINT) != 0) {
             g.audio.play("checkpoint", 0.8f, 1f);
             toast = "CHECKPOINT"; toastT = 2f; if (tower != null) g.rememberCheckpoint(tower, sim.checkpoint); g.persist(); say("[CHECKPOINT]");
@@ -534,16 +587,16 @@ public final class PlayScreen extends ScreenAdapter {
             toast = g.platform.tip("SPIKED CLUB! TAP SWING TO KNOCK CRABS AND BEES OFF"); toastT = 3f; say("[CLUB]");
         }
         if ((ev & Sim.EV_SWING) != 0) { g.audio.play("swing", 0.8f, 0.95f + MathUtils.random(0.1f)); vibrate(10, 2); }
-        if ((ev & Sim.EV_SHOVE) != 0 && (ev & (Sim.EV_SQUASH | Sim.EV_LAUNCH)) == 0) { g.audio.play("bonk", 0.9f, 0.9f + MathUtils.random(0.2f)); world.shake(0.4f); freeze(0.05f); vibrate(25, 1); pop("OOF!", Color.WHITE); say("[BONK]"); }
+        if ((ev & Sim.EV_SHOVE) != 0 && (ev & (Sim.EV_SQUASH | Sim.EV_LAUNCH)) == 0) { g.audio.play("bonk", 0.9f, 0.9f + MathUtils.random(0.2f)); g.audio.play("clack", 0.7f, 0.8f); world.shake(0.4f); freeze(0.05f); vibrate(25, 1); pop("OOF!", Color.WHITE); say("[BONK]"); }
         // Build 71 creatures: the skull's dash, the blob's leap and landing, being squashed, being launched
         if ((ev & Sim.EV_SLIP) != 0) { g.audio.play("slip", 1f, 1.45f + MathUtils.random(0.2f)); pop("WHOA!", Color.WHITE); say("[SQUEAK]"); vibrate(15, 2); }      // a squeaky-shoe skid on ice (sfx.json "slip")
-        if ((ev & Sim.EV_DASH) != 0) { g.audio.play("swing", 0.85f, 0.7f); say("[WHOOSH]"); }
-        if ((ev & Sim.EV_BLOB_JUMP) != 0) { g.audio.play("jump", 0.9f, 0.6f); say("[BOING]"); }
-        if ((ev & Sim.EV_BLOB_LAND) != 0) { g.audio.play("land", 1f, 0.55f); world.shake(0.25f); say("[THUD]"); }
-        if ((ev & Sim.EV_SQUASH) != 0) { g.audio.play("bonk", 1f, 0.6f); world.shake(0.6f); freeze(0.08f); vibrate(45, 1); pop("SQUASH!", SQUASH_GREEN); say("[SQUASH]"); }
+        if ((ev & Sim.EV_DASH) != 0) { g.audio.play("dash", 0.9f, 1f); say("[WHOOSH]"); }
+        if ((ev & Sim.EV_BLOB_JUMP) != 0) { g.audio.play("blobup", 0.9f, 1f); say("[BOING]"); }
+        if ((ev & Sim.EV_BLOB_LAND) != 0) { g.audio.play("splat", 1f, 1f); world.shake(0.25f); say("[THUD]"); }
+        if ((ev & Sim.EV_SQUASH) != 0) { g.audio.play("splat", 1f, 0.7f); g.audio.play("bonk", 0.7f, 0.6f); world.shake(0.6f); freeze(0.08f); vibrate(45, 1); pop("SQUASH!", SQUASH_GREEN); say("[SQUASH]"); }
         if ((ev & Sim.EV_LAUNCH) != 0) { g.audio.play("bounce", 1f, 0.8f); world.shake(0.5f); freeze(0.05f); vibrate(35, 1); pop("WHOOSH!", Color.WHITE); say("[LAUNCHED]"); }
         if ((ev & Sim.EV_CRAB_OFF) != 0) {
-            g.audio.play("squeak", 0.9f, 0.9f + MathUtils.random(0.3f)); world.crabFlung(sim.crabS, sim.crabY, sim.facing, sim.knockedBee); freeze(0.07f); world.shake(0.4f); vibrate(30, 1);
+            g.audio.play("squeak", 0.9f, 0.9f + MathUtils.random(0.3f)); g.audio.play("clack", 0.7f, 1.2f); world.crabFlung(sim.crabS, sim.crabY, sim.facing, sim.knockedBee); freeze(0.07f); world.shake(0.4f); vibrate(30, 1);
             pop("BONK!", gold); world.particles.burst(sim.crabS, sim.crabY + 0.4f, 12, red, 3.5f, 3.5f, 0.12f, 6f, 0.6f);
         }
         if ((ev & Sim.EV_KEY) != 0) {
@@ -573,7 +626,7 @@ public final class PlayScreen extends ScreenAdapter {
         if ((ev & Sim.EV_HIT) != 0) {
             g.save.climbHits++;
             world.particles.burst(sim.hitS, sim.hitY + 0.7f, 22, red, 4f, 4f, 0.13f, 8f, 0.7f);
-            g.audio.play("hit", 1f, com.hotatticgames.climbup.render.Characters.voice(g.settings.character)); world.shake(0.9f); freeze(0.09f); vibrate(60, 1); say("[OUCH]");
+            g.audio.play("hit", 1f, com.hotatticgames.climbup.render.Characters.voice(g.settings.character)); g.audio.playPack("hit_brick", 0.6f, 0.9f); world.shake(0.9f); freeze(0.09f); vibrate(60, 1); say("[OUCH]");
             toast = "OUCH! BE CAREFUL!"; toastT = 1.8f;
         }
     }
@@ -947,16 +1000,16 @@ public final class PlayScreen extends ScreenAdapter {
 
     // ------------------------------------------------------------------ lifecycle
 
-    private void pauseGame() { if (state == State.PLAYING) { if (gi() != null) gi().clear(); g.audio.fallStop(); state = State.PAUSED; confirmRestart = confirmEnd = false; stickPtr = jumpPtr = -1; jumpHeldTouch = false; g.audio.play("click"); g.persist(); saveRun(); } }
+    private void pauseGame() { if (state == State.PLAYING) { if (gi() != null) gi().clear(); g.audio.fallStop(); g.audio.stopLoops(); state = State.PAUSED; confirmRestart = confirmEnd = false; stickPtr = jumpPtr = -1; jumpHeldTouch = false; g.audio.play("click"); g.persist(); saveRun(); } }
     /** Writes the exact moment of the climb (not in the scripted demo, and not once the finish screen is up: that run is over). */
     private void saveRun() { if (tower != null && !demo && state != State.FINISHED) g.saveRun(tower, sim); }
     private void resumePlay() { if (gi() != null) gi().clear(); state = State.PLAYING; acc = 0; padLost = false; g.audio.play("click"); }
     public void resumeFromSettings() { applySettings(); }
 
-    @Override public void hide() { CrashContext.set(crashSnapshot()); CrashContext.source(null); g.audio.fallStop(); g.persist(); }      // the last play state stays as the crash line; the left screen is not kept alive by it
-    @Override public void pause() { /* app backgrounded */ g.audio.fallStop(); if (state == State.PLAYING) { state = State.PAUSED; confirmRestart = confirmEnd = false; stickPtr = jumpPtr = -1; jumpHeldTouch = false; } g.persist(); saveRun(); g.audio.pauseMusic(); }
+    @Override public void hide() { CrashContext.set(crashSnapshot()); CrashContext.source(null); g.audio.fallStop(); g.audio.stopLoops(); g.persist(); }      // the last play state stays as the crash line; the left screen is not kept alive by it
+    @Override public void pause() { /* app backgrounded */ g.audio.fallStop(); g.audio.stopLoops(); if (state == State.PLAYING) { state = State.PAUSED; confirmRestart = confirmEnd = false; stickPtr = jumpPtr = -1; jumpHeldTouch = false; } g.persist(); saveRun(); g.audio.pauseMusic(); }
     @Override public void resume() { g.audio.resumeMusic(); }
 
-    @Override public void dispose() { g.audio.fallStop(); if (world != null) { world.dispose(); world = null; } shapes.dispose(); }
+    @Override public void dispose() { g.audio.fallStop(); g.audio.stopLoops(); if (world != null) { world.dispose(); world = null; } shapes.dispose(); }
 
 }

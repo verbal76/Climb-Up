@@ -51,6 +51,15 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
       - name: Unit tests (headless simulation, generator, persistence, OTA incl. end-to-end over local HTTP)
         run: ./gradlew :core:test --no-daemon
+      - name: Fetch the licensed sound pack for this build (optional, never stored in the repo, any failure only warns and the game uses its built-in sounds)
+        continue-on-error: true
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          (command -v ffmpeg >/dev/null 2>&1 || sudo apt-get install -y --no-install-recommends ffmpeg >/dev/null 2>&1) || true
+          tools/ci/fetch_pack_sfx.sh --download
       - name: Assemble the release APK (not debuggable; signed with the Build 42 identity)
         env:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}

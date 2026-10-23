@@ -15,13 +15,15 @@ public final class Audio implements Disposable {
     private final Map<String, Music> tracks = new HashMap<>();
     private final Map<String, Sound[]> variants = new HashMap<>();     // owner-supplied sound pack, chosen per sound by assets/data/sfx.json
     private final Map<String, Integer> lastVariant = new HashMap<>();
+    private final Map<String, Sound[]> mf = new HashMap<>();           // OPTIONAL Minifantasy Forgotten Plains clips (assets/audio/pack_mf, fetched at build time, never in the repo): absent = the caller falls back
     private final Settings settings;
     private Music current;
     private String currentName = "";
     private String[] list;
     private int listIdx;
     public static final String[] GAME_TRACKS = {"music_game", "music_leaplike", "music_mountain_jig", "music_track4"};
-    public static final String[] SFX = {"jump", "land", "bounce", "grab", "pull", "crumble", "checkpoint", "respawn", "win", "click", "rope", "step", "grunt1", "grunt2", "grunt3", "effort", "hit", "cannon", "saw", "spikes", "key", "door", "locked", "swing", "bonk", "squeak", "poof", "buzz", "whoosh"};
+    public static final String[] SFX = {"jump", "land", "bounce", "grab", "pull", "crumble", "checkpoint", "respawn", "win", "click", "rope", "step", "grunt1", "grunt2", "grunt3", "effort", "hit", "cannon", "saw", "spikes", "key", "door", "locked", "swing", "bonk", "squeak", "poof", "buzz", "whoosh",
+            "dash", "skull", "wobble", "blobup", "splat", "clack", "dive", "slam", "motor"};
 
     public Audio(Settings s) {
         settings = s;
@@ -39,6 +41,101 @@ public final class Audio implements Disposable {
                 if (!list.isEmpty()) variants.put(e.name, list.toArray(new Sound[0]));
             }
         } catch (Exception ignored) { }
+        for (String g : PACK_GROUPS) {
+            java.util.ArrayList<Sound> list = new java.util.ArrayList<>();
+            for (int i = 1; i <= 3; i++) {
+                try {
+                    com.badlogic.gdx.files.FileHandle f = Gdx.files.internal("audio/pack_mf/" + g + "_" + i + ".ogg");
+                    if (f.exists()) list.add(Gdx.audio.newSound(f));
+                } catch (Exception ignored) { }
+            }
+            if (!list.isEmpty()) mf.put(g, list.toArray(new Sound[0]));
+        }
+    }
+
+    /** Pack clip groups (files pack_mf/<group>_1..3.ogg, made by tools/ci/fetch_pack_sfx.sh). */
+    public static final String[] PACK_GROUPS = {"step_grass", "step_dirt", "step_stone", "land_grass", "land_stone", "hit_wood", "hit_brick"};
+    /** Quiet looping ambience beds (pack_mf/amb_*.ogg), chosen by world. */
+    public static final String[] AMBIENCE = {"amb_birds", "amb_wind", "amb_crickets"};
+
+    private boolean throttle(String key, float gap) {
+        long now = System.nanoTime();
+        Long last = lastPlay.get(key);
+        if (last != null && (now - last) < gap * 1e9f) { throttled++; return true; }
+        lastPlay.put(key, now); return false;
+    }
+
+    /**
+     * Plays one random variant of an optional pack clip group. Returns false when the pack is not installed (tests, ci builds), so the caller can fall back to
+     * the built-in sound; returns true when the group exists (even if the play was rate limited or sfx is off) so the fallback is not layered on top.
+     */
+    public boolean playPack(String group, float vol, float pitch) {
+        Sound[] v = mf.get(group);
+        if (v == null) return false;
+        if (settings.sfx <= 0 || throttle("mf_" + group, 0.06f)) return true;
+        int i = v.length == 1 ? 0 : MathUtils.random(v.length - 1);
+        if (v.length > 1 && lastVariant.getOrDefault("mf_" + group, -1) == i) i = (i + 1) % v.length;
+        lastVariant.put("mf_" + group, i);
+        try { if (v[i].play(MathUtils.clamp(vol, 0, 1) * settings.sfx / 10f, pitch, 0f) == -1) refused++; played++; }
+        catch (Exception e) { errors++; lastError = e.getClass().getSimpleName(); }
+        return true;
+    }
+    public boolean hasPack(String group) { return mf.containsKey(group); }
+
+    // ---- conveyor motor hum: ONE looping instance, volume eased toward a target (fades in and out, never stacks)
+    private long humId = -1; private float humVol;
+    /** Call every frame while playing: target 0..1 (0 = silent). The loop starts when the target rises and stops once it has faded out. */
+    public void hum(float target, float dt) {
+        Sound s = sounds.get("motor");
+        if (s == null || settings.sfx <= 0) { humStop(); return; }
+        float k = Math.min(1f, dt * (target > humVol ? 4f : 2.5f));
+        humVol += (target - humVol) * k;
+        if (humVol < 0.01f && target <= 0f) { humStop(); return; }
+        try {
+            if (humId == -1) { humId = s.loop(0f, 1f, 0f); }
+            if (humId != -1) s.setVolume(humId, humVol * HUM_LEVEL * settings.sfx / 10f);
+        } catch (Exception e) { errors++; lastError = e.getClass().getSimpleName(); humId = -1; }
+    }
+    public static final float HUM_LEVEL = 0.22f;
+    public void humStop() {
+        try { Sound s = sounds.get("motor"); if (s != null && humId != -1) s.stop(humId); } catch (Exception e) { errors++; lastError = e.getClass().getSimpleName(); }
+        humId = -1; humVol = 0f;
+    }
+
+    // ---- optional quiet biome ambience (Music so the bed streams): fades out the old bed, then in the new one; follows the sfx volume, never the music setting
+    private final Map<String, Music> beds = new HashMap<>();
+    private String bedName = "", bedWant = ""; private Music bed; private float bedVol;
+    public static final float BED_LEVEL = 0.10f;
+    public void ambience(String name, float dt) {
+        bedWant = name == null ? "" : name;
+        if (!bedName.equals(bedWant)) {
+            bedVol -= dt * 0.8f;
+            if (bedVol <= 0f) {
+                bedVol = 0f;
+                if (bed != null) { try { bed.pause(); } catch (Exception ignored) { } }
+                bed = null; bedName = "";
+                if (!bedWant.isEmpty()) {
+                    Music m = beds.get(bedWant);
+                    if (m == null) {
+                        try { com.badlogic.gdx.files.FileHandle f = Gdx.files.internal("audio/pack_mf/" + bedWant + ".ogg"); if (f.exists()) { m = Gdx.audio.newMusic(f); m.setLooping(true); beds.put(bedWant, m); } }
+                        catch (Exception e) { m = null; }
+                    }
+                    if (m != null) { bed = m; bedName = bedWant; }
+                }
+            }
+        } else if (bed != null) bedVol = Math.min(1f, bedVol + dt * 0.5f);
+        if (bed == null) return;
+        try {
+            float v = bedVol * BED_LEVEL * settings.sfx / 10f;
+            bed.setVolume(v);
+            if (v > 0f && !bed.isPlaying()) bed.play(); else if (v <= 0f && bed.isPlaying()) bed.pause();
+        } catch (Exception e) { errors++; lastError = e.getClass().getSimpleName(); }
+    }
+    /** Stops the hum and pauses the ambience (pause menu, leaving the screen, app backgrounded). */
+    public void stopLoops() {
+        humStop();
+        try { if (bed != null && bed.isPlaying()) bed.pause(); } catch (Exception ignored) { }
+        bedVol = 0f;
     }
 
     public void play(String name, float vol, float pitch) {
@@ -176,5 +273,7 @@ public final class Audio implements Disposable {
         for (Sound s : sounds.values()) s.dispose();
         for (Sound[] vs : variants.values()) for (Sound s : vs) s.dispose();
         for (Music m : tracks.values()) m.dispose();
+        for (Sound[] vs : mf.values()) for (Sound s : vs) s.dispose();
+        for (Music m : beds.values()) m.dispose();
     }
 }

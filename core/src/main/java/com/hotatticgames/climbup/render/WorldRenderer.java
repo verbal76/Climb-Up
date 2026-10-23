@@ -57,6 +57,9 @@ public final class WorldRenderer implements Disposable {
     private boolean whooshPending;
     /** True once after a spaceship has flown past the player (the play screen plays the sound). */
     public boolean takeWhoosh() { boolean w = whooshPending; whooshPending = false; return w; }
+    private boolean scanPending;
+    /** True once when the scanning ship starts to hover (Build 78): the play screen plays its hum and scan sweep. */
+    public boolean takeScan() { boolean w = scanPending; scanPending = false; return w; }
     private final java.util.ArrayList<Vis> vis = new java.util.ArrayList<>();
     private int[] builtIdx = new int[256]; private int builtN, builtScan;       // every element whose model parts exist right now, so they can be freed wherever the player has moved away from them (up or down)
     private int pruneCursor;
@@ -531,8 +534,10 @@ public final class WorldRenderer implements Disposable {
             if (space == null) { farCam = new com.badlogic.gdx.graphics.PerspectiveCamera(40f, cam.viewportWidth, cam.viewportHeight); farCam.near = 1f; farCam.far = 2500f; space = new SpaceScene(models, farCam, T.radius); }
             space.cloudGlow.set(skyTop).lerp(skyBot, 0.5f).lerp(Color.WHITE, 0.4f);
             space.playerCharacter = character;
+            space.setZone(zoneF);
             space.update(frameDt, py, reducedMotion);
             if (space.whoosh) whooshPending = true;
+            if (space.scanSound) scanPending = true;
             farCam.viewportWidth = cam.viewportWidth; farCam.viewportHeight = cam.viewportHeight; farCam.fieldOfView = cam.fieldOfView;
             farCam.position.set(cam.position); farCam.direction.set(cam.direction); farCam.up.set(cam.up); farCam.update();
             if (GfxHooks.skyEffects) { batch.begin(farCam); space.renderFar(batch, ps, bgY, zoneF); batch.end(); }

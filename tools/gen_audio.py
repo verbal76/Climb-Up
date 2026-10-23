@@ -176,4 +176,12 @@ tick = np.zeros(len(t))
 for k in (0.0, 0.5):
     i = int(k * SR); tt = t_arr(0.03); tick[i:i + len(tt)] += lp(r3.uniform(-1, 1, len(tt)), 0.25) * np.exp(-tt * 140) * 0.35
 save('motor', hum + tick, 0.5)
+# ---------------- Build 78: the scanning ship's hum and scan sweep (own seeded generator, added last so every earlier sound stays byte-identical)
+r4 = np.random.default_rng(2078)
+d = 4.2; t = t_arr(d)
+shum = (np.sin(2 * np.pi * 92 * t) * 0.5 + np.sin(2 * np.pi * 184 * t + 0.4) * 0.25 + 0.08 * lp(r4.uniform(-1, 1, len(t)), 0.05)) * (0.85 + 0.15 * np.sin(2 * np.pi * 3 * t))
+shum *= np.clip(t / 0.6, 0, 1) * np.clip((d - t) / 0.9, 0, 1)                              # swells in, fades out
+f = 700 + 500 * np.sin(np.pi * np.clip((t - 0.7) / 2.6, 0, 1)) ** 2 * (0.6 + 0.4 * np.sin(2 * np.pi * 0.77 * t))   # the beam sweeping over you
+scanw = np.sin(2 * np.pi * np.cumsum(f) / SR) * (0.6 + 0.4 * np.sin(2 * np.pi * 9 * t)) * np.clip((t - 0.7) / 0.3, 0, 1) * np.clip((3.4 - t) / 0.4, 0, 1)
+save('scan', shum + 0.18 * scanw, 0.45)
 print('ok')

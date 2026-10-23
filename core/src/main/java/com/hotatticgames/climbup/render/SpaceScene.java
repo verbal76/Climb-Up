@@ -39,6 +39,15 @@ public final class SpaceScene {
     private final float[] astroMid = new float[ASTRONAUTS.length];     // half the model's height (model units): the cartwheel turns about its middle
     /** The character the player is using (Characters index; 2..5 are the astronauts): that astronaut never floats by. */
     public int playerCharacter = -1;
+    // Build 78 (owner): outside Deep Space, now and then (every 2-4 min) one of the ships slows in, hovers high BEHIND the course (owner rule: nothing
+    // in front of it), sweeps a faint see-through beam over the player, then zooms off. Pure flair: it never touches the climb.
+    private static final float SCAN_IN = 2.2f, SCAN_HOLD = 3.6f, SCAN_OUT = 1.7f, SCAN_TIME = SCAN_IN + SCAN_HOLD + SCAN_OUT;
+    private float scanT = -1, scanDir, nextScan = 120f + 120f * new java.util.Random(77).nextFloat(); private int scanShip;
+    private boolean scanSounded;
+    /** Set for one frame when the scanning ship starts to hover (the play screen plays the hum and scan sweep). */
+    public boolean scanSound;
+    private com.badlogic.gdx.graphics.g3d.Model beamModel; private ModelInstance beam; private BlendingAttribute beamBlend;
+    private final com.badlogic.gdx.math.Quaternion q = new com.badlogic.gdx.math.Quaternion();
     private float astroT = -1, astroDur, astroAng, astroOff, astroDist, astroSpin, astroYaw, nextAstro = 12f; private int astro;
     private final float[] planetExt = new float[PLANETS], rockExt = new float[ROCKS];      // horizontal radius of each model (model units): how far it reaches from its own centre
     private final java.util.Random rnd = new java.util.Random(31);   // cosmetic only
@@ -62,16 +71,23 @@ public final class SpaceScene {
     private float spaceW, zoneNow;                  // how deep in the space world we are (0..1)
     public boolean whoosh;                 // set for one frame when the close ship passes the player (the play screen plays the sound)
 
-    private final Vector3 tmp = new Vector3(), right = new Vector3(), up = new Vector3(), fwd = new Vector3(), back = new Vector3();
+    private final Vector3 tmp = new Vector3(), right = new Vector3(), up = new Vector3(), fwd = new Vector3(), back = new Vector3(), beamDir = new Vector3();
 
     public SpaceScene(Models models, Camera farCam, float radius) {
-        if (Boolean.getBoolean("climb.spaceFast")) { nextSky = 0.5f; nextBuzz = 2.5f; }       // test hook
+        if (Boolean.getBoolean("climb.spaceFast")) { nextSky = 0.5f; nextBuzz = 2.5f; nextScan = 4f; }       // test hook
         this.models = models; this.far = farCam; this.radius = radius; this.circumference = (float) (2 * Math.PI * radius);
         for (int i = 0; i < PLANETS; i++) planets[i] = fade(new ModelInstance(models.space("planet_" + (i + 1))));
         for (int i = 0; i < ROCKS; i++) rocks[i] = fade(new ModelInstance(models.space(ROCK_NAMES[i])));
         for (int i = 0; i < PLANETS; i++) planetExt[i] = reach(planets[i]);
         for (int i = 0; i < ROCKS; i++) rockExt[i] = reach(rocks[i]);
         for (int i = 0; i < SHIPS.length; i++) ships[i] = fade(new ModelInstance(models.space(SHIPS[i])));
+        // the scan beam: a cone, apex at the ship, glowing and see-through, never hiding what is behind it (no depth writes), both sides drawn
+        com.badlogic.gdx.graphics.g3d.Material bm = new Material(ColorAttribute.createDiffuse(0.4f, 1f, 0.75f, 1f), ColorAttribute.createEmissive(0.3f, 0.9f, 0.65f, 1f),
+                new BlendingAttribute(true, 0f), new com.badlogic.gdx.graphics.g3d.attributes.DepthTestAttribute(com.badlogic.gdx.graphics.GL20.GL_LEQUAL, false),
+                com.badlogic.gdx.graphics.g3d.attributes.IntAttribute.createCullFace(com.badlogic.gdx.graphics.GL20.GL_NONE));
+        beamModel = new com.badlogic.gdx.graphics.g3d.utils.ModelBuilder().createCone(1f, 1f, 1f, 24, bm, com.badlogic.gdx.graphics.VertexAttributes.Usage.Position | com.badlogic.gdx.graphics.VertexAttributes.Usage.Normal);
+        beam = new ModelInstance(beamModel);
+        beamBlend = (BlendingAttribute) beam.materials.first().get(BlendingAttribute.Type);    // the instance's own copy (a ModelInstance copies its materials)
         for (int i = 0; i < ASTRONAUTS.length; i++) {
             astros[i] = new ModelInstance(models.space(ASTRONAUTS[i]));
             astroAnim[i] = new com.badlogic.gdx.graphics.g3d.utils.AnimationController(astros[i]);
@@ -108,12 +124,20 @@ public final class SpaceScene {
         for (Material m : mi.materials) { BlendingAttribute b = (BlendingAttribute) m.get(BlendingAttribute.Type); if (b != null) b.opacity = a; }
     }
 
+    /** How far up the worlds the climb is (the renderer's zone), so the scenery knows its world even when the far sky layer is off. */
+    public void setZone(float zoneF) { zoneNow = zoneF; }
+
     /** Called every frame (before the render calls). */
     public void update(float dt, float playerY, boolean reduced) {
         clock += dt; whoosh = false;
-        if (reduced) { skyT = -1; buzzT = -1; astroT = -1; return; }
+        scanSound = false;
+        if (reduced) { skyT = -1; buzzT = -1; astroT = -1; scanT = -1; return; }
         if (FREEZE >= 0) { skyT = FREEZE * 24f; skyDur = 24f; skyDist = 300f; skyDir = 1f; buzzT = FREEZE * BUZZ_TIME; buzzDir = 1f; buzzY = 1.5f;
-            astroT = FREEZE * 16f; astroDur = 16f; astroAng = 0.5f; astroOff = 0.1f; astroDist = 40f; astroSpin = 70f; astroYaw = 15f; astro = otherAstro(0); astroAnim[astro].update(dt); return; }
+            astroT = FREEZE * 16f; astroDur = 16f; astroAng = 0.5f; astroOff = 0.1f; astroDist = 40f; astroSpin = 70f; astroYaw = 15f; astro = otherAstro(0); astroAnim[astro].update(dt);
+            scanT = SCAN_IN + FREEZE * SCAN_HOLD; scanDir = 1f; scanShip = 0; return; }
+        // the scanning ship: every world but Deep Space
+        if (scanT < 0) { if (zoneNow < 3.6f && buzzT < 0) { nextScan -= dt; if (nextScan <= 0) { scanT = 0; scanDir = rnd.nextBoolean() ? 1f : -1f; scanShip = rnd.nextInt(SHIPS.length); scanSounded = false; } } }
+        else { scanT += dt; if (!scanSounded && scanT > SCAN_IN - 0.3f) { scanSounded = true; scanSound = true; } if (scanT > SCAN_TIME) { scanT = -1; nextScan = 120f + rnd.nextFloat() * 120f; } }
         // astronauts: Deep Space only, one every 20-40 s
         if (astroT < 0) { if (spaceW > 0.5f) { nextAstro -= dt; if (nextAstro <= 0) {
             astroT = 0; astroDur = 14f + rnd.nextFloat() * 8f; astroAng = rnd.nextFloat() * MathUtils.PI2; astroOff = (rnd.nextFloat() - 0.5f) * 1.1f;
@@ -122,7 +146,7 @@ public final class SpaceScene {
         else { astroT += dt; astroAnim[astro].update(dt); if (astroT > astroDur) { astroT = -1; nextAstro = 20f + rnd.nextFloat() * 20f; } }
         if (skyT < 0) { nextSky -= dt * (1f + spaceW); if (nextSky <= 0) { skyT = 0; skyDur = 20f + rnd.nextFloat() * 14f; skyY = rnd.nextFloat(); skyDist = 240f + rnd.nextFloat() * 120f; skyDir = rnd.nextBoolean() ? 1f : -1f; skyShip = rnd.nextInt(SHIPS.length); } }
         else { skyT += dt; if (skyT >= skyDur) { skyT = -1; nextSky = 8f + rnd.nextFloat() * 14f; } }
-        if (buzzT < 0) { nextBuzz -= dt; if (nextBuzz <= 0) { buzzT = 0; buzzDir = rnd.nextBoolean() ? 1f : -1f; buzzY = 0.8f + rnd.nextFloat() * 2.2f; buzzShip = rnd.nextInt(SHIPS.length); buzzSounded = false; } }
+        if (buzzT < 0 && scanT < 0) { nextBuzz -= dt; if (nextBuzz <= 0) { buzzT = 0; buzzDir = rnd.nextBoolean() ? 1f : -1f; buzzY = 0.8f + rnd.nextFloat() * 2.2f; buzzShip = rnd.nextInt(SHIPS.length); buzzSounded = false; } }
         else { buzzT += dt; if (!buzzSounded && buzzT > 0.55f) { buzzSounded = true; whoosh = true; } if (buzzT > BUZZ_TIME) { buzzT = -1; nextBuzz = 45f + rnd.nextFloat() * 60f; } }
     }
 
@@ -182,11 +206,46 @@ public final class SpaceScene {
             float halfW = halfH * far.viewportWidth / Math.max(1f, far.viewportHeight), reach = (float) Math.sqrt(halfW * halfW + halfH * halfH) + 4f;
             float dx = MathUtils.cos(astroAng), dy = MathUtils.sin(astroAng), along = (u * 2f - 1f) * reach, side = astroOff * halfH;
             tmp.set(far.position).mulAdd(fwd, dist).mulAdd(right, dx * along - dy * side).mulAdd(up, dy * along + dx * side);
-            ModelInstance m = astros[astro]; float sc = 2.2f;
+            ModelInstance m = astros[astro]; float sc = 1.1f;
             m.transform.set(right, up, back.set(fwd).scl(-1f), tmp)                                  // faces the camera
                     .rotate(0, 0, 1, astroSpin * astroT).rotate(0, 1, 0, astroYaw + 25f * MathUtils.sin(astroT * 0.4f))           // the cartwheel, with a slow turn
                     .scale(sc, sc, sc).translate(0, -astroMid[astro], 0);
             batch.render(m, env);
+        }
+    }
+
+    /**
+     * The scanning ship: eases in from one side to hover 6 m above and 17 m behind the player (behind every platform the renderer draws, the same depth
+     * as the close fly-by), holds while the beam sweeps over the player, then speeds off up and away to the other side.
+     */
+    private void renderScan(ModelBatch batch, Environment mainEnv, float playerY, float playerZ) {
+        float t = scanT, hx = 2.5f * scanDir, hy = playerY + 6f, z = playerZ - radius - 7f, x, y, bank, beamK = 0f;
+        if (t < SCAN_IN) {                                   // slowing in: fast at first, settling into the hover
+            float k = 1f - (1f - t / SCAN_IN) * (1f - t / SCAN_IN) * (1f - t / SCAN_IN);
+            x = MathUtils.lerp(-45f * scanDir, hx, k); y = hy + 3f * (1f - k); bank = -18f * scanDir * (1f - k);
+        } else if (t < SCAN_IN + SCAN_HOLD) {                // hovering, bobbing a little, beam on
+            float h = t - SCAN_IN;
+            x = hx + 0.4f * MathUtils.sin(h * 1.3f); y = hy + 0.25f * MathUtils.sin(h * 2.1f); bank = 4f * MathUtils.sin(h * 1.7f);
+            beamK = MathUtils.clamp(h / 0.5f, 0f, 1f) * MathUtils.clamp((SCAN_HOLD - h) / 0.5f, 0f, 1f);
+        } else {                                             // zooming off, accelerating up and away
+            float k = (t - SCAN_IN - SCAN_HOLD) / SCAN_OUT; k = k * k;
+            x = MathUtils.lerp(hx, 55f * scanDir, k); y = hy + 10f * k; bank = 22f * scanDir * k;
+        }
+        ModelInstance sh = ships[scanShip]; float sc = 0.6f;
+        alpha(sh, 1f);
+        sh.transform.idt().translate(x, y, z).rotate(0, 1, 0, (scanDir > 0 ? 90f : -90f) * SHIP_NOSE).rotate(0, 0, 1, bank).scale(sc, sc, sc);
+        batch.render(sh, mainEnv);
+        if (beamK > 0f) {
+            float h = t - SCAN_IN;
+            // the beam's foot sweeps slowly across the player from feet to head and side to side
+            tmp.set(0.45f * MathUtils.sin(h * 2.4f), playerY + 0.55f + 0.35f * MathUtils.sin(h * 1.6f), playerZ);
+            beamDir.set(x, y - 0.6f, z).sub(tmp);               // foot -> ship
+            float len = beamDir.len(); beamDir.scl(1f / len);
+            q.setFromCross(Vector3.Y, beamDir);
+            float rad = 2f * (0.75f + 0.08f * MathUtils.sin(h * 7f));
+            beam.transform.idt().translate(tmp.mulAdd(beamDir, len * 0.5f)).rotate(q).scale(rad, len, rad);
+            beamBlend.opacity = 0.32f * beamK;
+            batch.render(beam, mainEnv);
         }
     }
 
@@ -252,6 +311,7 @@ public final class SpaceScene {
             sh.transform.idt().translate(x, y, z).rotate(0, 1, 0, (buzzDir > 0 ? 90f : -90f) * SHIP_NOSE).rotate(0, 0, 1, 14f * buzzDir * MathUtils.sin(u * MathUtils.PI)).scale(sc, sc, sc);
             batch.render(sh, mainEnv);
         }
+        if (scanT >= 0) renderScan(batch, mainEnv, playerY, playerZ);
     }
 
     private static float reach(ModelInstance m) {

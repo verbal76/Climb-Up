@@ -322,6 +322,7 @@ public final class PlayScreen extends ScreenAdapter {
             if (steps == 6) acc = 0;
             if (PerfProbe.ON) { PerfProbe.tSim = System.nanoTime(); PerfProbe.steps = steps; PerfProbe.mode = sim.mode.ordinal(); PerfProbe.absY = absNow(); }
             if (world.takeWhoosh()) g.audio.play("whoosh", 0.6f, 1f);
+            if (world.takeScan()) g.audio.play("scan", 0.5f, 1f);
             g.save.playSeconds += dt;
             if (maxAbs > g.save.bestHeight) g.save.bestHeight = (float) maxAbs;
             if (g.save.finished && tower != null && !demo) g.save.records().infinity(g.save.seed, infinityMetres());

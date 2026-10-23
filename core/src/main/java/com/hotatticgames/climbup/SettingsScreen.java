@@ -65,6 +65,31 @@ public final class SettingsScreen extends ScreenAdapter {
         t.setDaemon(true); t.setPriority(Thread.MIN_PRIORITY); t.start();
     }
 
+    // ---- Build 76 (owner: "game play footage from all the different areas"): the hidden world picker, next to the determinism check. Starts a new climb in
+    // the chosen world: the tower is grown up to that world on a background thread (a few seconds to a minute for Deep Space), then the climb starts on the
+    // first route platform there. Such a climb is assisted (no best times or splits) and earns no achievements (SaveData.devPicked).
+    private int pickWorld;
+    private static volatile boolean pickBusy, pickReady;
+    private static volatile String pickStatus = "";
+    private void startPick() {
+        if (pickBusy || checkRunning) return;
+        pickBusy = true; final int w = pickWorld; final String name = com.hotatticgames.climbup.render.Palette.NAMES[w].toUpperCase();
+        final int h = w == 0 ? 0 : (int) (w * g.tuning.zoneHeight) + 5;
+        pickStatus = "PREPARING " + name + "...";
+        Thread t = new Thread(() -> {
+            try {
+                g.beginFreshRun(null);
+                ClimbGame.Run r = g.openRun(true);
+                while (r.tower.topAbsY() < h + 80f) { r.tower.extend(); pickStatus = "PREPARING " + name + "  " + (int) Math.min(h, r.tower.topAbsY()) + " / " + h + " M"; }
+                r.startHeight = h;
+                g.save.devPicked = true; RunRecord.noteAssist(g.save, true);
+                g.preparedRun = r; g.runFresh = false; pickStatus = ""; pickReady = true;
+            } catch (Throwable e) { pickStatus = "WORLD PICKER FAILED: " + e; }
+            finally { pickBusy = false; }
+        }, "world-picker");
+        t.setDaemon(true); t.start();
+    }
+
     public float rowTop() { return rowY; }
     public void skip(float dy) { rowY -= dy; }
 
@@ -149,6 +174,9 @@ public final class SettingsScreen extends ScreenAdapter {
             if (versionTaps >= 7) {
                 row("DETERMINISM CHECK", checkRunning ? "RUNNING" : "RUN", null, null, this::startCheck);
                 rowY = aboutLines(checkStatus, 2.4f, W, rowY, 54);
+                row("WORLD PICKER", com.hotatticgames.climbup.render.Palette.NAMES[pickWorld].toUpperCase(), () -> pickWorld = (pickWorld + 4) % 5, () -> pickWorld = (pickWorld + 1) % 5, null);
+                row("START IN THIS WORLD", pickBusy ? "PREPARING" : "GO", null, null, this::startPick);
+                rowY = aboutLines(pickStatus.isEmpty() ? "A NEW CLIMB IN THAT WORLD, FOR FOOTAGE: IT REPLACES THE CURRENT CLIMB AND SETS NO RECORDS." : pickStatus, 2.4f, W, rowY, 54);
             }
             if (g.platform.networkAllowed()) {
                 rowY = aboutLines("CONTENT: " + g.ota.describe(), 3.0f, W, rowY, 54);
@@ -169,6 +197,7 @@ public final class SettingsScreen extends ScreenAdapter {
             toggle("ASSIST: JUMP FORGIVENESS", s.assistForgive, () -> s.assistForgive = !s.assistForgive);
         }
         ui.end();
+        if (pickReady) { pickReady = false; if (back instanceof PlayScreen) back.dispose(); g.setScreen(new PlayScreen(g, false)); return; }      // the world picker's climb is ready
         g.autoShot("settings", dt);
     }
 }

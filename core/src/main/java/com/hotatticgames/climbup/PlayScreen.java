@@ -113,9 +113,9 @@ public final class PlayScreen extends ScreenAdapter {
             course = CourseGenerator.chunk(Long.getLong("climb.seed", 11L), Integer.getInteger("climb.slice", 4), null, g.tuning);
             sim = Sim.startOn(course, g.tuning, 0);
         } else {
-            ClimbGame.Run run = g.openRun(g.runFresh); g.runFresh = false;
+            ClimbGame.Run run = g.preparedRun != null ? g.preparedRun : g.openRun(g.runFresh); g.preparedRun = null; g.runFresh = false;
             tower = run.tower; course = tower.world;
-            int hStart = Integer.getInteger("climb.startHeight", 0);              // test hook: begin partway up
+            int hStart = run.startHeight > 0 ? run.startHeight : Integer.getInteger("climb.startHeight", 0);              // test hook / the hidden world picker: begin partway up
             while (hStart > 0 && tower.topAbsY() < hStart + 80f) tower.extend();
             String hzType = System.getProperty("climb.hazard");              // test hook: start beside the first hazard of this type (e.g. CANNON)
             if (hzType != null) {
@@ -601,7 +601,7 @@ public final class PlayScreen extends ScreenAdapter {
         t.marathonMeters = (int) Math.min(Integer.MAX_VALUE, (long) achMarathonBase + (long) Math.max(0.0, maxAbs - achSessionStartMax));
         t.checkpointIndex = sim.checkpoint;
         t.height = abs;
-        for (String id : achRules.step(t)) a.unlock(id);
+        for (String id : achRules.step(t)) if (!g.save.devPicked) a.unlock(id);          // a world-picker climb (footage) earns nothing
         // mirror the persistent stats to Steam (the Steam layer caches and throttles the actual StoreStats; the no-op sink ignores them)
         a.stat(AchievementRules.STAT_FALLS, g.save.falls);
         a.stat(AchievementRules.STAT_TOWER_FELL_MASK, achRules.towerFellMask());

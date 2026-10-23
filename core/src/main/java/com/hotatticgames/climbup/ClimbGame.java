@@ -172,7 +172,9 @@ public class ClimbGame extends Game {
     }
 
     /** A climb in progress: the growing tower plus the world element the player stands on. */
-    public static final class Run { public Tower tower; public int startIdx; public boolean resumed; public RunSnapshot snapshot; }
+    public static final class Run { public Tower tower; public int startIdx; public boolean resumed; public RunSnapshot snapshot; public int startHeight; }
+    /** Build 76: a climb the hidden world picker prepared on a background thread (the tower already grown to its world); the next PlayScreen takes it. */
+    public volatile Run preparedRun;
 
     public HistoryStore history;
     /** True if there is a climb in progress whose history is on disk and complete up to its checkpoint. */

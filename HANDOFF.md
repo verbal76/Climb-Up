@@ -8,23 +8,20 @@
 
 # Handoff
 
-## Build 77 status (2026-10-23) - PUBLISHED
+## Build 77 status (2026-10-23) - PUBLISHED; closeout in progress
 
-Release v1.3.0-build77 (public, not draft) from build-74-determinism @ e1c8b55 (game code identical to 311fb2b; e1c8b55
-only widens the desktop title-upright scenario check). Assets: upwardly-1.3.0-build77.apk (SHA-256 c35d3d1d1f0b055d5b8a
-ae45c6e0b4a5ca68c638b101581b26e0279bfce570ca), Upwardly.Build.77.EXE.zip, Upwardly.Build.77.Linux.tar.gz, checksums.
-Runs: Android 39911402687, desktop 39911400270 (both green; emulator in-place update from Build 71 passed).
+Release v1.3.0-build77 (public) from build-74-determinism @ e1c8b55 (game code = 311fb2b). Verified: APK c35d3d1d...570ca, EXE zip 73e5f787...,
+Linux 9ec85d53..., the checksums and manifest match GitHub's digests (the manifest and checksums cover the two desktop files only, the APK hash is in
+the notes). Phone (owner's Pixel) determinism check MATCHES the desktop (finish 425348, 1:58:09.150). Android runs 39911402687, desktop 39911400270 green.
 
-Release blockers fixed overnight (311fb2b):
-1. everyRunIsDifferent...: TestUtil.slices' shared cache returned slices far above the height asked for, so the test
-   measured whole runs. Fix: slices() returns only the slices up to the requested top.
-2. Seed 2 link 36 (rope to an aimed-cannon platform): a knock at the rope top left the solver in BEAM mode on the rope
-   with no step taken, so it looped. Fix: solver climbs down from a rope-top beam and retries (test solver only; the
-   generator and game rules are unchanged).
+Closeout work (commit after 2143ec9, see DECISIONS "Build 77 closeout"):
+* Release gate: publish_release.sh drafts, checks the same commit, publishes only with all three packages; offline test tools/ci/test_publish_release.sh.
+* Sound pack: fetch from the private repo verbal76/upwardly-licensed-assets with secret LICENSED_ASSETS_TOKEN; production builds require the pack.
+* Steam Linux upload script finds v<ver>-buildN releases.
 
-Known issues: the release notes' Android section names 311fb2b and the first run's APK hash (stale; the real APK is
-from e1c8b55, hash above). The "Sfx" pack release is public; the pack licence forbids redistribution - owner should
-make it a draft (the workflows only need it readable by the token).
+Waiting on the owner: (1) paste the corrected Android notes into the Build 77 release; (2) create the private repo, upload the pack zip to its
+"Sfx" release, create the token + secret, then delete the zip from this repo's public "Sfx" release (exact steps in the session report);
+(3) Steam: owner says app, store page, Coming Soon and a build upload are done; Build 77 is not yet on Steam.
 
 ## Build 72 (version 1.2.0, rules version 3) - playtest candidate
 

@@ -15,7 +15,10 @@ DEPOT="${2:?usage: upload_linux_depot.sh <steam_login> <linux_depot_id> [build_n
 BUILD="${3:-70}"
 APP=5427130
 WORK="${HOME}/upwardly-steam-upload"
-REL="https://github.com/verbal76/Climb-Up/releases/download/build-${BUILD}-desktop"
+# Builds 62-73 were released under build-N-desktop; from Build 74 one release per build carries every platform under v<version>-buildN
+TAG=$(curl -fsSL "https://api.github.com/repos/verbal76/Climb-Up/releases?per_page=100" | grep -oE "\"tag_name\": *\"(v[0-9.]+-build${BUILD}|build-${BUILD}-desktop)\"" | head -1 | sed -E 's/.*"([^"]+)"$/\1/' || true)
+[ -n "$TAG" ] || { echo "No published release for Build ${BUILD} found. Stopping."; exit 1; }
+REL="https://github.com/verbal76/Climb-Up/releases/download/${TAG}"
 PKG="Upwardly.Build.${BUILD}.Linux.tar.gz"
 
 mkdir -p "$WORK" && cd "$WORK"

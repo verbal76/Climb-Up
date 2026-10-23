@@ -51,12 +51,14 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
       - name: Unit tests (headless simulation, generator, persistence, OTA incl. end-to-end over local HTTP)
         run: ./gradlew :core:test --no-daemon
-      - name: Fetch the licensed sound pack for this build (optional, never stored in the repo, any failure only warns and the game uses its built-in sounds)
-        continue-on-error: true
+      - name: Fetch the licensed sound pack for this build (never stored in the repo; required for a production build, optional for an owner test build)
+        continue-on-error: ${{ inputs.test_build == true }}
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
+          PACK_TOKEN: ${{ secrets.LICENSED_ASSETS_TOKEN }}   # read-only token for the private licensed-assets repository (Build 78)
+          PACK_REQUIRED: ${{ inputs.test_build != true && '1' || '' }}
         run: |
           (command -v ffmpeg >/dev/null 2>&1 || sudo apt-get install -y --no-install-recommends ffmpeg >/dev/null 2>&1) || true
           tools/ci/fetch_pack_sfx.sh --download
@@ -123,7 +125,7 @@ jobs:
           BASE=$(grep -oP "BUNDLED_CONTENT_VERSION = \K[0-9]+" core/src/main/java/com/hotatticgames/climbup/ota/OtaConfig.java)
           python3 tools/ota/make_ota.py --version "$BASE" --sign
           ./gradlew :core:verifyOta -PotaDir=build/ota -PexpectBundled --no-daemon -q
-      - name: Publish GitHub Release (APK)
+      - name: Release notes, and the owner test build's draft (a production APK goes to the release job below)
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -138,10 +140,16 @@ jobs:
           if [ "${{ inputs.test_build }}" = "true" ]; then
             # owner test build: a DRAFT release (collaborators only, creates no tag, never public) carries the APK
             gh release create "v${VER}-build${{ env.BUILD_NUMBER }}" "$APK" --target ${{ github.sha }} --title "Upwardly v${VER} (build ${{ env.BUILD_NUMBER }}) — Android APK (owner test build, draft)" --notes-file notes.md --draft
-          else
-            # owner: one release per build with the APK, EXE and Linux build together ("Upwardly build NN"); windows.yml adds to the same tag
-            REPO=${{ github.repository }} bash tools/ci/publish_release.sh "v${VER}-build${{ env.BUILD_NUMBER }}" "${{ env.BUILD_NUMBER }}" notes.md "$APK"
           fi
+          mkdir -p candidate && cp "$APK" notes.md candidate/
+          echo "TAG=v${VER}-build${{ env.BUILD_NUMBER }}" > candidate/tag.env
+      - name: Hand the signed APK and its notes to the release job
+        if: ${{ inputs.test_build != true }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-candidate-android-${{ env.BUILD_NUMBER }}
+          path: candidate/
+          retention-days: 14
       - name: Publish the OTA baseline (only if the channel does not already carry this version or a newer one)
         if: ${{ inputs.test_build != true }}   # an owner test build never touches the OTA channel
         env:
@@ -155,3 +163,28 @@ jobs:
           if [ "$CUR" -ge "$BV" ]; then echo "channel already at v$CUR (>= baseline v$BV): left untouched"; exit 0; fi
           gh release upload ota build/ota/payload.zip build/ota/manifest.json build/ota/manifest.sig --clobber
           echo "published OTA baseline v$BV"
+
+  release:
+    # owner: one release per build with the APK, EXE and Linux build together ("Upwardly build NN"); windows.yml adds to the same tag.
+    # Build 78 release gate (tools/ci/publish_release.sh): the APK joins a draft candidate; the release goes public only when the Windows and Linux
+    # packages from this same commit are on it too. The lock is shared with windows.yml's release job so the two never check and publish at once.
+    needs: build
+    if: ${{ inputs.test_build != true }}
+    runs-on: ubuntu-latest
+    concurrency:
+      group: upwardly-release-publish
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-candidate-android-${{ env.BUILD_NUMBER }}
+          path: candidate
+      - name: Add the APK to the release candidate (publishes only when all three packages are on it)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -e
+          . candidate/tag.env
+          bash tools/ci/publish_release.sh "$TAG" "${{ env.BUILD_NUMBER }}" candidate/notes.md candidate/*.apk

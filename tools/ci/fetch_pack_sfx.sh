@@ -3,28 +3,41 @@
 # The pack may not be redistributed, so the converted files are git-ignored (assets/audio/pack_mf/) and exist only in built artifacts.
 #
 #   tools/ci/fetch_pack_sfx.sh <pack.zip> [out_dir]        convert from a local zip (CI and local use run exactly this)
-#   tools/ci/fetch_pack_sfx.sh --download [out_dir]        CI: fetch release asset Minifantasy_Forgotten_Plains_SFX.zip of tag "Sfx" via the GitHub API
-#                                                          (needs GH_TOKEN and GITHUB_REPOSITORY, or REPO), then convert
-# Never fails the build: any problem prints a warning and exits 0; the game plays without these optional sounds.
+#   tools/ci/fetch_pack_sfx.sh --download [out_dir]        CI: fetch the pack zip, then convert
+#   tools/ci/fetch_pack_sfx.sh --check                     CI: fetch the pack zip and check its SHA-256 only (no conversion, writes nothing)
+#
+# Where --download / --check fetch from (Build 78, licence: the source pack must never be publicly downloadable):
+#   PACK_TOKEN set  -> release asset Minifantasy_Forgotten_Plains_SFX.zip of tag "Sfx" in the PRIVATE repository PACK_REPO
+#                      (default verbal76/upwardly-licensed-assets); PACK_TOKEN is a fine-grained token with read-only Contents on that repository
+#                      (repository secret LICENSED_ASSETS_TOKEN).
+#   no PACK_TOKEN   -> the old location, tag "Sfx" of this repository (GH_TOKEN, REPO), only until the owner moves the pack.
+# PACK_REQUIRED=1 (production builds, and --check) turns every problem into a failure; otherwise a problem prints a warning and exits 0, and the game
+# plays with its built-in sounds.
 set -uo pipefail
 EXPECT_SHA=d94e9fd53240fb2787dee72fcfdc2ee23f51113beb489d59c12e586ba711692a
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-warn() { echo "::warning::pack sfx: $*"; exit 0; }
+MODE="${1:-}"; [ "$MODE" != "--check" ] || PACK_REQUIRED=1
+warn() { if [ "${PACK_REQUIRED:-}" = "1" ]; then echo "::error::pack sfx: $*"; exit 1; fi; echo "::warning::pack sfx: $*"; exit 0; }
 
-MODE="${1:-}"; [ -n "$MODE" ] || { echo "usage: fetch_pack_sfx.sh <pack.zip>|--download [out_dir]"; exit 0; }
+[ -n "$MODE" ] || { echo "usage: fetch_pack_sfx.sh <pack.zip>|--download [out_dir]|--check"; exit 0; }
 OUT="${2:-$ROOT/assets/audio/pack_mf}"
 WORK="$(mktemp -d)"; trap 'rm -rf "$WORK"' EXIT
-command -v ffmpeg >/dev/null 2>&1 || warn "ffmpeg not found, skipping (the game falls back to its built-in sounds)"
+if [ "$MODE" != "--check" ]; then command -v ffmpeg >/dev/null 2>&1 || warn "ffmpeg not found, skipping (the game falls back to its built-in sounds)"; fi
 PY=""; for c in python3 python; do if "$c" -c pass >/dev/null 2>&1; then PY="$c"; break; fi; done
 [ -n "$PY" ] || warn "python not found, skipping"
 
-if [ "$MODE" = "--download" ]; then
-  REPO="${REPO:-${GITHUB_REPOSITORY:-verbal76/Climb-Up}}"
+if [ "$MODE" = "--download" ] || [ "$MODE" = "--check" ]; then
   command -v gh >/dev/null 2>&1 || warn "gh not found, skipping"
+  if [ -n "${PACK_TOKEN:-}" ]; then
+    export GH_TOKEN="$PACK_TOKEN"; SRC="${PACK_REPO:-verbal76/upwardly-licensed-assets}"
+  else
+    SRC="${REPO:-${GITHUB_REPOSITORY:-verbal76/Climb-Up}}"
+    echo "::warning::pack sfx: no PACK_TOKEN (secret LICENSED_ASSETS_TOKEN), using the old location in $SRC; move the pack to the private repository"
+  fi
   # the release may be a draft, which only the list endpoint shows: look it up by tag name
-  AID="$(gh api "repos/$REPO/releases" --paginate --jq '.[] | select(.tag_name=="Sfx") | .assets[] | select(.name=="Minifantasy_Forgotten_Plains_SFX.zip") | .id' 2>/dev/null | head -n1)" || true
-  [ -n "${AID:-}" ] || warn "release asset not found (tag Sfx), skipping"
-  gh api -H "Accept: application/octet-stream" "repos/$REPO/releases/assets/$AID" > "$WORK/pack.zip" 2>/dev/null || warn "download failed, skipping"
+  AID="$(gh api "repos/$SRC/releases" --paginate --jq '.[] | select(.tag_name=="Sfx") | .assets[] | select(.name=="Minifantasy_Forgotten_Plains_SFX.zip") | .id' 2>/dev/null | head -n1)" || true
+  [ -n "${AID:-}" ] || warn "release asset not found (tag Sfx in $SRC), skipping"
+  gh api -H "Accept: application/octet-stream" "repos/$SRC/releases/assets/$AID" > "$WORK/pack.zip" 2>/dev/null || warn "download failed, skipping"
   ZIP="$WORK/pack.zip"
 else
   ZIP="$MODE"; [ -f "$ZIP" ] || warn "zip not found: $ZIP"
@@ -32,6 +45,7 @@ fi
 
 GOT="$("$PY" -I -c 'import hashlib,sys;print(hashlib.sha256(open(sys.argv[1],"rb").read()).hexdigest())' "$ZIP" 2>/dev/null)"
 [ "$GOT" = "$EXPECT_SHA" ] || warn "sha256 mismatch ($GOT), skipping"
+if [ "$MODE" = "--check" ]; then echo "pack sfx: reachable from $SRC, sha256 OK"; exit 0; fi
 "$PY" -I -m zipfile -e "$ZIP" "$WORK/x" >/dev/null 2>&1 || warn "unzip failed, skipping"
 
 mkdir -p "$OUT" || warn "cannot create $OUT"
@@ -62,4 +76,5 @@ conv amb_birds    "13_Birds_loop"      0 1
 conv amb_wind     "14_Wind_loop"       0 1
 conv amb_crickets "11_Crickets_2_loop" 0 1
 echo "pack sfx: wrote $N files to $OUT"
+[ "$N" -ge 20 ] || warn "only $N of 20 clips converted"
 exit 0

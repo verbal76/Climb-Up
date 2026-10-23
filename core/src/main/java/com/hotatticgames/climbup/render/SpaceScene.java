@@ -45,7 +45,7 @@ public final class SpaceScene {
     /** Colour of the sky glow the far clouds take (set by the renderer from the sky gradient). */
     public final com.badlogic.gdx.graphics.Color cloudGlow = new com.badlogic.gdx.graphics.Color(0.8f, 0.9f, 1f, 1f);
 
-    // sky ship: crosses the sky slowly; close ship: a short fast fly-by in front of the player
+    // sky ship: crosses the sky slowly; close ship: a short fast fly-by behind the course, seen through the gaps
     private float skyT = -1, skyDur, skyY, skyDist, skyDir, nextSky = 6f; private int skyShip;
     private float buzzT = -1, buzzDir, buzzY, nextBuzz = 30f, clock; private int buzzShip;
     private static final float BUZZ_TIME = 2.8f, FREEZE = Float.parseFloat(System.getProperty("climb.spaceFreeze", "-1"));   // FREEZE: test hook that parks both ships at that point of their flight
@@ -59,7 +59,7 @@ public final class SpaceScene {
         if (Boolean.getBoolean("climb.spaceFast")) { nextSky = 0.5f; nextBuzz = 2.5f; }       // test hook
         this.models = models; this.far = farCam; this.radius = radius; this.circumference = (float) (2 * Math.PI * radius);
         for (int i = 0; i < PLANETS; i++) planets[i] = fade(new ModelInstance(models.space("planet_" + (i + 1))));
-        for (int i = 0; i < ROCKS; i++) rocks[i] = new ModelInstance(models.space(ROCK_NAMES[i]));
+        for (int i = 0; i < ROCKS; i++) rocks[i] = fade(new ModelInstance(models.space(ROCK_NAMES[i])));
         for (int i = 0; i < PLANETS; i++) planetExt[i] = reach(planets[i]);
         for (int i = 0; i < ROCKS; i++) rockExt[i] = reach(rocks[i]);
         for (int i = 0; i < SHIPS.length; i++) ships[i] = fade(new ModelInstance(models.space(SHIPS[i])));
@@ -166,17 +166,23 @@ public final class SpaceScene {
             float arc = ((h >>> 10) % 1000) / 1000f * circumference, y = bandY + ((h >>> 20) % 1000) / 1000f * 60f, r = 3.2f + ((h >>> 30) % 1000) / 1000f * 4.5f;
             float sc = 0.45f + ((h >>> 40) % 1000) / 1000f * 0.8f;
             r = inside(r, sc, planetExt[(int) ((h >>> 3) % PLANETS)]);
-            alpha(pl, 1f);
+            float k = clearOfCourse(arc, r, sc * planetExt[(int) ((h >>> 3) % PLANETS)], camS);
+            if (k > 0f) {
+            alpha(pl, k);
             placer.place(pl, arc, y, radius - r, sc, sc, sc, reduced ? 0f : clock * (6f + (h % 7)));
             batch.render(pl, mainEnv);
+            }
             }
             if (spaceW > 0.3f) {            // deep space: a second planet per band
                 ModelInstance p2 = planets[(int) ((h >>> 5) % PLANETS)];
                 float a2 = ((h >>> 12) % 1000) / 1000f * circumference, y2 = bandY + ((h >>> 22) % 1000) / 1000f * 60f, r2 = 3.5f + ((h >>> 32) % 1000) / 1000f * 4f, s2 = 0.5f + ((h >>> 42) % 1000) / 1000f * 0.9f;
                 r2 = inside(r2, s2, planetExt[(int) ((h >>> 5) % PLANETS)]);
-                alpha(p2, 1f);
+                float k = clearOfCourse(a2, r2, s2 * planetExt[(int) ((h >>> 5) % PLANETS)], camS);
+                if (k > 0f) {
+                alpha(p2, k);
                 placer.place(p2, a2, y2, radius - r2, s2, s2, s2, reduced ? 0f : clock * 5f);
                 batch.render(p2, mainEnv);
+                }
             }
             // two drifting rocks (three in deep space)
             for (int k = 0; k < (spaceW > 0.3f ? 3 : 2); k++) {
@@ -187,14 +193,19 @@ public final class SpaceScene {
                 float rs = 0.3f + ((g >>> 42) % 1000) / 1000f * 0.6f;
                 rr = inside(rr, rs, rockExt[(int) ((g >>> 4) % ROCKS)]);
                 if (rr < 0.3f) continue;
+                float vis = clearOfCourse(ra, rr, rs * rockExt[(int) ((g >>> 4) % ROCKS)], camS);
+                if (vis <= 0f) continue;
+                alpha(rk, vis);
                 placer.place(rk, ra, ry + (reduced ? 0f : 0.4f * MathUtils.sin(clock * 0.6f + k)), radius - rr, rs, rs, rs, reduced ? 0f : clock * (8f + (g % 9)));
                 batch.render(rk, mainEnv);
             }
         }
         if (buzzT >= 0) {
             float u = buzzT / BUZZ_TIME, x = (u - 0.5f) * 64f * buzzDir, y = playerY + buzzY + 0.25f * MathUtils.sin(buzzT * 6f);
-            float z = playerZ - 1.2f;
-            ModelInstance sh = ships[buzzShip]; float sc = 0.30f;
+            // owner rule (Build 78): nothing comes between the camera and the course, so the ship passes behind all of it (its widest wingspan, 5.8 model
+            // units either side, points at the camera while it flies sideways: 0.6 x 5.8 = 3.5 m, nearest point 13.5 m behind the front of the tower)
+            float z = playerZ - radius - 7f;
+            ModelInstance sh = ships[buzzShip]; float sc = 0.6f;
             alpha(sh, 1f);
             sh.transform.idt().translate(x, y, z).rotate(0, 1, 0, (buzzDir > 0 ? 90f : -90f) * SHIP_NOSE).rotate(0, 0, 1, 14f * buzzDir * MathUtils.sin(u * MathUtils.PI)).scale(sc, sc, sc);
             batch.render(sh, mainEnv);
@@ -205,6 +216,19 @@ public final class SpaceScene {
         com.badlogic.gdx.math.collision.BoundingBox bb = new com.badlogic.gdx.math.collision.BoundingBox(); m.calculateBoundingBox(bb);
         com.badlogic.gdx.math.Vector3 d = bb.getDimensions(new com.badlogic.gdx.math.Vector3());
         return 0.5f * (float) Math.sqrt(d.x * d.x + d.z * d.z);
+    }
+
+    /**
+     * Owner rule (Build 78): nothing may block the player's view of the course. Scenery inside the cylinder turns with the tower, so as the climb
+     * goes round it comes toward the camera; it is drawn only while its nearest point is behind the farthest part of the course the renderer can
+     * draw (WorldRenderer.visible: 1.3 rad either side plus a 3 m margin; platforms and the hazards set behind the lane reach about 2 m deeper), and it
+     * fades out over the last 1.5 m before that limit, where it still covers nothing. Returns its opacity, 0 = not drawn.
+     */
+    private float clearOfCourse(float arc, float r, float ext, float camS) {
+        float phi = (mod(arc - camS + circumference * 0.5f, circumference) - circumference * 0.5f) / radius;
+        float nearZ = -radius + r * MathUtils.cos(phi) + ext;                                    // its nearest point toward the camera (+z)
+        float courseFarZ = -radius + radius * MathUtils.cos(Math.min(MathUtils.PI, 1.3f + 3f / radius)) - 2f;
+        return MathUtils.clamp((courseFarZ - nearZ) / 1.5f, 0f, 1f);
     }
 
     /** Scenery floating inside the cylinder must never reach the plane the player and the platforms use (distance `radius` from the axis): keep its far edge a margin short of it. */

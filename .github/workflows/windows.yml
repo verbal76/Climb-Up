@@ -71,9 +71,10 @@ jobs:
     if: always() && (github.ref == 'refs/heads/ccr-cb458cd1-w4dh5c' || github.ref == 'refs/heads/build-74-determinism') && (needs.tests.result == 'success' || (inputs.skip_tests && needs.tests.result == 'skipped'))
     needs: tests
     runs-on: windows-latest
-    # contents: read is all the sound-pack fetch needs while the "Sfx" release is published (a DRAFT release would need contents: write); nothing in this job publishes
+    # contents: write ONLY because the sound pack sits on the owner's DRAFT "Sfx" release, which GitHub shows only to a token that can write
+    # (proved by sfx-pack-access.yml: a contents: read token cannot see it); nothing in this job publishes or writes
     permissions:
-      contents: read
+      contents: write
       actions: read
     steps:
       - uses: actions/checkout@v4
@@ -153,9 +154,10 @@ jobs:
     if: always() && (github.ref == 'refs/heads/ccr-cb458cd1-w4dh5c' || github.ref == 'refs/heads/build-74-determinism') && (needs.tests.result == 'success' || (inputs.skip_tests && needs.tests.result == 'skipped'))
     needs: tests
     runs-on: ubuntu-latest
-    # contents: read is all the sound-pack fetch needs while the "Sfx" release is published (a DRAFT release would need contents: write); nothing in this job publishes
+    # contents: write ONLY because the sound pack sits on the owner's DRAFT "Sfx" release, which GitHub shows only to a token that can write
+    # (proved by sfx-pack-access.yml: a contents: read token cannot see it); nothing in this job publishes or writes
     permissions:
-      contents: read
+      contents: write
       actions: read
     steps:
       - uses: actions/checkout@v4

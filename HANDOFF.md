@@ -8,6 +8,15 @@
 
 # Handoff
 
+## Build 78 status (2026-10-23) - PUBLISHED
+
+Release v1.3.0-build78 (public) from build-74-determinism @ cf07f34; tag v1.3.0-build78 -> cf07f34. First release through the new gate: the
+desktop run (40005658733) left a draft with the EXE zip + Linux tar.gz, the Android run (40005654773, emulator update from Build 71 passed)
+added the APK and published it with checksums.sha256 (3 lines) and build-manifest.json (3 artifacts, source cf07f34), all matching GitHub's
+digests. APK sha256 f2eb188b..., EXE zip 1e734774..., Linux 9890f6fd.... New in 78: clear-view rule (space scenery behind the course),
+tumbling astronauts (Deep Space), scanning ship (other worlds), sound pack from the draft Sfx release. The first Build 78 attempt (e57036e)
+was refused at publish (HTTP 403, cause not found) and published nothing; see DECISIONS.
+
 ## Build 77 status (2026-10-23) - PUBLISHED; closeout in progress
 
 Release v1.3.0-build77 (public) from build-74-determinism @ e1c8b55 (game code = 311fb2b). Verified: APK c35d3d1d...570ca, EXE zip 73e5f787...,

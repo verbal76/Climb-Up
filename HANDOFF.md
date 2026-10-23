@@ -16,6 +16,8 @@ added the APK and published it with checksums.sha256 (3 lines) and build-manifes
 digests. APK sha256 f2eb188b..., EXE zip 1e734774..., Linux 9890f6fd.... New in 78: clear-view rule (space scenery behind the course),
 tumbling astronauts (Deep Space), scanning ship (other worlds), sound pack from the draft Sfx release. The first Build 78 attempt (e57036e)
 was refused at publish (HTTP 403, cause not found) and published nothing; see DECISIONS.
+Owner's phone, Build 78 installed: determinism check MATCHES the desktop (finish 425348, clock 425349, 1:58:09.150, same event and state
+hashes as Build 77, as expected: Build 78 changed only rendering and audio).
 
 ## Build 77 status (2026-10-23) - PUBLISHED; closeout in progress
 

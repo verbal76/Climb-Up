@@ -190,7 +190,7 @@ public final class CourseGenerator {
             rests = prev.get(rs - 1).zone * 3 + rs;   // keeps the checkpoint cadence varied between slices
         }
         float startY = c.get(ctx - 1).y;
-        castleTarget = 0f; castleDone = false; exactCastle = false; keyN = 0; keyY = 0f; gemBest = -1;
+        castleTarget = 0f; castleDone = false; exactCastle = false; keyN = 0; keyY = 0f; gemBest = -1; beltSawY = 0f; beltSawDone = false; beltSawNow = false;
         if (T.castleSpacing > 0f) {          // exact heights: the castles at spacing x N, and ONE red-gem checkpoint halfway between every two castles (and between the start and castle 1)
             double sp = T.castleSpacing, half = sp * 0.5, startAbs = startY + base;          // absolute heights in double: the same maths at any altitude
             int mc = (int) Math.floor((startAbs + 80.0) / sp);
@@ -201,8 +201,13 @@ public final class CourseGenerator {
                 float hk = (float) (keyHeight(c.seed, n, T.castleSpacing) - base);
                 if (hk > startY && hk <= startY + 80f) { keyN = n; keyY = hk; break; }
             }
+            if (endless) for (int n = Math.max(BELT_SAW_FIRST, (int) Math.floor(startAbs / sp) + 1); n <= Math.min(BELT_SAW_LAST, (int) Math.floor((startAbs + 80.0) / sp) + 1); n++) {
+                float hb = (float) (beltSawHeight(c.seed, n, T.castleSpacing) - base);
+                if (hb > startY && hb <= startY + 80f) { beltSawY = hb; break; }
+            }
         }
-        extend(keyN > 0 ? Math.max(startY + T.chunkHeight, keyY + 6f) : startY + T.chunkHeight);
+        float top = keyN > 0 ? Math.max(startY + T.chunkHeight, keyY + 6f) : startY + T.chunkHeight;
+        extend(beltSawY > 0f ? Math.max(top, beltSawY + 12f) : top);
         addRest(theme(c.get(c.size() - 1).y));
         c.get(c.size() - 1).checkpoint = true;
         thinCheckpoints();
@@ -266,7 +271,7 @@ public final class CourseGenerator {
         if (castleTarget > 0f && !castleDone) targetY = Math.max(targetY, castleTarget + (exactCastle ? 8f : 6f));
         int sinceRest = 0;
         float lastRestY = c.get(c.size() - 1).y, nextGap = T.gemSpacing * r(0.85f, 1.15f);      // red-gem checkpoints at even stretches of height, each with a little random give
-        while (c.get(c.size() - 1).y < targetY) {
+        while (c.get(c.size() - 1).y < targetY || (beltSawY > 0f && !beltSawDone && c.get(c.size() - 1).y < beltSawY + 40f)) {      // (a balance conveyor that could not be proven yet gets up to 40 m more tries)
             Element last = c.get(c.size() - 1);
             float d = diff(last.y);
             int zone = tier(last.y), th = theme(last.y);
@@ -287,6 +292,10 @@ public final class CourseGenerator {
             if (k != Kind.WET && k != Kind.CREATURE && !last.wet() && prev != Kind.DROPS && (secondHalf ? rnd.nextFloat() < 0.10f : th >= 1 && rnd.nextFloat() < 0.04f)) k = Kind.DROPS;
             else if (secondHalf && (k == Kind.HOP || k == Kind.STAIRS) && rnd.nextFloat() < 0.3f) k = Kind.HAZ;          // a little rougher than the first half
             if (last.wet() && (k == Kind.HAZ || k == Kind.TRAP || k == Kind.MORTAR || k == Kind.CREATURE || k == Kind.DROPS)) k = Kind.STAIRS;          // after a slippery platform give a walk-up (not a hazard you must time, nor a jump you must push off a slippery surface for): its timing windows assume a normal run-up (SawFairnessTest) and the plain climb stays walkable
+            if (beltSawY > 0f && !beltSawDone && last.y >= beltSawY && !last.wet() && !(castlePending && last.y > castleTarget - 14f)) {      // Build 77: this section's balance conveyor (tried again on the next module if it cannot be proven here)
+                beltSawNow = true; boolean ok = tryModuleBelow(Kind.SEESAW, d, th); beltSawNow = false;
+                if (ok) { beltSawDone = true; prev2 = prev; prev = Kind.SEESAW; sinceRest++; continue; }
+            }
             if (!tryModuleBelow(k, d, th)) {
                 rejected++;
                 boolean ok = false;
@@ -364,12 +373,21 @@ public final class CourseGenerator {
     }
 
     private int keyN, gemBest; private float keyY;
+    private float beltSawY; private boolean beltSawDone, beltSawNow;      // this slice's balance conveyor (Build 77): the height it starts from; built yet; the SEESAW being built now is one
 
     /** Deterministic key height for castle n: anywhere in the section before it (near the previous castle ... far above), clear of the exact-height structures (gem, castle). */
     public static float keyHeight(long seed, int n, float spacing) {
         float lo = spacing * (n - 1) + 20f, hi = spacing * n - 40f, mid = spacing * (n - 1) + spacing * 0.5f;
         Random r = new Random(seed * 0x9E3779B97F4A7C15L + n * 0xBF58476D1CE4E5B9L + 17L);
         for (int i = 0; i < 32; i++) { float h = lo + r.nextFloat() * (hi - lo); if (Math.abs(h - mid) >= 16f) return h; }
+        return lo;
+    }
+    /** Build 77 (owner): sections 7-10 (Castle 6 to Castle 10) each get ONE balance conveyor, at a height fixed by the seed and the section, like the keys. */
+    public static final int BELT_SAW_FIRST = 7, BELT_SAW_LAST = 10;
+    public static float beltSawHeight(long seed, int n, float spacing) {
+        float lo = spacing * (n - 1) + 40f, hi = spacing * n - 60f, mid = spacing * (n - 1) + spacing * 0.5f;
+        Random r = new Random(seed * 0x94D049BB133111EBL + n * 0x9E3779B97F4A7C15L + 29L);
+        for (int i = 0; i < 32; i++) { float h = lo + r.nextFloat() * (hi - lo); if (Math.abs(h - mid) >= 25f) return h; }
         return lo;
     }
     /** The key (and gate) colour of castle n is fixed by the run's seed and the castle number, so the key can be placed sections before its gate is built. */
@@ -1350,6 +1368,7 @@ public final class CourseGenerator {
                 float w = 7f + rnd.nextInt(2), dyIn = r(-0.4f, 0.3f);
                 float gapIn = reach(dyIn) * lerp(0.5f, 0.85f, d) * r(0.92f, 1f) * (1f - 0.03f * attempt);
                 Element sw = plat(Element.Type.SEESAW, eR + gapIn + w / 2f, y0 + dyIn, w, z); sw.skin = 1;
+                if (beltSawNow) { sw.skin = 4; sw.phase = lerp(2.2f, 3.0f, d) * r(0.95f, 1.05f); }      // Build 77 (owner): the balance conveyor - its belt runs toward the low end, up to this fast
                 l.add(sw);
                 float gapOut = lerp(0.5f, 1.3f, d) * r(0.9f, 1.1f) * (1f - 0.05f * attempt);
                 l.add(plat(S, sw.s + w / 2f + gapOut + 1.5f, sw.y + r(-0.5f, 0.6f), 3f, z));

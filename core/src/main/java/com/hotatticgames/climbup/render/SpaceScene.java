@@ -120,8 +120,15 @@ public final class SpaceScene {
             pl.transform.idt().translate(tmp).rotate(0, 1, 0, clock * f.spin).rotate(1, 0, 0, 12f).scale(sc, sc, sc);
             alpha(pl, a); batch.render(pl, env);
         }
-        float cloudA = (1f - 0.8f * MathUtils.clamp((zoneF - 2.4f) / 0.8f, 0f, 1f) * (1f - wrap)) * (1f - spaceW) * 0.65f;      // fewer at night, none in deep space
-        if (cloudA > 0.02f) for (FarCloud c : farClouds) {
+        float night = MathUtils.clamp((zoneF - 2.4f) / 0.8f, 0f, 1f) * (1f - wrap);
+        float cloudA = (1f - 0.8f * night) * (1f - spaceW) * 0.65f;      // fewer at night, none in deep space
+        // Build 77 (owner: in the space levels the stars looked weird coming through the clouds): where stars show, clouds thin out by NUMBER, one at a time,
+        // and the ones left stay solid; only the cloud fading in or out is see-through for a moment. Daytime clouds look as before.
+        float starK = Math.max(night, spaceW), presence = cloudA / 0.65f * FAR_CLOUDS;
+        if (cloudA > 0.02f) for (int ci = 0; ci < FAR_CLOUDS; ci++) {
+            FarCloud c = farClouds[ci];
+            float fade = starK > 0f ? MathUtils.clamp(presence - ci, 0f, 1f) : 1f;
+            if (fade <= 0f) continue;
             float W = 1.7f * c.dist, H = 1.2f * c.dist;
             float x = mod(c.u * W - camS * c.pkx * c.dist * 0.1f, W) - W / 2f;
             float y = mod(c.v * H - camY * c.pky * c.dist * 0.1f, H) - H / 2f;
@@ -130,9 +137,9 @@ public final class SpaceScene {
             c.inst.transform.idt().translate(tmp).rotate(0, 1, 0, 8f).scale(sc * 1.7f, sc * 0.85f, sc);
             for (Material m : c.inst.materials) {
                 float haze = c.band / 4f;                              // 0 = nearest band, 1 = farthest: farther clouds are hazier and take more of the sky colour
-                ((ColorAttribute) m.get(ColorAttribute.Diffuse)).color.set(1f, 1f, 1f, 1f).lerp(cloudGlow, 0.30f + 0.55f * haze);
-                ((ColorAttribute) m.get(ColorAttribute.Emissive)).color.set(cloudGlow).mul(0.55f);
-                ((BlendingAttribute) m.get(BlendingAttribute.Type)).opacity = cloudA * (0.95f - 0.45f * haze);
+                ((ColorAttribute) m.get(ColorAttribute.Diffuse)).color.set(1f, 1f, 1f, 1f).lerp(cloudGlow, 0.30f + 0.55f * haze).mul(1f - 0.55f * starK, 1f - 0.5f * starK, 1f - 0.35f * starK, 1f);   // solid night clouds are dusky, not glowing white
+                ((ColorAttribute) m.get(ColorAttribute.Emissive)).color.set(cloudGlow).mul(0.55f * (1f - 0.7f * starK));
+                ((BlendingAttribute) m.get(BlendingAttribute.Type)).opacity = fade * MathUtils.lerp(cloudA * (0.95f - 0.45f * haze), 0.97f - 0.1f * haze, starK);
             }
             batch.render(c.inst, env);
         }

@@ -543,6 +543,26 @@ public final class Autopilot {
         }
         return real.mode == Sim.Mode.GROUND && real.onElem >= 0 && real.onElem < c.routeSize();
     }
+    /** Stops within a few cm of {@code toS} on the platform underfoot the way a person does with a direction-only stick: back off if too close to stop cleanly, run in, let go at the stopping distance. */
+    static void standAt(Sim real, float toS, InputState in) {
+        Course c = real.course; int a = real.onElem; Element el = c.get(a);
+        float room = Math.max(0f, el.halfW() - 0.35f);
+        for (int tries = 0; tries < 3 && real.mode == Sim.Mode.GROUND && real.onElem == a; tries++) {
+            float d = c.dsWrap(toS, real.s);
+            if (Math.abs(d) < 0.07f) return;
+            if (Math.abs(d) < 0.5f) {           // too close for a clean stop: step back first
+                float off = Math.max(-room, Math.min(room, c.dsWrap(toS, real.es1[a]) - Math.signum(d) * 0.8f)), back = c.wrap(real.es1[a] + off);
+                for (int q = 0; q < 120 && real.mode == Sim.Mode.GROUND && real.onElem == a; q++) { float db = c.dsWrap(back, real.s); if (Math.abs(db) < 0.3f) break; in.clear(); in.moveX = Math.signum(db); real.step(in); }
+                for (int q = 0; q < 40 && real.mode == Sim.Mode.GROUND && Math.abs(real.vx) > 0.02f; q++) { in.clear(); real.step(in); }
+            }
+            for (int q = 0; q < 240 && real.mode == Sim.Mode.GROUND && real.onElem == a; q++) {
+                float dd = c.dsWrap(toS, real.s), stop = real.vx * real.vx / (2f * real.T.groundDecel);
+                if (Math.abs(dd) < 0.07f || (Math.signum(real.vx) == Math.signum(dd) && Math.abs(dd) <= stop + 0.04f)) break;
+                in.clear(); in.moveX = Math.signum(dd); real.step(in);
+            }
+            for (int q = 0; q < 40 && real.mode == Sim.Mode.GROUND && Math.abs(real.vx) > 0.02f; q++) { in.clear(); real.step(in); }
+        }
+    }
     private static int[] chain(int first, int n) { int[] a = new int[n]; for (int i = 0; i < n; i++) a[i] = first + i; return a; }
 
     /** True if the planner can get from route/decoy element a to element b and attach to it (the same check the generator proves, re-run on the finished data: used by the tests). */
@@ -632,6 +652,13 @@ public final class Autopilot {
                     r = plan(real, a, false, false);
                     if (r.ok) break;
                 }
+            }
+            if (!r.ok && real.mode == Sim.Mode.GROUND && real.onElem == a && !hasMidHazard(c, a)) {
+                // like a person: stand right where the jump was proven (the platform's middle) and repeat it as proven. The walks above stop anywhere within 0.45 m of
+                // a spot, and a standing jump off a short step can need ~0.35 m and the proof's exact start timing (Build 77, seed 3 slice 54: castle 7's staircase,
+                // a 2.5 m step that works from -0.2..+0.15 m; proofs start with the stick just let go, a long-idle solver moved 0.1 s sooner and missed)
+                standAt(real, real.es1[a], in);
+                if (real.mode == Sim.Mode.GROUND && real.onElem == a) { real.restartHold(); r = plan(real, a, false, true); if (!r.ok) r = plan(real, a, false, false); }      // and from the stick state the proof started in
             }
             if (!r.ok && real.mode == Sim.Mode.GROUND && real.onElem == a && hasMidHazard(c, a) && c.get(a).isPlatform()) {
                 // like a person: a hazard in the middle of this platform, and the spot we arrived at gives no clean hop. Wait for a better moment, step to another spot on the near side and size it up again (tried on a copy first: the stand-in never walks into the hazard)

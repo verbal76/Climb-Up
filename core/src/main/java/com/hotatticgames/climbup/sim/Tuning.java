@@ -21,6 +21,7 @@ public class Tuning {
     public float fallRespawnDepth = 12f;
     public float hitKnockSide = 6.9f, hitKnockUp = 6.9f;   // a hazard hit (saw, spikes, pendulum, cannon ball) throws you off: sideways and upward speed (owner: 15 % more than the earlier 6 / 6, nothing kills you)
     public float seesawMaxTilt = 0.55f, seesawRate = 1.0f, seesawRelax = 1.0f, seesawSlide = 5f, seesawUphill = 0.45f;   // seesaw bridge: slope (height per metre), tip / relax speed, downhill slide, uphill slow-down
+    public float beltSeesawDead = 0.5f;      // Build 77 (owner): the balance conveyor stays level while you are within this many metres of its pivot
     public float courseHeight = 520f;        // finite test towers only; the shipped game is endless
     public float zoneHeight = 400f; public int zoneCount = 5; public float gemSpacing = 30f;   // red-gem checkpoints about every gemSpacing metres (+-15%);   // each world (meadow, frost, dusk, night, space) lasts zoneHeight metres, then they repeat
     public float rampHeight = 520f;          // height over which base difficulty (gap sizes, mover amplitude) ramps up in the endless climb

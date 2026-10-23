@@ -35,7 +35,7 @@ public final class WorldRenderer implements Disposable {
         boolean belt; float beltSpan, beltSlope, beltInset;   // Build 72: a conveyor slat that rides the belt, wrapping round within beltSpan (and along the ramp's slope); Build 76: cut off beltInset short of each end (the rollers)
         float localZ;   // optional pre-rotation translate along the model's own Z (model units, applied before scale): used to recentre an off-origin mesh (the ramp) so it can sit at the element centre without a big arc offset
     }
-    private static final class Vis { Part[] parts; Element e; boolean built; }
+    private static final class Vis { Part[] parts; Element e; boolean built; float beltU, beltT; }      // beltU: how far a balance conveyor's belt has run (its speed follows the tilt)
 
     private final Tuning T;
     private final Course course;
@@ -177,7 +177,7 @@ public final class WorldRenderer implements Disposable {
         boolean snow = e.zone == 1 || e.zone == 3;
         String base = snow ? "block-snow" : "block-grass";
         switch (e.type) {
-            case SEESAW: bridgeParts(ps, e.w, true, false); break;
+            case SEESAW: bridgeParts(ps, e.w, true, e.tiltBelt()); break;
             case RAMP: {
                 float sc = e.len;
                 // The ramp wedge's walking surface runs model-Z 2.0 (high, top y=1.39) -> 4.1 (low); its centre is model-Z ~3.1.
@@ -625,6 +625,7 @@ public final class WorldRenderer implements Disposable {
         float shakeX = 0, fallY = 0;
         boolean gone = sim.gone[i];
         float crumble = sim.crumbleT[i];
+        if (e.tiltBelt()) { float st = sim.time - v.beltT; if (st > 0f && st < 0.25f) v.beltU += sim.surfaceCarry(i) * st; v.beltT = sim.time; }
         for (Part p : v.parts) {
             float du = p.du, dy = p.dy, extraYaw = p.yaw; float sx = p.sx, sy = p.sy, roll = p.roll;
             float y = e.isPlatform() ? ey - Math.max(-0.1f, Math.min(0.22f, dip[i])) : ey;
@@ -634,7 +635,7 @@ public final class WorldRenderer implements Disposable {
                 if (e.spins() && !p.fixed) extraYaw = p.yaw - e.spinAngle(sim.time) * MathUtils.radiansToDegrees;      // turning like a record (heading 0 = uphill toward +s)
             }
             if (p.belt) {       // Build 72: a conveyor slat rides along the belt and wraps round to the far end
-                float span = p.beltSpan, u = ((p.du + span / 2f + e.beltV() * sim.time) % span + span) % span - span / 2f;
+                float span = p.beltSpan, u = ((p.du + span / 2f + (e.tiltBelt() ? v.beltU : e.beltV() * sim.time)) % span + span) % span - span / 2f;
                 // Build 76 (owner: the planks clipped through the end rollers): the slat is cut where it reaches a roller, so it shrinks into one end and grows out of the other
                 float lo = Math.max(u - p.sx / 2f, -span / 2f + p.beltInset), hi = Math.min(u + p.sx / 2f, span / 2f - p.beltInset);
                 if (hi - lo < 0.02f) continue;
@@ -645,7 +646,7 @@ public final class WorldRenderer implements Disposable {
                 y = e.y - Math.max(-0.1f, Math.min(0.22f, dip[i]));
                 if (!p.fixed) {         // tilt the plank about its pivot
                     float th = (float) Math.atan(sim.tilt[i]), c = (float) Math.cos(th), sn = (float) Math.sin(th);
-                    du = p.du * c - p.dy * sn; dy = p.du * sn + p.dy * c; roll = th * MathUtils.radiansToDegrees;
+                    float u0 = du, v0 = dy; du = u0 * c - v0 * sn; dy = u0 * sn + v0 * c; roll = p.roll + th * MathUtils.radiansToDegrees;      // (du, dy: after a belt slat has moved along)
                 }
             }
             switch (e.type) {

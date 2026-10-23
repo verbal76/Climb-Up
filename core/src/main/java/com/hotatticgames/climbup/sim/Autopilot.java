@@ -608,6 +608,14 @@ public final class Autopilot {
             if (real.mode == Sim.Mode.GROUND && real.onElem == a && hasMidHazard(c, a)) {   // like a person would: stop in the safe pocket before sizing up the hazard
                 for (int q = 0; q < 40 && Math.abs(real.vx) > 0.05f && real.mode == Sim.Mode.GROUND; q++) { in.clear(); real.step(in); }
             }
+            if (real.mode == Sim.Mode.BEAM && real.onElem == a && c.get(a).type == Element.Type.ROPE) {
+                // like a person: knocked off a ledge back onto the rope and hauled up onto its top beam, so climb back down onto the rope and size the move up
+                // again from there (the moves off a rope are planned from the rope). Build 77, seed 2 slice 55: an aimed cannon hit the pull-up onto the next
+                // block; the loop only took the beam as "nothing to do" and went round again without a step until it gave up
+                for (int q = 0; q < 120 && real.mode == Sim.Mode.BEAM; q++) { in.clear(); in.moveY = -1f; real.step(in); }
+                for (int q = 0; q < 6 && real.mode == Sim.Mode.ROPE; q++) { in.clear(); real.step(in); }
+                continue;
+            }
             if (real.mode == Sim.Mode.AIR && !(real.lastPad == a && (c.get(a).type == Element.Type.PAD || c.get(a).type == Element.Type.SPRING))) {      // shoved into the air by a bee or crab: settle first
                 if (!recover(real, a, in)) { rep.failedLink = a; rep.simTime = real.time; rep.failInfo = "recover " + String.format("mode=%s s=%.2f y=%.2f", real.mode, real.s, real.y); return rep; }
                 a = real.onElem;

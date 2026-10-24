@@ -252,6 +252,7 @@ public final class WorldRenderer implements Disposable {
                     }
                 }
                 if (orbit || deck) { /* decorated by spacePlatform / bare so the tower fits */ }
+                else if (insideCastle(e)) { /* Build 79 (owner): nothing inside castles */ }
                 else if (thick && e.type != Element.Type.GOAL && quality > 0) decorate(ps, e, idx, w, snow);
                 else if (!thick && e.type == Element.Type.STATIC && quality > 0 && hash(idx, 7) % 3 == 0) decorate(ps, e, idx, w, snow);
                 // checkpoints are marked by a hovering red gem (drawn every frame in drawGem), not baked into the platform
@@ -429,7 +430,13 @@ public final class WorldRenderer implements Disposable {
      * The scale a rock hanging under platform idx may have: {@code sc}, or smaller so that its bottom (depth {@code base} plus its height below the platform's top) stays
      * ROCK_CLEAR above any platform, castle or rope top beneath its span; 0 (no rock) when even a small one would not fit or a rope runs up through the platform.
      */
+    /** Build 79 (owner: "nothing inside castles"): platform e lies within a castle's walls (its span and height), so it gets no props or hanging rock. */
+    private boolean insideCastle(Element e) {
+        for (Element o : course.hazards) if (o.type == Element.Type.GATE && Math.abs(course.dsWrap(o.s, e.s)) < 2.5f + e.halfW() && e.y > o.y - 0.5f && e.y < o.y + o.len + 0.5f) return true;
+        return false;
+    }
     private float fitRock(int idx, Element e, String rock, float sc, float base, float w) {
+        if (insideCastle(e)) return 0f;
         float[] bb = rockBox.get(rock);
         if (bb == null) { com.badlogic.gdx.math.collision.BoundingBox b = new com.badlogic.gdx.math.collision.BoundingBox(); models.space(rock).calculateBoundingBox(b); bb = new float[]{b.getHeight(), Math.max(b.getWidth(), b.getDepth())}; rockBox.put(rock, bb); }
         float span = Math.max(w * 0.5f + 0.5f, bb[1] * sc * 0.5f), room = 1e9f;

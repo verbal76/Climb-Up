@@ -603,7 +603,7 @@ generator proofs and the bundled replays are redone together.
   with it and is gone. The planner hops each crab on a deck in turn.
 - **Bees** (owner: two at once, never from the same side): a bee's `dir` (-1) now brings it in from the other side; a guarded gap that has a
   bee gets a second one from the opposite side 30-70 % of the time, slightly out of step.
-- **Spike drops** (owner: just wait and walk under): 20-50 % of drop platforms after the first get a crab on the deck or a bee over it.
+- **Spike drops** (owner: just wait and walk under): 20-50 % of drop platforms after the first get crabs on the deck (two, plus one per difficulty level: never fewer than two) or a bee over it.
 - **Aimed cannon** (owner: it spun through its pedestal): the turret turns flat like a record (aimYaw, 4 rad/s) to face your side and its
   barrel only tilts between -20 and +29 degrees; it only arms once it faces along the lane. The ball flies along that limited angle, so a
   climber far below or above the barrel's reach is not targeted.

@@ -1154,11 +1154,18 @@ public final class CourseGenerator {
             h.anchor = base0 + k;
             hzOut.add(h);
             if (k > 0 && rnd.nextFloat() < 0.2f + 0.3f * inten + 0.3f * T.hard) {             // Build 79 (owner: waiting out a drop is too easy): sometimes a crab on the deck or a bee over it as well
-                Element m;
-                if (rnd.nextBoolean()) { m = hz(Element.Type.CRAB, p.s - 0.15f * w, p.y, 0f, z); m.amp = 0.9f; m.period = r(3.0f, 4.0f) - 0.4f * inten; }
-                else { m = hz(Element.Type.BEE, p.s, p.y + 2.2f, 0f, z); m.amp = 0.6f; m.len = 0.8f; m.period = r(7.0f, 9.5f) - 1.5f * inten; m.dir = rnd.nextBoolean() ? 1 : -1; }
-                m.phase = r(0f, 6.28f); m.anchor = base0 + k;
-                hzOut.add(m);
+                if (rnd.nextBoolean()) {                                    // crabs: never fewer than two on a deck (owner), one more per difficulty level
+                    int nc = 2 + T.hard; float span = w - 1.6f, step = span / (nc - 1);
+                    for (int q = 0; q < nc; q++) {
+                        Element m = hz(Element.Type.CRAB, p.s - span / 2f + q * step, p.y, 0f, z);
+                        m.amp = Math.max(0.3f, Math.min(0.9f, step * 0.5f - 0.3f)); m.period = r(3.0f, 4.0f) - 0.4f * inten; m.phase = r(0f, 6.28f); m.anchor = base0 + k;
+                        hzOut.add(m);
+                    }
+                } else {
+                    Element m = hz(Element.Type.BEE, p.s, p.y + 2.2f, 0f, z); m.amp = 0.6f; m.len = 0.8f; m.period = r(7.0f, 9.5f) - 1.5f * inten; m.dir = rnd.nextBoolean() ? 1 : -1;
+                    m.phase = r(0f, 6.28f); m.anchor = base0 + k;
+                    hzOut.add(m);
+                }
             }
             cur = p;
         }

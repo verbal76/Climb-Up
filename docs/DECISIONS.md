@@ -685,3 +685,16 @@ No approved rule was changed to suit the solver, and no test or tolerance was re
 - **Saw next to a cannon lane** (SawFairnessTest, still 0.36 after the creature rule): the probe found the remaining narrow saw (seed 3, slice
   16) with no creature near, but a cannon across the deck it lands on, inside the same chain of guarded gaps; alone it leaves its whole cycle.
   As the bee rule since Build 71, a saw and a cannon are never next to each other in a chain (the later one becomes a spiked block).
+- **Saw next to a cannon from another module** (SawFairnessTest 0.36 on b831e7f: seed 3 slice 16, a saw on platform 37 and a cannon on 38
+  built by the next module, so the chain rule never saw them together): `sawsClearOfCreatures` now also refuses a commit that puts a cannon or
+  aimed cannon on a platform next to a saw's, wherever the two came from; the generator then tries another module.
+- **No ceiling over a route platform** (EndlessTest seed 224 slice 12: a left spur 2.6 m over the route blocked its jump). A dead-end piece
+  may not sit 0.5-3.9 m above a route platform it overlaps. Proving the margin alone did not catch it (the margin-only experiment still failed
+  seed 224), so both rules stay: a decoy near a link must also leave that link the 0.05 m margin every route link is proven with (CourseTest
+  link margin 0.017 on b831e7f).
+- **Left spurs** (owner: spurs go left and right). The route climbs to the right, so a left spur branches back towards the platform it came
+  up from; with the ceiling rule the main pass found room for only 3-6 in DeadEndTest's 60 slices. A left spur now climbs or drops steeply
+  first, and a third pass from its own RNG looks along each slice for a platform with room on its left and builds one there if the slice has
+  none (DeadEndTest: left 14, right 35, up-and-down 21, route dips 12).
+- **Route dips are bounded** (CourseTest ascent): a hop module steps down only from the highest route platform so far and never twice in a
+  row, so a dip is one or two steps and the climb then goes on; the ascent never loses more than one dip's height.

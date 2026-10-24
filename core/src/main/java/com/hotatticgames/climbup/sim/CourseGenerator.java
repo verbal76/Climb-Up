@@ -652,7 +652,7 @@ public final class CourseGenerator {
     private void addDecoys(int lo, int hi) {
         c.finishRoute();
         Random dr = new Random(c.seed * 0x2545F4914F6CDD1DL + 99 + salt * 7919L);
-        spurLeft = (c.seed & 1L) == 0L;
+        spurLeft = (c.seed & 1L) == 0L; leftBuilt = 0;
         int rs = c.routeSize();
         java.util.Set<Integer> anchored = new java.util.HashSet<>();
         for (int a = lo; a < Math.min(rs - 4, hi + 1); a++) {
@@ -672,9 +672,29 @@ public final class CourseGenerator {
             if (lr.nextFloat() > 0.5f) continue;              // spread the forced spurs across the slice
             if (placeDecoy(p, a, lr, true)) { anchored.add(a); wantLong--; }
         }
+        // Build 79 (owner): spurs go left as well as right. The route climbs to the right, so a left spur branches back towards the block it came up
+        // from and fits only where that block leaves room (no overlap, no ceiling over it); the main pass rarely finds such a spot, so a third pass,
+        // again from its own RNG, looks along the slice for one and builds a left spur there if the slice has none yet.
+        Random sr = new Random(c.seed * 0xC2B2AE3D27D4EB4FL + 2029 + salt * 4271L);
+        for (int a = lo; a < Math.min(rs - 4, hi + 1) && leftBuilt == 0; a++) {
+            Element p = c.get(a);
+            if (p.type != Element.Type.STATIC || p.w < 2f || anchored.contains(a)) continue;
+            for (int tryNo = 0; tryNo < 5 && leftBuilt == 0; tryNo++) {
+                spurLeft = true; forceSpur = true;
+                pendingHaz = new ArrayList<>(); spurBuilt = false;
+                List<Element> es = buildDecoy(p, a, sr, false);
+                forceSpur = false;
+                if (tryDecoy(es, pendingHaz, a)) { decoys += es.size(); anchored.add(a); leftBuilt++; }
+            }
+        }
         addKeyRooms();          // last, so every key-room link is proven against the final geometry
     }
 
+    private boolean lastDip;      // Build 79: the last hop module was a dip
+    /** The highest route platform built so far. */
+    private float routeTop() { float m = -1e9f; for (int i = 0; i < c.size(); i++) { Element e = c.get(i); if (e.anchor < 0 && e.isPlatform()) m = Math.max(m, e.y); } return m; }
+    private boolean forceSpur;      // the left-spur pass: always a short spur
+    private int leftBuilt;      // left spurs built in this slice
     private boolean spurLeft, spurBuilt;      // Build 79: the side the next dead-end spur branches to (flips with every spur placed); the last decoy built was a spur
 
     /** Two tries at a decoy off route platform a: a spur goes first to the side whose turn it is, then to the other; a placed spur hands the turn over. */
@@ -684,7 +704,7 @@ public final class CourseGenerator {
             pendingHaz = new ArrayList<>(); spurBuilt = false;
             spurLeft = again == 0 ? side : !side;
             List<Element> es = buildDecoy(p, a, dr, forceLong);
-            if (tryDecoy(es, pendingHaz, a)) { decoys += es.size(); spurLeft = spurBuilt ? !spurLeft : side; return true; }
+            if (tryDecoy(es, pendingHaz, a)) { decoys += es.size(); if (spurBuilt && spurLeft) leftBuilt++; spurLeft = spurBuilt ? !spurLeft : side; return true; }
         }
         spurLeft = side;
         return false;
@@ -698,7 +718,7 @@ public final class CourseGenerator {
         float inten = intensity(p.y);
         // a longer dead end: four to six steps ending on a wide, plainly safe platform.
         boolean longSpur = kind >= 10 || forceLong;
-        if (longSpur) kind = dr.nextInt(7);
+        if (longSpur || forceSpur) kind = dr.nextInt(7);
         if (kind >= 8 && inten <= 0f) kind = dr.nextInt(8);
         if (kind >= 8) {
             // bait ledge: a wide, tempting platform forward and slightly down, guarded by a trap in the middle or a saw across the approach
@@ -723,11 +743,13 @@ public final class CourseGenerator {
             // normal jump too: a dead end only ever costs the walk back.
             boolean forward = !spurLeft; spurBuilt = true;
             float edge = forward ? p.s + p.w / 2f : p.s - p.w / 2f, y = p.y;
+            boolean leftDown = false;
             int n = longSpur ? 4 + dr.nextInt(3) : 2 + dr.nextInt(2);
             for (int k = 0; k < n; k++) {
                 boolean up = dr.nextFloat() < (forward ? 0.35f : 0.7f);      // both ways on either side, but a left spur leans up, clear of the lower block the route came from, a right one down, under the block it goes on to
                 float dy = up ? 0.2f + dr.nextFloat() * 0.6f : -(0.3f + dr.nextFloat() * 0.7f);
-                if (!forward && k == 0) dy = 1.2f + dr.nextFloat() * 0.3f;          // a left spur first jumps up clear of the block the route came from, which sits just behind and below
+                if (!forward && k == 0) leftDown = dr.nextFloat() < 0.5f;
+                if (!forward && k < 2) dy = leftDown ? -(1.0f + dr.nextFloat() * 0.4f) : 1.4f + dr.nextFloat() * 0.3f;   // a left spur branches back over (or under) the route it came up: it climbs or drops steeply first, so it never hangs low over a route platform (no ceiling)
                 float gap = reach(Math.abs(dy)) * (0.40f + 0.2f * dr.nextFloat());
                 float w = k == n - 1 ? (longSpur ? 3f : 1f) : 1f + dr.nextInt(2);
                 float s = forward ? edge + gap + w / 2f : edge - gap - w / 2f; y += dy;
@@ -763,6 +785,7 @@ public final class CourseGenerator {
                 float gap = Math.abs(d.s - e.s) - d.w / 2f - arcHalf(e);
                 if (gap < 1.0f && d.y - 0.6f < vHi(e) - 1.6f && d.y + 1.6f > vLo(e) + 0.8f) { decoyWhy = 1; return false; }   // overlapping / touching
                 if (e.type == Element.Type.ROPE && gap < 1.2f && d.y > e.y - e.len - 0.5f && d.y < e.y + 2.2f) { decoyWhy = 1; return false; }   // Build 79 (owner): never across a rope or on its top beam
+                if (i < rs && e.isPlatform() && Math.abs(d.s - e.s) < d.w / 2f + e.halfW() + 0.3f && d.y > e.y + 0.5f && d.y < e.y + 3.9f) { decoyWhy = 1; return false; }   // Build 79: never a ceiling over a route platform (a left-hand spur hung 2.6 m over the route and blocked its jump: EndlessTest seed 224)
             } else if (layersClash(c, d, e)) { decoyWhy = 2; return false; }
         }
         for (Element g : ghostElems) if (layersClash(c, d, g)) { decoyWhy = 3; return false; }
@@ -794,8 +817,12 @@ public final class CourseGenerator {
             c.indexDecoys();
             int rs = c.routeSize();
             for (int r = Math.max(0, a - 7); r <= Math.min(rs - 2, a + 5) && ok; r++) {
-                Autopilot.Result res = Autopilot.plan(Sim.startOn(c, T, r), r, false);
-                if (!res.ok) { ok = false; decoyPlanFail++; }
+                // Build 79: a dead end next to a link may not take away its tolerance - the link keeps the margin every route link is proven with (0.05
+                // for a ledge grab, otherwise more), not merely one move that works (left-hand spurs over the route left links at 0.017: CourseTest)
+                boolean near = false;
+                for (Element d : es) for (int q = r; q <= r + 1 && !near; q++) { Element e = c.get(q); if (Math.abs(c.dsWrap(d.s, e.s)) < 12f && d.y - e.y > -3f && d.y - e.y < 6f) near = true; }
+                Autopilot.Result res = Autopilot.plan(Sim.startOn(c, T, r), r, near);
+                if (!res.ok || (near && res.margin() < 0.05f)) { ok = false; decoyPlanFail++; }
             }
         }
         if (!ok) { while (c.size() > n0) c.elements.remove(c.size() - 1); while (c.hazards.size() > h0) c.hazards.remove(c.hazards.size() - 1); c.indexDecoys(); }
@@ -953,6 +980,7 @@ public final class CourseGenerator {
             Element saw = n.type == Element.Type.SAW_H ? n : o.type == Element.Type.SAW_H ? o : null, mob = saw == n ? o : n;
             int r = saw == null ? -1 : roamReach(mob);
             if (r >= 0 && saw.anchor >= mob.anchor - r - 1 && saw.anchor <= mob.anchor + r) return false;
+            if (saw != null && (mob.type == Element.Type.CANNON || mob.type == Element.Type.AIMED) && Math.abs(saw.anchor - mob.anchor) <= 1) return false;   // nor a cannon lane on the deck before, its own or the one it lands on, whichever module placed it (seed 3: a cannon from the next module cut a saw to 0.36)
         }
         return true;
     }
@@ -1336,14 +1364,16 @@ public final class CourseGenerator {
         Element.Type S = Element.Type.STATIC;
         switch (k) {
             case HOP: {
-                if (rnd.nextFloat() < 0.2f) {          // Build 79 (owner): now and then the route steps down one or two blocks before it climbs on, just to throw you off
+                if (rnd.nextFloat() < 0.2f && !lastDip && y0 >= routeTop() - 0.5f) {          // (one dip at a time, and only from the route's high point: never more than two steps below it)          // Build 79 (owner): now and then the route steps down one or two blocks before it climbs on, just to throw you off
                     int n = 1 + rnd.nextInt(2); float s = eR, y = y0;
                     for (int i = 0; i < n; i++) {
                         float dy = -r(0.4f, 1.1f), w = 2 + rnd.nextInt(2);
                         s += reach(0f) * lerp(0.45f, 0.85f, d) * r(0.9f, 1.05f) + w / 2; y += dy; l.add(plat(S, s, y, w, z)); s += w / 2;
                     }
+                    lastDip = true;
                     break;
                 }
+                lastDip = false;
                 float dy = tier(last.y) == 0 ? r(0f, 0.8f) : r(0f, 1.4f);
                 float frac = lerp(0.45f, 0.92f, d) * r(0.9f, 1.1f);
                 float w = 2 + rnd.nextInt(3);

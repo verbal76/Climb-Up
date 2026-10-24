@@ -83,6 +83,11 @@ jq -n --argjson n "$N" --arg v "$VER" --arg sha "$GITHUB_SHA" --arg t "$(date -u
 upload "$ID" checksums.sha256
 upload "$ID" build-manifest.json
 
+# owner (2026-10-24): releases are prepared as a private draft; it goes public only when the dispatch says so (publish_public)
+if [ "${PUBLISH_PUBLIC:-false}" != "true" ]; then
+  echo "::notice::all three packages, checksums.sha256 and build-manifest.json are on '$TITLE', kept as a PRIVATE DRAFT (publish_public is off; the owner publishes it)"
+  exit 0
+fi
 jq -n --arg t "$TITLE" --arg tag "$TAG" --arg sha "$GITHUB_SHA" '{name:$t, tag_name:$tag, target_commitish:$sha, draft:false, make_latest:"true"}' > rel.json
 if OUT=$(gh api -X PATCH "repos/$REPO/releases/$ID" --input rel.json -q .html_url 2>&1); then
   echo "published $OUT (all three packages from $GITHUB_SHA)"

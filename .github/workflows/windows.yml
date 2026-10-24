@@ -14,6 +14,10 @@ on:
         description: "Owner test build: attach the packages to a DRAFT GitHub Release (visible to collaborators only, no tag, nothing public). Off = the normal published release."
         type: boolean
         default: false
+      publish_public:
+        description: "Make the completed three-platform release public. Off (default, owner 2026-10-24) = the release with all three packages stays a private draft."
+        type: boolean
+        default: false
       skip_tests:
         description: "Skip the test job (core, desktop, scenario, limb guard) for an art-only rebuild whose commit already passed them elsewhere. The Windows EXE and Linux launcher smoke checks still run. Default off."
         type: boolean
@@ -244,5 +248,5 @@ jobs:
           else
             # owner: one release per build with the APK, EXE and Linux build together, under the Android workflow's tag. The packages join a draft
             # candidate; it goes public only when the APK from this same commit is on it too, with checksums and a manifest for all three (Build 78)
-            bash tools/ci/publish_release.sh "v${VER}-build${N}" "$N" notes.md "$EXE" "$LINUX"
+            PUBLISH_PUBLIC="${{ inputs.publish_public }}" bash tools/ci/publish_release.sh "v${VER}-build${N}" "$N" notes.md "$EXE" "$LINUX"
           fi

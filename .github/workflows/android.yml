@@ -8,6 +8,10 @@ on:
         description: "Owner test build: attach the APK to a DRAFT GitHub Release (visible to collaborators only, no tag, nothing public) and skip the OTA baseline publish. Off = the normal published release."
         type: boolean
         default: false
+      publish_public:
+        description: "Make the completed three-platform release public and publish the OTA baseline. Off (default, owner 2026-10-24) = the release stays a private draft and the OTA channel is untouched."
+        type: boolean
+        default: false
       build_number:
         description: "Build number for the versionCode, APK name, tag and release title (blank = this run's number). Set it so a re-run after a failure, or the desktop build dispatched alongside, still carries the number the owner expects."
         type: string
@@ -148,7 +152,7 @@ jobs:
           path: candidate/
           retention-days: 14
       - name: Publish the OTA baseline (only if the channel does not already carry this version or a newer one)
-        if: ${{ inputs.test_build != true }}   # an owner test build never touches the OTA channel
+        if: ${{ inputs.test_build != true && inputs.publish_public == true }}   # an owner test build, or a private draft release, never touches the OTA channel
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -177,9 +181,10 @@ jobs:
         with:
           name: release-candidate-android-${{ env.BUILD_NUMBER }}
           path: candidate
-      - name: Add the APK to the release candidate (publishes only when all three packages are on it)
+      - name: Add the APK to the release candidate (publishes only when all three packages are on it, and only with publish_public)
         env:
           GH_TOKEN: ${{ github.token }}
+          PUBLISH_PUBLIC: ${{ inputs.publish_public }}
           REPO: ${{ github.repository }}
         run: |
           set -e

@@ -75,7 +75,9 @@ public class DeterminismTest {
     }
 
     @Test public void theRulesVersionIsStampedAndOlderBuildsAreNotComparable() {
-        assertEquals(5, CourseGenerator.RULES_VERSION);           // Build 77: faster skull with loop+swoop, key detours proved with the skull at either end
+        assertEquals(6, CourseGenerator.RULES_VERSION);           // Build 79: the owner's play-through notes, the difficulties, dead ends both ways, route dips (DECISIONS.md)
+        assertEquals(6, CourseGenerator.rulesOfBuild(79));
+        assertEquals(5, CourseGenerator.rulesOfBuild(78));        // Build 77-78: faster skull with loop+swoop, key detours proved with the skull at either end
         assertEquals(5, CourseGenerator.rulesOfBuild(77));
         assertEquals(4, CourseGenerator.rulesOfBuild(76));        // Build 76: faster plank conveyor bridges
         assertEquals(3, CourseGenerator.rulesOfBuild(75));        // Build 72-75: flush ramps, faster crumbling, the wilder shaking ramp, the spinning ramp

@@ -8,6 +8,22 @@
 
 # Handoff
 
+## Recovery point (2026-10-24, Build 79 on hold for the generator directive)
+
+- **Where things are:**
+  - Branch `build-74-determinism`, HEAD at the commit carrying this note (generator source is `bd0b550`), PR #9.
+  - No Build 79 artifacts and no draft release exist.
+- **Owner decisions in force:**
+  - All existing mechanics stay; aimed cannons are mandatory.
+  - Approved: a one-simulation-step landing tolerance for TowerStreamingTest. Verified rounding; not yet applied.
+  - Not Gonna Happen stays.
+  - No public release and no OTA update.
+  - The master generator directive of 2026-10-24 (difficulty model, 10-level curves, forks instead of dead ends).
+- **Audit, gap analysis, design and open owner questions:** `docs/GENERATOR_AUDIT.md`.
+- **Replays recorded on `bd0b550`:** in `replays-pending/` (uncommitted by owner instruction), listed in `replays-pending/RECORDINGS.txt`. They are invalid after any generator change.
+- **Still failing on `bd0b550` (CI):** see GENERATOR_AUDIT.md.
+
+
 ## Build 78 status (2026-10-23) - PUBLISHED
 
 Release v1.3.0-build78 (public) from build-74-determinism @ cf07f34; tag v1.3.0-build78 -> cf07f34. First release through the new gate: the

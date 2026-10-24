@@ -673,20 +673,21 @@ public final class CourseGenerator {
         // below it, runs on under it and bounces back up onto a later route platform. Both go forward and meet again. NORMAL forks now and then, one branch
         // at a time; PUNISHER forks more often, with longer branches, and sometimes a second branch off the first.
         boolean punisher = T.hard > 0;
-        float chance = punisher ? 0.30f : 0.15f;
+        float chance = punisher ? 0.9f : 0.5f;          // of the take-offs a branch can drop from (open air past the edge: few of them)
         int spacing = punisher ? 4 : 7, last = -100;
         for (int a = lo; a < Math.min(rs - 5, hi + 1); a++) {
             if (a - last < spacing) continue;
             Element p = c.get(a);
-            if (p.type != Element.Type.STATIC || p.w < 2.5f || p.anchor >= 0) continue;
+            if (p.type == Element.Type.STATIC && p.w >= 2.5f && p.anchor < 0) { float dir0 = c.get(a + 1).s >= p.s ? 1f : -1f, rm = forkRoom(a, dir0); ROOMHIST[rm == Float.MAX_VALUE ? 7 : Math.max(0, Math.min(6, (int) rm))]++; Element n1 = c.get(a + 1); ROOMHIST[8 + Math.max(0, Math.min(4, (int) (n1.y - p.y + 2f)))]++; }
+            if (p.type != Element.Type.STATIC || p.w < 2.5f || p.anchor >= 0 || !forkable(a)) continue;
             if (dr.nextFloat() > chance) continue;
-            int built = tryFork(a, a, dr, punisher ? 6 : 4);
+            int built = tryFork(a, a, dr, punisher ? 9 : 7);
             if (built < 0) continue;
             last = a;
             if (punisher && dr.nextFloat() < 0.35f) {          // a second branch off the first one, rejoining the route further on
                 int[] f = c.forks.get(c.forks.size() - 1);
                 int from = f[1] + Math.max(0, f[2] / 2 - 1);
-                tryFork(a, from, dr, 7);
+                tryFork(a, from, dr, 10);
             }
         }
         addKeyRooms();          // last, so every key-room link is proven against the final geometry
@@ -697,35 +698,75 @@ public final class CourseGenerator {
      * route that rejoins it at a route platform up to {@code maxAhead} ahead. Every link along it is proven like a key-room detour, every route link
      * nearby is proven again with it there, and it is laid out like any decoy (no overlap, no ceiling over the route). Returns the rejoined route index, or -1.
      */
+    public static final int[] FORKWHY = new int[14], ROOMHIST = new int[13];      // diagnostics: why fork attempts were refused
+    /** Open air to drop into past the end of {@code from} going {@code dir}: {@code Float.MAX_VALUE} when the next element is well above (the drop passes under it), else the gap. */
+    private float forkRoom(int from, float dir) {
+        Element start = c.get(from), nx = c.get(from + 1);
+        if (nx.isPlatform() && nx.y - start.y > 2.1f) return Float.MAX_VALUE;          // its top beyond the hands' reach: nothing to catch on the way down
+        return dir * (nx.s - start.s) - start.halfW() - nx.halfW();
+    }
+    private boolean forkable(int a) { float dir = c.get(a + 1).s >= c.get(a).s ? 1f : -1f; return !hazOn(a) && forkRoom(a, dir) >= 2.2f; }          // off a quiet platform
+    /** The highest a 2 m branch platform centred at {@code x} may sit: below every element over it by the overlap clearance. */
+    private float ceilAt(float x, float y0, float y1) {
+        float ceil = Float.MAX_VALUE;
+        for (int q = 0; q < c.size(); q++) { Element e = c.get(q); if (Math.abs(e.s - x) < arcHalf(e) + 1f + 1.2f && vHi(e) > y0 - 12f && e.y < y1 + 3f) ceil = Math.min(ceil, vLo(e) - 0.9f); }
+        return ceil;
+    }
+    private boolean hazOn(int i) { for (Element h : c.hazards) if (h.anchor == i) return true; return false; }
     private int tryFork(int a, int from, Random dr, int maxAhead) {
         Element start = c.get(from);
         int rs = c.routeSize();
-        for (int attempt = 0; attempt < 4; attempt++) {
-            int t = a + 3 + dr.nextInt(Math.max(1, maxAhead - 2));
+        int lo = a + 2, n = Math.max(1, maxAhead - 1), off = dr.nextInt(n);
+        for (int attempt = 0; attempt < n; attempt++) {
+            int t = lo + (off + attempt) % n;          // every candidate rejoin platform once, from a seeded start
             if (t >= rs - 1) continue;
             Element tg = c.get(t);
-            if (!tg.isPlatform() || tg.isMoving() || tg.w < 2f || tg.y < start.y + 1f) continue;
-            float padS = c.wrap(tg.s - tg.halfW() - 1.9f), padY = tg.y - 3.9f - dr.nextFloat() * 0.4f;
-            float s0 = start.s + start.halfW() + 1.6f + dr.nextFloat() * 0.8f, y0 = start.y - 1.9f - dr.nextFloat() * 0.5f;
-            float span = c.dsWrap(padS, s0);
-            if (span < 3f) continue;
-            int steps = Math.max(1, (int) Math.ceil(span / 4.2f));
+            if (!tg.isPlatform() || tg.isMoving() || tg.w < 2f || tg.y < start.y + 1f) { FORKWHY[0]++; continue; }
+            float dir = tg.s >= start.s ? 1f : -1f;          // the route runs either way round; the branch runs with it (arc positions are unwrapped: no wrap)
+            // the pad sits low enough to read as below the route, and close enough under the rejoin platform for its bounce (about 6.5 m) to reach it
+            float padY = Math.max(tg.y - 5.4f, Math.min(tg.y - 3.8f, start.y - 3.2f - dr.nextFloat() * 0.4f));
+            // the pad bounces up through open air next to the rejoin platform: under the gap before it (at least 1.2 m) or past a platform well below it
+            Element pv = c.get(t - 1);
+            float gapP = dir * (tg.s - pv.s) - tg.halfW() - pv.halfW();
+            float padS;
+            if (tg.y - pv.y > 2.4f) padS = tg.s - dir * (tg.halfW() + 1.9f);
+            else if (gapP >= 1.2f) padS = tg.s - dir * (tg.halfW() + gapP / 2f);
+            else { FORKWHY[12]++; continue; }          // (the player is 0.56 m wide: a 1.2 m gap lets a straight bounce through)
+            float padCeil = ceilAt(padS, start.y, tg.y) - 0.2f;
+            if (tg.y - padCeil > 7.6f) { FORKWHY[12]++; continue; }          // even the highest pad that fits there is out of the bounce's reach
+            // the drop off the take-off needs open air: either the next element along is well above (the branch passes under it) or there is a gap to drop into
+            float room = forkRoom(from, dir), edge = start.s + dir * start.halfW();
+            float s0;
+            if (room == Float.MAX_VALUE) s0 = edge + dir * (1.9f + 1f + dr.nextFloat() * 0.6f);
+            else if (room >= 2.2f) s0 = edge + dir * room / 2f;          // under the gap, wide enough to drop through it without catching the next ledge (reach 0.4 m)
+            else { FORKWHY[0]++; continue; }
+            float span = dir * (padS - s0) - 4.0f;          // the last branch platform leaves a 2 m gap before the pad
+            if (span < 0f) { FORKWHY[1]++; continue; }
+            int steps = Math.max(1, (int) (span / 3.6f) + 1);          // gaps of about 1.6 m: hops that fit under the route
             List<Element> es = new ArrayList<>();
-            for (int k = 0; k < steps; k++) {
-                float f = (float) k / steps, w = 2f + dr.nextInt(2);
-                Element b = plat(Element.Type.STATIC, c.wrap(s0 + span * f), y0 + (padY - y0) * f + (k > 0 ? dr.nextFloat() * 0.3f : 0f), w, start.zone);
-                b.anchor = a; es.add(b);
+            float py = start.y;
+            boolean shaped = true;
+            for (int k = 0; k < steps && shaped; k++) {
+                float x = steps == 1 ? s0 : s0 + dir * span * k / (steps - 1f);
+                // under the route, never touching it: below every route element over this spot by the overlap clearance
+                float ceil = ceilAt(x, start.y, tg.y) - 1.7f;          // headroom to hop under the route: 0.9 m clearance + 1.7 m = the body (1.25 m) and a low hop
+                float goal = tg.y - 6.6f;          // the branch climbs toward where the pad can bounce onto the rejoin platform
+                float want = k == 0 ? start.y - 3.2f : start.y - 3.2f + (goal - start.y + 3.2f) * k / (steps - 1f);
+                float y = Math.min(Math.min(want, ceil - dr.nextFloat() * 0.3f), py + 1.5f);          // a step up the branch stays an easy one (a jump rises about 1.9 m)
+                Element b = plat(Element.Type.STATIC, x, y, 2f, start.zone); b.anchor = a; es.add(b); py = y;
             }
+            padY = Math.min(padCeil, Math.max(tg.y - 7.4f, py - 1.0f));          // as low as the bounce allows (held, it rises about 8.5 m): an easy hop down or across onto it
+            if (!shaped || padY > py + 1.5f || tg.y - padY > 7.6f) { FORKWHY[1]++; continue; }
             Element pad = plat(Element.Type.PAD, padS, padY, 2f, tg.zone); pad.anchor = a; es.add(pad);
             int n0 = c.size(), h0 = c.hazards.size();
             boolean ok = true;
-            for (Element e : es) { c.add(e); if (!decoyOk(e, a) || !corridorOk(e, a)) { ok = false; break; } }
+            for (Element e : es) { c.add(e); if (!decoyOk(e, a, true)) { ok = false; FORKWHY[2 + decoyWhy]++; break; } }
             if (ok) {
                 c.indexDecoys();
-                ok = pairOk(from, n0);
-                for (int k = n0; ok && k < c.size() - 1; k++) ok = pairOk(k, k + 1);
-                ok = ok && pairOkAir(c.size() - 1, t);
-                for (int q = Math.max(0, a - 3); ok && q <= Math.min(rs - 2, t + 2); q++) ok = Autopilot.plan(Sim.startOn(c, T, q), q, false).ok;
+                ok = pairOk(from, n0); if (!ok) { FORKWHY[10]++; }
+                for (int k = n0; ok && k < c.size() - 1; k++) { ok = pairOk(k, k + 1); if (!ok) { FORKWHY[11]++; } }
+                if (ok) { ok = pairOkAir(c.size() - 1, t); if (!ok) FORKWHY[12]++; }
+                for (int q = Math.max(0, a - 3); ok && q <= Math.min(rs - 2, t + 2); q++) { ok = Autopilot.plan(Sim.startOn(c, T, q), q, false).ok; if (!ok) { FORKWHY[9]++; } }
             }
             if (!ok) { rollbackTo(n0, h0); c.indexDecoys(); continue; }
             c.forks.add(new int[]{from, n0, es.size(), t});
@@ -821,7 +862,9 @@ public final class CourseGenerator {
 
     public int decoyWhy;      // diagnostics: why decoyOk last said no (1 overlap, 2 other layer, 3 ghost layer, 4 stepping stone)
 
-    private boolean decoyOk(Element d, int a) {
+    private boolean decoyOk(Element d, int a) { return decoyOk(d, a, false); }
+    /** {@code fork}: a fork's branch, which rejoins the route anyway, so the stepping-stone rule (no shortcut toward the route) does not apply to it. */
+    private boolean decoyOk(Element d, int a, boolean fork) {
         int rs = c.routeSize();
         for (int i = 0; i < c.size(); i++) {
             Element e = c.get(i);
@@ -831,10 +874,10 @@ public final class CourseGenerator {
                 if (gap < 1.0f && d.y - 0.6f < vHi(e) - 1.6f && d.y + 1.6f > vLo(e) + 0.8f) { decoyWhy = 1; return false; }   // overlapping / touching
                 if (e.type == Element.Type.ROPE && gap < 1.2f && d.y > e.y - e.len - 0.5f && d.y < e.y + 2.2f) { decoyWhy = 1; return false; }   // Build 79 (owner): never across a rope or on its top beam
                 if (i < rs && e.isPlatform() && Math.abs(d.s - e.s) < d.w / 2f + e.halfW() + 0.3f && d.y > e.y + 0.5f && d.y < e.y + 3.9f) { decoyWhy = 1; return false; }   // Build 79: never a ceiling over a route platform (a left-hand spur hung 2.6 m over the route and blocked its jump: EndlessTest seed 224)
-            } else if (layersClash(c, d, e)) { decoyWhy = 2; return false; }
+            } else if (fork ? forkLayersClash(d, e) : layersClash(c, d, e)) { decoyWhy = 2; return false; }
         }
         for (Element g : ghostElems) if (layersClash(c, d, g)) { decoyWhy = 3; return false; }
-        for (int j = a + 2; j < rs; j++) {                 // never a stepping stone toward later route
+        if (!fork) for (int j = a + 2; j < rs; j++) {                 // never a stepping stone toward later route
             Element e = c.get(j);
             if (!e.isPlatform()) continue;
             float gap = Math.max(0f, Math.abs(c.dsWrap(d.s, e.s)) - d.w / 2f - e.halfW());
@@ -931,6 +974,20 @@ public final class CourseGenerator {
         if (Math.abs(c.dsWrap(e.s, f.s)) > arcHalf(e) + arcHalf(f) + 2.5f) return false;
         if (vLo(e) - 1.5f < vHi(f) && vHi(e) + 1.5f > vLo(f)) return true;
         return e.isPlatform() && f.isPlatform() && Math.abs(e.y - f.y) < 9.5f;   // no trampoline shortcuts between layers
+    }
+
+    /**
+     * {@link #layersClash} for a fork's branch, which runs below the route and so nearer the revolution beneath: the bodies must keep clear as usual, and
+     * no layer may reach the other: platforms out of jump reach (4 m; a jump rises about 1.9 m) unless the lower one bounces, which keeps the 9.5 m rule.
+     */
+    private boolean forkLayersClash(Element d, Element f) {
+        if (Math.abs(d.s - f.s) < c.circumference * 0.5f) return false;
+        if (Math.abs(c.dsWrap(d.s, f.s)) > arcHalf(d) + arcHalf(f) + 2.5f) return false;
+        if (vLo(d) - 1.5f < vHi(f) && vHi(d) + 1.5f > vLo(f)) return true;
+        if (!d.isPlatform() || !f.isPlatform()) return false;
+        Element lower = d.y < f.y ? d : f;
+        boolean bounces = lower.type == Element.Type.PAD || lower.type == Element.Type.SPRING;
+        return Math.abs(d.y - f.y) < (bounces ? 9.5f : 4f);
     }
 
     private boolean clearOfOtherLayers(int idx) {

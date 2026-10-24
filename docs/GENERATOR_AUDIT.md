@@ -93,3 +93,16 @@ Estimated effort: several focused sessions (the generator is about 1,700 lines).
 
 - G1: modes limited to two (SettingsScreen, ClimbGame.newClimbTuning).
 - G2: `sim/EncounterModel`: per-link demands (pursue, wait, position, commit, recover), interaction terms and a conflict flag, with a reason string for every link. `LevelReport` probe: per-level score distribution, conflicts and mechanic counts for either mode.
+- G3 (commit 959a2e2): level gates removed (aimed cannon, skull/blob, drops, creature line now scale with `level(y)` from Level 1). Punisher is its own curve: `PUNISHER_SHIFT` 1500 m ahead on intensity/late/level (Punisher L1 ≈ Normal L4), plus its faster timers and extra enemies; the pick-weight multiplier is gone. Feasibility rule in `commit()`: a link that `EncounterModel` flags as a conflict (≥2 pursuers + waiting + cramped/positioned take-off) is rolled back and re-composed (`failConflict`).
+- G4 (smoke round 1, uncommitted until the round closes): dead-end spurs replaced by `tryFork` (branch below the route that bounces back up onto a later route platform; every link proven, route re-proven around it).
+
+### Smoke round 1 finding: forks under the route do not fit the tower (blocker, needs owner direction)
+
+Measured with `ForkProbe` (seeds 160-163 x 5 slices, NORMAL), after correcting each rejection in turn:
+
+- The route is a near-continuous staircase. Take-off gaps: 133 of 171 are 1-2 m, 27 are 2-4 m, none above 4 m.
+- In those gaps a dropping player catches the next ledge (fingertip grab, reach 0.4 m). So a branch can only leave through a gap of at least 2.2 m, or under a next platform at least 2.1 m higher: about 1 take-off in 6.
+- A branch under the route needs about 3.4 m of headroom (body 1.25 m plus a hop, plus the overlap clearance) to be walkable.
+- In slow-climbing stretches the previous revolution of the tower is only 7-9 m below the route (circumference 62.8 m). The branch then clashes with that layer's bodies or comes within jump reach of it. These are genuine clashes, not rule artefacts.
+- Result: 0 forks in 20 slices after these corrections (no broken links: the course falls back to the plain route, so there are no dead ends either).
+- Correcting this needs forks planned in the route generator itself, by reserving a split section with room above or below. That is a structural change to route layout, so per the amendment it is reported, not started.

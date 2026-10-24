@@ -21,7 +21,13 @@ public final class CourseGenerator {
         /** Build 71: a creature's deck - a skull on a long fixed platform or bridge (from the second world), or a green blob on a long platform or a tipping bridge (from the third). */
         CREATURE,
         /** Build 71: a row of platforms, each under its own chained spike drop (own speed, own top height, none low): like a mortar row, cross each when its slab is up. */
-        DROPS }
+        DROPS,
+        /**
+         * Owner directive 2026-10-24 (sections 15-16): a split. The route part of it reserves the room a second way needs: an entry platform, a wide gap
+         * to drop through, a gentle climb with full headroom beneath it, and a wide gap before the rejoin platform. The branch below it is built in the
+         * decoy phase ({@link #tryReservedFork}) and proven like every other link; if it cannot be proven the route stays as a plain climb.
+         */
+        FORK }
 
     private final Tuning T;
     private final Random rnd;
@@ -110,6 +116,7 @@ public final class CourseGenerator {
         for (int i = 0; i < src.size(); i++) { Element e = copyOf(src.get(i), src.get(i).anchor); e.y -= dy; e.s -= ds; out.add(e); }
         for (Element h : src.hazards) { Element e = copyOf(h, h.anchor); e.y -= dy; e.s -= ds; out.hazards.add(e); }
         for (int[] k : src.keyRooms) out.keyRooms.add(k.clone());
+        for (int[] f : src.forks) out.forks.add(f.clone());
         out.routeCount = src.routeCount; out.gemCheckpoints = src.gemCheckpoints; out.indexDecoys();
         return out;
     }
@@ -276,6 +283,7 @@ public final class CourseGenerator {
             if (h.anchor >= off) { newHz[i] = out.hazards.size(); out.hazards.add(copyOf(h, h.anchor - off)); } else newHz[i] = -1;
         }
         for (int[] k : c.keyRooms) out.keyRooms.add(new int[]{k[0] - off, k[1] < 0 ? -1 : k[1] - off, k[2], k[3], newHz[k[4]], k[5] < 0 ? -1 : newHz[k[5]]});
+        for (int[] f : c.forks) if (f[0] >= off) out.forks.add(new int[]{f[0] - off, f[1] - off, f[2], f[3] - off});
         out.routeCount = rs - off;
         out.indexDecoys();
         return out;
@@ -295,6 +303,14 @@ public final class CourseGenerator {
             if (castlePending && !exactCastle && last.y >= castleTarget - GEM_LEAD) { chooseGem(th); castleDone = true; lastRestY = c.get(c.size() - 1).y; continue; }
             if (last.y - lastRestY >= nextGap && targetY - last.y > 0.4f * T.gemSpacing && !(castlePending && last.y > castleTarget - 14f)) {      // (not right before the slice's own closing rest)
                 addRest(th); sinceRest = 0; lastRestY = c.get(c.size() - 1).y; nextGap = T.gemSpacing * r(0.85f, 1.15f); maybeCastle(th); continue;
+            }
+            float forkEvery = T.hard > 0 ? 34f : 70f;          // PUNISHER splits about twice as often, and its splits are longer
+            if (Float.isNaN(lastForkY)) lastForkY = last.y - forkEvery * 0.5f;
+            if (last.y - lastForkY >= forkEvery && last.isPlatform() && !last.isMoving() && !last.wet() && !(castlePending && last.y > castleTarget - 24f)) {
+                int e0 = c.size(), n = T.hard > 0 ? 5 : 3;
+                forkRisers = n;
+                if (tryModuleBelow(Kind.FORK, d, th)) { forkEntries.add(new int[]{e0, n}); lastForkY = last.y; prev2 = prev; prev = Kind.FORK; sinceRest++; continue; }
+                lastForkY = last.y - forkEvery + 8f;          // no room here: try again a little higher
             }
             Kind k = pick(zone, last);
             boolean clubTarget = false;
@@ -650,6 +666,10 @@ public final class CourseGenerator {
 
     // ------------------------------------------------------------------ decoys: dead ends and lures that mislead without ever blocking the route
 
+    private float wideHopY = -1e9f;
+    private float lastForkY = Float.NaN;          // height of the last split laid (NaN: none yet in this slice)
+    private int forkRisers;                       // risers in the split being built
+    private final List<int[]> forkEntries = new ArrayList<>();          // {entry platform index, risers} of every split laid          // height of the last wide hop laid for a fork
     public int decoys, decoyTried, decoyGeoFail, decoyPlanFail;
     public static CourseGenerator lastForDebug;
     private long salt;
@@ -673,18 +693,22 @@ public final class CourseGenerator {
         // below it, runs on under it and bounces back up onto a later route platform. Both go forward and meet again. NORMAL forks now and then, one branch
         // at a time; PUNISHER forks more often, with longer branches, and sometimes a second branch off the first.
         boolean punisher = T.hard > 0;
+        for (int[] fe : forkEntries) {          // the splits the route reserved room for: their branches first
+            if (fe[0] < lo || fe[0] + fe[1] + 1 > Math.min(rs - 2, hi + 6)) continue;
+            if (tryReservedFork(fe[0], fe[1], dr) < 0) tryPadFork(fe[0], dr);
+        }
         float chance = punisher ? 0.9f : 0.5f;          // of the take-offs a branch can drop from (open air past the edge: few of them)
         int spacing = punisher ? 4 : 7, last = -100;
         for (int a = lo; a < Math.min(rs - 5, hi + 1); a++) {
             if (a - last < spacing) continue;
             Element p = c.get(a);
-            if (p.type == Element.Type.STATIC && p.w >= 2.5f && p.anchor < 0) { float dir0 = c.get(a + 1).s >= p.s ? 1f : -1f, rm = forkRoom(a, dir0); ROOMHIST[rm == Float.MAX_VALUE ? 7 : Math.max(0, Math.min(6, (int) rm))]++; Element n1 = c.get(a + 1); ROOMHIST[8 + Math.max(0, Math.min(4, (int) (n1.y - p.y + 2f)))]++; }
-            if (p.type != Element.Type.STATIC || p.w < 2.5f || p.anchor >= 0 || !forkable(a)) continue;
+            if (!p.isPlatform() || p.isMoving() || p.crumbles() || p.w < 2f || p.anchor >= 0 || !forkable(a)) continue;
             if (dr.nextFloat() > chance) continue;
             int built = tryFork(a, a, dr, punisher ? 9 : 7);
+            if (built < 0) built = tryPadFork(a, dr);          // no room for a branch under the route here: the short fork, a bounce pad down in the gap
             if (built < 0) continue;
             last = a;
-            if (punisher && dr.nextFloat() < 0.35f) {          // a second branch off the first one, rejoining the route further on
+            if (punisher && c.forks.get(c.forks.size() - 1)[2] > 2 && dr.nextFloat() < 0.35f) {          // a second branch off a long one, rejoining the route further on
                 int[] f = c.forks.get(c.forks.size() - 1);
                 int from = f[1] + Math.max(0, f[2] / 2 - 1);
                 tryFork(a, from, dr, 10);
@@ -698,7 +722,86 @@ public final class CourseGenerator {
      * route that rejoins it at a route platform up to {@code maxAhead} ahead. Every link along it is proven like a key-room detour, every route link
      * nearby is proven again with it there, and it is laid out like any decoy (no overlap, no ceiling over the route). Returns the rejoined route index, or -1.
      */
-    public static final int[] FORKWHY = new int[14], ROOMHIST = new int[13];      // diagnostics: why fork attempts were refused
+    public static final int[] FORKWHY = new int[14];      // diagnostics: why fork attempts were refused
+    /**
+     * The branch of a split the route reserved ({@link Kind#FORK}): drop through the wide gap past entry platform {@code e} onto a landing, hop along
+     * under the risers, and bounce off a pad in the wide gap before the rejoin platform up onto it. PUNISHER's longer branch has more, shorter hops and
+     * a narrow foothold in the middle (a crumbling one cannot be proven by a stand-and-land link proof). Every link is proven, and the route around it is proven again with it there. Returns the rejoin index, or -1 (the route stays plain).
+     */
+    private int tryReservedFork(int e, int n, Random dr) {
+        int rs = c.routeSize(), j = e + n + 1;
+        if (j >= rs - 1) return -1;
+        Element E = c.get(e), U = c.get(e + n), J = c.get(j);
+        float x0 = E.s + E.halfW(), y0 = E.y;
+        float padC = (U.s + U.halfW() + J.s - J.halfW()) / 2f;
+        float b0 = x0 + 1.7f, bl = padC - 3.6f;
+        boolean pun = T.hard > 0;
+        int m = Math.max(1, Math.round((bl - b0) / (pun ? 3.4f : 4.4f)));          // PUNISHER: more, shorter hops
+        float[] wd = new float[m + 1]; float sumW = 0f;
+        for (int k = 0; k <= m; k++) { wd[k] = k == 0 ? 3f : pun && m >= 2 && k == m / 2 ? 1.4f : 2.4f; if (k > 0) sumW += wd[k]; }          // (PUNISHER's middle foothold is a narrow one)
+        float g = (bl + wd[m] / 2f - (b0 + 1.5f) - sumW) / m;          // even gaps edge to edge, the last landing centred at bl
+        if (g < 1.1f) { FORKWHY[1]++; return -1; }
+        List<Element> es = new ArrayList<>();
+        float py = y0, edge = b0 - 1.5f;
+        for (int k = 0; k <= m; k++) {
+            float x = k == 0 ? b0 : edge + g + wd[k] / 2f;
+            float want = y0 - 3.2f + (J.y - 5.4f - (y0 - 3.2f)) * k / m;
+            float y = Math.min(Math.min(want, ceilAt(x, y0, J.y) - 1.7f), py + 1.2f);
+            Element b = plat(Element.Type.STATIC, x, y, wd[k], E.zone); b.anchor = e; es.add(b); py = y;
+            edge = x + wd[k] / 2f;
+        }
+        float padY = Math.min(ceilAt(padC, y0, J.y) - 0.2f, Math.max(J.y - 5.6f, py - 1.0f));
+        if (padY > py + 1.5f || J.y - padY > 7.0f) { FORKWHY[1]++; return -1; }
+        Element pad = plat(Element.Type.PAD, padC, padY, 2f, J.zone); pad.anchor = e; es.add(pad);
+        int n0 = c.size(), h0 = c.hazards.size();
+        boolean ok = true;
+        for (Element b : es) { c.add(b); if (!decoyOk(b, e, true)) { ok = false; FORKWHY[2 + decoyWhy]++; break; } }
+        if (ok) {
+            c.indexDecoys();
+            ok = pairOk(e, n0); if (!ok) FORKWHY[10]++;
+            for (int k = n0; ok && k < c.size() - 1; k++) { ok = pairOk(k, k + 1); if (!ok) FORKWHY[11]++; }
+            if (ok) { ok = pairOkAir(c.size() - 1, j); if (!ok) FORKWHY[12]++; }
+            for (int q = Math.max(0, e - 3); ok && q <= Math.min(rs - 2, j + 2); q++) { ok = Autopilot.plan(Sim.startOn(c, T, q), q, false).ok; if (!ok) FORKWHY[9]++; }
+        }
+        if (!ok) { rollbackTo(n0, h0); c.indexDecoys(); return -1; }
+        c.forks.add(new int[]{e, n0, es.size(), j});
+        decoys += es.size();
+        return j;
+    }
+
+    /**
+     * The short fork: a bounce pad down in the open gap past route platform {@code a}. Drop onto it and its bounce carries you up onto a route
+     * platform ahead (over the next one where it reaches), or take the route's own hops. Both ways are proven, and every route link nearby is proven again with the pad
+     * there. Returns the rejoined route index, or -1.
+     */
+    private int tryPadFork(int a, Random dr) {
+        Element start = c.get(a); int rs = c.routeSize();
+        float dir = c.get(a + 1).s >= start.s ? 1f : -1f, room = forkRoom(a, dir);
+        if (room == Float.MAX_VALUE || room < 2.2f) return -1;
+        float x = start.s + dir * (start.halfW() + room / 2f);
+        float y = Math.min(ceilAt(x, start.y, start.y + 8f) - 0.2f, start.y - 2.6f - dr.nextFloat() * 0.6f);
+        for (int t = Math.min(rs - 2, a + 3); t >= a + 1; t--) {          // the furthest platform the bounce can carry you to (it drifts about 4.5 m)
+            Element tg = c.get(t);
+            if (!tg.isPlatform() || tg.isMoving() || tg.w < 2f || tg.y - y > 7.6f || Math.abs(tg.s - x) - tg.halfW() > 4.5f) { FORKWHY[0]++; continue; }
+            Element pad = plat(Element.Type.PAD, x, y, 2f, start.zone); pad.anchor = a;
+            int n0 = c.size(), h0 = c.hazards.size();
+            c.add(pad);
+            boolean ok = decoyOk(pad, a, true);
+            if (!ok) FORKWHY[2 + decoyWhy]++;
+            if (ok) {
+                c.indexDecoys();
+                ok = pairOk(a, n0); if (!ok) FORKWHY[10]++;
+                if (ok) { ok = pairOkAir(n0, t); if (!ok) FORKWHY[12]++; }
+                for (int q = Math.max(0, a - 3); ok && q <= Math.min(rs - 2, t + 2); q++) { ok = Autopilot.plan(Sim.startOn(c, T, q), q, false).ok; if (!ok) FORKWHY[9]++; }
+            }
+            if (!ok) { rollbackTo(n0, h0); c.indexDecoys(); continue; }
+            c.forks.add(new int[]{a, n0, 1, t});
+            decoys++;
+            return t;
+        }
+        return -1;
+    }
+
     /** Open air to drop into past the end of {@code from} going {@code dir}: {@code Float.MAX_VALUE} when the next element is well above (the drop passes under it), else the gap. */
     private float forkRoom(int from, float dir) {
         Element start = c.get(from), nx = c.get(from + 1);
@@ -1521,9 +1624,22 @@ public final class CourseGenerator {
                 lastDip = false;
                 float dy = tier(last.y) == 0 ? r(0f, 0.8f) : r(0f, 1.4f);
                 float frac = lerp(0.45f, 0.92f, d) * r(0.9f, 1.1f);
+                if (y0 - wideHopY > (T.hard > 0 ? 18f : 36f)) { frac = Math.max(frac, r(0.66f, 0.74f)); wideHopY = y0; }          // now and then a wide hop (about 2.5 m): the open air a fork drops through (owner directive 2026-10-24, sections 15-16)
                 float w = 2 + rnd.nextInt(3);
                 if (tier(last.y) == 3 && rnd.nextBoolean()) w = 1 + rnd.nextInt(2);
                 l.add(plat(S, eR + reach(dy) * frac + w / 2, y0 + dy, w, z));
+                break;
+            }
+            case FORK: {          // entry, risers over the branch's room, rejoin (see Kind.FORK); every gap and rise is an ordinary hop
+                float dy = r(0f, 0.4f), w = 4f;
+                Element E = plat(S, eR + reach(dy) * r(0.4f, 0.55f) + w / 2f, y0 + dy, w, z); l.add(E);
+                float s = E.s + w / 2f, ye = E.y; int n = forkRisers;
+                for (int i = 0; i < n; i++) {
+                    float gap = i == 0 ? r(2.5f, 2.8f) : r(1.5f, 1.8f), rw = 2.5f;
+                    s += gap + rw / 2f; l.add(plat(S, s, ye + 0.4f + 1.8f * i / Math.max(1, n - 1), rw, z)); s += rw / 2f;
+                }
+                float jw = 4f; s += r(2.5f, 2.8f) + jw / 2f;
+                l.add(plat(S, s, ye + 2.8f, jw, z));
                 break;
             }
             case STAIRS: {

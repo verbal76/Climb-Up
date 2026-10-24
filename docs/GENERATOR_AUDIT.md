@@ -105,4 +105,27 @@ Measured with `ForkProbe` (seeds 160-163 x 5 slices, NORMAL), after correcting e
 - A branch under the route needs about 3.4 m of headroom (body 1.25 m plus a hop, plus the overlap clearance) to be walkable.
 - In slow-climbing stretches the previous revolution of the tower is only 7-9 m below the route (circumference 62.8 m). The branch then clashes with that layer's bodies or comes within jump reach of it. These are genuine clashes, not rule artefacts.
 - Result: 0 forks in 20 slices after these corrections (no broken links: the course falls back to the plain route, so there are no dead ends either).
-- Correcting this needs forks planned in the route generator itself, by reserving a split section with room above or below. That is a structural change to route layout, so per the amendment it is reported, not started.
+- Correcting this needs forks planned in the route generator itself, by reserving a split section with room above or below. The owner directed that correction on 2026-10-24 (below).
+
+### Correction (owner direction 2026-10-24): the route reserves room for its forks
+
+- **Route builder:** a new module, `Kind.FORK`, lays a split section into the route at regular heights: every 70 m in NORMAL and every 34 m in PUNISHER, never next to a castle. The section has:
+  - a 4 m entry platform;
+  - a wide 2.5-2.8 m drop gap;
+  - 3 risers (PUNISHER 5), 2.5 m wide, 1.5-1.8 m apart, climbing 2.8 m in all;
+  - a wide 2.5-2.8 m gap before a 4 m rejoin platform.
+
+  Every gap and rise is an ordinary hop, proven like every module.
+- **Branch (decoy phase, `tryReservedFork`):** drop through the gap onto a 3 m landing 3.2 m down, hop along under the risers with at least 3.4 m of headroom, then bounce off a pad in the gap before the rejoin platform up onto it. PUNISHER's branch has more, shorter hops and a narrow 1.4 m foothold. Every branch link is proven, and the route links around it are proven again with the branch in place. If the branch cannot be proven, the trampoline fork (`tryPadFork`) is tried; failing that, the section stays a plain climb.
+- **Not used: a crumbling platform on the PUNISHER branch.** It cannot pass the branch's stand-and-land link proof, and relaxing that proof was not acceptable.
+- **Extra forks:** opportunistic forks stay. These are trampoline forks, plus the longer under-route branch where the geometry happens to allow it. A periodic wide hop (every 36 m, PUNISHER 18 m) gives them gaps to use.
+- **Bug fixed:** `extract()` and `shift()` dropped the fork records when a slice was finished, so earlier probes under-counted forks.
+
+Smoke round 2 (ForkProbe, seed 160, 5 slices each):
+
+| Mode | Forks | Reserved splits proven | Broken (independent reconnection check) |
+|---|---|---|---|
+| NORMAL | 8 (5 reserved, 3 trampoline) | 5 of 5 laid | 0 |
+| PUNISHER | 10 (7 long, 3 trampoline) | 7 of 7 laid (after the narrow-foothold change) | 0 |
+
+The probe's reconnection check runs `Autopilot.linkExists` over every fork link: take-off to branch, along the branch, and branch to rejoin.

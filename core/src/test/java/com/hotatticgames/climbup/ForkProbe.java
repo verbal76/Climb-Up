@@ -21,7 +21,6 @@ public class ForkProbe {
                 }
             }
         }
-        System.out.println("ROOMHIST gap0..6,above | dy<-1,-1..0,0..1,1..2,>2 " + java.util.Arrays.toString(CourseGenerator.ROOMHIST));
         System.out.println("FORKWHY [target, span, decoyWhy0..6, corridor, pairIn, pairStep, padUp] " + java.util.Arrays.toString(CourseGenerator.FORKWHY));
         System.out.printf("FORKS %s: %d forks in %d slices (%d second branches), branch length mean %.1f max %d, broken %d%n", Tuning.HARD_NAMES[mode], forks, slices, nested, forks > 0 ? (float) len / forks : 0f, maxLen, broken);
     }

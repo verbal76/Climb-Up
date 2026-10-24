@@ -720,3 +720,11 @@ No approved rule was changed to suit the solver, and no test or tolerance was re
   (StreamingReplayTest allows such a one-step timing difference). The new courses only moved the test's scripted wander onto that edge. It is
   not fixed here: no tolerance may be widened to hide it (owner rule), and the exact cures (one absolute frame, doubles for element and body
   positions, or fixed point) change the simulation's arithmetic, which Build 72 left for the owner to decide.
+
+## Generator redesign (owner master directive, 2026-10-24)
+
+- **Audit and plan:** `docs/GENERATOR_AUDIT.md`.
+- **Modes:** only NORMAL and PUNISHER are offered for new climbs until the difficulty infrastructure is in place. NEVER GONNA HAPPEN keeps its code, its board and any climb begun on it.
+- **Build 79:** held until the redesign lands.
+- **Dead-end spurs:** replaced by reconnecting forks.
+- **Difficulty:** estimated per link by `EncounterModel` (demand categories and interaction terms, all reasons logged). The weights are first estimates, to be calibrated against playtests. A score is an estimate, not proof of human feasibility.

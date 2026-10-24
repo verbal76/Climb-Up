@@ -80,9 +80,16 @@ Recovery point: branch `build-74-determinism`, HEAD `bd0b550` (PR #9). Generator
 
 Estimated effort: several focused sessions (the generator is about 1,700 lines). It changes every seeded course (rules 7), so the replays above, records and the fingerprint all reset.
 
-## Owner decisions needed before implementation
+## Owner decisions (2026-10-24, answered)
 
-1. Modes: the directive names two (Normal, Punisher), but the game ships three (NORMAL, PUNISHER, NEVER GONNA HAPPEN). Keep the third on its own curve above Punisher, or remove it?
-2. Build 79: ship the current generator (`bd0b550` plus the aimed-cannon fix plus test tolerance) as a private playtest first, or hold every build until the redesign lands?
-3. Forks replace the dead-end spurs you asked for on 2026-10-24 (the directive's section 15). Confirm the spurs go.
-4. Budget: the redesign is multi-session. Start now, or after the weekly reset?
+1. Modes: new climbs offer only NORMAL and PUNISHER until this design infrastructure is in place.
+   - NEVER GONNA HAPPEN keeps its code and its times board, and a climb already begun on it carries on.
+   - A saved NEVER GONNA HAPPEN setting starts PUNISHER climbs (`Tuning.PLAYABLE_MODES = 2`).
+2. Build 79 is held until the redesign lands. No build from the current generator.
+3. Forks replace the dead-end spurs.
+4. The redesign starts now.
+
+## Implementation log
+
+- G1: modes limited to two (SettingsScreen, ClimbGame.newClimbTuning).
+- G2: `sim/EncounterModel`: per-link demands (pursue, wait, position, commit, recover), interaction terms and a conflict flag, with a reason string for every link. `LevelReport` probe: per-level score distribution, conflicts and mechanic counts for either mode.

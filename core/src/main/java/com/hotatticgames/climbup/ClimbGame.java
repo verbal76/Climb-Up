@@ -216,7 +216,7 @@ public class ClimbGame extends Game {
     /** The tuning of the climb in progress, at the difficulty it began with. */
     public Tuning runTuning() { return tuningFor(save != null ? save.difficulty : 0); }
     /** The tuning the next new climb starts with (the DIFFICULTY setting). */
-    public Tuning newClimbTuning() { return tuningFor(settings != null ? settings.difficulty : 0); }
+    public Tuning newClimbTuning() { return tuningFor(settings != null ? Math.min(settings.difficulty, Tuning.PLAYABLE_MODES - 1) : 0); }      // a saved NEVER GONNA HAPPEN setting starts PUNISHER climbs (owner 2026-10-24)
 
     /** Opens the saved climb, or starts a new one (fresh seed) when there is none or {@code fresh} is set. */
     public Run openRun(boolean fresh) {

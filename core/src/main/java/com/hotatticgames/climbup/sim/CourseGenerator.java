@@ -122,7 +122,22 @@ public final class CourseGenerator {
     /** 0 before the first hazards, ramping to 1 (finite towers ramp over their own height so tests exercise them too). */
     float intensity(float y) {
         float start = endless ? T.hazardStartY : T.courseHeight * 0.18f, ramp = endless ? T.hazardRampY : T.courseHeight * 0.7f;
-        return Math.min(1f, Math.max(0f, (float) ((y + base - start) / ramp)));
+        return Math.min(1f, Math.max(0f, (float) ((y + base + modeShift() - start) / ramp)));
+    }
+
+    /**
+     * Owner directive 2026-10-24 (two 10-level curves): PUNISHER reads the whole difficulty curve this far further up the tower, so its Level 1 plays like
+     * NORMAL's Levels 3-4 and its later levels go past anything NORMAL reaches. Only the curve moves: the worlds, castles and gems stay at their heights.
+     */
+    static final float PUNISHER_SHIFT = 1500f;
+    private float modeShift() { return endless && T.hard > 0 ? PUNISHER_SHIFT : 0f; }
+    /**
+     * Where height y sits in the 10-level timed climb, as a difficulty from 0 (NORMAL Level 1) to 1 (NORMAL's top castle), and beyond 1 for PUNISHER's
+     * last levels. Every mechanic's chance of appearing grows with it smoothly; none is locked behind a level (directive section 6).
+     */
+    float level(float y) {
+        if (!endless) return diff(y);
+        return Math.max(0f, (float) ((y + base + modeShift()) / (10.0 * T.castleSpacing)));
     }
 
     /**
@@ -133,7 +148,7 @@ public final class CourseGenerator {
     static final float LATE_RAMP = 3800f;
     float late(float y) {
         float done = endless ? T.hazardStartY + T.hazardRampY : T.courseHeight;
-        return Math.min(1f, Math.max(0f, (float) ((y + base - done) / LATE_RAMP)));
+        return Math.min(1f, Math.max(0f, (float) ((y + base + modeShift() - done) / LATE_RAMP)));
     }
 
     // ------------------------------------------------------------------ physics helpers
@@ -286,10 +301,11 @@ public final class CourseGenerator {
             if (clubBoost > 0) { clubBoost--; k = rnd.nextBoolean() ? Kind.TRAP : Kind.HAZ; clubTarget = true; }      // Build 71 (owner): a club was just placed - the next few modules give it crabs and bees to hit
             wantCreature = clubTarget;
             if (th == 1 && last.type == Element.Type.STATIC && rnd.nextFloat() < 0.2f) k = Kind.WET;          // the Frost world: some platforms are under a rain cloud (slippery)
-            if (th >= 1 && k != Kind.WET && prev != Kind.CREATURE && !last.wet() && rnd.nextFloat() < (th >= 2 ? 0.065f : 0.06f) + 0.05f * late(last.y) + 0.05f * T.hard) k = Kind.CREATURE;
+            float lv = Math.min(1f, level(last.y));
+            if (k != Kind.WET && prev != Kind.CREATURE && !last.wet() && rnd.nextFloat() < 0.025f + 0.045f * lv + 0.05f * late(last.y)) k = Kind.CREATURE;      // owner directive 2026-10-24: creature decks from Level 1 on, more as the levels rise (was world 2 on)
             else if (prev == Kind.CREATURE && !last.wet() && rnd.nextFloat() < 0.35f * late(last.y)) k = rnd.nextBoolean() ? Kind.HAZ : Kind.TRAP;      // Build 71: higher up, a creature deck runs straight into a trap      // Build 71: a skull's deck (world 2 on), or a green blob's (world 3 on)
             boolean secondHalf = endless && th == 0 && ((last.y + base) % T.zoneHeight) >= 0.5f * T.zoneHeight - 15f;      // castle 1 to castle 2: the Meadow's second, harder half (owner, Build 71)
-            if (k != Kind.WET && k != Kind.CREATURE && !last.wet() && prev != Kind.DROPS && (secondHalf ? rnd.nextFloat() < 0.10f : th >= 1 && rnd.nextFloat() < 0.04f)) k = Kind.DROPS;
+            if (k != Kind.WET && k != Kind.CREATURE && !last.wet() && prev != Kind.DROPS && (secondHalf ? rnd.nextFloat() < 0.10f : rnd.nextFloat() < 0.015f + 0.025f * lv)) k = Kind.DROPS;      // (spike-drop rows anywhere, more higher up; was world 2 on)
             else if (secondHalf && (k == Kind.HOP || k == Kind.STAIRS) && rnd.nextFloat() < 0.3f) k = Kind.HAZ;          // a little rougher than the first half
             if (last.wet() && (k == Kind.HAZ || k == Kind.TRAP || k == Kind.MORTAR || k == Kind.CREATURE || k == Kind.DROPS)) k = Kind.STAIRS;          // after a slippery platform give a walk-up (not a hazard you must time, nor a jump you must push off a slippery surface for): its timing windows assume a normal run-up (SawFairnessTest) and the plain climb stays walkable
             if (beltSawY > 0f && !beltSawDone && last.y >= beltSawY && !last.wet() && !(castlePending && last.y > castleTarget - 14f)) {      // Build 77: this section's balance conveyor (tried again on the next module if it cannot be proven here)
@@ -652,42 +668,71 @@ public final class CourseGenerator {
     private void addDecoys(int lo, int hi) {
         c.finishRoute();
         Random dr = new Random(c.seed * 0x2545F4914F6CDD1DL + 99 + salt * 7919L);
-        spurLeft = (c.seed & 1L) == 0L; leftBuilt = 0;
         int rs = c.routeSize();
-        java.util.Set<Integer> anchored = new java.util.HashSet<>();
-        for (int a = lo; a < Math.min(rs - 4, hi + 1); a++) {
+        // Owner directive 2026-10-24 (sections 15-16): no dead ends. Now and then the route forks: the route itself is the quick way, and a longer branch drops
+        // below it, runs on under it and bounces back up onto a later route platform. Both go forward and meet again. NORMAL forks now and then, one branch
+        // at a time; PUNISHER forks more often, with longer branches, and sometimes a second branch off the first.
+        boolean punisher = T.hard > 0;
+        float chance = punisher ? 0.30f : 0.15f;
+        int spacing = punisher ? 4 : 7, last = -100;
+        for (int a = lo; a < Math.min(rs - 5, hi + 1); a++) {
+            if (a - last < spacing) continue;
             Element p = c.get(a);
-            if (p.type != Element.Type.STATIC || p.w < 3f) continue;
-            if (dr.nextFloat() > 0.44f + 0.08f * tier(p.y)) continue;          // more dead ends than before (was 0.30)
-            if (placeDecoy(p, a, dr, false)) anchored.add(a);          // a second, different try when the first does not fit the surrounding geometry
-        }
-        // Guarantee that long dead-end spurs appear (DeadEndTest). This runs from a SEPARATE, deterministic RNG and only on
-        // platforms that did not already get a decoy, so the main decoy pass above stays byte-for-byte identical - the streaming
-        // autopilot is sensitive to any shift in it (TowerStreamingTest). The added spurs are off-route, hazard-free dead ends.
-        Random lr = new Random(c.seed * 0x9E3779B97F4A7C15L + 1013 + salt * 6367L);
-        int wantLong = 1;
-        for (int a = lo; a < Math.min(rs - 4, hi + 1) && wantLong > 0; a++) {
-            Element p = c.get(a);
-            if (p.type != Element.Type.STATIC || p.w < 3f || anchored.contains(a)) continue;
-            if (lr.nextFloat() > 0.5f) continue;              // spread the forced spurs across the slice
-            if (placeDecoy(p, a, lr, true)) { anchored.add(a); wantLong--; }
-        }
-        // Build 79 (owner): spurs go left as well as right. The route climbs to the right, so a left spur branches back towards the block it came up
-        // from and fits only where that block leaves room (no overlap, no ceiling over it); the main pass rarely finds such a spot, so a third pass,
-        // again from its own RNG, looks along the slice for one and builds a left spur there if the slice has none yet.
-        Random sr = new Random(c.seed * 0xC2B2AE3D27D4EB4FL + 2029 + salt * 4271L);
-        for (int a = lo; a < Math.min(rs - 4, hi + 1) && leftBuilt == 0; a++) {
-            Element p = c.get(a);
-            if (p.type != Element.Type.STATIC || p.w < 2f || anchored.contains(a)) continue;
-            for (int tryNo = 0; tryNo < 5 && leftBuilt == 0; tryNo++) {
-                spurLeft = true; forceSpur = true;
-                pendingHaz = new ArrayList<>(); spurBuilt = false;
-                List<Element> es = buildDecoy(p, a, sr, false);
-                forceSpur = false;
-                if (tryDecoy(es, pendingHaz, a)) { decoys += es.size(); anchored.add(a); leftBuilt++; }
+            if (p.type != Element.Type.STATIC || p.w < 2.5f || p.anchor >= 0) continue;
+            if (dr.nextFloat() > chance) continue;
+            int built = tryFork(a, a, dr, punisher ? 6 : 4);
+            if (built < 0) continue;
+            last = a;
+            if (punisher && dr.nextFloat() < 0.35f) {          // a second branch off the first one, rejoining the route further on
+                int[] f = c.forks.get(c.forks.size() - 1);
+                int from = f[1] + Math.max(0, f[2] / 2 - 1);
+                tryFork(a, from, dr, 7);
             }
         }
         addKeyRooms();          // last, so every key-room link is proven against the final geometry
+    }
+
+    /**
+     * One fork off element {@code from} (a route platform, or a platform of an earlier branch) for route platform {@code a}'s section: a branch below the
+     * route that rejoins it at a route platform up to {@code maxAhead} ahead. Every link along it is proven like a key-room detour, every route link
+     * nearby is proven again with it there, and it is laid out like any decoy (no overlap, no ceiling over the route). Returns the rejoined route index, or -1.
+     */
+    private int tryFork(int a, int from, Random dr, int maxAhead) {
+        Element start = c.get(from);
+        int rs = c.routeSize();
+        for (int attempt = 0; attempt < 4; attempt++) {
+            int t = a + 3 + dr.nextInt(Math.max(1, maxAhead - 2));
+            if (t >= rs - 1) continue;
+            Element tg = c.get(t);
+            if (!tg.isPlatform() || tg.isMoving() || tg.w < 2f || tg.y < start.y + 1f) continue;
+            float padS = c.wrap(tg.s - tg.halfW() - 1.9f), padY = tg.y - 3.9f - dr.nextFloat() * 0.4f;
+            float s0 = start.s + start.halfW() + 1.6f + dr.nextFloat() * 0.8f, y0 = start.y - 1.9f - dr.nextFloat() * 0.5f;
+            float span = c.dsWrap(padS, s0);
+            if (span < 3f) continue;
+            int steps = Math.max(1, (int) Math.ceil(span / 4.2f));
+            List<Element> es = new ArrayList<>();
+            for (int k = 0; k < steps; k++) {
+                float f = (float) k / steps, w = 2f + dr.nextInt(2);
+                Element b = plat(Element.Type.STATIC, c.wrap(s0 + span * f), y0 + (padY - y0) * f + (k > 0 ? dr.nextFloat() * 0.3f : 0f), w, start.zone);
+                b.anchor = a; es.add(b);
+            }
+            Element pad = plat(Element.Type.PAD, padS, padY, 2f, tg.zone); pad.anchor = a; es.add(pad);
+            int n0 = c.size(), h0 = c.hazards.size();
+            boolean ok = true;
+            for (Element e : es) { c.add(e); if (!decoyOk(e, a) || !corridorOk(e, a)) { ok = false; break; } }
+            if (ok) {
+                c.indexDecoys();
+                ok = pairOk(from, n0);
+                for (int k = n0; ok && k < c.size() - 1; k++) ok = pairOk(k, k + 1);
+                ok = ok && pairOkAir(c.size() - 1, t);
+                for (int q = Math.max(0, a - 3); ok && q <= Math.min(rs - 2, t + 2); q++) ok = Autopilot.plan(Sim.startOn(c, T, q), q, false).ok;
+            }
+            if (!ok) { rollbackTo(n0, h0); c.indexDecoys(); continue; }
+            c.forks.add(new int[]{from, n0, es.size(), t});
+            decoys += es.size();
+            return t;
+        }
+        return -1;
     }
 
     private boolean lastDip;      // Build 79: the last hop module was a dip
@@ -987,6 +1032,7 @@ public final class CourseGenerator {
 
     private boolean commit(List<Element> es, float minMargin) { return commit(es, new ArrayList<Element>(), minMargin); }
 
+    public int failConflict;      // diagnostics: modules refused for incompatible demands (EncounterModel)
     /** The margin each committed link was proven with (route index of its start). */
     private final ArrayList<Float> linkNeeds = new ArrayList<>();
     private float linkNeed(int i) { return i < linkNeeds.size() && linkNeeds.get(i) != null ? linkNeeds.get(i) : Math.min(0.05f, T.minLinkMargin); }
@@ -1045,6 +1091,10 @@ public final class CourseGenerator {
                 }
             }
         }
+        // Owner directive 2026-10-24 (sections 10-14): no link may ask for incompatible things at once: several creatures chasing the climber where the
+        // jump also has to wait for a cycle from a cramped take-off. Such a module is not dropped from the game; this arrangement of it is refused and the
+        // generator tries another (different spacing, placement or module), so the mechanics stay and meet elsewhere.
+        for (int i = Math.max(0, from); ok && i < c.size() - 1; i++) if (EncounterModel.link(c, T, i).conflict) { ok = false; failConflict++; }
         if (!ok) { while (c.size() > n0) c.elements.remove(c.size() - 1); while (c.hazards.size() > h0) c.hazards.remove(c.hazards.size() - 1); }
         else { for (int i = Math.max(0, n0 - 1); i < c.size() - 1; i++) setLinkNeed(i, minMargin); if (!hz.isEmpty()) hazardsPlaced += hz.size(); }
         hazardTried += hz.isEmpty() ? 0 : 1;
@@ -1113,7 +1163,7 @@ public final class CourseGenerator {
             if (lagging && !vert) w[k.ordinal()] *= 0.12f;
             if (rushing && vert) w[k.ordinal()] *= 0.2f;
         }
-        if (T.hard > 0) { w[Kind.CREATURE.ordinal()] *= 1f + 0.6f * T.hard; w[Kind.TRAP.ordinal()] *= 1f + 0.4f * T.hard; w[Kind.HAZ.ordinal()] *= 1f + 0.3f * T.hard; }      // Build 79 PUNISHER / NEVER GONNA HAPPEN: more creature decks and guarded gaps
+        // (PUNISHER no longer multiplies these weights: it reads the curve PUNISHER_SHIFT metres higher; owner directive 2026-10-24)
         if (prev != null) { w[prev.ordinal()] *= 0.35f; if (prev == prev2) w[prev.ordinal()] = 0f; }
         float sum = 0; for (float f : w) sum += f;
         float x = rnd.nextFloat() * sum;
@@ -1200,7 +1250,7 @@ public final class CourseGenerator {
      */
     private List<Element> buildCreature(Element last, float d, int z, int attempt, List<Element> hzOut) {
         float uR = last.s + last.w / 2f;
-        int roll = z >= 2 ? (rnd.nextBoolean() ? 0 : 1 + rnd.nextInt(2)) : 0;          // 0 skull (half), 1 blob on a platform, 2 blob on a tipping bridge
+        int roll = rnd.nextFloat() < 0.3f + 0.7f * Math.min(1f, level(last.y)) ? (rnd.nextBoolean() ? 0 : 1 + rnd.nextInt(2)) : 0;      // (blobs from Level 1 on, more often higher up; were world 3 on)          // 0 skull (half), 1 blob on a platform, 2 blob on a tipping bridge
         List<Element> es = new ArrayList<>();
         if (roll == 2) {
             float w = 7f + rnd.nextInt(2), dyIn = r(-0.4f, 0.3f);
@@ -1331,7 +1381,7 @@ public final class CourseGenerator {
                 float muzzle = cur.s - cur.w / 2f + 0.7f;
                 h = hz(Element.Type.CANNON, muzzle, cur.y + 2.35f, 0f, z);
                 h.len = (uR - muzzle) + g + 1.2f; h.dir = 1; h.period = r(3.0f, 4.0f) - 0.5f * inten;
-                if (z >= 3 && rnd.nextFloat() < 0.6f) {          // late game (the night world on): an aimed cannon instead of the side cannon: it turns to the player, locks, flashes, fires along the locked line
+                if (rnd.nextFloat() < 0.15f + 0.5f * Math.min(1f, level(cur.y))) {          // owner directive 2026-10-24: aimed cannons anywhere, more often higher up (were the night world on)          // late game (the night world on): an aimed cannon instead of the side cannon: it turns to the player, locks, flashes, fires along the locked line
                     h = hz(Element.Type.AIMED, muzzle, cur.y + 2.0f, 0f, z);
                     h.period = r(4.2f, 5.2f) - 0.4f * inten;
                 }

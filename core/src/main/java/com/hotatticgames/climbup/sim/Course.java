@@ -55,6 +55,8 @@ public final class Course {
      * The solver uses them to fetch the key before the matching castle gate.
      */
     public final List<int[]> keyRooms = new ArrayList<>();
+    /** Owner directive 2026-10-24: alternative routes. Each fork is {start element, first branch element, branch length, route element it rejoins}. */
+    public final List<int[]> forks = new ArrayList<>();
 
     /** Indices of hazards anchored to route/decoy elements aLo..aHi (inclusive). */
     /** The hazards anchored to elements aLo..aHi, plus any side cannon further back whose balls fly on into that stretch (Build 63: a ball flies CANNON_BEYOND past its lane and hits there, so the cannon stays live while the player is within its reach). */

@@ -995,6 +995,24 @@ public final class CourseGenerator {
     /** Adds elements (and their hazards) if every link (prefix last -> e1 -> ... -> eN) is solvable with the required margin and timing window. */
     private boolean commit(List<Element> es, List<Element> hz, float minMargin) {
         int n0 = c.size(), h0 = c.hazards.size();
+        int from = n0 - 1;
+        // Every link a new hazard can touch is proven with it there: a hazard on the platform the previous link lands on touches that link too (a cannon
+        // fires across it; a saw on it sweeps the landing: seed 3 slice 16, a saw from the next module cut a saw link to 0.36), and a creature also the
+        // links into the decks it roams onto (framed seed 5 slice 17: a skull from the next module jumped the pad link before its deck).
+        for (Element h : hz) if (h.anchor >= 0) from = Math.min(from, h.anchor - 1 - Math.max(0, roamReach(h)));
+        if (n0 >= 2 && !es.isEmpty()) from = Math.min(from, n0 - 2);       // and the link onto the platform the module starts from: what comes next can crowd its landing (tower 3: a slider just past it cut a ramp link from 0.25 to 0.017)
+        from = Math.max(0, from);
+        // An earlier link is held against the module only if it held before it: some earlier links are proven from a start a plain re-check does not
+        // reproduce (the landing on a running belt, a skull parked at the far end), and re-checking those unconditionally rejected every module after
+        // them, so generation ran out of modules (framed seed 21 slice 49).
+        boolean[] heldBefore = new boolean[Math.max(0, n0 - 1 - from)];
+        for (int i = from; i < n0 - 1; i++) {
+            boolean cannonOnLanding = false; for (Element h : hz) if (h.type == Element.Type.CANNON && h.anchor == i + 1) cannonOnLanding = true;
+            if (cannonOnLanding) { heldBefore[i - from] = true; continue; }       // as before Build 79: a cannon's lane across a landing is always proven
+            Sim b = Sim.startOn(c, T, i); quietStart(b, i);
+            Autopilot.Result r0 = Autopilot.plan(b, i, true);
+            heldBefore[i - from] = r0.ok && r0.margin() >= linkNeed(i);
+        }
         for (Element e : es) c.add(e);
         for (Element h : hz) c.hazards.add(h);
         boolean ok = true;
@@ -1002,15 +1020,9 @@ public final class CourseGenerator {
         if (!ok) failLayer++;
         for (Element h : hz) { if (!ok) break; if (h.type == Element.Type.CLUB) continue; ok = hazardOk(h, ownerOf(h)); if (!ok) failHaz++; }
         if (ok && !sawsClearOfCreatures(hz)) { ok = false; failHaz++; }
-        int from = n0 - 1;
-        // Every link a new hazard can touch is proven with it there: a hazard on the platform the previous link lands on touches that link too (a cannon
-        // fires across it; a saw on it sweeps the landing: seed 3 slice 16, a saw from the next module cut a saw link to 0.36), and a creature also the
-        // links into the decks it roams onto (framed seed 5 slice 17: a skull from the next module jumped the pad link before its deck).
-        if (!Boolean.getBoolean("noReach")) for (Element h : hz) if (h.anchor >= 0) from = Math.min(from, h.anchor - 1 - Math.max(0, roamReach(h)));
-        if (!Boolean.getBoolean("noPrev") && n0 >= 2 && c.size() > n0) from = Math.min(from, n0 - 2);       // and the link onto the platform the module starts from: what comes next can crowd its landing (tower 3: a slider just past it cut a ramp link from 0.25 to 0.017)
-        from = Math.max(0, from);
         Sim prevStart = null; Autopilot.Result prevRes = null;
         for (int i = from; i < c.size() - 1 && ok; i++) {
+            if (i < n0 - 1 && !heldBefore[i - from]) { prevStart = null; prevRes = null; continue; }
             Sim sim = Sim.startOn(c, T, i); quietStart(sim, i);
             if (c.get(i).tiltBelt() && prevRes != null && prevRes.factory != null) {
                 // Build 79 (owner): the balance conveyor always runs, so nobody stands still on it: a climber crosses it straight from the landing. Its link is

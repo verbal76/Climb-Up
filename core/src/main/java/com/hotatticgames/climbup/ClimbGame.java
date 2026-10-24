@@ -204,6 +204,14 @@ public class ClimbGame extends Game {
         return false;
     }
 
+    private Tuning punisherTuning;
+    /** Build 79: the tuning a PUNISHER climb runs with (one shared copy, so a prepared first slice is found again). */
+    public Tuning punisherTuning() { if (punisherTuning == null || punisherTuning.radius != tuning.radius) punisherTuning = tuning.punisherCopy(); return punisherTuning; }
+    /** The tuning of the climb in progress: PUNISHER or normal, as it began. */
+    public Tuning runTuning() { return save != null && save.punisher ? punisherTuning() : tuning; }
+    /** The tuning the next new climb starts with (the PUNISHER setting). */
+    public Tuning newClimbTuning() { return settings != null && settings.punisher ? punisherTuning() : tuning; }
+
     /** Opens the saved climb, or starts a new one (fresh seed) when there is none or {@code fresh} is set. */
     public Run openRun(boolean fresh) {
         Run r = new Run();
@@ -214,7 +222,7 @@ public class ClimbGame extends Game {
                 if (snap != null && (snap.seed != save.seed || hist == null || hist.size() <= snap.maxSlice)) { store.deleteRun(); snap = null; }
                 if (snap != null) { save.cpSlice = snap.cpSlice; save.cpLocal = snap.cpLocal; }
                 if (hist != null && hist.size() > save.cpSlice) {
-                    r.tower = new Tower(save.seed, tuning, hist, save.cpSlice);
+                    r.tower = new Tower(save.seed, runTuning(), hist, save.cpSlice);
                     Tower.Ref ref = new Tower.Ref(save.cpSlice, save.cpLocal);
                     int idx = r.tower.worldIndex(ref);
                     if (idx >= 0) {
@@ -229,8 +237,10 @@ public class ClimbGame extends Game {
         String sd = System.getProperty("climb.seed");
         long seed = pendingSeed != null ? pendingSeed : sd != null ? Long.parseLong(sd) : takeRandomSeed();   // Build 64: a typed course code wins; the random draw is unchanged (Build 71: drawn ahead, see prepareNextClimb)
         pendingSeed = null;
-        r.tower = new Tower(seed, tuning); r.startIdx = 0;
+        Tuning nt = newClimbTuning();
+        r.tower = new Tower(seed, nt); r.startIdx = 0;
         Legacy.stampNewClimb(save, VERSION, appBuild, Legacy.today());
+        save.punisher = nt.punisher;
         save.seed = seed; save.cpSlice = 0; save.cpLocal = 0;
         try { history.reset(seed); syncHistory(r.tower); } catch (java.io.IOException e) { /* cannot store the climb: it still plays, it just cannot be resumed */ save.seed = 0; }
         return r;
@@ -252,7 +262,7 @@ public class ClimbGame extends Game {
         long seed;
         if (sd != null) seed = Long.parseLong(sd);
         else { if (nextRandomSeed == null) nextRandomSeed = drawSeed(); seed = nextRandomSeed; }
-        com.hotatticgames.climbup.sim.Tower.prepare(seed, tuning);
+        com.hotatticgames.climbup.sim.Tower.prepare(seed, newClimbTuning());
     }
 
     /** Appends every slice the tower has generated since the last call to the history file. */

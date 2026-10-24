@@ -40,7 +40,7 @@ public final class SeedScreen extends ScreenAdapter {
         char u = Character.toUpperCase(c);
         if (code.length() >= SeedCode.LENGTH || SeedCode.ALPHABET.indexOf(u) < 0) return false;
         code.append(u); message = "";
-        if (code.length() == SeedCode.LENGTH && SeedCode.problem(code.toString()) == null) com.hotatticgames.climbup.sim.Tower.prepare(SeedCode.decode(code.toString()), g.tuning);     // a whole valid code: make its first slice while OK is pressed (Build 71)
+        if (code.length() == SeedCode.LENGTH && SeedCode.problem(code.toString()) == null) com.hotatticgames.climbup.sim.Tower.prepare(SeedCode.decode(code.toString()), g.newClimbTuning());     // a whole valid code: make its first slice while OK is pressed (Build 71)
         return true;
     }
     void backspace() { if (code.length() > 0) code.setLength(code.length() - 1); message = ""; }

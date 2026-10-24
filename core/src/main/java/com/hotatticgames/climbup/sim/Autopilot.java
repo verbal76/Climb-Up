@@ -162,17 +162,67 @@ public final class Autopilot {
                 else phase = 1;
             }
             if (phase == 1) {
-                float at = crab >= 0 && crab < s.course.hazards.size() ? s.crabAt(crab, s.course.hazards.get(crab)) : hx;
-                float ahead = s.course.dsWrap(at, s.s) * dir;
+                float ahead = crab >= 0 ? crabAhead(s) : s.course.dsWrap(hx, s.s) * dir;
                 in.moveX = dir;
                 if (ahead <= hopDist) { in.jumpPressed = true; in.jumpHeld = true; phase = 2; }
                 return;
             }
             if (phase == 2) {
                 in.moveX = dir; in.jumpHeld = s.vy > 0f && s.mode == Sim.Mode.AIR;
-                if (s.mode == Sim.Mode.GROUND) phase = 3; else return;
+                if (s.mode != Sim.Mode.GROUND) return;
+                phase = crab >= 0 && crabAhead(s) < 1e8f ? 1 : 3;          // Build 79: several crabs share a deck: hop each in turn
+                if (phase == 1) return;
             }
             rest.act(s, in);
+        }
+        /** Distance ahead (along dir) of the nearest live crab on this deck that is still in front of you (1e9 when none). */
+        private float crabAhead(Sim s) {
+            Course c = s.course; Element ref = crab < c.hazards.size() ? c.hazards.get(crab) : null;
+            float best = 1e9f;
+            for (int k = 0, n = s.hz == null ? c.hazards.size() : s.hz.length; k < n; k++) {
+                int hi = s.hz == null ? k : s.hz[k];
+                if (hi >= c.hazards.size()) continue;
+                Element h = c.hazards.get(hi);
+                if (h.type != Element.Type.CRAB || (hi < s.featDone.length && s.featDone[hi]) || s.crabFalling(hi) || ref == null || s.mobDeckIdx(hi, h) != s.mobDeckIdx(crab, ref)) continue;
+                float ahead = c.dsWrap(s.crabAt(hi, h), s.s) * dir;
+                if (ahead > -0.2f && ahead < best) best = ahead;
+            }
+            return best;
+        }
+    }
+
+    /** Build 79: runs across a bridge whose planks drop out (Element.holed), hopping each hole {@code hopDist} before its near edge, then leaves like {@link GroundPolicy}. */
+    static final class HoleHopPolicy implements Policy {
+        final int a, dir; final float hopDist; final GroundPolicy rest; boolean inHop;
+        HoleHopPolicy(int a, int b, int dir, float hopDist, int steerMode) { this.a = a; this.dir = dir; this.hopDist = hopDist; rest = new GroundPolicy(a, b, dir, 0f, 0f, 0.9f, steerMode); }
+        public void act(Sim s, InputState in) {
+            if (s.mode == Sim.Mode.LEDGE || s.mode == Sim.Mode.PULLUP) { in.moveY = 1f; return; }
+            if (inHop) {
+                if (s.mode == Sim.Mode.AIR) { in.moveX = dir; in.jumpHeld = s.vy > 0f; return; }
+                inHop = false;
+            }
+            if (s.mode == Sim.Mode.GROUND && s.onElem == a) {
+                float near = nextHole(s);
+                if (near < 1e8f) {
+                    in.moveX = dir;
+                    if (near <= hopDist) { in.jumpPressed = true; in.jumpHeld = true; inHop = true; }
+                    return;
+                }
+            }
+            rest.act(s, in);
+        }
+        /** Distance (along dir) from you to the near edge of the next hole section ahead on deck a (negative when already over it), else 1e9. */
+        private float nextHole(Sim s) {
+            Element e = s.course.get(a);
+            if (!e.holed()) return 1e9f;
+            float x = s.course.dsWrap(s.s, s.es1[a]); int n = e.holeSections(); float sec = e.w / n, best = 1e9f;
+            for (int k = 0; k < n; k++) {
+                if ((e.color & (1 << k)) == 0) continue;
+                float lo = -e.w * 0.5f + k * sec, hi = lo + sec, near = dir > 0 ? lo : hi, far = dir > 0 ? hi : lo;
+                if ((far - x) * dir <= Sim.HOLE_FOOT) continue;          // behind you
+                best = Math.min(best, (near - x) * dir);
+            }
+            return best;
         }
     }
 
@@ -206,16 +256,17 @@ public final class Autopilot {
                 if (hi >= c.hazards.size()) continue;
                 Element h = c.hazards.get(hi);
                 if (h.type == Element.Type.SKULL && s.skullDashing(hi)) {
-                    Element deck = h.anchor >= 0 && h.anchor < c.size() ? c.get(h.anchor) : null;
-                    if (deck == null || Math.abs(s.y - deck.y) > 0.6f) continue;
+                    int dj = s.mobDeckIdx(hi, h);                       // Build 79: the deck it hunts on now
+                    if (dj < 0 || Math.abs(s.y - s.deckY(dj)) > 0.6f) continue;
                     float ahead = c.dsWrap(s.s, s.mobS[hi]) * s.mobDir[hi], gap = ahead - (Element.SKULL_R + hw);
                     if (ahead > 0f && gap / Element.SKULL_SPEED < 0.15f) { in.jumpPressed = true; in.jumpHeld = true; busy = 1; return true; }
                 } else if (h.type == Element.Type.BLOB && s.blobShadow(hi) >= 0f && s.mobDir[hi] == 0f) {
                     float d = c.dsWrap(s.s, s.mobTgt[hi]);
                     if (Math.abs(d) >= Element.BLOB_R + hw + 0.35f) continue;
-                    Element deck = h.anchor >= 0 && h.anchor < c.size() ? c.get(h.anchor) : null;
+                    int dj = s.mobDeckIdx(hi, h);                       // Build 79: the deck it comes down on
+                    Element deck = dj >= 0 ? c.get(dj) : null;
                     float dir = d > 0f ? 1f : d < 0f ? -1f : s.facing;
-                    if (deck != null) { float room = c.dsWrap(s.es1[h.anchor] + dir * deck.halfW(), s.s) * dir; if (room < 1.3f) dir = -dir; }
+                    if (deck != null) { float room = c.dsWrap(s.es1[dj] + dir * deck.halfW(), s.s) * dir; if (room < 1.3f) dir = -dir; }
                     dodge = dir; blob = hi; busy = 2; in.moveX = dir; return true;
                 }
             }
@@ -351,6 +402,10 @@ public final class Autopilot {
                 cands.add(() -> new WalkOffPolicy(b, dir, wt, fsm));
                 group.add(24 + sm);
             }
+        }
+        if (base.mode == Sim.Mode.GROUND && c.get(a).holed()) {           // Build 79: a bridge that drops planks: hop the holes (tried first: a plain run falls through)
+            int at = 0;
+            for (float hd : new float[]{0.15f, 0.45f, 0.8f}) for (int sm : new int[]{0, 3}) { final float fhd = hd; final int fsm = sm; cands.add(at, () -> new HoleHopPolicy(a, b, dir, fhd, fsm)); group.add(at++, 16); }
         }
         if (base.mode == Sim.Mode.GROUND && c.get(a).isPlatform()) {      // a hazard in the middle of this platform: hop-over moves
             for (int hi = 0; hi < c.hazards.size(); hi++) {

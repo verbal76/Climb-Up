@@ -39,7 +39,7 @@ public final class TitleScreen extends ScreenAdapter {
         has = g.climbValid();
         if (has) {        // backdrop: where the climb in progress stands
             try {
-                tw = new Tower(g.save.seed, g.tuning, g.history.read(g.save.seed), g.save.cpSlice);
+                tw = new Tower(g.save.seed, g.runTuning(), g.history.read(g.save.seed), g.save.cpSlice);
                 idx = tw.worldIndex(new Tower.Ref(g.save.cpSlice, g.save.cpLocal));
                 if (idx < 0) { tw = null; idx = 0; }
             } catch (Exception e) { tw = null; idx = 0; }

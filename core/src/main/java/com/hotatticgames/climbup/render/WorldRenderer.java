@@ -33,6 +33,7 @@ public final class WorldRenderer implements Disposable {
     private static final class Part {
         ModelInstance inst; float du, dy, dz, sx = 1, sy = 1, sz = 1, yaw, roll; Color color; boolean fall; boolean tinted = true; boolean fixed; ColorAttribute tintAttr;
         boolean belt; float beltSpan, beltSlope, beltInset;   // Build 72: a conveyor slat that rides the belt, wrapping round within beltSpan (and along the ramp's slope); Build 76: cut off beltInset short of each end (the rollers)
+        int hole = -1;  // Build 79: the plank section of a holed bridge this plank belongs to (it drops out with it), else -1
         float localZ;   // optional pre-rotation translate along the model's own Z (model units, applied before scale): used to recentre an off-origin mesh (the ramp) so it can sit at the element centre without a big arc offset
     }
     private static final class Vis { Part[] parts; Element e; boolean built; float beltU, beltT; }      // beltU: how far a balance conveyor's belt has run (its speed follows the tilt)
@@ -189,6 +190,8 @@ public final class WorldRenderer implements Disposable {
                 // sy=0.84 matches the wedge's steeper native slope to the sim's RAMP_SLOPE (0.576); sx shapes the ~1.35 m depth centred on the lane; dy drops the surface mid-point onto e.y.
                 // Build 72 (owner): the spinning ramp is as deep as it is long, so the lane always crosses its full length whichever way it faces
                 Part rp = part(models.space("ramp"), 0f, -0.571f * sc, 0f, (e.spins() ? 1.17f : 0.72f) * sc, 0.84f * sc, sc); rp.yaw = -90f; rp.localZ = -3.1f; rp.tinted = false; ps.add(rp);
+                // Build 79 (owner: the middle vanished when the spinning ramp showed its back): the deck is a single-sided plate, so draw both sides of it
+                if (e.spins()) for (com.badlogic.gdx.graphics.g3d.Material m : rp.inst.materials) m.set(com.badlogic.gdx.graphics.g3d.attributes.IntAttribute.createCullFace(GL20.GL_NONE));
                 if (e.spins()) {            // it turns on a round turntable: a dark plinth with a glowing rim, which stays still
                     Color glow = new Color(0.30f, 0.85f, 1f, 1f), pad = new Color(0.22f, 0.24f, 0.32f, 1f);
                     float rad = e.halfW() * 2.3f, plinth = -e.amp * e.halfW() - 0.12f;
@@ -209,7 +212,7 @@ public final class WorldRenderer implements Disposable {
                 break;
             }
             case STATIC: case GOAL: case CRUMBLE: {
-                if ((e.skin == 1 || e.skin == 4) && e.type == Element.Type.STATIC) { bridgeParts(ps, e.w, false, e.skin == 4); break; }
+                if ((e.skin == 1 || e.skin == 4) && e.type == Element.Type.STATIC) { int p0 = ps.size; bridgeParts(ps, e.w, false, e.skin == 4); if (e.holed()) markHoles(ps, p0, e); break; }
                 int w = Math.max(1, Math.round(e.w));
                 boolean thick = w >= 5 || e.type == Element.Type.GOAL;
                 String name = thick ? base : base + "-low";
@@ -242,8 +245,11 @@ public final class WorldRenderer implements Disposable {
                     int hh = hash(idx, 41); boolean big = w >= 5;
                     String rock = big ? new String[]{"rock_large_1", "rock_large_2", "rock_large_3"}[hh % 3] : new String[]{"rock_1", "rock_2", "rock_3", "rock_4"}[hh % 4];
                     float sc = Math.max(0.3f, Math.min(w, 6f) * 0.85f / (big ? 7.6f : 3.0f)), top = big ? 0.3f : 0.4f;
-                    Part rk = part(models.space(rock), ((hh >> 5) % 5 - 2) * 0.08f * w, -h - 0.25f - top * sc, ((hh >> 9) % 3 - 1) * 0.15f, sc, sc, sc);
-                    rk.roll = 180f; rk.yaw = (hh >> 3) % 360; ps.add(rk);
+                    sc = fitRock(idx, e, rock, sc, h + 0.25f, w);          // Build 79 (owner): never hangs down over anything below
+                    if (sc > 0f) {
+                        Part rk = part(models.space(rock), ((hh >> 5) % 5 - 2) * 0.08f * w, -h - 0.25f - top * sc, ((hh >> 9) % 3 - 1) * 0.15f, sc, sc, sc);
+                        rk.roll = 180f; rk.yaw = (hh >> 3) % 360; ps.add(rk);
+                    }
                 }
                 if (orbit || deck) { /* decorated by spacePlatform / bare so the tower fits */ }
                 else if (thick && e.type != Element.Type.GOAL && quality > 0) decorate(ps, e, idx, w, snow);
@@ -326,6 +332,18 @@ public final class WorldRenderer implements Disposable {
     }
 
     /** Wooden bridge: plank deck on two beams, back rail with posts; the seesaw also gets a stone fulcrum and red end caps. */
+    /** Build 79: the planks over a holed bridge's drop-out sections: a paler, cracked-looking wood so you can read them before you land, tagged to fall with their section. */
+    private void markHoles(Array<Part> ps, int from, Element e) {
+        int n = e.holeSections(); float sec = e.w / n;
+        Color loose = new Color(0.80f, 0.66f, 0.44f, 1f);
+        for (int i = from; i < ps.size; i++) {
+            Part p = ps.get(i);
+            if (p.sx > 0.6f || p.dy != -0.10f) continue;           // planks only (not the beams, posts and rails)
+            int k = (int) Math.floor((p.du + e.w * 0.5f) / sec);
+            if (k < 0 || k >= n || (e.color & (1 << k)) == 0) continue;
+            p.hole = k; p.color = loose; p.fall = true; p.tinted = false; if (p.tintAttr != null) p.tintAttr.color.set(loose);
+        }
+    }
     private void bridgeParts(Array<Part> ps, float w, boolean seesaw, boolean belt) {
         Color wood1 = new Color(0.66f, 0.47f, 0.26f, 1f), wood2 = new Color(0.58f, 0.40f, 0.22f, 1f), beam = new Color(0.36f, 0.24f, 0.14f, 1f), rope = new Color(0.62f, 0.50f, 0.30f, 1f);
         Color painted = new Color(0.86f, 0.36f, 0.16f, 1f);         // Build 72: on a plank conveyor every fourth plank is painted, so you can see the deck rolling left
@@ -404,6 +422,39 @@ public final class WorldRenderer implements Disposable {
     /** Vertical offset that puts a mover block's top face exactly on the simulation surface (the blue block used to be placed as if it were 0.3 m tall, so it stood 0.2 m proud and the hero sank into it). */
     public static float moverBlockDy(Element.Type t) { return -(t == Element.Type.MOVE_H ? BLUE_MOVER_BLOCK_H : MOVER_BLOCK_H); }
 
+    /** Build 79 (owner: "the bottoms of the big rocks get in the way... they cannot block platforms"): head room kept between a hanging rock's bottom and anything under it. */
+    static final float ROCK_CLEAR = 3.2f;
+    private final java.util.HashMap<String, float[]> rockBox = new java.util.HashMap<>();
+    /**
+     * The scale a rock hanging under platform idx may have: {@code sc}, or smaller so that its bottom (depth {@code base} plus its height below the platform's top) stays
+     * ROCK_CLEAR above any platform, castle or rope top beneath its span; 0 (no rock) when even a small one would not fit or a rope runs up through the platform.
+     */
+    private float fitRock(int idx, Element e, String rock, float sc, float base, float w) {
+        float[] bb = rockBox.get(rock);
+        if (bb == null) { com.badlogic.gdx.math.collision.BoundingBox b = new com.badlogic.gdx.math.collision.BoundingBox(); models.space(rock).calculateBoundingBox(b); bb = new float[]{b.getHeight(), Math.max(b.getWidth(), b.getDepth())}; rockBox.put(rock, bb); }
+        float span = Math.max(w * 0.5f + 0.5f, bb[1] * sc * 0.5f), room = 1e9f;
+        for (int j = 0; j < course.size(); j++) {
+            if (j == idx) continue;
+            Element o = course.get(j);
+            boolean rope = o.type == Element.Type.ROPE;
+            if (!rope && !o.isPlatform()) continue;
+            if (Math.abs(course.dsWrap(o.s, e.s)) > span + (rope ? 0.8f : o.halfW())) continue;
+            float top = rope ? o.y + 1.2f : o.y + (o.type == Element.Type.MOVE_V ? Math.abs(o.amp) : 0f);
+            if (rope && o.y - o.len < e.y && top > e.y - base) return 0f;              // a rope running up past the platform: no rock in its way
+            if (top >= e.y - 0.05f) continue;
+            room = Math.min(room, e.y - top - ROCK_CLEAR);
+        }
+        for (Element o : course.hazards) {
+            if (o.type != Element.Type.GATE || Math.abs(course.dsWrap(o.s, e.s)) > span + 2.5f) continue;
+            float top = o.y + o.len;
+            if (o.y >= e.y - 0.05f) continue;
+            room = Math.min(room, e.y - Math.max(top, o.y) - ROCK_CLEAR);
+        }
+        float most = (room - base) / Math.max(0.01f, bb[0]);
+        if (most >= sc) return sc;
+        return most >= 0.3f ? most : 0f;
+    }
+
     /** Space biome platform: a metal deck with beacon lights, hanging from a Space Kit asteroid. */
     private void spacePlatform(Array<Part> ps, Element e, int idx) {
         float w = e.w;
@@ -422,8 +473,11 @@ public final class WorldRenderer implements Disposable {
             boolean big = w >= 4.5f;
             String rock = big ? new String[]{"rock_large_1", "rock_large_2", "rock_large_3"}[h % 3] : new String[]{"rock_1", "rock_2", "rock_3", "rock_4"}[h % 4];
             float sc = Math.max(0.35f, w * 1.1f / (big ? 7.6f : 3.0f)), top = big ? 0.3f : 0.4f;
-            Part rk = part(models.space(rock), ((h >> 5) % 5 - 2) * 0.1f * w, -0.42f - top * sc, ((h >> 9) % 3 - 1) * 0.2f, sc, sc, sc);
-            rk.roll = 180f; rk.yaw = (h >> 3) % 360; rk.tinted = false; ps.add(rk);
+            sc = fitRock(idx, e, rock, sc, 0.42f, w);              // Build 79 (owner): big rocks are fine, but never over a platform, rope or castle below
+            if (sc > 0f) {
+                Part rk = part(models.space(rock), ((h >> 5) % 5 - 2) * 0.1f * w, -0.42f - top * sc, ((h >> 9) % 3 - 1) * 0.2f, sc, sc, sc);
+                rk.roll = 180f; rk.yaw = (h >> 3) % 360; rk.tinted = false; ps.add(rk);
+            }
             Part small = part(models.space("rock_" + (1 + (h >> 11) % 4)), -w * 0.25f + ((h >> 13) % 5) * w * 0.12f, 0f, 0.55f, 0.16f, 0.16f, 0.16f);
             small.yaw = (h >> 17) % 360; small.tinted = false; ps.add(small);
         }
@@ -669,6 +723,12 @@ public final class WorldRenderer implements Disposable {
                 }
                 default: break;
             }
+            float holeY = 0f, holeX = 0f;
+            if (p.hole >= 0) {                                 // Build 79: a drop-out plank: it rattles once you land, then falls and is gone until the bridge resets
+                float ct = i < sim.crumbleT.length ? sim.crumbleT[i] : -1f;
+                if (ct >= Element.HOLE_DELAY) { float el = ct - Element.HOLE_DELAY; if (el > 1.1f) continue; holeY = -0.5f * 30f * el * el; extraYaw = el * 50f * (p.du >= 0 ? 1 : -1); }
+                else if (ct >= 0f && !reducedMotion) holeX = 0.04f * MathUtils.sin(time * 80f + p.du * 7f);
+            }
             if (e.crumbles()) {
                 if (gone) {
                     float el = T.crumbleRespawn - sim.goneT[i];
@@ -689,7 +749,7 @@ public final class WorldRenderer implements Disposable {
                 else if (p.tinted) p.tintAttr.color.set(tint);
                 else p.tintAttr.color.set(Color.WHITE);
             }
-            place(p.inst, es + du + shakeX, y + dy + fallY, p.dz + (e.type == Element.Type.MOVE_Z ? e.zAt(sim.time) : 0f), camS, sx, sy, p.sz, extraYaw, roll);
+            place(p.inst, es + du + shakeX + holeX, y + dy + fallY + holeY, p.dz + (e.type == Element.Type.MOVE_Z ? e.zAt(sim.time) : 0f), camS, sx, sy, p.sz, extraYaw, roll);
             if (p.localZ != 0f) p.inst.transform.translate(0f, 0f, p.localZ);     // recentre an off-origin mesh along its own Z (applied before scale): see Part.localZ / the ramp
             batch.render(p.inst, env);
         }
@@ -790,7 +850,7 @@ public final class WorldRenderer implements Disposable {
     public static float[] mouthFromAxle(float yaw, float tilt, float[] out) {
         double t = Math.toRadians(tilt), c = Math.cos(t), s = Math.sin(t);
         float x = (float) ((MOUTH_X * c - MOUTH_Y * s) * PK), y = (float) ((MOUTH_X * s + MOUTH_Y * c) * PK);
-        if (Math.abs(((yaw % 360f) + 360f) % 360f - 180f) < 1f) x = -x;
+        x *= (float) Math.cos(Math.toRadians(yaw));           // Build 79: the turret turns flat like a record, so the mouth's reach along the lane shrinks through the turn (0 and 180 as before)
         out[0] = x; out[1] = y; return out;
     }
     /** Lane units (s) that a rigid length of {@code metres} along the lane covers at depth {@code dz} behind it: the ring there is drawn at radius - dz, so the same metres span more arc. */
@@ -1069,6 +1129,10 @@ public final class WorldRenderer implements Disposable {
         float cs = h.type == Element.Type.CANNON ? h.s + h.dir * h.len * 0.5f : h.s;
         float half = h.type == Element.Type.AIMED ? 17f : h.type == Element.Type.CANNON ? h.len * 0.5f + 1.5f + CANNON_OFFSCREEN : (h.type == Element.Type.SAW_H ? h.amp + 1.5f : h.type == Element.Type.SKULL || h.type == Element.Type.BLOB ? h.w * 0.5f + 1.5f : 2f);
         float cy = h.type == Element.Type.SAW_V ? h.y + h.amp * 0.5f : h.y;
+        if (rsim != null && rhz >= 0 && rhz < rsim.mobState.length) {       // Build 79: creatures roam to the decks either side of their own: cull them where they are
+            if (h.type == Element.Type.CRAB) { cs = rsim.crabAt(rhz, h); cy = rsim.crabY(rhz, h); half = 2f; }
+            else if ((h.type == Element.Type.SKULL || h.type == Element.Type.BLOB) && rsim.mobState[rhz] > 0) { int j = rsim.mobDeckIdx(rhz, h); cs = rsim.mobS[rhz]; if (j >= 0) cy = rsim.deckY(j); half = 3f; }
+        }
         if (!visible(cs, cy, camS, half)) return;
         switch (h.type) {
             case SAW_H: {
@@ -1120,19 +1184,20 @@ public final class WorldRenderer implements Disposable {
                 // the SIMULATION's own aim, so the picture is where the ball goes, and it faces down the lane or back up it rather than ever
                 // turning upside down. Locked = a red glow at the muzzle that pulses faster; the ball then glides into the play plane in front.
                 float dz = AIM_DEPTH, deck = h.y - 2.0f;
-                float ang = rsim != null && rhz < rsim.aimAng.length ? rsim.aimAng[rhz] : (float) Math.PI * 0.5f;
+                float ang = rsim != null && rhz < rsim.aimAng.length ? rsim.aimAng[rhz] : 0f;
+                // Build 79 (owner): the simulation turns the turret flat like a record (aimYaw) and only tilts the barrel a little: draw exactly that
+                float yawDeg = rsim != null && rhz < rsim.aimYaw.length ? rsim.aimYaw[rhz] * MathUtils.radiansToDegrees : 0f;
                 float deg = ang * MathUtils.radiansToDegrees;
-                boolean left = Math.cos(ang) < 0f;
-                float tilt = left ? 180f - deg : deg; tilt = ((tilt + 180f) % 360f + 360f) % 360f - 180f;
+                float tilt = Math.cos(yawDeg * MathUtils.degreesToRadians) >= 0f ? deg : 180f - deg; tilt = ((tilt + 180f) % 360f + 360f) % 360f - 180f;
                 drawSlab(h.s, deck, dz, camS, h.zone);
                 drawBox(h.s, deck, dz, camS, 1.25f, AIM_LIFT, 1.25f, 0.34f, 0.31f, 0.40f);
                 drawBox(h.s, deck + AIM_LIFT, dz, camS, 1.45f, 0.16f, 1.45f, 0.3f, 0.27f, 0.36f);
-                drawCannon(h.s, h.y - CANNON_AXIS_UP, dz, camS, left ? 180f : 0f, tilt);
+                drawCannon(h.s, h.y - CANNON_AXIS_UP, dz, camS, yawDeg, tilt);
                 // Build 67 (owner: the ball must leave the centre of the mouth): the cradle turns about its axle, so the drawn mouth wanders
                 // up to half a metre from the simulation's launch point (AIM_MUZZLE along the aim from the barrel's resting axis) as it aims;
                 // the turret stays put and the ball is drawn from the mouth instead, gliding onto its simulated path over the same BALL_SWOOP
                 // it already glides from the slab's depth into the play plane. The flash sits on the drawn mouth too. The simulation is untouched.
-                float[] mz = mouthFromAxle(left ? 180f : 0f, tilt, mouthTmp);
+                float[] mz = mouthFromAxle(yawDeg, tilt, mouthTmp);
                 float mouthS = h.s + laneUnits(mz[0], dz, T.radius), mouthY = h.y - CANNON_AXIS_UP + mz[1];
                 float offS = mouthS - (h.s + (float) Math.cos(ang) * Element.AIM_MUZZLE), offY = mouthY - (h.y + (float) Math.sin(ang) * Element.AIM_MUZZLE);
                 float c = h.cyc(t);
@@ -1215,8 +1280,12 @@ public final class WorldRenderer implements Disposable {
                 float crabX = rsim != null ? rsim.crabAt(rhz, h) : h.sAt(t);
                 float face = rsim != null ? rsim.crabFacing(rhz, h) : (h.amp * (float) Math.cos(2 * Math.PI * t / h.period + h.phase) >= 0f ? 1f : -1f);
                 boolean chasing = rsim != null && rsim.crabChasing(rhz);
-                Rig crabRig = rig(h, "crab_anim", "Walk"); castShadow(crabRig.inst, crabX, h.y - dipY);
-                drawRig(crabRig, crabX, h.y - dipY, 0f, camS, 0.34f, face >= 0f ? 90f : -90f, 0f, chasing ? 2.4f : 1.6f);
+                float crabY = rsim != null ? rsim.crabY(rhz, h) : h.y;                  // Build 79: on a deck it followed you onto, mid-hop, or falling with a crumbled deck
+                boolean home = rsim == null || (rhz < rsim.deckOff.length && rsim.deckOff[rhz] == 0f && rsim.crabJump[rhz] < 0f && !rsim.crabFalling(rhz));
+                if (home) crabY -= dipY;
+                boolean falling = rsim != null && rsim.crabFalling(rhz);
+                Rig crabRig = rig(h, "crab_anim", "Walk"); if (!falling) castShadow(crabRig.inst, crabX, crabY);
+                drawRig(crabRig, crabX, crabY, 0f, camS, 0.34f, face >= 0f ? 90f : -90f, falling ? rsim.crabFall[rhz] * 300f : 0f, chasing ? 2.4f : 1.6f);
                 break;
             }
             case BEE: {
@@ -1229,8 +1298,10 @@ public final class WorldRenderer implements Disposable {
             }
             case SKULL: {
                 // Build 71: a floating skull with glowing eyes. It bobs at the hover height, drops low and shivers before a dash, streaks along its deck leaving mist, rises and turns round.
-                Element deck = h.anchor >= 0 && h.anchor < course.size() ? course.get(h.anchor) : null;
-                float dY = deck != null ? deck.y : h.y, end = h.w * 0.5f - Element.SKULL_END;
+                if (done) break;      // Build 79: batted away by the club (drawn as it flies off: drawFlung)
+                int dj = rsim != null ? rsim.mobDeckIdx(rhz, h) : h.anchor;      // Build 79: the deck it is hunting on now (its own, or the one before or after)
+                Element deck = dj >= 0 && dj < course.size() ? course.get(dj) : null;
+                float dY = deck != null ? (rsim != null ? rsim.deckY(dj) : deck.y) : h.y, end = h.w * 0.5f - Element.SKULL_END;
                 int st = rsim != null && rhz < rsim.mobState.length ? rsim.mobState[rhz] : 1;
                 float ks = rsim != null && st > 0 ? rsim.mobS[rhz] : h.s + end, ky = dY + (rsim != null && st > 0 ? rsim.mobY[rhz] : Element.SKULL_HOVER + 0.12f * MathUtils.sin(time * 2.6f + h.phase));
                 float dir = rsim != null && st > 0 ? rsim.mobDir[rhz] : -1f;
@@ -1258,11 +1329,13 @@ public final class WorldRenderer implements Disposable {
             }
             case BLOB: {
                 // Build 71: the green blob. It wobbles, leaps off the top of the screen, and drops: only its growing shadow shows where, in the last BLOB_SHADOW seconds.
-                Element deck = h.anchor >= 0 && h.anchor < course.size() ? course.get(h.anchor) : null;
-                float dY = deck != null ? deck.y : h.y;
+                int dj = rsim != null ? rsim.mobDeckIdx(rhz, h) : h.anchor;      // Build 79: the deck it is on now (its own, or the one before or after)
+                Element deck = dj >= 0 && dj < course.size() ? course.get(dj) : null;
+                float dY = deck != null ? (rsim != null ? rsim.deckY(dj) : deck.y) : h.y;
+                if (dj != h.anchor) dipY = 0f;
                 int st = rsim != null && rhz < rsim.mobState.length ? rsim.mobState[rhz] : 1;
                 float bs = rsim != null && st > 0 ? rsim.mobS[rhz] : h.s;
-                float surf = (rsim != null ? rsim.blobSurfaceY(rhz, deck, h.anchor, dY) : dY) - dipY;
+                float surf = (rsim != null ? rsim.blobSurfaceY(rhz, deck, dj, dY) : dY) - dipY;
                 float lift = rsim != null && st > 0 ? rsim.mobY[rhz] : 0f;
                 float sx = 1f, sy = 1f;
                 if (st == 2 && !reducedMotion) { float w = MathUtils.sin(time * 26f) * 0.13f; sx = 1f + w; sy = 1f - w; }          // the wobble before the leap
@@ -1270,7 +1343,7 @@ public final class WorldRenderer implements Disposable {
                 float shadow = rsim != null ? rsim.blobShadow(rhz) : -1f;
                 if (shadow >= 0f) {
                     float tgt = rsim.mobTgt[rhz], k = 1f - shadow / Element.BLOB_SHADOW, sw = 0.5f + 0.9f * k;
-                    float ty = rsim.blobSurfaceY(rhz, deck, h.anchor, dY);
+                    float ty = rsim.blobSurfaceY(rhz, deck, dj, dY);
                     drawPuddle(0, tgt, ty + SHADOW_LIFT, 0f, camS, sw, SHADOW_THICK, sw * 0.8f, 0.06f, 0.07f, 0.09f);
                 }
                 float sc = 0.6f, face = rsim != null && course.dsWrap(rsim.s, bs) < 0f ? -1f : 1f;
@@ -1472,16 +1545,27 @@ public final class WorldRenderer implements Disposable {
     private int[] dipAct = new int[64]; private int dipN; private boolean[] dipOn = new boolean[16];      // platforms whose landing spring is still moving: the per-frame update touches only these, never the whole (ever-growing) tower
     private final Color ambCol = new Color();
 
-    private static final class Flung { float s, y, vx, vy, rot, age; boolean bee; }
+    private static final class Flung { float s, y, z, vx, vy, rot, age; int kind; }
     private final java.util.ArrayList<Flung> flung = new java.util.ArrayList<>();
     /** A crab was knocked off its platform: it tumbles away (purely visual). */
-    public void crabFlung(float s, float y, int dir, boolean bee) { Flung f = new Flung(); f.s = s; f.y = y; f.vx = dir * 6f; f.vy = bee ? 5f : 7f; f.bee = bee; flung.add(f); }
+    /** Something the club knocked away (kind 0 crab, 1 bee, 2 skull): it tumbles away (purely visual). Build 79: a skull is batted like a hooked golf shot, up and away, curling in toward the middle of the tower. */
+    public void crabFlung(float s, float y, int dir, int kind) { Flung f = new Flung(); f.s = s; f.y = y; f.vx = dir * (kind == 2 ? 11f : 6f); f.vy = kind == 1 ? 5f : kind == 2 ? 9f : 7f; f.kind = kind; flung.add(f); }
 
     private void drawFlung(float dt, float camS) {
         for (int i = flung.size() - 1; i >= 0; i--) {
-            Flung f = flung.get(i); f.age += dt; f.vy -= 30f * dt; f.s += f.vx * dt; f.y += f.vy * dt; f.rot += 540f * dt;
+            Flung f = flung.get(i); f.age += dt;
+            if (f.kind == 2) {          // the hook: it climbs, slows along the lane and curls away into the depth, shrinking out of sight
+                f.vy -= 6f * dt; f.vx *= (float) Math.pow(0.35f, dt); f.s += f.vx * dt; f.y += f.vy * dt; f.z -= (2f + 14f * f.age) * dt; f.rot += 900f * dt;
+                if (f.age > 2.4f) { flung.remove(i); continue; }
+                float sc = 0.6f * Math.max(0.15f, 1f - f.age / 2.6f);
+                drawPack("skull", f.s, f.y, f.z, camS, sc, sc, sc, f.rot * 0.4f, f.rot);
+                if (quality > 0 && !reducedMotion) { mistCol.set(0.82f, 0.9f, 1f, 0.5f); particles.spawn(f.s, f.y, -f.vx * 0.1f, 0.2f, mistCol, 0.14f, -0.3f, 0.5f); }
+                continue;
+            }
+            f.vy -= 30f * dt; f.s += f.vx * dt; f.y += f.vy * dt; f.rot += 540f * dt;
             if (f.age > 2f) { flung.remove(i); continue; }
-            drawPack(f.bee ? "bee_anim" : "crab", f.s, f.y, 0f, camS, f.bee ? 0.36f : 0.34f, f.bee ? 0.36f : 0.34f, f.bee ? 0.36f : 0.34f, 0f, f.rot);
+            boolean bee = f.kind == 1;
+            drawPack(bee ? "bee_anim" : "crab", f.s, f.y, 0f, camS, bee ? 0.36f : 0.34f, bee ? 0.36f : 0.34f, bee ? 0.36f : 0.34f, 0f, f.rot);
         }
     }
 

@@ -74,6 +74,22 @@ public final class Element {
     /** True for anything that changes with time (planner sweeps its phase). */
     /** Build 72 (owner): the spinning ramp (RAMP skin 3, was the sinking ramp) turns flat on its centre like a record: one turn every {@code period} seconds. */
     public boolean spins() { return type == Type.RAMP && skin == 3; }
+    /** Build 79 (owner: some bridges drop plank sections when you land, leaving holes to jump): a fixed wooden bridge (STATIC skin 1) whose sections set in {@code color}
+     *  (a bit mask; the deck is cut into holeSections() equal sections from its -s end, each about HOLE_SEC long) fall out HOLE_DELAY after you land on it. */
+    public static final float HOLE_SEC = 1.3f, HOLE_DELAY = 0.45f;
+    public boolean holed() { return type == Type.STATIC && skin == 1 && color != 0; }
+    public int holeSections() { return Math.max(1, (int) (w / HOLE_SEC)); }
+    /** True when x (from the deck's centre, along the lane) is over a hole section, at least {@code margin} in from its edges (a negative margin reaches past them). */
+    public boolean overHole(float x, float margin) {
+        if (!holed()) return false;
+        int n = holeSections(); float sec = w / n;
+        for (int k = 0; k < n; k++) {
+            if ((color & (1 << k)) == 0) continue;
+            float lo = -w * 0.5f + k * sec;
+            if (x > lo + margin && x < lo + sec - margin) return true;
+        }
+        return false;
+    }
     /** Build 72 (owner): conveyor belts. A RAMP with skin 4 runs downhill; a STATIC with skin 4 is a wooden plank belt (a long bridge) running to the left. {@code phase} is the belt speed in m/s. */
     public boolean belt() { return skin == 4 && (type == Type.RAMP || type == Type.STATIC); }
     /** The belt's surface speed along +s: both kinds carry you toward -s (down the ramp, to the left on screen). */
@@ -120,6 +136,8 @@ public final class Element {
     public static final float MORTAR_FLIGHT = 0.82f, MORTAR_R = 0.42f;
     /** Aimed cannon timing, as fractions of its period: tracks the player until LOCK, holds (warning) until FIRE, fires; the ball flies AIM_LIFE seconds at AIM_SPEED; it only wakes when the player is within AIM_RANGE. */
     public static final float AIM_LOCK = 0.55f, AIM_FIRE = 0.70f, AIM_SPEED = 9f, AIM_LIFE = 1.6f, AIM_R = 0.40f, AIM_RANGE = 15f, AIM_TURN = 2.4f;
+    /** Build 79 (owner): the turret turns flat like a record (AIM_YAW_TURN rad/s) and its barrel only tilts between AIM_PITCH_LO and AIM_PITCH_HI (radians, 0 level). */
+    public static final float AIM_YAW_TURN = 4.0f, AIM_PITCH_LO = -0.35f, AIM_PITCH_HI = 0.5f;
     /** The ball leaves the muzzle TIP, not the barrel's centre: the cannon model's barrel runs 2.26 units from its axle to its mouth along the model's +X (PK = 0.37 scale), so the mouth is 0.84 world units ahead of (s,y). Without this the ball erupts from the middle of the cannon. */
     public static final float AIM_MUZZLE = 0.84f;
     /** How far an aimed cannon leads a moving player (fraction of the full "where will they be when the ball lands" prediction): it tries to put the shot in front of you, but partially, so a committed move still slips past. A plain CANNON stays a fixed straight-line shot for the "measure the gap" variety. */
@@ -173,18 +191,24 @@ public final class Element {
     public float beeDive(float t) { float u = beeU(t); return u > 0.38f && u < 0.62f ? (float) StrictMath.sin((u - 0.38f) / 0.24f * Math.PI) : 0f; }
 
     // ---- skull (Build 71): body radius, heights of its centre above the deck while hovering and while dashing, dash speed, and the phase lengths
-    public static final float SKULL_R = 0.42f, SKULL_HOVER = 1.75f, SKULL_LOW = 0.55f, SKULL_SPEED = 13f;      // Build 77 (owner: "come at you faster"): 10 -> 13 m/s
-    public static final float SKULL_NOTICE = 0.35f, SKULL_WINDUP = 1.2f, SKULL_TURN = 0.5f, SKULL_REST = 1.3f, SKULL_END = 0.7f;
+    public static final float SKULL_R = 0.42f, SKULL_HOVER = 1.75f, SKULL_LOW = 0.55f, SKULL_SPEED = 16f;      // Build 77 (owner: "come at you faster"): 10 -> 13 m/s; Build 79 (owner: "attack faster"): 16
+    public static final float SKULL_NOTICE = 0.35f, SKULL_WINDUP = 0.8f, SKULL_TURN = 0.5f, SKULL_REST = 0.6f, SKULL_END = 0.7f;      // Build 79: wind-up 1.2 -> 0.8 s, rest 1.3 -> 0.6 s
+    /** Build 79 (owner: it goes to the platforms before and after its own): it flies between decks at SKULL_FLY m/s, and goes home after SKULL_HOME seconds without you on any of the three. */
+    public static final float SKULL_FLY = 8f, SKULL_HOME = 1.5f;
+    /** Build 79: a skull or blob only roams to a neighbouring deck within this height of the one it is on. */
+    public static final float ROAM_DY = 3.0f;
     /** A dash that catches you throws you this hard along its way, and up. */
     public static final float SKULL_LAUNCH_X = 14f, SKULL_LAUNCH_Y = 9.5f;      // Build 77 (owner: "mush you farther"): +30% (was 11 / 7.5)
     /** Build 77 (owner: when it turns to face you it loops and swoops before it dashes): the wind-up is a vertical loop-the-loop of this radius over the
      *  first SKULL_LOOP_T seconds, then a swoop down to dash height, drawing back a little first, for the rest of SKULL_WINDUP. */
-    public static final float SKULL_LOOP_R = 0.6f, SKULL_LOOP_T = 0.75f, SKULL_SWOOP_BACK = 0.5f;
+    public static final float SKULL_LOOP_R = 0.6f, SKULL_LOOP_T = 0.5f, SKULL_SWOOP_BACK = 0.5f;
 
     // ---- green blob (Build 71): landing half-width, phase lengths, how far up it leaps (off the top of the screen), how long its shadow shows before it lands
-    public static final float BLOB_R = 0.6f, BLOB_NOTICE = 0.3f, BLOB_WOBBLE = 0.8f, BLOB_AIR = 1.7f, BLOB_SHADOW = 0.55f, BLOB_REST = 1.2f, BLOB_APEX = 11f, BLOB_END = 0.8f;
-    /** A squash bounces you away and up. */
-    public static final float BLOB_PUSH_X = 4.5f, BLOB_PUSH_Y = 8f;
+    public static final float BLOB_R = 0.6f, BLOB_NOTICE = 0.3f, BLOB_AIR = 1.7f, BLOB_SHADOW = 0.55f, BLOB_REST = 1.0f, BLOB_APEX = 11f, BLOB_END = 0.8f;
+    /** Build 79 (owner: no wobble - it jumps, rests a second, jumps again; it reaches the platforms before and after its own): it goes home after BLOB_HOME seconds without you on any of the three. */
+    public static final float BLOB_HOME = 1.5f;
+    /** A squash knocks you away and up (Build 79, owner: "it hits me and I just stand there": 4.5 / 8 -> 9 / 7, like a crab's shove). */
+    public static final float BLOB_PUSH_X = 9f, BLOB_PUSH_Y = 7f;
     /** Landing on the far end of a tipping bridge you stand on: launch speed = this times the jump speed (sqrt 3 = three times the jump height). */
     public static final float BLOB_LAUNCH = 1.7320508f;
     /** Height of the leaping blob above its deck, k = 0..1 through the leap: up fast, a hang off screen, and down. */
@@ -198,7 +222,7 @@ public final class Element {
     private float beeEnv(float u) { return smooth(u / 0.22f) * smooth((1f - u) / 0.22f); }
     public float beeS(float t) {
         float u = beeU(t); if (u >= 1f) return s;
-        float env = beeEnv(u), fly = (u < 0.5f ? -1f : 1f) * 14f * (1f - env);
+        float env = beeEnv(u), fly = (u < 0.5f ? -1f : 1f) * (dir < 0 ? -1f : 1f) * 14f * (1f - env);      // Build 79: dir -1 comes in from the other side (a bee pair never shares a side)
         return s + fly + amp * env * (float) StrictMath.sin(2 * Math.PI * 2.3f * u);
     }
     public float beeY(float t) {

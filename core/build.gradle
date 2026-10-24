@@ -14,3 +14,11 @@ tasks.register('verifyOta', JavaExec) {
     workingDir = rootProject.projectDir
     args = [project.findProperty('otaDir') ?: 'build/ota'] + (project.hasProperty('expectBundled') ? ['--expect-bundled'] : [])
 }
+
+// Dev probes in the test sources (e.g. ./gradlew :core:probe -Pmain=com.hotatticgames.climbup.RopeClearProbe -Pargs="22222-243N-ZJHT 30")
+tasks.register('probe', JavaExec) {
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = project.findProperty('main') ?: 'com.hotatticgames.climbup.GenPrint'
+    workingDir = projectDir
+    args = (project.findProperty('args') ?: '').toString().tokenize(' ')
+}

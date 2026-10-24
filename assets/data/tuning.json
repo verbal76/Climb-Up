@@ -13,7 +13,7 @@
   "hitKnockSide": 6.9, "hitKnockUp": 6.9,
   "seesawMaxTilt": 0.55, "seesawRate": 1.0, "seesawRelax": 1.0, "seesawSlide": 5.0, "seesawUphill": 0.45, "beltSeesawDead": 0.5,
   "zoneHeight": 1000.0, "zoneCount": 5, "castleSpacing": 500.0, "finishCastle": 10, "gemSpacing": 30.0, "courseHeight": 520.0, "rampHeight": 520.0, "chunkHeight": 60.0,
-  "hazardStartY": 70.0, "hazardRampY": 1100.0, "minTimingWindow": 0.2, "spiralPitch": 24.0, "restEvery": 5, "checkpointEveryRests": 1,
+  "hazardStartY": 40.0, "hazardRampY": 950.0, "minTimingWindow": 0.2, "spiralPitch": 24.0, "restEvery": 5, "checkpointEveryRests": 1,
   "minLinkMargin": 0.07,
   "assistJumpForgiveness": 0.08, "assistSlowFactor": 0.8
 }

@@ -195,6 +195,7 @@ public final class SettingsScreen extends ScreenAdapter {
             toggle("COLOURBLIND-SAFE COLOURS", s.colourblind, () -> s.colourblind = !s.colourblind);
             toggle("ASSIST: SLOWER SPEED", s.assistSlow, () -> s.assistSlow = !s.assistSlow);
             toggle("ASSIST: JUMP FORGIVENESS", s.assistForgive, () -> s.assistForgive = !s.assistForgive);
+            toggle("PUNISHER MODE (NEW CLIMBS)", s.punisher, () -> s.punisher = !s.punisher);      // Build 79 (owner): much harder, still survivable; a climb keeps the mode it began in
         }
         ui.end();
         if (pickReady) { pickReady = false; if (back instanceof PlayScreen) back.dispose(); g.setScreen(new PlayScreen(g, false)); return; }      // the world picker's climb is ready

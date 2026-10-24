@@ -579,3 +579,50 @@ Requirement: the same seed, the same inputs on the same simulation steps, give t
   other platform's run could not find the draft by tag and would have made a second one. Every update now re-sends tag, title and commit,
   and the lookup also matches a draft by its title. The offline test's fake GitHub reproduces the reset.
 - The e57036e runs can only re-run their own (unfixed) script, so Build 78 is dispatched again from the current head.
+
+## Build 79: the owner's play-through notes (rules 6, 2026-10-23)
+
+All from the owner's Build 78 play-through. Everything that changes the simulation or the generator is one rules bump (5 -> 6): courses,
+generator proofs and the bundled replays are redone together.
+
+- **Spinning ramp, middle vanished from behind** (render only): the ramp deck is a single-sided plate, so its back face was culled when the
+  ramp turned its back to the camera. The spinning ramp's material now draws both sides.
+- **Blob** (owner: telegraphs too long, too easy to avoid): no wobble - it leaps as soon as it has noticed you (0.3 s), lands, rests 1.0 s
+  (was 1.2) and leaps again at once if you are still there. It reaches the platform before and after its own: it lands on whichever of the
+  three you stand on, and leaps home after 1.5 s without you on any of them. A squash now knocks you away (9 / 7 m/s, was 4.5 / 8: "it hits
+  me and I just stand there"). Neighbour decks must be fixed, flat platforms within 3 m height (no movers, ramps, tipping bridges or
+  crumbling decks).
+- **Skull** (owner: same range, attack faster): rest 1.3 -> 0.6 s, wind-up 1.2 -> 0.8 s (loop 0.75 -> 0.5 s), dash 13 -> 16 m/s. Standing
+  on the platform before or after its own, it flies over (8 m/s, it does not hit on the way) to the end of that deck away from you and hunts
+  you there; it flies home after 1.5 s without you on any of the three.
+- **Club vs skull** (owner): the club bats a skull away like a hooked golf shot (it curls off into the middle of the tower); doing so breaks
+  the club (its time goes to 0). Every crab or bee knocked away costs 5 s of club.
+- **Crabs** (owner): never fewer than two on a crab deck, more higher up (2-4, deck 9-13 m); each patrols its own stretch. A chasing crab
+  follows you onto the next (or previous) platform by hopping the gap (up to 3.2 m wide, 1.8 m up), up to three platforms from home, and
+  hops back home when it loses you. Crabs do not understand crumbling: one on a deck that crumbles (or over a bridge hole that opens) falls
+  with it and is gone. The planner hops each crab on a deck in turn.
+- **Bees** (owner: two at once, never from the same side): a bee's `dir` (-1) now brings it in from the other side; a guarded gap that has a
+  bee gets a second one from the opposite side 30-70 % of the time, slightly out of step.
+- **Spike drops** (owner: just wait and walk under): 20-50 % of drop platforms after the first get a crab on the deck or a bee over it.
+- **Aimed cannon** (owner: it spun through its pedestal): the turret turns flat like a record (aimYaw, 4 rad/s) to face your side and its
+  barrel only tilts between -20 and +29 degrees; it only arms once it faces along the lane. The ball flies along that limited angle, so a
+  climber far below or above the barrel's reach is not targeted.
+- **Balance conveyor** (owner: always moving): runs at full speed all the time, toward the end you last stood on (stored per element in
+  `onT`, which the save already carries); the calm middle no longer stops it.
+- **Bridges that drop planks** (owner): some fixed wooden bridges (45 % of plain floating bridges, 35 % of skull bridges) mark one or two
+  plank sections (about 1.3 m) that rattle when you land and drop out 0.45 s later, for the crumble respawn time. Never the first two
+  sections (you land there) or the last (take-off), never side by side. Drawn paler so they can be read before you land. Stored as a bit
+  mask in the element's `color` (unused on platforms). You fall through once your middle is 0.2 m inside a hole. The planner gets a
+  hole-hop move; link proofs never start a climber standing on a loose plank.
+- **Decoys across ropes** (owner screenshot, seed 22222-243N-ZJHT): side platforms (dead ends / lures) were placed on a rope's top beam
+  because the overlap test allowed head room above. A decoy is now refused anywhere along a rope or within 2.2 m above its top.
+- **Big rocks under platforms** (owner: keep them, but they cannot block platforms): the dusk, night and space rocks are scaled down so their
+  bottom stays 3.2 m above any platform, castle or rope top beneath them, or left off when even a small one would not fit (render only).
+- **First world** (owner: "dawn base is a little too easy" - read as the first world, the sunrise sky at the tower's base): hazards start at
+  40 m (was 70) and reach full frequency over 950 m (was 1100).
+- **PUNISHER mode** (owner; answers: new climbs only, separate board, about 25 % faster and one more enemy): a setting (ACCESS tab, next to
+  the assists) read when a climb starts; the climb keeps that mode (`SaveData.punisher`). Its tuning is a copy with `punisher = true`:
+  creature and cannon reactions are 1.25 x faster (skull, blob, crab, bee, aimed cannon timings and speeds), cannon, aimed, mortar and bee
+  periods are 20 % shorter, one more crab per deck, more bee pairs and drop-row creatures, more creature decks and guarded gaps. The
+  generator still proves every link. Its times go on their own board (`SaveData.punisherRecordsJson`; the Times screen switches between
+  NORMAL and PUNISHER) and never touch the normal bests. The HUD seed line and the pause menu say PUNISHER.

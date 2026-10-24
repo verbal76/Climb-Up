@@ -129,7 +129,7 @@ public final class PlayScreen extends ScreenAdapter {
             }
             boolean fromSnapshot = false;
             if (run.resumed && run.snapshot != null) {            // CONTINUE after SAVE & EXIT: the climb exactly as it was left
-                Sim ss = new Sim(course, g.tuning);
+                Sim ss = new Sim(course, g.runTuning());
                 ss.keysFree = false; ss.deferRespawn = true; ss.floorOverride = tower.floorLocal(); ss.setRange(0, course.size() - 1);
                 tower.openedUpTo = g.save.openedUpTo;
                 ResumeState.restore(g.save, ss, tower);
@@ -137,7 +137,7 @@ public final class PlayScreen extends ScreenAdapter {
                 else { g.store.deleteRun(); run = g.openRun(false); tower = run.tower; course = tower.world; }       // does not fit the world on disk: resume from the checkpoint
             }
             if (!fromSnapshot) {
-                sim = Sim.startOn(course, g.tuning, run.startIdx);
+                sim = Sim.startOn(course, g.runTuning(), run.startIdx);
                 sim.checkpoint = run.startIdx; sim.keysFree = false; sim.keys = 0;
                 if (hzType != null) sim.s += Float.parseFloat(System.getProperty("climb.startDs", "0"));     // test hook: stand this much further along the start platform (camera angle on the hazard)
                 if (run.resumed) { sim.deferRespawn = true; sim.setRange(0, course.size() - 1); ResumeState.restore(g.save, sim, tower); }
@@ -147,7 +147,7 @@ public final class PlayScreen extends ScreenAdapter {
                 // the next castle's key lies ahead in its section. (It used to walk the element list to a height: local heights vs an absolute one, and side platforms in the list.)
                 int i = tower.afterCastle((int) (hStart / g.tuning.castleSpacing));
                 if (i < 0) { i = 0; double oy = tower.originY; while (i < course.routeSize() - 1 && course.get(i + 1).y + oy < hStart) i++; }
-                sim = Sim.startOn(course, g.tuning, i); sim.checkpoint = i; sim.keysFree = false; sim.keys = 0;
+                sim = Sim.startOn(course, g.runTuning(), i); sim.checkpoint = i; sim.keysFree = false; sim.keys = 0;
             }
             if (tower != null) { tower.openedUpTo = g.save.openedUpTo; sim.deferRespawn = true; sim.floorOverride = tower.floorLocal(); }
             sim.setRange(0, course.size() - 1); simSize = course.size(); if (tower != null) seenRebuilds = tower.rebuilds;
@@ -162,8 +162,8 @@ public final class PlayScreen extends ScreenAdapter {
         if (gi() != null) gi().controllerLost();          // a pad unplugged on the menus before this climb began is no reason to start it paused (found by the Build 64 scenario)
         g.audio.playlist(Audio.GAME_TRACKS);
         runTime = 0; maxAbs = absNow(); milestone = (int) (maxAbs / 50f);
-        if (!demo && tower != null && g.save.assisted && g.save.seed != 0) g.save.records().markAssisted(g.save.seed);      // a resumed assisted climb stays assisted in the times table too
-        if (!demo && tower != null) g.save.records().catchUp(g.save.seed, runRules(), g.save.splits, g.save.towers, g.save.finished, g.save.finishTime);          // times table: a climb begun before the records existed
+        if (!demo && tower != null && g.save.assisted && g.save.seed != 0) g.save.board().markAssisted(g.save.seed);      // a resumed assisted climb stays assisted in the times table too
+        if (!demo && tower != null) g.save.board().catchUp(g.save.seed, runRules(), g.save.splits, g.save.towers, g.save.finished, g.save.finishTime);          // times table: a climb begun before the records existed
         if (!demo) {        // seed the cross-session achievement counters from Steam's stored stats (all 0 when there is no Steam)
             com.hotatticgames.climbup.platform.Achievements a = g.platform.achievements();
             achRules = new AchievementRules(a.stat(AchievementRules.STAT_TOWER_FELL_MASK));
@@ -171,7 +171,7 @@ public final class PlayScreen extends ScreenAdapter {
             achMarathonBase = a.stat(AchievementRules.STAT_MARATHON_M);
             achSessionStartMax = maxAbs;
         }
-        if (Boolean.getBoolean("climb.finishDemo")) { g.save.runClock = 3723.4f; g.save.finished = true; g.save.finishTime = 3723.4f; finishNewBest = true; state = State.FINISHED; if (tower != null) g.save.records().finish(g.save.seed, 3723.4f); }       // test hook: shows the finish screen
+        if (Boolean.getBoolean("climb.finishDemo")) { g.save.runClock = 3723.4f; g.save.finished = true; g.save.finishTime = 3723.4f; finishNewBest = true; state = State.FINISHED; if (tower != null) g.save.board().finish(g.save.seed, 3723.4f); }       // test hook: shows the finish screen
         if (Boolean.getBoolean("climb.ropeScript")) {   // test hook: start low on the first rope; readInput() then climbs it, mounts the beam and jumps (screenshots of the rope top)
             for (int e = 0; e < course.size(); e++) if (course.get(e).type == Element.Type.ROPE && course.get(e).y > 5f) {
                 Element el = course.get(e); sim.mode = Sim.Mode.ROPE; sim.onElem = e; sim.s = sim.es1[e]; sim.y = el.y - el.len + 0.6f; sim.vx = sim.vy = 0; world.snapCamera(sim); break;
@@ -325,7 +325,7 @@ public final class PlayScreen extends ScreenAdapter {
             if (world.takeScan()) g.audio.play("scan", 0.5f, 1f);
             g.save.playSeconds += dt;
             if (maxAbs > g.save.bestHeight) g.save.bestHeight = (float) maxAbs;
-            if (g.save.finished && tower != null && !demo) g.save.records().infinity(g.save.seed, infinityMetres());
+            if (g.save.finished && tower != null && !demo) g.save.board().infinity(g.save.seed, infinityMetres());
             int ms = (int) (maxAbs / 50f);
             if (ms > milestone) { milestone = ms; toast = ms * 50 + " M!"; toastT = 1.6f; g.audio.play("checkpoint", 0.55f, 1.35f); world.particles.burst(sim.s, sim.y + 1f, 12, gold, 2.6f, 3.2f, 0.1f, -0.5f, 1f); }
             for (int pi = pops.size() - 1; pi >= 0; pi--) { Pop pp = pops.get(pi); pp.age += dt; pp.liftShown += (pp.lift - pp.liftShown) * Math.min(1f, dt * 14f); if (pp.age > 1.1f) pops.remove(pi); }
@@ -489,11 +489,11 @@ public final class PlayScreen extends ScreenAdapter {
         sd.towerTotals = java.util.Arrays.copyOf(sd.towerTotals, n + 1); sd.towerTotals[n] = total;
         sd.towers = n + 1;
         RecordsData.Run cur = null;
-        if (n < RecordsData.LEGS) { sd.records().legDone(sd.seed, runRules(), n, split); cur = sd.records().current; }          // times table: this leg, its global and its on-this-course bests
-        boolean hadSplit = sd.bestSplit > 0f, pbSplit = !sd.assisted && (!hadSplit || RunRecord.faster(split, sd.bestSplit));       // owner (Build 71): an assisted run's towers are timed but set no best
+        if (n < RecordsData.LEGS) { sd.board().legDone(sd.seed, runRules(), n, split); cur = sd.board().current; }          // times table: this leg, its global and its on-this-course bests
+        boolean hadSplit = sd.bestSplit > 0f, pbSplit = !sd.assisted && !sd.punisher && (!hadSplit || RunRecord.faster(split, sd.bestSplit));       // owner (Build 71): an assisted run's towers are timed but set no best
         if (pbSplit) sd.bestSplit = split;
         if (sd.bestTotals.length <= n) sd.bestTotals = java.util.Arrays.copyOf(sd.bestTotals, n + 1);
-        boolean hadTotal = sd.bestTotals[n] > 0f, pbTotal = !sd.assisted && (!hadTotal || RunRecord.faster(total, sd.bestTotals[n]));
+        boolean hadTotal = sd.bestTotals[n] > 0f, pbTotal = !sd.assisted && !sd.punisher && (!hadTotal || RunRecord.faster(total, sd.bestTotals[n]));
         if (pbTotal) sd.bestTotals[n] = total;
         sd.towerStartClock = sd.runClock; sd.towerStartHeight = (float) Math.max(0.0, maxAbs);
         toast = keyName(sim.lastGateColor) + " CASTLE OPENED!"; toastT = 3.2f;
@@ -511,7 +511,7 @@ public final class PlayScreen extends ScreenAdapter {
     /** END RUN AND SAVE TIME: the times already stand in the records; the climb is forgotten and the end-of-run summary comes up. */
     private void endRunToSummary() {
         g.audio.play("click");
-        RecordsData.Run r = tower != null && !demo ? g.save.records().endRun(g.save.seed) : null;
+        RecordsData.Run r = tower != null && !demo ? g.save.board().endRun(g.save.seed) : null;
         g.forgetRun(); g.persist();
         next = new RunSummaryScreen(g, r); disposeOnLeave = true;
     }
@@ -603,8 +603,9 @@ public final class PlayScreen extends ScreenAdapter {
         if ((ev & Sim.EV_SQUASH) != 0) { g.audio.play("splat", 1f, 0.7f); g.audio.play("bonk", 0.7f, 0.6f); world.shake(0.6f); freeze(0.08f); vibrate(45, 1); pop("SQUASH!", SQUASH_GREEN); say("[SQUASH]"); }
         if ((ev & Sim.EV_LAUNCH) != 0) { g.audio.play("bounce", 1f, 0.8f); world.shake(0.5f); freeze(0.05f); vibrate(35, 1); pop("WHOOSH!", Color.WHITE); say("[LAUNCHED]"); }
         if ((ev & Sim.EV_CRAB_OFF) != 0) {
-            g.audio.play("squeak", 0.9f, 0.9f + MathUtils.random(0.3f)); g.audio.play("clack", 0.7f, 1.2f); world.crabFlung(sim.crabS, sim.crabY, sim.facing, sim.knockedBee); freeze(0.07f); world.shake(0.4f); vibrate(30, 1);
-            pop("BONK!", gold); world.particles.burst(sim.crabS, sim.crabY + 0.4f, 12, red, 3.5f, 3.5f, 0.12f, 6f, 0.6f);
+            g.audio.play("squeak", 0.9f, 0.9f + MathUtils.random(0.3f)); g.audio.play("clack", 0.7f, 1.2f); world.crabFlung(sim.crabS, sim.crabY, sim.facing, sim.knocked); freeze(0.07f); world.shake(0.4f); vibrate(30, 1);
+            if (sim.knocked == 2) { pop("FORE!", gold); g.audio.play("bonk", 1f, 0.8f); world.shake(0.7f); say("[CLUB BREAKS]"); } else pop("BONK!", gold);      // Build 79: a skull batted away, and the club gone with it
+            world.particles.burst(sim.crabS, sim.crabY + 0.4f, 12, red, 3.5f, 3.5f, 0.12f, 6f, 0.6f);
         }
         if ((ev & Sim.EV_KEY) != 0) {
             float[] kc = keyRgb(sim.lastKeyColor);
@@ -621,7 +622,7 @@ public final class PlayScreen extends ScreenAdapter {
             int r = RunRecord.complete(g.save);
             if (r >= 0) {
                 finishNewBest = r == 1;
-                if (tower != null) g.save.records().finish(g.save.seed, runRules(), g.save.finishTime);
+                if (tower != null) g.save.board().finish(g.save.seed, runRules(), g.save.finishTime);
                 g.audio.fallStop(); g.audio.play("win", 1f, 1f); world.particles.burst(s, y + 1.2f, 40, new Color(1f, 0.85f, 0.3f, 1f), 4f, 4f, 0.14f, 1f, 1.6f); vibrate(60, 1); say("[RUN COMPLETE]");
                 state = State.FINISHED; stickPtr = jumpPtr = -1; jumpHeldTouch = false; g.persist();
             }
@@ -765,7 +766,7 @@ public final class PlayScreen extends ScreenAdapter {
         } else {
             boolean seedLine = g.settings.showSeed && !demo && g.save.seed != 0;                 // Build 64: the course code under the clocks (SHOW COURSE SEED)
             ui.rect(m - 6, H - m - (seedLine ? 160f : 136f) * zk, 380 * zk + 12, (seedLine ? 160f : 136f) * zk + 6, new Color(0.05f, 0.07f, 0.14f, 0.55f));
-            if (seedLine) ui.text("SEED " + SeedCode.encode(g.save.seed), m, H - m - 152 * zk, 2.7f * zk, Ui.DIM);      // Build 72: was 2.3, too small to read on a phone
+            if (seedLine) ui.text("SEED " + SeedCode.encode(g.save.seed) + (g.save.punisher ? "  PUNISHER" : ""), m, H - m - 152 * zk, 2.7f * zk, g.save.punisher ? new Color(1f, 0.45f, 0.4f, 1f) : Ui.DIM);      // Build 79: a PUNISHER climb says so      // Build 72: was 2.3, too small to read on a phone
             ui.text(hs, m, H - m - 30 * zk, 4f * zk, Ui.TEXT);
             ui.text("BEST " + (int) Math.max(g.save.bestHeight, maxAbs), m, H - m - 56 * zk, 2.9f * zk, Ui.DIM);         // Build 72: was 2.6
             // speed-run clock: distance and time on the tower being worked towards, and the total time of the climb (always shown)
@@ -946,9 +947,9 @@ public final class PlayScreen extends ScreenAdapter {
         ui.textC(fmtTime(sd.finishTime), W / 2, y + ph - 216, 8f, new Color(0.45f, 1f, 0.55f, 1f));
         ui.textC(sd.assisted ? "ASSISTED RUN - NOT A RECORD" : finishNewBest ? "NEW RECORD!" : "BEST " + fmtTime(sd.bestFinish), W / 2, y + ph - 270, 3.6f, finishNewBest ? new Color(1f, 0.85f, 0.3f, 1f) : Ui.DIM);
         if (sd.seed != 0) {                                                            // Build 64: the course this time was set on, and (SHOW BEST TIMES) how it compares with the best on it; two lines, both inside the panel
-            RecordsData.Run cur = sd.records().current; boolean mine = cur != null && cur.seed == sd.seed;
+            RecordsData.Run cur = sd.board().current; boolean mine = cur != null && cur.seed == sd.seed;
             String vs = g.settings.showBestTimes && mine && cur.totalSeedPrev > 0f ? fmtDelta(sd.finishTime - cur.totalSeedPrev) + " VS COURSE BEST " + fmtTime(cur.totalSeedPrev) : g.settings.showBestTimes && mine && cur.totalSeedPb ? "FIRST FINISH ON THIS COURSE" : "";
-            String line = "SEED " + SeedCode.encode(sd.seed);
+            String line = "SEED " + SeedCode.encode(sd.seed) + (sd.punisher ? "  PUNISHER" : "");
             ui.textC(line, W / 2, y + ph - 296, Math.min(2.8f, (pw - 40f) / (line.length() * 6f)), Ui.DIM);
             if (!vs.isEmpty()) ui.textC(vs, W / 2, y + ph - 322, Math.min(2.8f, (pw - 40f) / (vs.length() * 6f)), Ui.DIM);
         }
@@ -976,14 +977,14 @@ public final class PlayScreen extends ScreenAdapter {
             ui.text("NOW   " + fmtTime(sd.runClock - sd.towerStartClock), sx + 26, y + sh - 108, 3.4f, new Color(1f, 0.82f, 0.3f, 1f));
             ui.text("TOTAL " + fmtTime(sd.runClock), sx + 26, y + sh - 146, 3.4f, Ui.TEXT);
             boolean showPb = g.settings.showBestTimes;                                 // Build 64: bests and faster/slower marks only with SHOW BEST TIMES; the splits themselves always
-            RecordsData.Run cur = sd.records().current; boolean curRun = cur != null && cur.seed == sd.seed;
+            RecordsData.Run cur = sd.board().current; boolean curRun = cur != null && cur.seed == sd.seed;
             int first = Math.max(0, sd.towers - 6);
             for (int i = first; i < sd.towers; i++) {
                 String vs = showPb && curRun && i < RecordsData.LEGS && cur.legSeedPrev[i] > 0f ? "  " + fmtDelta(sd.splits[i] - cur.legSeedPrev[i]) : "";
                 ui.text((i + 1) + "  " + fmtTime(sd.splits[i]) + "  " + fmtTime(sd.towerTotals[i]) + vs, sx + 26, y + sh - 196 - (i - first) * 40, 3f, Ui.TEXT);
             }
             if (sd.towers == 0) ui.text("NO TOWER OPENED YET", sx + 26, y + sh - 196, 3f, Ui.DIM);
-            RecordsData.SeedBests sb = showPb ? sd.records().seedBests(sd.seed, runRules()) : null;
+            RecordsData.SeedBests sb = showPb ? sd.board().seedBests(sd.seed, runRules()) : null;
             if (sb != null && sb.bestTotal > 0f) ui.text("COURSE BEST " + fmtTime(sb.bestTotal), sx + 26, y + 76, 3f, Ui.DIM);
             if (showPb && sd.bestSplit > 0f) ui.text("FASTEST TOWER " + fmtTime(sd.bestSplit), sx + 26, y + 40, 3f, Ui.DIM);
         }

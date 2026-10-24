@@ -51,6 +51,15 @@ public class Tuning {
 
     public float circumference() { return (float) (2 * Math.PI * radius); }
 
+    /** Build 79 (owner): PUNISHER mode - set only on the copy a punisher climb runs with (never in tuning.json): creatures and cannons react PUNISH_REACT times faster and
+     *  the generator puts more creatures in the way. */
+    public boolean punisher;
+    public static final float PUNISH_REACT = 1.25f;
+    /** How much faster creatures and cannons react on this climb (1 normally). */
+    public float react() { return punisher ? PUNISH_REACT : 1f; }
+    /** A copy of this tuning for a PUNISHER climb. */
+    public Tuning punisherCopy() { Tuning c = parse(new Json().toJson(this)); c.punisher = true; return c; }
+
     public static Tuning parse(String json) {
         Json j = new Json();
         j.setIgnoreUnknownFields(true);

@@ -16,14 +16,17 @@ public class BalanceConveyorTest {
         return s;
     }
 
-    @Test public void theMiddleIsCalm() throws Exception {
-        Tuning t = TestUtil.tuning(); Course c = bridge(t);
-        for (float dx : new float[]{-0.4f, 0f, 0.4f}) {
-            Sim s = standOn(c, t, dx);
-            TestUtil.run(s, 90, 0f, false, -1);
-            assertEquals("within " + t.beltSeesawDead + " m of the pivot it stays level (dx " + dx + ")", 0f, s.tilt[1], 1e-4f);
-            assertEquals("and the belt is still", 0f, s.surfaceCarry(1), 1e-4f);
-        }
+    @Test public void theBeltNeverStopsAndKeepsTheWayItLastRan() throws Exception {      // Build 79 (owner: moving at all times; only its direction follows the end you are on)
+        Tuning t = TestUtil.tuning(); Course c = bridge(t); Element e = c.get(1);
+        Sim s = standOn(c, t, 0f);
+        assertEquals("standing on the pivot the belt already runs at full speed", Math.abs(e.phase), Math.abs(s.surfaceCarry(1)), 1e-4f);
+        s = standOn(c, t, -2.2f); TestUtil.run(s, 20, 0f, false, -1);
+        assertTrue("on the left end it runs left", s.surfaceCarry(1) < 0f);
+        s.s = c.wrap(s.es1[1]); TestUtil.run(s, 1, 0f, false, -1);
+        assertTrue("back on the calm middle it keeps running left", s.surfaceCarry(1) < 0f);
+        assertEquals("at full speed", Math.abs(e.phase), Math.abs(s.surfaceCarry(1)), 1e-4f);
+        s.mode = Sim.Mode.AIR; s.onElem = -1; s.y += 20f; s.vy = 0f; TestUtil.run(s, 30, 0f, false, -1);
+        assertTrue("and with nobody on it", s.surfaceCarry(1) < 0f);
     }
 
     @Test public void theBeltRunsTowardTheLowEndAndReversesWithTheTilt() throws Exception {

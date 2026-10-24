@@ -230,7 +230,8 @@ public final class Autopilot {
     static Policy make(PolicyFactory f) { return f == null ? null : new Reflex(f); }
 
     /**
-     * Build 71 creatures need reflexes rather than a plan made in advance: a skull dashes at you wherever you are, a green blob lands where you were.
+     * Build 71 creatures need reflexes rather than a plan made in advance: a skull dashes at you wherever you are, a green blob lands where you were
+     * (Build 79: and a crab that followed you onto another platform runs at you there: hop it as it closes in).
      * On foot, this hops a dashing skull just before it reaches you (its dash is low, so a hop clears it) and steps out of a blob's shadow (away from its
      * centre, or the other way when the deck's edge is too close). The planned move is then started again from wherever that left you. Without either
      * creature nearby it is exactly the planned move.
@@ -260,6 +261,10 @@ public final class Autopilot {
                     if (dj < 0 || Math.abs(s.y - s.deckY(dj)) > 0.6f) continue;
                     float ahead = c.dsWrap(s.s, s.mobS[hi]) * s.mobDir[hi], gap = ahead - (Element.SKULL_R + hw);
                     if (ahead > 0f && gap / Element.SKULL_SPEED < 0.15f) { in.jumpPressed = true; in.jumpHeld = true; busy = 1; return true; }
+                } else if (h.type == Element.Type.CRAB && s.crabChasing(hi) && !(hi < s.featDone.length && s.featDone[hi]) && !s.crabFalling(hi)
+                        && s.crabJump[hi] < 0f && s.mobDeckIdx(hi, h) == s.onElem) {          // Build 79: a crab that followed you here (or turned on you) runs at you: hop it as it comes
+                    float d = c.dsWrap(s.crabAt(hi, h), s.s);
+                    if (Math.abs(d) < 1.35f && Math.abs(d) > 0.25f && s.crabFacing(hi, h) * d < 0f) { in.jumpPressed = true; in.jumpHeld = true; busy = 1; return true; }
                 } else if (h.type == Element.Type.BLOB && s.blobShadow(hi) >= 0f && s.mobDir[hi] == 0f) {
                     float d = c.dsWrap(s.s, s.mobTgt[hi]);
                     if (Math.abs(d) >= Element.BLOB_R + hw + 0.35f) continue;

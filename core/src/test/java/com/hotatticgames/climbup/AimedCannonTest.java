@@ -99,7 +99,7 @@ public class AimedCannonTest {
         assertEquals("not shot", 0, s.hits); assertTrue("never fired", s.aimFireT[0] < -1e8f);
     }
 
-    @Test public void theBarrelTurnsToFaceAHeroClimbingUpTowardAPillarCannonBeforeHeIsLevel() throws Exception {
+    @Test public void theTurretTurnsFlatToFaceAHeroBelowAndTiltsOnlyToItsLimit() throws Exception {
         Tuning t = TestUtil.tuning();
         Course c = new Course(0, t.circumference());
         Element plat = new Element(Element.Type.STATIC, 12f, 0f, 8f); plat.checkpoint = true; c.add(plat);
@@ -107,9 +107,13 @@ public class AimedCannonTest {
         Sim s = Sim.startOn(c, t, 0); s.s = 12f; s.y = 0f; s.mode = Sim.Mode.GROUND; s.onElem = 0;     // the hero on the platform below it, ~8 m under the barrel: below its firing layer, approaching from beneath
         InputState in = new InputState();
         for (int i = 0; i < (int) (h.period * Element.AIM_LOCK * 0.95f * 60); i++) { in.clear(); s.s = 12f; s.y = 0f; s.vx = s.vy = 0f; s.step(in); s.consumeEvents(); }
-        float towardHero = (float) Math.atan2(0.7f - h.y, 12f - 10f);                       // steeply down and to the side
-        assertEquals("the barrel turned to face the hero below, not idling straight up", towardHero, s.aimAng[0], 0.25f);
-        assertTrue("well away from the idle-up (straight up) position", Math.abs(s.aimAng[0] - (float) Math.PI * 0.5f) > 0.6f);
+        // Build 79 (owner: it turns flat like a record and only tilts a little, never down into its pedestal): it faces the hero's side and tilts to its lower limit
+        assertEquals("the turret has turned to face the hero's side (+s)", 0f, s.aimYaw[0], 1e-3f);
+        assertEquals("its barrel tilts down only as far as its limit", Element.AIM_PITCH_LO, s.aimAng[0], 1e-3f);
+        s.s = 8f;                                                                             // the hero goes round to the other side
+        for (int i = 0; i < (int) ((h.period * (1f + 0.9f * Element.AIM_LOCK - 0.95f * Element.AIM_LOCK)) * 60); i++) { in.clear(); s.s = 8f; s.y = 0f; s.vx = s.vy = 0f; s.step(in); s.consumeEvents(); }   // into its next tracking window
+        assertEquals("it swings round flat to face him there (-s)", (float) Math.PI, s.aimYaw[0], 1e-3f);
+        assertEquals("still tilted no further than its limit", (float) Math.PI - Element.AIM_PITCH_LO, s.aimAng[0], 1e-3f);
         for (int i = 0; i < 60 * 12; i++) { in.clear(); s.s = 12f; s.y = 0f; s.vx = s.vy = 0f; s.step(in); s.consumeEvents(); }   // several more cycles
         assertEquals("but it never shoots across its own layer", 0, s.hits);
         assertTrue("and never fires at the lower layer", s.aimFireT[0] < -1e8f);

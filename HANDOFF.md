@@ -10,7 +10,12 @@
 
 ## Recovery point (2026-10-24, generator redesign: playtest candidate pending packaging)
 
-- **Where things are:** branch `build-74-determinism` (PR #9), HEAD at the commit carrying this note. Generator rules 7 (`rulesOfBuild(80) = 7`). No Build 79/80 artifacts or releases exist.
+- **Where things are:** branch `build-74-determinism` (PR #9). Generator rules 7 (`rulesOfBuild(80) = 7`).
+- **Build 80 playtest (owner choice: built with the core tests skipped):**
+  - Private draft release "Upwardly build 80" (v1.3.0-build80, untagged draft) from `7ed261d`.
+  - APK versionCode 80, SHA-256 `826d138618ff13d773e0d2090d04622755079088fc5b4d1caeda80fa0da8ea02`, plus the Windows EXE zip and the Linux tar.gz.
+  - Runs: Android 40116021811 (emulator update from Build 71 passed), desktop 40116023900 (EXE 30 s launch and Linux launcher smoke passed).
+  - Not public; the OTA channel was not touched. Awaiting the owner's hands-on playtest.
 - **Done (details in `docs/GENERATOR_AUDIT.md`):**
   - Two playable modes.
   - Encounter model and conflict rule.

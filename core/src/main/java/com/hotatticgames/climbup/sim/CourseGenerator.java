@@ -1236,6 +1236,7 @@ public final class CourseGenerator {
             boolean cannonOk = cur.w >= 3f && cur.type == Element.Type.STATIC;
             int roll = wantCreature && j == 0 ? 3 : rnd.nextInt(cannonOk ? 5 : 4);
             if ((roll == 1 && prevRoll == 3) || (roll == 3 && prevRoll == 1)) roll = 2;      // Build 71: the bee now homes in and bumps you, so it never sits next to a saw you must time (it cut the saw's window to 0.2 s; SawFairnessTest)
+            if ((roll == 1 && prevRoll == 4) || (roll == 4 && prevRoll == 1)) roll = 2;      // Build 79: nor a cannon lane right before or after it (a cannon across the landing cut a saw's window from its whole cycle to 0.36; SawFairnessTest, seed 3)
             prevRoll = roll;
             if (roll == 1 && creatureReaches(j == 0 ? c.size() - 1 : base + j - 1)) roll = 2;      // Build 79: nor next to a skull, blob or crab that can roam onto its decks (a skull there cut the window to 0.36; SawFairnessTest)
             if (roll == 1) dy = Math.min(dy, 0.1f);      // a saw never guards an uphill jump: the blade would sit higher than the take-off

@@ -682,3 +682,6 @@ No approved rule was changed to suit the solver, and no test or tolerance was re
 - **Waiting for a cannon on the platform before** (FramedGenerationTest seed 5 slice 6, a spring the cannon from the previous platform
   always crossed): the planner tried waits only for movers and hazards from the current platform on, while `commit` proves a cannon's lane
   across the platform after it. Cannons, aimed cannons and mortars anchored one platform back now count too (`Autopilot.firesAhead`); the slice completes.
+- **Saw next to a cannon lane** (SawFairnessTest, still 0.36 after the creature rule): the probe found the remaining narrow saw (seed 3, slice
+  16) with no creature near, but a cannon across the deck it lands on, inside the same chain of guarded gaps; alone it leaves its whole cycle.
+  As the bee rule since Build 71, a saw and a cannon are never next to each other in a chain (the later one becomes a spiked block).

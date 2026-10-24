@@ -155,7 +155,7 @@ public final class CourseGenerator {
     static final float LATE_RAMP = 3800f;
     float late(float y) {
         float done = endless ? T.hazardStartY + T.hazardRampY : T.courseHeight;
-        return Math.min(1f, Math.max(0f, (float) ((y + base + modeShift() - done) / LATE_RAMP)));
+        return Math.min(endless && T.hard > 0 ? 1.4f : 1f, Math.max(0f, (float) ((y + base + modeShift() - done) / LATE_RAMP)));          // PUNISHER keeps climbing past NORMAL's top (its head start would otherwise flatten it from Level 8)
     }
 
     // ------------------------------------------------------------------ physics helpers

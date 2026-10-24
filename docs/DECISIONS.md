@@ -669,3 +669,16 @@ No approved rule was changed to suit the solver, and no test or tolerance was re
   jump. One hop module in five is instead one or two steps down (0.4-1.1 m each) before the route climbs on; the spiral-pitch controller makes
   the height up. On DeadEndTest's 60 slices: 33 long plain dead ends, 44 spurs left and 34 right, 40 that step both up and down, 12 route dips;
   the test now checks all four.
+- **Determinism confirmed locally** (on 17856f8): PlayDeterminismTest 8/8 (the save restored mid-creature now continues exactly) and
+  TowerStreamingTest 7/7 (streaming vs whole: 539 m, 412 rebuilds, no decision flip, worst divergence 1.55 mm against the unchanged 2 mm).
+- **Solver on the streaming tower** (StreamingReplayTest / TowerStreamingTest stopped at 35 m after the dead-end change): three planner
+  assumptions that only held while a slice's decoys were few. In a tower's world each slice's decoys follow its route (`routeCount` -1).
+  (1) Link success was "a later element below `routeSize()`", which there includes decoys, so a grab of a left spur's ledge, hanging over the
+  route three steps back, counted as progress. Success now needs a route element (`Autopilot.onRoute`), as it always did in a slice.
+  (2) The next route element was taken to be `a + 1`; `Course.nextRoute` skips the decoys between a slice's last route platform and the next
+  slice's route. (3) The planning window took raw indices; in a tower's world it now counts route elements and brings the decoys and hazards
+  anchored there. Slice courses are untouched (`nextRoute` is `a + 1`, decoys already sit past the route). Seed 12's streaming tower now climbs
+  401 m in the test's 26,000 steps (was 35 m).
+- **Waiting for a cannon on the platform before** (FramedGenerationTest seed 5 slice 6, a spring the cannon from the previous platform
+  always crossed): the planner tried waits only for movers and hazards from the current platform on, while `commit` proves a cannon's lane
+  across the platform after it. Cannons, aimed cannons and mortars anchored one platform back now count too (`Autopilot.firesAhead`); the slice completes.

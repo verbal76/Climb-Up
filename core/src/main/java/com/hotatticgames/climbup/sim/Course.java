@@ -23,6 +23,10 @@ public final class Course {
 
     public int routeSize() { return routeCount < 0 ? elements.size() : routeCount; }
     public void finishRoute() { routeCount = elements.size(); indexDecoys(); }
+    /** False for a streaming tower's world, whose decoys sit among the route elements (each slice's route, then its decoys) rather than after them. */
+    public boolean routeFinished() { return routeCount >= 0; }
+    /** The route element after route element i: i + 1, or in a streaming tower's world the next one past any decoys in between (each slice's decoys follow its route). size() if none. */
+    public int nextRoute(int i) { if (routeFinished()) return i + 1; int j = i + 1; while (j < elements.size() && elements.get(j).anchor >= 0) j++; return j; }
 
     public void indexDecoys() {
         int rs = routeSize();

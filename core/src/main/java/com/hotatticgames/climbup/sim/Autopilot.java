@@ -287,24 +287,30 @@ public final class Autopilot {
 
     static boolean movingNear(Course c, int a) {
         for (int i = a; i <= Math.min(c.routeSize() - 1, a + 2); i++) if (c.get(i).isMoving() || c.get(i).spins()) return true;
-        int a0 = anchorIdx(c, a); for (Element h : c.hazards) if (h.anchor >= a0 && h.anchor <= a0 + 2 && h.isMoving()) return true;
+        int a0 = anchorIdx(c, a); for (Element h : c.hazards) if (h.anchor >= a0 - (firesAhead(h) ? 1 : 0) && h.anchor <= a0 + 2 && h.isMoving()) return true;
         return false;
     }
 
     static float maxPeriod(Course c, int a) {
         float p = 0;
         for (int i = a; i <= Math.min(c.routeSize() - 1, a + 2); i++) if (c.get(i).isMoving() || c.get(i).spins()) p = Math.max(p, c.get(i).period);
-        int a0 = anchorIdx(c, a); for (Element h : c.hazards) if (h.anchor >= a0 && h.anchor <= a0 + 2 && h.isMoving()) p = Math.max(p, h.period);
+        int a0 = anchorIdx(c, a); for (Element h : c.hazards) if (h.anchor >= a0 - (firesAhead(h) ? 1 : 0) && h.anchor <= a0 + 2 && h.isMoving()) p = Math.max(p, h.period);
         return p;
     }
+    /** Build 79: a cannon (or mortar) on the platform before fires across this one, as CourseGenerator.commit proves it: a person waits for a clear moment here too
+     *  (framed seed 5 slice 6: off a spring the cannon from the platform before was always in the way, as the planner never tried waiting before the spring). */
+    private static boolean firesAhead(Element h) { return h.type == Element.Type.CANNON || h.type == Element.Type.AIMED || h.type == Element.Type.MORTAR; }
 
     static boolean succeeded(Sim s, int a) {
         switch (s.mode) {
             case GROUND: case LEDGE: case PULLUP: case ROPE: case CABLE: case BEAM:
-                return s.onElem > a && s.onElem < s.course.routeSize() && (s.mode != Sim.Mode.GROUND || !s.gone[s.onElem]);
-            default: return s.lastPad > a && s.lastPad < s.course.routeSize();
+                return s.onElem > a && onRoute(s.course, s.onElem) && (s.mode != Sim.Mode.GROUND || !s.gone[s.onElem]);
+            default: return s.lastPad > a && onRoute(s.course, s.lastPad);
         }
     }
+    /** A route element, not a dead end or lure. Build 79: a streaming tower's world keeps each slice's decoys among the route indices, so "below routeSize()"
+     *  alone took a grab of a dead end's ledge (a left-hand spur hanging over the route a few steps back) for progress (StreamingReplayTest, seed 12). */
+    static boolean onRoute(Course c, int i) { return i >= 0 && i < c.routeSize() && c.get(i).anchor < 0; }
 
     /** Pair mode (key-room detours): success means attaching to exactly element {@code tgt}. */
     static boolean succeededTo(Sim s, int tgt) {
@@ -337,7 +343,7 @@ public final class Autopilot {
         Policy p = make(f);
         InputState in = new InputState();
         int fallsBefore = s.setbacks();
-        float floorY = (tgt >= 0 ? Math.min(s.course.get(a).y, s.course.get(tgt).y) : Math.min(s.course.get(a).y, s.course.get(Math.min(s.course.routeSize() - 1, a + 1)).y)) - 4.5f;
+        float floorY = (tgt >= 0 ? Math.min(s.course.get(a).y, s.course.get(tgt).y) : Math.min(s.course.get(a).y, s.course.get(Math.min(s.course.routeSize() - 1, s.course.nextRoute(a))).y)) - 4.5f;
         int n = (int) (limit / Sim.DT);
         for (int i = 0; i < n; i++) {
             in.clear();
@@ -345,7 +351,7 @@ public final class Autopilot {
             s.step(in);
             if (s.setbacks() != fallsBefore) return null;
             if (tgt >= 0 ? succeededTo(s, tgt) : succeeded(s, a)) return tgt >= 0 && !staysOn(s, tgt) ? null : s;
-            if (tgt < 0 && s.mode == Sim.Mode.GROUND && s.onElem >= 0 && (s.onElem < a || s.onElem >= s.course.routeSize())) return null;   // fell back, or onto a dead end
+            if (tgt < 0 && s.mode == Sim.Mode.GROUND && s.onElem >= 0 && (s.onElem < a || !onRoute(s.course, s.onElem))) return null;   // fell back, or onto a dead end
             if (s.mode == Sim.Mode.AIR && s.vy < 0 && s.y < floorY) return null;
         }
         return null;
@@ -365,7 +371,7 @@ public final class Autopilot {
     public static Result plan(Sim base, int a, boolean measureMargin) { return plan(base, a, measureMargin, false); }
 
     /** With lookahead, prefers moves that leave a state from which the next link is also solvable (used when actually playing the course). */
-    public static Result plan(Sim base, int a, boolean measureMargin, boolean lookahead) { return planTo(base, a, a + 1, false, measureMargin, lookahead); }
+    public static Result plan(Sim base, int a, boolean measureMargin, boolean lookahead) { return planTo(base, a, base.course.nextRoute(a), false, measureMargin, lookahead); }
 
     /** Plans a link between any two elements (not just consecutive route elements): key-room detours. */
     public static Result planPair(Sim base, int a, int b, boolean measureMargin) { return planTo(base, a, b, true, measureMargin, false); }
@@ -578,7 +584,7 @@ public final class Autopilot {
         }
         for (int q = 0; q < 24; q++) { in.clear(); real.step(in); }
         if (real.mode != Sim.Mode.GROUND) recover(real, r, in);      // like a person: knocked off by a hazard on the way back, so land and carry on from wherever that is (the key is already in hand)
-        if (real.mode == Sim.Mode.GROUND && real.onElem >= 0 && real.onElem < c.routeSize()) return true;
+        if (real.mode == Sim.Mode.GROUND && onRoute(c, real.onElem)) return true;
         why = "back on the route platform"; return false;
     }
     /** Like a person arriving on a platform with momentum: counter-steer to brake and drift to the middle, then stand still. */
@@ -601,7 +607,7 @@ public final class Autopilot {
             real.step(in);
             if (real.setbacks() != f0) return false;
         }
-        return real.mode == Sim.Mode.GROUND && real.onElem >= 0 && real.onElem < c.routeSize();
+        return real.mode == Sim.Mode.GROUND && onRoute(c, real.onElem);
     }
     /** Stops within a few cm of {@code toS} on the platform underfoot the way a person does with a direction-only stick: back off if too close to stop cleanly, run in, let go at the stopping distance. */
     static void standAt(Sim real, float toS, InputState in) {
@@ -730,7 +736,7 @@ public final class Autopilot {
             }
             if (!r.ok && real.mode == Sim.Mode.GROUND && real.onElem == a && hasMidHazard(c, a) && c.get(a).isPlatform()) {
                 // like a person: a hazard in the middle of this platform, and the spot we arrived at gives no clean hop. Wait for a better moment, step to another spot on the near side and size it up again (tried on a copy first: the stand-in never walks into the hazard)
-                float dirA = c.dsWrap(real.es1[a + 1], real.es1[a]) >= 0 ? 1f : -1f;
+                float dirA = c.dsWrap(real.es1[c.nextRoute(a)], real.es1[a]) >= 0 ? 1f : -1f;
                 search:
                 for (float off : new float[]{1.0f, 0.6f, 1.4f, 0.8f, 1.8f, 2.4f}) {
                     if (off > c.get(a).halfW() - 0.3f) continue;
@@ -820,7 +826,7 @@ public final class Autopilot {
                 if (d.failed) return false;
                 s.step(in);
                 if (s.setbacks() != sb) return false;
-                if (s.mode == Sim.Mode.GROUND && s.onElem > a && s.onElem < s.course.routeSize() && !s.course.get(s.onElem).crumbles()) return true;
+                if (s.mode == Sim.Mode.GROUND && s.onElem > a && onRoute(s.course, s.onElem) && !s.course.get(s.onElem).crumbles()) return true;
             }
             return false;
         }
@@ -847,7 +853,7 @@ public final class Autopilot {
                 a = s.mode == Sim.Mode.AIR ? s.lastPad : s.onElem;
             }
             if (brakeT > 0 && p == null && s.mode == Sim.Mode.GROUND && s.onElem == a) { brakeT--; return; }
-            if (p == null && !inner && s.mode == Sim.Mode.GROUND && s.onElem == a && a + 1 < s.course.routeSize() && s.course.get(a + 1).crumbles() && !s.course.get(a).crumbles()) {
+            if (p == null && !inner && s.mode == Sim.Mode.GROUND && s.onElem == a && s.course.nextRoute(a) < s.course.routeSize() && s.course.get(s.course.nextRoute(a)).crumbles() && !s.course.get(a).crumbles()) {
                 // like a person: crumbling footing leaves no time to wait out a hazard, so size up the whole crossing from solid ground and wait here until it is clear
                 if (waitedAt != a) { waitedAt = a; waited = 0; holdT = 0; }
                 if (holdT > 0) { holdT--; return; }

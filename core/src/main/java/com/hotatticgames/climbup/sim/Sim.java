@@ -103,6 +103,17 @@ public final class Sim {
         int[] a = new int[n]; int k = 0;
         for (int i = lo; i <= hi; i++) a[k++] = i;
         for (int i = d[0]; i < d[1]; i++) a[k++] = i;
+        if (!course.routeFinished()) {          // Build 79: a streaming tower's world keeps each slice's decoys right after its route, so the window counts route elements, not indices: the next slice's route is past the decoys between (its dead ends grew with spurs both ways), and the decoys anchored in the window come too (a left-hand spur can hang over the route a few steps back)
+            int n0 = course.size(), want = Math.max(0, hi - lo + 1), got = 0, lastRoute = lo, cnt = 0;
+            boolean[] in = new boolean[n0];
+            if (lo < n0 && course.get(lo).anchor >= 0) { int b = lo - 1; while (b >= 0 && course.get(b).anchor >= 0) b--; if (b >= 0) in[b] = true; }
+            for (int i = lo; i < n0 && got < want; i++) { in[i] = true; if (course.get(i).anchor < 0) { got++; lastRoute = i; } }
+            for (int i = 0; i < n0; i++) { int an = course.get(i).anchor; if (an >= lo - 4 && an <= lastRoute + 1) in[i] = true; }
+            for (boolean b : in) if (b) cnt++;
+            act = new int[cnt]; for (int i = 0, j = 0; i < n0; i++) if (in[i]) act[j++] = i;
+            hz = course.hazardsFor(lo - 3, lastRoute + 3);
+            return;
+        }
         act = a;
         hz = course.hazardsFor(lo - 3, hi + 3);
     }

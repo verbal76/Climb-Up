@@ -817,6 +817,8 @@ public final class Sim {
     /** Build 79 (owner): a chasing crab follows you up to CRAB_FOLLOW decks past its own, hopping gaps up to CRAB_HOP_GAP wide and CRAB_HOP_DY high in CRAB_HOP_T seconds
      *  (CRAB_HOP_H high); a crab on a deck that crumbles falls with it and is gone after CRAB_FALL_T seconds. */
     public static final int CRAB_FOLLOW = 3;
+    /** Build 79: the longest it watches you in the air before it gives up (a jump over a gap is well under this). */
+    public static final float CRAB_WAIT = 1.5f;
     public static final float CRAB_HOP_GAP = 3.2f, CRAB_HOP_DY = 1.8f, CRAB_HOP_T = 0.55f, CRAB_HOP_H = 1.0f, CRAB_FALL_T = 1.5f;
     /** Build 79 (owner): seconds of club each knocked creature costs. */
     public static final float CLUB_HIT_COST = 5f;
@@ -857,7 +859,7 @@ public final class Sim {
         if (!sees && deck != null) {
             int ps = crabMode[idx] == 1 ? standOff(j, -1, 1, true) : NONE;
             if (ps != NONE && ps != 0 && off + ps >= 0 && off + ps <= CRAB_FOLLOW && canHop(j, j + ps)) follow = ps;
-            else if (crabMode[idx] == 1 && mode == Mode.AIR && Math.abs(dx) <= CRAB_SIGHT + 3f) follow = 2;           // you are in the air over a gap: it waits to see where you land
+            else if (crabMode[idx] == 1 && mode == Mode.AIR && Math.abs(dx) <= CRAB_SIGHT + 3f && dy > -4f && dy < CRAB_SIGHT_HI + 2f && crabStuck[idx] < CRAB_WAIT) follow = 2;      // you are in the air over a gap near its deck: it waits (a moment) to see where you land
             else if (off != 0) { int back = off > 0 ? -1 : 1; if (canHop(j, j + back)) follow = back * 3; }      // lost you away from home: it heads back
         }
         // the way it faces: along its sweep, else the way it last moved (or was turned)
@@ -881,7 +883,7 @@ public final class Sim {
                 ns = cs + Math.signum(toEdge) * stepLen;
             }
         } else if (follow == 2) {
-            crabTurn[idx] = 0f;                                                         // it stands at its edge and watches you fly
+            crabTurn[idx] = 0f; crabStuck[idx] += DT;                                   // it stands at its edge and watches you fly
         } else {
             crabTurn[idx] = 0f;
             if (crabMode[idx] != 0) {
@@ -898,7 +900,7 @@ public final class Sim {
         if (crabMode[idx] == 1 && !turning && follow == 0) {                            // held at its edge with you beyond it: it soon loses interest, and does not camp there
             if (Math.abs(moved) < 1e-4f && Math.abs(dx) > 0.6f) { crabStuck[idx] += DT; if (crabStuck[idx] >= CRAB_STUCK) { crabMode[idx] = 2; crabCool[idx] = CRAB_COOL; crabStuck[idx] = 0f; } }
             else crabStuck[idx] = 0f;
-        } else crabStuck[idx] = 0f;
+        } else if (follow != 2) crabStuck[idx] = 0f;
         crabVel[idx] = Math.abs(moved) > 1e-5f ? moved : (crabMode[idx] == 1 ? face * 1e-3f : 0f);   // faces the way it moves; standing (turning, or held at its edge) it faces you
         crabPos[idx] = ns;
         return ns;

@@ -16,6 +16,10 @@ on:
         description: "Build number for the versionCode, APK name, tag and release title (blank = this run's number). Set it so a re-run after a failure, or the desktop build dispatched alongside, still carries the number the owner expects."
         type: string
         default: ""
+      skip_tests:
+        description: "Skip the core unit-test step, as the desktop workflow's skip_tests (owner 2026-10-24: a private playtest draft while the generator's expected values are being refreshed). Signing, the certificate gate, the emulator update test and the OTA checks still run. Default off."
+        type: boolean
+        default: false
 permissions:
   contents: write   # publish GitHub Releases
   actions: read
@@ -54,6 +58,7 @@ jobs:
           printf '\n84831b9409646a918e30573bab4c9c91346d8abd\n' > "$ANDROID_HOME/licenses/android-sdk-preview-license"
       - uses: gradle/actions/setup-gradle@v4
       - name: Unit tests (headless simulation, generator, persistence, OTA incl. end-to-end over local HTTP)
+        if: ${{ !inputs.skip_tests }}
         run: ./gradlew :core:test --no-daemon
       - name: Fetch the licensed sound pack (the owner's "Sfx" release in this repository, GITHUB_TOKEN, SHA-256 checked; the build fails if it is missing or corrupted)
         shell: bash

@@ -11,6 +11,8 @@ import org.junit.Test;
  * - seed 130 slice 11: a full-speed run-up from the far end of a platform overshot onto a ledge; the clean line starts from a nearer/slower approach. Fixed in the solver (it now also tries other standing spots and gentle approaches).
  * - seed 178 slice 0 (key branch): the generator's proof window for side branches missed a route platform hanging directly over the landing. Fixed in the generator proof (the window now covers it).
  * - seed 194 slice 0: a razor-thin full-speed window; gentle approach exists. Fixed in the solver.
+ * - seed 2 slice 55 (Build 77, about 3,648 m): an aimed cannon hit the pull-up onto the block above a rope; knocked back onto the rope and hauled up onto its top beam, the solver had no move from the beam and went round without a step. Fixed in the solver (it climbs back down onto the rope and tries again).
+ * - seed 3 slice 54 (Build 77): a castle step whose jump works only from -0.2..+0.15 m of its middle. Fixed in the solver (it stands on the proven spot, from the proof's stick state).
  */
 public class SolverEvidenceTest {
     private static Course slice(long seed, int k) throws Exception {
@@ -26,7 +28,7 @@ public class SolverEvidenceTest {
     }
 
     @Test public void formerlyReportedSlicesAllComplete() throws Exception {
-        solves(32, 4); solves(130, 11); solves(178, 0); solves(194, 0);
+        solves(32, 4); solves(130, 11); solves(178, 0); solves(194, 0); solves(2, 55); solves(3, 54);
     }
 
     @Test public void everyKeyBranchLinkIsProvenOnTheFinishedGeometry() throws Exception {

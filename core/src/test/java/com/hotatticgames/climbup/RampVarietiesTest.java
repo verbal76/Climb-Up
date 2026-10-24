@@ -115,7 +115,9 @@ public class RampVarietiesTest {
 
     @Test public void theSpinningRampIsAlwaysProvenPassable() throws Exception {
         Tuning t = TestUtil.tuning(); int spinners = 0;
-        for (Course c : TestUtil.slices(3, 2600f)) {            // they start in the second world (from 1,000 m)
+        // they start in the second world (from 1,000 m), where a ramp is one module in many and a spinner one ramp in five: one seed rolled none at
+        // all under rules 6 (6 ramps above 1,000 m on seed 3, none spinning), so three seeds (the ones the suite already climbs to 5,300 m)
+        for (long seed = 1; seed <= 3; seed++) for (Course c : TestUtil.slices(seed, 2600f)) {
             int here = 0; for (int i = 0; i < c.routeSize(); i++) if (c.get(i).spins()) here++;
             if (here == 0) continue;
             spinners += here;

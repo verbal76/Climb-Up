@@ -21,7 +21,13 @@ public final class CourseGenerator {
         /** Build 71: a creature's deck - a skull on a long fixed platform or bridge (from the second world), or a green blob on a long platform or a tipping bridge (from the third). */
         CREATURE,
         /** Build 71: a row of platforms, each under its own chained spike drop (own speed, own top height, none low): like a mortar row, cross each when its slab is up. */
-        DROPS }
+        DROPS,
+        /**
+         * Owner directive 2026-10-24 (sections 15-16): a split. The route part of it reserves the room a second way needs: an entry platform, a wide gap
+         * to drop through, a gentle climb with full headroom beneath it, and a wide gap before the rejoin platform. The branch below it is built in the
+         * decoy phase ({@link #tryReservedFork}) and proven like every other link; if it cannot be proven the route stays as a plain climb.
+         */
+        FORK }
 
     private final Tuning T;
     private final Random rnd;
@@ -48,9 +54,9 @@ public final class CourseGenerator {
      * generator (the crab rules of Build 63 changed what a seed produced, so runs from earlier builds carry version 0, "old rules", and are not compared).
      * {@code GeneratorFingerprintTest} fails when generation changes without a bump.
      */
-    public static final int RULES_VERSION = 3;      // 3 = Build 72: flush ramps, faster crumbling, a wilder shaking ramp, the spinning ramp; 2 = Build 71: the bee homes in, skulls and green blobs, mortars out of step at random
+    public static final int RULES_VERSION = 7;      // 7 = Build 80 (owner directive 2026-10-24): no level gates, PUNISHER on its own curve, encounter-conflict rule, splits with reconnecting branches instead of dead ends; 6 = Build 79: skulls, blobs and crabs reach the platforms either side (crabs follow up to three, fall with crumbling decks), faster skull, no blob wobble, two to four crabs a deck, bee pairs, creatures on spike-drop rows, bridges that drop planks, flat-turning aimed cannons, an always-running balance conveyor, decoys kept off ropes, a slightly harder first world; 5 = Build 77: faster skull with loop+swoop, key detours proved with the skull at either end, one balance conveyor per section from Castle 6 to 10; 4 = Build 76: faster plank conveyor bridges; 3 = Build 72: flush ramps, faster crumbling, a wilder shaking ramp, the spinning ramp; 2 = Build 71: the bee homes in, skulls and green blobs, mortars out of step at random
     /** The rules version a climb started on a given build used (0 = unknown or before the stamps: not comparable). */
-    public static int rulesOfBuild(int build) { return build >= 72 ? 3 : build >= 71 ? 2 : build >= 63 ? 1 : 0; }
+    public static int rulesOfBuild(int build) { return build >= 80 ? 7 : build >= 79 ? 6 : build >= 77 ? 5 : build >= 76 ? 4 : build >= 72 ? 3 : build >= 71 ? 2 : build >= 63 ? 1 : 0; }
 
     private CourseGenerator(long seed, Tuning t, long salt) {
         T = t; this.salt = salt; rnd = new Random(seed * 0x9E3779B97F4A7C15L + 12345 + salt * 0x632BE59BD9B4E019L); c = new Course(seed, t.circumference());
@@ -110,6 +116,7 @@ public final class CourseGenerator {
         for (int i = 0; i < src.size(); i++) { Element e = copyOf(src.get(i), src.get(i).anchor); e.y -= dy; e.s -= ds; out.add(e); }
         for (Element h : src.hazards) { Element e = copyOf(h, h.anchor); e.y -= dy; e.s -= ds; out.hazards.add(e); }
         for (int[] k : src.keyRooms) out.keyRooms.add(k.clone());
+        for (int[] f : src.forks) out.forks.add(f.clone());
         out.routeCount = src.routeCount; out.gemCheckpoints = src.gemCheckpoints; out.indexDecoys();
         return out;
     }
@@ -122,7 +129,22 @@ public final class CourseGenerator {
     /** 0 before the first hazards, ramping to 1 (finite towers ramp over their own height so tests exercise them too). */
     float intensity(float y) {
         float start = endless ? T.hazardStartY : T.courseHeight * 0.18f, ramp = endless ? T.hazardRampY : T.courseHeight * 0.7f;
-        return Math.min(1f, Math.max(0f, (float) ((y + base - start) / ramp)));
+        return Math.min(1f, Math.max(0f, (float) ((y + base + modeShift() - start) / ramp)));
+    }
+
+    /**
+     * Owner directive 2026-10-24 (two 10-level curves): PUNISHER reads the whole difficulty curve this far further up the tower, so its Level 1 plays like
+     * NORMAL's Levels 3-4 and its later levels go past anything NORMAL reaches. Only the curve moves: the worlds, castles and gems stay at their heights.
+     */
+    static final float PUNISHER_SHIFT = 1500f;
+    private float modeShift() { return endless && T.hard > 0 ? PUNISHER_SHIFT : 0f; }
+    /**
+     * Where height y sits in the 10-level timed climb, as a difficulty from 0 (NORMAL Level 1) to 1 (NORMAL's top castle), and beyond 1 for PUNISHER's
+     * last levels. Every mechanic's chance of appearing grows with it smoothly; none is locked behind a level (directive section 6).
+     */
+    float level(float y) {
+        if (!endless) return diff(y);
+        return Math.max(0f, (float) ((y + base + modeShift()) / (10.0 * T.castleSpacing)));
     }
 
     /**
@@ -133,7 +155,7 @@ public final class CourseGenerator {
     static final float LATE_RAMP = 3800f;
     float late(float y) {
         float done = endless ? T.hazardStartY + T.hazardRampY : T.courseHeight;
-        return Math.min(1f, Math.max(0f, (float) ((y + base - done) / LATE_RAMP)));
+        return Math.min(endless && T.hard > 0 ? 1.4f : 1f, Math.max(0f, (float) ((y + base + modeShift() - done) / LATE_RAMP)));          // PUNISHER keeps climbing past NORMAL's top (its head start would otherwise flatten it from Level 8)
     }
 
     // ------------------------------------------------------------------ physics helpers
@@ -190,7 +212,7 @@ public final class CourseGenerator {
             rests = prev.get(rs - 1).zone * 3 + rs;   // keeps the checkpoint cadence varied between slices
         }
         float startY = c.get(ctx - 1).y;
-        castleTarget = 0f; castleDone = false; exactCastle = false; keyN = 0; keyY = 0f; gemBest = -1;
+        castleTarget = 0f; castleDone = false; exactCastle = false; keyN = 0; keyY = 0f; gemBest = -1; beltSawY = 0f; beltSawDone = false; beltSawNow = false;
         if (T.castleSpacing > 0f) {          // exact heights: the castles at spacing x N, and ONE red-gem checkpoint halfway between every two castles (and between the start and castle 1)
             double sp = T.castleSpacing, half = sp * 0.5, startAbs = startY + base;          // absolute heights in double: the same maths at any altitude
             int mc = (int) Math.floor((startAbs + 80.0) / sp);
@@ -201,8 +223,13 @@ public final class CourseGenerator {
                 float hk = (float) (keyHeight(c.seed, n, T.castleSpacing) - base);
                 if (hk > startY && hk <= startY + 80f) { keyN = n; keyY = hk; break; }
             }
+            if (endless) for (int n = Math.max(BELT_SAW_FIRST, (int) Math.floor(startAbs / sp) + 1); n <= Math.min(BELT_SAW_LAST, (int) Math.floor((startAbs + 80.0) / sp) + 1); n++) {
+                float hb = (float) (beltSawHeight(c.seed, n, T.castleSpacing) - base);
+                if (hb > startY && hb <= startY + 80f) { beltSawY = hb; break; }
+            }
         }
-        extend(keyN > 0 ? Math.max(startY + T.chunkHeight, keyY + 6f) : startY + T.chunkHeight);
+        float top = keyN > 0 ? Math.max(startY + T.chunkHeight, keyY + 6f) : startY + T.chunkHeight;
+        extend(beltSawY > 0f ? Math.max(top, beltSawY + 12f) : top);
         addRest(theme(c.get(c.size() - 1).y));
         c.get(c.size() - 1).checkpoint = true;
         thinCheckpoints();
@@ -256,6 +283,7 @@ public final class CourseGenerator {
             if (h.anchor >= off) { newHz[i] = out.hazards.size(); out.hazards.add(copyOf(h, h.anchor - off)); } else newHz[i] = -1;
         }
         for (int[] k : c.keyRooms) out.keyRooms.add(new int[]{k[0] - off, k[1] < 0 ? -1 : k[1] - off, k[2], k[3], newHz[k[4]], k[5] < 0 ? -1 : newHz[k[5]]});
+        for (int[] f : c.forks) if (f[0] >= off) out.forks.add(new int[]{f[0] - off, f[1] - off, f[2], f[3] - off});
         out.routeCount = rs - off;
         out.indexDecoys();
         return out;
@@ -266,7 +294,7 @@ public final class CourseGenerator {
         if (castleTarget > 0f && !castleDone) targetY = Math.max(targetY, castleTarget + (exactCastle ? 8f : 6f));
         int sinceRest = 0;
         float lastRestY = c.get(c.size() - 1).y, nextGap = T.gemSpacing * r(0.85f, 1.15f);      // red-gem checkpoints at even stretches of height, each with a little random give
-        while (c.get(c.size() - 1).y < targetY) {
+        while (c.get(c.size() - 1).y < targetY || (beltSawY > 0f && !beltSawDone && c.get(c.size() - 1).y < beltSawY + 40f)) {      // (a balance conveyor that could not be proven yet gets up to 40 m more tries)
             Element last = c.get(c.size() - 1);
             float d = diff(last.y);
             int zone = tier(last.y), th = theme(last.y);
@@ -276,17 +304,30 @@ public final class CourseGenerator {
             if (last.y - lastRestY >= nextGap && targetY - last.y > 0.4f * T.gemSpacing && !(castlePending && last.y > castleTarget - 14f)) {      // (not right before the slice's own closing rest)
                 addRest(th); sinceRest = 0; lastRestY = c.get(c.size() - 1).y; nextGap = T.gemSpacing * r(0.85f, 1.15f); maybeCastle(th); continue;
             }
+            float forkEvery = T.hard > 0 ? 34f : 70f;          // PUNISHER splits about twice as often, and its splits are longer
+            if (Float.isNaN(lastForkY)) lastForkY = last.y - forkEvery * 0.5f;
+            if (last.y - lastForkY >= forkEvery && last.isPlatform() && !last.isMoving() && !last.wet() && !(castlePending && last.y > castleTarget - 24f)) {
+                int e0 = c.size(), n = T.hard > 0 ? 5 : 3;
+                forkRisers = n;
+                if (tryModuleBelow(Kind.FORK, d, th)) { forkEntries.add(new int[]{e0, n}); lastForkY = last.y; prev2 = prev; prev = Kind.FORK; sinceRest++; continue; }
+                lastForkY = last.y - forkEvery + 8f;          // no room here: try again a little higher
+            }
             Kind k = pick(zone, last);
             boolean clubTarget = false;
             if (clubBoost > 0) { clubBoost--; k = rnd.nextBoolean() ? Kind.TRAP : Kind.HAZ; clubTarget = true; }      // Build 71 (owner): a club was just placed - the next few modules give it crabs and bees to hit
             wantCreature = clubTarget;
             if (th == 1 && last.type == Element.Type.STATIC && rnd.nextFloat() < 0.2f) k = Kind.WET;          // the Frost world: some platforms are under a rain cloud (slippery)
-            if (th >= 1 && k != Kind.WET && prev != Kind.CREATURE && !last.wet() && rnd.nextFloat() < (th >= 2 ? 0.065f : 0.06f) + 0.05f * late(last.y)) k = Kind.CREATURE;
+            float lv = Math.min(1f, level(last.y));
+            if (k != Kind.WET && prev != Kind.CREATURE && !last.wet() && rnd.nextFloat() < 0.025f + 0.045f * lv + 0.05f * late(last.y)) k = Kind.CREATURE;      // owner directive 2026-10-24: creature decks from Level 1 on, more as the levels rise (was world 2 on)
             else if (prev == Kind.CREATURE && !last.wet() && rnd.nextFloat() < 0.35f * late(last.y)) k = rnd.nextBoolean() ? Kind.HAZ : Kind.TRAP;      // Build 71: higher up, a creature deck runs straight into a trap      // Build 71: a skull's deck (world 2 on), or a green blob's (world 3 on)
             boolean secondHalf = endless && th == 0 && ((last.y + base) % T.zoneHeight) >= 0.5f * T.zoneHeight - 15f;      // castle 1 to castle 2: the Meadow's second, harder half (owner, Build 71)
-            if (k != Kind.WET && k != Kind.CREATURE && !last.wet() && prev != Kind.DROPS && (secondHalf ? rnd.nextFloat() < 0.10f : th >= 1 && rnd.nextFloat() < 0.04f)) k = Kind.DROPS;
+            if (k != Kind.WET && k != Kind.CREATURE && !last.wet() && prev != Kind.DROPS && (secondHalf ? rnd.nextFloat() < 0.10f : rnd.nextFloat() < 0.015f + 0.025f * lv)) k = Kind.DROPS;      // (spike-drop rows anywhere, more higher up; was world 2 on)
             else if (secondHalf && (k == Kind.HOP || k == Kind.STAIRS) && rnd.nextFloat() < 0.3f) k = Kind.HAZ;          // a little rougher than the first half
             if (last.wet() && (k == Kind.HAZ || k == Kind.TRAP || k == Kind.MORTAR || k == Kind.CREATURE || k == Kind.DROPS)) k = Kind.STAIRS;          // after a slippery platform give a walk-up (not a hazard you must time, nor a jump you must push off a slippery surface for): its timing windows assume a normal run-up (SawFairnessTest) and the plain climb stays walkable
+            if (beltSawY > 0f && !beltSawDone && last.y >= beltSawY && !last.wet() && !(castlePending && last.y > castleTarget - 14f)) {      // Build 77: this section's balance conveyor (tried again on the next module if it cannot be proven here)
+                beltSawNow = true; boolean ok = tryModuleBelow(Kind.SEESAW, d, th); beltSawNow = false;
+                if (ok) { beltSawDone = true; prev2 = prev; prev = Kind.SEESAW; sinceRest++; continue; }
+            }
             if (!tryModuleBelow(k, d, th)) {
                 rejected++;
                 boolean ok = false;
@@ -364,12 +405,21 @@ public final class CourseGenerator {
     }
 
     private int keyN, gemBest; private float keyY;
+    private float beltSawY; private boolean beltSawDone, beltSawNow;      // this slice's balance conveyor (Build 77): the height it starts from; built yet; the SEESAW being built now is one
 
     /** Deterministic key height for castle n: anywhere in the section before it (near the previous castle ... far above), clear of the exact-height structures (gem, castle). */
     public static float keyHeight(long seed, int n, float spacing) {
         float lo = spacing * (n - 1) + 20f, hi = spacing * n - 40f, mid = spacing * (n - 1) + spacing * 0.5f;
         Random r = new Random(seed * 0x9E3779B97F4A7C15L + n * 0xBF58476D1CE4E5B9L + 17L);
         for (int i = 0; i < 32; i++) { float h = lo + r.nextFloat() * (hi - lo); if (Math.abs(h - mid) >= 16f) return h; }
+        return lo;
+    }
+    /** Build 77 (owner): sections 7-10 (Castle 6 to Castle 10) each get ONE balance conveyor, at a height fixed by the seed and the section, like the keys. */
+    public static final int BELT_SAW_FIRST = 7, BELT_SAW_LAST = 10;
+    public static float beltSawHeight(long seed, int n, float spacing) {
+        float lo = spacing * (n - 1) + 40f, hi = spacing * n - 60f, mid = spacing * (n - 1) + spacing * 0.5f;
+        Random r = new Random(seed * 0x94D049BB133111EBL + n * 0x9E3779B97F4A7C15L + 29L);
+        for (int i = 0; i < 32; i++) { float h = lo + r.nextFloat() * (hi - lo); if (Math.abs(h - mid) >= 25f) return h; }
         return lo;
     }
     /** The key (and gate) colour of castle n is fixed by the run's seed and the castle number, so the key can be placed sections before its gate is built. */
@@ -384,9 +434,36 @@ public final class CourseGenerator {
             if (b2 >= 0 && (best < 0 || Math.abs(c.get(b2).y - castleTarget) < Math.abs(c.get(best).y - castleTarget))) best = b2;
             if (b2 == c.size() - 1) break;          // the new rest is suitable
         }
+        if (best < 0 || Math.abs(c.get(best).y - castleTarget) > GEM_MAX_DEV) { int w = widenForGem(); if (w >= 0) best = w; }
         if (best < 0) throw new IllegalStateException("no platform for the gem near " + castleTarget);
         Element g = c.get(best); g.skin = 3; g.checkpoint = true; gemBest = best;
     }
+    /** The official rule: the halfway red gem stands within this height of the exact midpoint. */
+    private static final float GEM_MAX_DEV = 4.5f;
+    /**
+     * Build 76: when no rest could be added near the midpoint (every spot blocked by the spiral layer a revolution above or below: seed 8, gem 9, 7.2 m high
+     * once the faster plank conveyors reshaped that section) and the climb carried past it, a route platform near the midpoint that is only too narrow
+     * to stand and wait on is widened to the gem's minimum width, if it then still clears the other layers and both links through it are proven again.
+     * Returns its index, or -1 (the slice is unchanged).
+     */
+    private int widenForGem() {
+        int best = -1; float bestDev = GEM_MAX_DEV;
+        for (int i = Math.max(1, ctx); i < c.routeSize() - 1; i++) {
+            Element e = c.get(i);
+            if (e.type != Element.Type.STATIC || e.skin != 0 || e.wet() || e.w >= GEM_MIN_W || e.anchor >= 0 || Autopilot.hasMidHazard(c, i)) continue;
+            float d = Math.abs(e.y - castleTarget);
+            if (d > bestDev) continue;
+            float old = e.w; e.w = GEM_MIN_W;
+            boolean ok = clearOfOtherLayers(i);
+            for (int k = i - 1; k <= i + 1 && ok; k += 2) { Element n = c.get(k); ok = Math.abs(n.y - e.y) > 1.0f || Math.abs(c.dsWrap(e.s, n.s)) - e.halfW() - n.halfW() > 0.2f; }      // never into a neighbour
+            for (int j = i - 1; j <= i && ok; j++) { Sim sim = Sim.startOn(c, T, j); quietStart(sim, j); Autopilot.Result res = Autopilot.plan(sim, j, true); ok = res.ok && res.margin() >= 0.12f; }
+            e.w = old;
+            if (ok) { best = i; bestDev = d; }
+        }
+        if (best >= 0) c.get(best).w = GEM_MIN_W;
+        return best;
+    }
+    private static final float GEM_MIN_W = 3.5f;
     /** How far below the exact midpoint the climb may still be when the red gem platform is chosen: a rest added then lands within about 4 m of the midpoint instead of up to a whole module above it. */
     private static final float GEM_LEAD = 4f;
     private int bestGemCandidate() {
@@ -571,9 +648,15 @@ public final class CourseGenerator {
     private boolean pairOk(int a, int b) {
         float hwd = Math.max(0.3f, c.get(a).halfW() - 0.4f);
         for (float dx : new float[]{-hwd, -0.75f * hwd, -hwd / 2f, -hwd / 4f, 0f, hwd / 4f, hwd / 2f, 0.75f * hwd, hwd}) {
+            if (c.get(a).overHole(dx, -0.3f)) continue;          // Build 79: nobody waits on the planks that drop out
             Sim base = Sim.startOn(c, T, a);
             if (base.mode == Sim.Mode.GROUND) base.s = c.wrap(base.s + dx);
             else if (dx != 0f) continue;
+            Autopilot.Result res = Autopilot.planPair(base, a, b, true);
+            if (!res.ok || res.margin() < Math.min(T.minLinkMargin, 0.05f)) return false;
+        }
+        if (Sim.startOn(c, T, a).hasSkull()) {       // a skull may be waiting at either end of its deck: prove the link from the centre with it parked at the other end too (Build 77, rules 5)
+            Sim base = Sim.startOn(c, T, a); base.parkSkullsAtFarEnd();
             Autopilot.Result res = Autopilot.planPair(base, a, b, true);
             if (!res.ok || res.margin() < Math.min(T.minLinkMargin, 0.05f)) return false;
         }
@@ -583,6 +666,10 @@ public final class CourseGenerator {
 
     // ------------------------------------------------------------------ decoys: dead ends and lures that mislead without ever blocking the route
 
+    private float wideHopY = -1e9f;
+    private float lastForkY = Float.NaN;          // height of the last split laid (NaN: none yet in this slice)
+    private int forkRisers;                       // risers in the split being built
+    private final List<int[]> forkEntries = new ArrayList<>();          // {entry platform index, risers} of every split laid          // height of the last wide hop laid for a fork
     public int decoys, decoyTried, decoyGeoFail, decoyPlanFail;
     public static CourseGenerator lastForDebug;
     private long salt;
@@ -602,35 +689,217 @@ public final class CourseGenerator {
         c.finishRoute();
         Random dr = new Random(c.seed * 0x2545F4914F6CDD1DL + 99 + salt * 7919L);
         int rs = c.routeSize();
-        java.util.Set<Integer> anchored = new java.util.HashSet<>();
-        for (int a = lo; a < Math.min(rs - 4, hi + 1); a++) {
-            Element p = c.get(a);
-            if (p.type != Element.Type.STATIC || p.w < 3f) continue;
-            if (dr.nextFloat() > 0.44f + 0.08f * tier(p.y)) continue;          // more dead ends than before (was 0.30)
-            for (int again = 0; again < 2; again++) {          // a second, different try when the first does not fit the surrounding geometry
-                pendingHaz = new ArrayList<>();
-                List<Element> es = buildDecoy(p, a, dr);
-                if (tryDecoy(es, pendingHaz, a)) { decoys += es.size(); anchored.add(a); break; }
-            }
+        // Owner directive 2026-10-24 (sections 15-16): no dead ends. Now and then the route forks: the route itself is the quick way, and a longer branch drops
+        // below it, runs on under it and bounces back up onto a later route platform. Both go forward and meet again. NORMAL forks now and then, one branch
+        // at a time; PUNISHER forks more often, with longer branches, and sometimes a second branch off the first.
+        boolean punisher = T.hard > 0;
+        for (int[] fe : forkEntries) {          // the splits the route reserved room for: their branches first
+            if (fe[0] < lo || fe[0] + fe[1] + 1 > Math.min(rs - 2, hi + 6)) continue;
+            if (tryReservedFork(fe[0], fe[1], dr) < 0) tryPadFork(fe[0], dr);
         }
-        // Guarantee that long dead-end spurs appear (DeadEndTest). This runs from a SEPARATE, deterministic RNG and only on
-        // platforms that did not already get a decoy, so the main decoy pass above stays byte-for-byte identical - the streaming
-        // autopilot is sensitive to any shift in it (TowerStreamingTest). The added spurs are off-route, hazard-free dead ends.
-        Random lr = new Random(c.seed * 0x9E3779B97F4A7C15L + 1013 + salt * 6367L);
-        int wantLong = 1;
-        for (int a = lo; a < Math.min(rs - 4, hi + 1) && wantLong > 0; a++) {
+        float chance = punisher ? 0.9f : 0.5f;          // of the take-offs a branch can drop from (open air past the edge: few of them)
+        int spacing = punisher ? 4 : 7, last = -100;
+        for (int a = lo; a < Math.min(rs - 5, hi + 1); a++) {
+            if (a - last < spacing) continue;
             Element p = c.get(a);
-            if (p.type != Element.Type.STATIC || p.w < 3f || anchored.contains(a)) continue;
-            if (lr.nextFloat() > 0.5f) continue;              // spread the forced spurs across the slice
-            pendingHaz = new ArrayList<>();
-            List<Element> es = buildDecoy(p, a, lr, true);
-            if (tryDecoy(es, pendingHaz, a)) { decoys += es.size(); anchored.add(a); wantLong--; }
+            if (!p.isPlatform() || p.isMoving() || p.crumbles() || p.w < 2f || p.anchor >= 0 || !forkable(a)) continue;
+            if (dr.nextFloat() > chance) continue;
+            int built = tryFork(a, a, dr, punisher ? 9 : 7);
+            if (built < 0) built = tryPadFork(a, dr);          // no room for a branch under the route here: the short fork, a bounce pad down in the gap
+            if (built < 0) continue;
+            last = a;
+            if (punisher && c.forks.get(c.forks.size() - 1)[2] > 2 && dr.nextFloat() < 0.35f) {          // a second branch off a long one, rejoining the route further on
+                int[] f = c.forks.get(c.forks.size() - 1);
+                int from = f[1] + Math.max(0, f[2] / 2 - 1);
+                tryFork(a, from, dr, 10);
+            }
         }
         addKeyRooms();          // last, so every key-room link is proven against the final geometry
     }
 
-    /** Dead-end spurs (forward and gently down, or backward and up), crumbling lures, unreachable stepping stones, and trapped ledges guarded by hazards. */
-    private List<Element> buildDecoy(Element p, int a, Random dr) { return buildDecoy(p, a, dr, false); }
+    /**
+     * One fork off element {@code from} (a route platform, or a platform of an earlier branch) for route platform {@code a}'s section: a branch below the
+     * route that rejoins it at a route platform up to {@code maxAhead} ahead. Every link along it is proven like a key-room detour, every route link
+     * nearby is proven again with it there, and it is laid out like any decoy (no overlap, no ceiling over the route). Returns the rejoined route index, or -1.
+     */
+    public static final int[] FORKWHY = new int[14];      // diagnostics: why fork attempts were refused
+    /**
+     * The branch of a split the route reserved ({@link Kind#FORK}): drop through the wide gap past entry platform {@code e} onto a landing, hop along
+     * under the risers, and bounce off a pad in the wide gap before the rejoin platform up onto it. PUNISHER's longer branch has more, shorter hops and
+     * a narrow foothold in the middle (a crumbling one cannot be proven by a stand-and-land link proof). Every link is proven, and the route around it is proven again with it there. Returns the rejoin index, or -1 (the route stays plain).
+     */
+    private int tryReservedFork(int e, int n, Random dr) {
+        int rs = c.routeSize(), j = e + n + 1;
+        if (j >= rs - 1) return -1;
+        Element E = c.get(e), U = c.get(e + n), J = c.get(j);
+        float x0 = E.s + E.halfW(), y0 = E.y;
+        float padC = (U.s + U.halfW() + J.s - J.halfW()) / 2f;
+        float b0 = x0 + 1.7f, bl = padC - 3.6f;
+        boolean pun = T.hard > 0;
+        int m = Math.max(1, Math.round((bl - b0) / (pun ? 3.4f : 4.4f)));          // PUNISHER: more, shorter hops
+        float[] wd = new float[m + 1]; float sumW = 0f;
+        for (int k = 0; k <= m; k++) { wd[k] = k == 0 ? 3f : pun && m >= 2 && k == m / 2 ? 1.4f : 2.4f; if (k > 0) sumW += wd[k]; }          // (PUNISHER's middle foothold is a narrow one)
+        float g = (bl + wd[m] / 2f - (b0 + 1.5f) - sumW) / m;          // even gaps edge to edge, the last landing centred at bl
+        if (g < 1.1f) { FORKWHY[1]++; return -1; }
+        List<Element> es = new ArrayList<>();
+        float py = y0, edge = b0 - 1.5f;
+        for (int k = 0; k <= m; k++) {
+            float x = k == 0 ? b0 : edge + g + wd[k] / 2f;
+            float want = y0 - 3.2f + (J.y - 5.4f - (y0 - 3.2f)) * k / m;
+            float y = Math.min(Math.min(want, ceilAt(x, y0, J.y) - 1.7f), py + 1.2f);
+            Element b = plat(Element.Type.STATIC, x, y, wd[k], E.zone); b.anchor = e; es.add(b); py = y;
+            edge = x + wd[k] / 2f;
+        }
+        float padY = Math.min(ceilAt(padC, y0, J.y) - 0.2f, Math.max(J.y - 5.6f, py - 1.0f));
+        if (padY > py + 1.5f || J.y - padY > 7.0f) { FORKWHY[1]++; return -1; }
+        Element pad = plat(Element.Type.PAD, padC, padY, 2f, J.zone); pad.anchor = e; es.add(pad);
+        int n0 = c.size(), h0 = c.hazards.size();
+        boolean ok = true;
+        for (Element b : es) { c.add(b); if (!decoyOk(b, e, true)) { ok = false; FORKWHY[2 + decoyWhy]++; break; } }
+        if (ok) {
+            c.indexDecoys();
+            ok = pairOk(e, n0); if (!ok) FORKWHY[10]++;
+            for (int k = n0; ok && k < c.size() - 1; k++) { ok = pairOk(k, k + 1); if (!ok) FORKWHY[11]++; }
+            if (ok) { ok = pairOkAir(c.size() - 1, j); if (!ok) FORKWHY[12]++; }
+            for (int q = Math.max(0, e - 3); ok && q <= Math.min(rs - 2, j + 2); q++) { ok = Autopilot.plan(Sim.startOn(c, T, q), q, false).ok; if (!ok) FORKWHY[9]++; }
+        }
+        if (!ok) { rollbackTo(n0, h0); c.indexDecoys(); return -1; }
+        c.forks.add(new int[]{e, n0, es.size(), j});
+        decoys += es.size();
+        return j;
+    }
+
+    /**
+     * The short fork: a bounce pad down in the open gap past route platform {@code a}. Drop onto it and its bounce carries you up onto a route
+     * platform ahead (over the next one where it reaches), or take the route's own hops. Both ways are proven, and every route link nearby is proven again with the pad
+     * there. Returns the rejoined route index, or -1.
+     */
+    private int tryPadFork(int a, Random dr) {
+        Element start = c.get(a); int rs = c.routeSize();
+        float dir = c.get(a + 1).s >= start.s ? 1f : -1f, room = forkRoom(a, dir);
+        if (room == Float.MAX_VALUE || room < 2.2f) return -1;
+        float x = start.s + dir * (start.halfW() + room / 2f);
+        float y = Math.min(ceilAt(x, start.y, start.y + 8f) - 0.2f, start.y - 2.6f - dr.nextFloat() * 0.6f);
+        for (int t = Math.min(rs - 2, a + 3); t >= a + 1; t--) {          // the furthest platform the bounce can carry you to (it drifts about 4.5 m)
+            Element tg = c.get(t);
+            if (!tg.isPlatform() || tg.isMoving() || tg.w < 2f || tg.y - y > 7.6f || Math.abs(tg.s - x) - tg.halfW() > 4.5f) { FORKWHY[0]++; continue; }
+            Element pad = plat(Element.Type.PAD, x, y, 2f, start.zone); pad.anchor = a;
+            int n0 = c.size(), h0 = c.hazards.size();
+            c.add(pad);
+            boolean ok = decoyOk(pad, a, true);
+            if (!ok) FORKWHY[2 + decoyWhy]++;
+            if (ok) {
+                c.indexDecoys();
+                ok = pairOk(a, n0); if (!ok) FORKWHY[10]++;
+                if (ok) { ok = pairOkAir(n0, t); if (!ok) FORKWHY[12]++; }
+                for (int q = Math.max(0, a - 3); ok && q <= Math.min(rs - 2, t + 2); q++) { ok = Autopilot.plan(Sim.startOn(c, T, q), q, false).ok; if (!ok) FORKWHY[9]++; }
+            }
+            if (!ok) { rollbackTo(n0, h0); c.indexDecoys(); continue; }
+            c.forks.add(new int[]{a, n0, 1, t});
+            decoys++;
+            return t;
+        }
+        return -1;
+    }
+
+    /** Open air to drop into past the end of {@code from} going {@code dir}: {@code Float.MAX_VALUE} when the next element is well above (the drop passes under it), else the gap. */
+    private float forkRoom(int from, float dir) {
+        Element start = c.get(from), nx = c.get(from + 1);
+        if (nx.isPlatform() && nx.y - start.y > 2.1f) return Float.MAX_VALUE;          // its top beyond the hands' reach: nothing to catch on the way down
+        return dir * (nx.s - start.s) - start.halfW() - nx.halfW();
+    }
+    private boolean forkable(int a) { float dir = c.get(a + 1).s >= c.get(a).s ? 1f : -1f; return !hazOn(a) && forkRoom(a, dir) >= 2.2f; }          // off a quiet platform
+    /** The highest a 2 m branch platform centred at {@code x} may sit: below every element over it by the overlap clearance. */
+    private float ceilAt(float x, float y0, float y1) {
+        float ceil = Float.MAX_VALUE;
+        for (int q = 0; q < c.size(); q++) { Element e = c.get(q); if (Math.abs(e.s - x) < arcHalf(e) + 1f + 1.2f && vHi(e) > y0 - 12f && e.y < y1 + 3f) ceil = Math.min(ceil, vLo(e) - 0.9f); }
+        return ceil;
+    }
+    private boolean hazOn(int i) { for (Element h : c.hazards) if (h.anchor == i) return true; return false; }
+    private int tryFork(int a, int from, Random dr, int maxAhead) {
+        Element start = c.get(from);
+        int rs = c.routeSize();
+        int lo = a + 2, n = Math.max(1, maxAhead - 1), off = dr.nextInt(n);
+        for (int attempt = 0; attempt < n; attempt++) {
+            int t = lo + (off + attempt) % n;          // every candidate rejoin platform once, from a seeded start
+            if (t >= rs - 1) continue;
+            Element tg = c.get(t);
+            if (!tg.isPlatform() || tg.isMoving() || tg.w < 2f || tg.y < start.y + 1f) { FORKWHY[0]++; continue; }
+            float dir = tg.s >= start.s ? 1f : -1f;          // the route runs either way round; the branch runs with it (arc positions are unwrapped: no wrap)
+            // the pad sits low enough to read as below the route, and close enough under the rejoin platform for its bounce (about 6.5 m) to reach it
+            float padY = Math.max(tg.y - 5.4f, Math.min(tg.y - 3.8f, start.y - 3.2f - dr.nextFloat() * 0.4f));
+            // the pad bounces up through open air next to the rejoin platform: under the gap before it (at least 1.2 m) or past a platform well below it
+            Element pv = c.get(t - 1);
+            float gapP = dir * (tg.s - pv.s) - tg.halfW() - pv.halfW();
+            float padS;
+            if (tg.y - pv.y > 2.4f) padS = tg.s - dir * (tg.halfW() + 1.9f);
+            else if (gapP >= 1.2f) padS = tg.s - dir * (tg.halfW() + gapP / 2f);
+            else { FORKWHY[12]++; continue; }          // (the player is 0.56 m wide: a 1.2 m gap lets a straight bounce through)
+            float padCeil = ceilAt(padS, start.y, tg.y) - 0.2f;
+            if (tg.y - padCeil > 7.6f) { FORKWHY[12]++; continue; }          // even the highest pad that fits there is out of the bounce's reach
+            // the drop off the take-off needs open air: either the next element along is well above (the branch passes under it) or there is a gap to drop into
+            float room = forkRoom(from, dir), edge = start.s + dir * start.halfW();
+            float s0;
+            if (room == Float.MAX_VALUE) s0 = edge + dir * (1.9f + 1f + dr.nextFloat() * 0.6f);
+            else if (room >= 2.2f) s0 = edge + dir * room / 2f;          // under the gap, wide enough to drop through it without catching the next ledge (reach 0.4 m)
+            else { FORKWHY[0]++; continue; }
+            float span = dir * (padS - s0) - 4.0f;          // the last branch platform leaves a 2 m gap before the pad
+            if (span < 0f) { FORKWHY[1]++; continue; }
+            int steps = Math.max(1, (int) (span / 3.6f) + 1);          // gaps of about 1.6 m: hops that fit under the route
+            List<Element> es = new ArrayList<>();
+            float py = start.y;
+            boolean shaped = true;
+            for (int k = 0; k < steps && shaped; k++) {
+                float x = steps == 1 ? s0 : s0 + dir * span * k / (steps - 1f);
+                // under the route, never touching it: below every route element over this spot by the overlap clearance
+                float ceil = ceilAt(x, start.y, tg.y) - 1.7f;          // headroom to hop under the route: 0.9 m clearance + 1.7 m = the body (1.25 m) and a low hop
+                float goal = tg.y - 6.6f;          // the branch climbs toward where the pad can bounce onto the rejoin platform
+                float want = k == 0 ? start.y - 3.2f : start.y - 3.2f + (goal - start.y + 3.2f) * k / (steps - 1f);
+                float y = Math.min(Math.min(want, ceil - dr.nextFloat() * 0.3f), py + 1.5f);          // a step up the branch stays an easy one (a jump rises about 1.9 m)
+                Element b = plat(Element.Type.STATIC, x, y, 2f, start.zone); b.anchor = a; es.add(b); py = y;
+            }
+            padY = Math.min(padCeil, Math.max(tg.y - 7.4f, py - 1.0f));          // as low as the bounce allows (held, it rises about 8.5 m): an easy hop down or across onto it
+            if (!shaped || padY > py + 1.5f || tg.y - padY > 7.6f) { FORKWHY[1]++; continue; }
+            Element pad = plat(Element.Type.PAD, padS, padY, 2f, tg.zone); pad.anchor = a; es.add(pad);
+            int n0 = c.size(), h0 = c.hazards.size();
+            boolean ok = true;
+            for (Element e : es) { c.add(e); if (!decoyOk(e, a, true)) { ok = false; FORKWHY[2 + decoyWhy]++; break; } }
+            if (ok) {
+                c.indexDecoys();
+                ok = pairOk(from, n0); if (!ok) { FORKWHY[10]++; }
+                for (int k = n0; ok && k < c.size() - 1; k++) { ok = pairOk(k, k + 1); if (!ok) { FORKWHY[11]++; } }
+                if (ok) { ok = pairOkAir(c.size() - 1, t); if (!ok) FORKWHY[12]++; }
+                for (int q = Math.max(0, a - 3); ok && q <= Math.min(rs - 2, t + 2); q++) { ok = Autopilot.plan(Sim.startOn(c, T, q), q, false).ok; if (!ok) { FORKWHY[9]++; } }
+            }
+            if (!ok) { rollbackTo(n0, h0); c.indexDecoys(); continue; }
+            c.forks.add(new int[]{from, n0, es.size(), t});
+            decoys += es.size();
+            return t;
+        }
+        return -1;
+    }
+
+    private boolean lastDip;      // Build 79: the last hop module was a dip
+    /** The highest route platform built so far. */
+    private float routeTop() { float m = -1e9f; for (int i = 0; i < c.size(); i++) { Element e = c.get(i); if (e.anchor < 0 && e.isPlatform()) m = Math.max(m, e.y); } return m; }
+    private boolean forceSpur;      // the left-spur pass: always a short spur
+    private int leftBuilt;      // left spurs built in this slice
+    private boolean spurLeft, spurBuilt;      // Build 79: the side the next dead-end spur branches to (flips with every spur placed); the last decoy built was a spur
+
+    /** Two tries at a decoy off route platform a: a spur goes first to the side whose turn it is, then to the other; a placed spur hands the turn over. */
+    private boolean placeDecoy(Element p, int a, Random dr, boolean forceLong) {
+        boolean side = spurLeft;
+        for (int again = 0; again < 2; again++) {
+            pendingHaz = new ArrayList<>(); spurBuilt = false;
+            spurLeft = again == 0 ? side : !side;
+            List<Element> es = buildDecoy(p, a, dr, forceLong);
+            if (tryDecoy(es, pendingHaz, a)) { decoys += es.size(); if (spurBuilt && spurLeft) leftBuilt++; spurLeft = spurBuilt ? !spurLeft : side; return true; }
+        }
+        spurLeft = side;
+        return false;
+    }
+
+    /** Dead-end spurs (to the left or the right, stepping up and down), crumbling lures, unreachable stepping stones, and trapped ledges guarded by hazards. */
     /** {@code forceLong}: always build a long spur (used by the separate-RNG long-spur pass so the main decoy RNG stays byte-identical). */
     private List<Element> buildDecoy(Element p, int a, Random dr, boolean forceLong) {
         List<Element> l = new ArrayList<>();
@@ -638,7 +907,7 @@ public final class CourseGenerator {
         float inten = intensity(p.y);
         // a longer dead end: four to six steps ending on a wide, plainly safe platform.
         boolean longSpur = kind >= 10 || forceLong;
-        if (longSpur) kind = dr.nextInt(7);
+        if (longSpur || forceSpur) kind = dr.nextInt(7);
         if (kind >= 8 && inten <= 0f) kind = dr.nextInt(8);
         if (kind >= 8) {
             // bait ledge: a wide, tempting platform forward and slightly down, guarded by a trap in the middle or a saw across the approach
@@ -658,12 +927,19 @@ public final class CourseGenerator {
             return l;
         }
         if (kind < 7) {
-            boolean forward = kind < 4;
+            // Build 79 (owner): spurs branch off to the left and to the right in turn (spurLeft flips with every spur built), and each step may go up
+            // or down - up, down, up, up... - just to throw the climber off. Every gap is sized for the step taken upward, so the way back is always a
+            // normal jump too: a dead end only ever costs the walk back.
+            boolean forward = !spurLeft; spurBuilt = true;
             float edge = forward ? p.s + p.w / 2f : p.s - p.w / 2f, y = p.y;
+            boolean leftDown = false;
             int n = longSpur ? 4 + dr.nextInt(3) : 2 + dr.nextInt(2);
             for (int k = 0; k < n; k++) {
-                float dy = forward ? -(longSpur ? 0.15f + dr.nextFloat() * 0.25f : 0.35f + dr.nextFloat() * 0.35f) : (longSpur ? 0.2f + dr.nextFloat() * 0.4f : 0.3f + dr.nextFloat() * 0.8f);
-                float gap = reach(Math.max(dy, 0f)) * (0.40f + 0.2f * dr.nextFloat());
+                boolean up = dr.nextFloat() < (forward ? 0.35f : 0.7f);      // both ways on either side, but a left spur leans up, clear of the lower block the route came from, a right one down, under the block it goes on to
+                float dy = up ? 0.2f + dr.nextFloat() * 0.6f : -(0.3f + dr.nextFloat() * 0.7f);
+                if (!forward && k == 0) leftDown = dr.nextFloat() < 0.5f;
+                if (!forward && k < 2) dy = leftDown ? -(1.0f + dr.nextFloat() * 0.4f) : 1.4f + dr.nextFloat() * 0.3f;   // a left spur branches back over (or under) the route it came up: it climbs or drops steeply first, so it never hangs low over a route platform (no ceiling)
+                float gap = reach(Math.abs(dy)) * (0.40f + 0.2f * dr.nextFloat());
                 float w = k == n - 1 ? (longSpur ? 3f : 1f) : 1f + dr.nextInt(2);
                 float s = forward ? edge + gap + w / 2f : edge - gap - w / 2f; y += dy;
                 Element d = plat(Element.Type.STATIC, s, y, w, p.zone); d.anchor = a;       // a dead end costs only the walk back: no trap at the end
@@ -689,7 +965,9 @@ public final class CourseGenerator {
 
     public int decoyWhy;      // diagnostics: why decoyOk last said no (1 overlap, 2 other layer, 3 ghost layer, 4 stepping stone)
 
-    private boolean decoyOk(Element d, int a) {
+    private boolean decoyOk(Element d, int a) { return decoyOk(d, a, false); }
+    /** {@code fork}: a fork's branch, which rejoins the route anyway, so the stepping-stone rule (no shortcut toward the route) does not apply to it. */
+    private boolean decoyOk(Element d, int a, boolean fork) {
         int rs = c.routeSize();
         for (int i = 0; i < c.size(); i++) {
             Element e = c.get(i);
@@ -697,10 +975,12 @@ public final class CourseGenerator {
             if (Math.abs(d.s - e.s) < c.circumference * 0.5f) {
                 float gap = Math.abs(d.s - e.s) - d.w / 2f - arcHalf(e);
                 if (gap < 1.0f && d.y - 0.6f < vHi(e) - 1.6f && d.y + 1.6f > vLo(e) + 0.8f) { decoyWhy = 1; return false; }   // overlapping / touching
-            } else if (layersClash(c, d, e)) { decoyWhy = 2; return false; }
+                if (e.type == Element.Type.ROPE && gap < 1.2f && d.y > e.y - e.len - 0.5f && d.y < e.y + 2.2f) { decoyWhy = 1; return false; }   // Build 79 (owner): never across a rope or on its top beam
+                if (i < rs && e.isPlatform() && Math.abs(d.s - e.s) < d.w / 2f + e.halfW() + 0.3f && d.y > e.y + 0.5f && d.y < e.y + 3.9f) { decoyWhy = 1; return false; }   // Build 79: never a ceiling over a route platform (a left-hand spur hung 2.6 m over the route and blocked its jump: EndlessTest seed 224)
+            } else if (fork ? forkLayersClash(d, e) : layersClash(c, d, e)) { decoyWhy = 2; return false; }
         }
         for (Element g : ghostElems) if (layersClash(c, d, g)) { decoyWhy = 3; return false; }
-        for (int j = a + 2; j < rs; j++) {                 // never a stepping stone toward later route
+        if (!fork) for (int j = a + 2; j < rs; j++) {                 // never a stepping stone toward later route
             Element e = c.get(j);
             if (!e.isPlatform()) continue;
             float gap = Math.max(0f, Math.abs(c.dsWrap(d.s, e.s)) - d.w / 2f - e.halfW());
@@ -728,8 +1008,12 @@ public final class CourseGenerator {
             c.indexDecoys();
             int rs = c.routeSize();
             for (int r = Math.max(0, a - 7); r <= Math.min(rs - 2, a + 5) && ok; r++) {
-                Autopilot.Result res = Autopilot.plan(Sim.startOn(c, T, r), r, false);
-                if (!res.ok) { ok = false; decoyPlanFail++; }
+                // Build 79: a dead end next to a link may not take away its tolerance - the link keeps the margin every route link is proven with (0.05
+                // for a ledge grab, otherwise more), not merely one move that works (left-hand spurs over the route left links at 0.017: CourseTest)
+                boolean near = false;
+                for (Element d : es) for (int q = r; q <= r + 1 && !near; q++) { Element e = c.get(q); if (Math.abs(c.dsWrap(d.s, e.s)) < 12f && d.y - e.y > -3f && d.y - e.y < 6f) near = true; }
+                Autopilot.Result res = Autopilot.plan(Sim.startOn(c, T, r), r, near);
+                if (!res.ok || (near && res.margin() < 0.05f)) { ok = false; decoyPlanFail++; }
             }
         }
         if (!ok) { while (c.size() > n0) c.elements.remove(c.size() - 1); while (c.hazards.size() > h0) c.hazards.remove(c.hazards.size() - 1); c.indexDecoys(); }
@@ -773,7 +1057,7 @@ public final class CourseGenerator {
     private static float arcHalf(Element e) {
         switch (e.type) {
             case MOVE_H: return e.w / 2f + e.amp;
-            case SWING: return e.w / 2f + e.len * (float) Math.sin(e.amp);
+            case SWING: return e.w / 2f + e.len * (float) StrictMath.sin(e.amp);
             case ROPE: return 0.8f;
             default: return e.w / 2f;
         }
@@ -795,6 +1079,20 @@ public final class CourseGenerator {
         return e.isPlatform() && f.isPlatform() && Math.abs(e.y - f.y) < 9.5f;   // no trampoline shortcuts between layers
     }
 
+    /**
+     * {@link #layersClash} for a fork's branch, which runs below the route and so nearer the revolution beneath: the bodies must keep clear as usual, and
+     * no layer may reach the other: platforms out of jump reach (4 m; a jump rises about 1.9 m) unless the lower one bounces, which keeps the 9.5 m rule.
+     */
+    private boolean forkLayersClash(Element d, Element f) {
+        if (Math.abs(d.s - f.s) < c.circumference * 0.5f) return false;
+        if (Math.abs(c.dsWrap(d.s, f.s)) > arcHalf(d) + arcHalf(f) + 2.5f) return false;
+        if (vLo(d) - 1.5f < vHi(f) && vHi(d) + 1.5f > vLo(f)) return true;
+        if (!d.isPlatform() || !f.isPlatform()) return false;
+        Element lower = d.y < f.y ? d : f;
+        boolean bounces = lower.type == Element.Type.PAD || lower.type == Element.Type.SPRING;
+        return Math.abs(d.y - f.y) < (bounces ? 9.5f : 4f);
+    }
+
     private boolean clearOfOtherLayers(int idx) {
         Element e = c.get(idx);
         for (int i = 0; i < idx - 3; i++) if (layersClash(c, e, c.get(i))) return false;
@@ -810,7 +1108,7 @@ public final class CourseGenerator {
             case CRAB: return h.amp + 0.6f;
             case BEE: return h.amp + 0.6f;
             case SAW_V: return Element.SAW_R;
-            case PENDULUM: return h.len * (float) Math.sin(h.amp) + Element.BALL_R;
+            case PENDULUM: return h.len * (float) StrictMath.sin(h.amp) + Element.BALL_R;
             case CANNON: return h.len * 0.5f + Element.SHOT_R;
             case MORTAR: return Element.MORTAR_R;
             case AIMED: return 0.6f;
@@ -824,7 +1122,7 @@ public final class CourseGenerator {
         switch (h.type) {
             case SAW_H: return h.y + Element.SAW_R;
             case SAW_V: return h.y + h.amp + Element.SAW_R;
-            case PENDULUM: return h.y + h.len * (1f - (float) Math.cos(h.amp)) + Element.BALL_R;
+            case PENDULUM: return h.y + h.len * (1f - (float) StrictMath.cos(h.amp)) + Element.BALL_R;
             case CANNON: return h.y + Element.SHOT_R;
             case MORTAR: return h.y + h.amp + Element.MORTAR_R;
             case AIMED: return h.y + 0.6f;
@@ -868,26 +1166,84 @@ public final class CourseGenerator {
 
     private float windowNeeded(float y) { return T.minTimingWindow - 0.06f * intensity(y); }
 
+    /** Build 79: how many decks either side of its own a creature can reach (skulls and blobs a neighbour, crabs follow up to CRAB_FOLLOW); -1 for anything else. */
+    private static int roamReach(Element h) {
+        return h.type == Element.Type.CRAB ? Sim.CRAB_FOLLOW : h.type == Element.Type.SKULL || h.type == Element.Type.BLOB ? 1 : -1;
+    }
+    /** True if a creature already on the course can roam onto the link from deck a (onto a or a + 1). */
+    private boolean creatureReaches(int a) {
+        for (Element o : c.hazards) { int r = roamReach(o); if (r >= 0 && a >= o.anchor - r - 1 && a <= o.anchor + r) return true; }
+        return false;
+    }
+    /**
+     * Build 79 (owner: skulls, blobs and crabs reach the platforms either side): a creature that roams onto a saw's link cut its timing window from a whole
+     * cycle to 0.36 (SawFairnessTest), so, as the homing bee since Build 71, a horizontal saw is never placed within a roaming creature's reach.
+     */
+    private boolean sawsClearOfCreatures(List<Element> hz) {
+        for (Element n : hz) for (Element o : c.hazards) {
+            if (n == o) continue;
+            Element saw = n.type == Element.Type.SAW_H ? n : o.type == Element.Type.SAW_H ? o : null, mob = saw == n ? o : n;
+            int r = saw == null ? -1 : roamReach(mob);
+            if (r >= 0 && saw.anchor >= mob.anchor - r - 1 && saw.anchor <= mob.anchor + r) return false;
+            if (saw != null && (mob.type == Element.Type.CANNON || mob.type == Element.Type.AIMED) && Math.abs(saw.anchor - mob.anchor) <= 1) return false;   // nor a cannon lane on the deck before, its own or the one it lands on, whichever module placed it (seed 3: a cannon from the next module cut a saw to 0.36)
+        }
+        return true;
+    }
+
     private boolean commit(List<Element> es, float minMargin) { return commit(es, new ArrayList<Element>(), minMargin); }
+
+    public int failConflict;      // diagnostics: modules refused for incompatible demands (EncounterModel)
+    /** The margin each committed link was proven with (route index of its start). */
+    private final ArrayList<Float> linkNeeds = new ArrayList<>();
+    private float linkNeed(int i) { return i < linkNeeds.size() && linkNeeds.get(i) != null ? linkNeeds.get(i) : Math.min(0.05f, T.minLinkMargin); }
+    private void setLinkNeed(int i, float m) { while (linkNeeds.size() <= i) linkNeeds.add(null); linkNeeds.set(i, m); }
 
     /** Adds elements (and their hazards) if every link (prefix last -> e1 -> ... -> eN) is solvable with the required margin and timing window. */
     private boolean commit(List<Element> es, List<Element> hz, float minMargin) {
         int n0 = c.size(), h0 = c.hazards.size();
+        int from = n0 - 1;
+        // Every link a new hazard can touch is proven with it there: a hazard on the platform the previous link lands on touches that link too (a cannon
+        // fires across it; a saw on it sweeps the landing: seed 3 slice 16, a saw from the next module cut a saw link to 0.36), and a creature also the
+        // links into the decks it roams onto (framed seed 5 slice 17: a skull from the next module jumped the pad link before its deck).
+        for (Element h : hz) if (h.anchor >= 0) from = Math.min(from, h.anchor - 1 - Math.max(0, roamReach(h)));
+        if (n0 >= 2 && !es.isEmpty()) from = Math.min(from, n0 - 2);       // and the link onto the platform the module starts from: what comes next can crowd its landing (tower 3: a slider just past it cut a ramp link from 0.25 to 0.017)
+        from = Math.max(0, from);
+        // An earlier link is held against the module only if it held before it: some earlier links are proven from a start a plain re-check does not
+        // reproduce (the landing on a running belt, a skull parked at the far end), and re-checking those unconditionally rejected every module after
+        // them, so generation ran out of modules (framed seed 21 slice 49).
+        boolean[] heldBefore = new boolean[Math.max(0, n0 - 1 - from)];
+        for (int i = from; i < n0 - 1; i++) {
+            boolean cannonOnLanding = false; for (Element h : hz) if (h.type == Element.Type.CANNON && h.anchor == i + 1) cannonOnLanding = true;
+            if (cannonOnLanding) { heldBefore[i - from] = true; continue; }       // as before Build 79: a cannon's lane across a landing is always proven
+            Sim b = Sim.startOn(c, T, i); quietStart(b, i);
+            Autopilot.Result r0 = Autopilot.plan(b, i, true);
+            heldBefore[i - from] = r0.ok && r0.margin() >= linkNeed(i);
+        }
         for (Element e : es) c.add(e);
         for (Element h : hz) c.hazards.add(h);
         boolean ok = true;
         for (int i = n0; i < c.size() && ok; i++) ok = clearOfOtherLayers(i);
         if (!ok) failLayer++;
         for (Element h : hz) { if (!ok) break; if (h.type == Element.Type.CLUB) continue; ok = hazardOk(h, ownerOf(h)); if (!ok) failHaz++; }
-        int from = n0 - 1;
-        for (Element h : hz) if (h.type == Element.Type.CANNON && h.anchor == n0 - 1 && n0 >= 2) from = n0 - 2;          // a cannon fires across the platform the previous link LANDS on: that link must be proven with the cannon there too
+        if (ok && !sawsClearOfCreatures(hz)) { ok = false; failHaz++; }
+        Sim prevStart = null; Autopilot.Result prevRes = null;
         for (int i = from; i < c.size() - 1 && ok; i++) {
+            if (i < n0 - 1 && !heldBefore[i - from]) { prevStart = null; prevRes = null; continue; }
             Sim sim = Sim.startOn(c, T, i); quietStart(sim, i);
+            if (c.get(i).tiltBelt() && prevRes != null && prevRes.factory != null) {
+                // Build 79 (owner): the balance conveyor always runs, so nobody stands still on it: a climber crosses it straight from the landing. Its link is
+                // proven from where and how the proven jump onto it lands (a standing start at its back end is carried off it before anyone could move).
+                Sim land = Autopilot.trialEnd(prevStart, i - 1, prevRes.factory, 10.5f);
+                if (land != null && land.onElem == i) sim = land;
+            }
             Autopilot.Result res = Autopilot.plan(sim, i, true);
+            prevStart = sim; prevRes = res;
             boolean touched = false;
             for (Element h : hz) if (h.anchor == i || h.anchor + 1 == i || h.anchor == i + 1) touched = true;
-            if (!res.ok || res.margin() < Math.max(minMargin, 0f)) { ok = false; failPlan++; if (trace.length() < 600) trace.append(String.format("[link %d %s->%s ok=%b %d/%d need %.3f]", i, c.get(i).type, c.get(i + 1).type, res.ok, res.successes, res.trials, minMargin)); }
-            else if (touched && res.window < windowNeeded(c.get(i).y)) { ok = false; failWindow++; }
+            float need = i >= n0 - 1 ? minMargin : linkNeed(i);       // a link proven again keeps the margin it was proven with (a ledge grab 0.05), not this module's
+            boolean sawLink = false; for (Element h : c.hazards) if (h.type == Element.Type.SAW_H && h.anchor == i) sawLink = true;
+            if (!res.ok || res.margin() < Math.max(need, 0f)) { ok = false; failPlan++; if (trace.length() < 600) trace.append(String.format("[link %d %s->%s ok=%b %d/%d need %.3f]", i, c.get(i).type, c.get(i + 1).type, res.ok, res.successes, res.trials, minMargin)); }
+            else if ((touched || sawLink) && res.window < (sawLink ? Math.max(0.5f, windowNeeded(c.get(i).y)) : windowNeeded(c.get(i).y))) { ok = false; failWindow++; }      // a saw leaves at least half its cycle to time the jump (SawFairnessTest), whatever else shares the link
             else if (Autopilot.hasMidHazard(c, i)) {       // a person never stands on the exact spot the planner starts from: the move must work from nearby too
                 for (float dx : new float[]{-0.5f, 0.4f}) {
                     Sim b = Sim.startOn(c, T, i); b.s = c.wrap(b.s + dx); quietStart(b, i);
@@ -895,8 +1251,12 @@ public final class CourseGenerator {
                 }
             }
         }
+        // Owner directive 2026-10-24 (sections 10-14): no link may ask for incompatible things at once: several creatures chasing the climber where the
+        // jump also has to wait for a cycle from a cramped take-off. Such a module is not dropped from the game; this arrangement of it is refused and the
+        // generator tries another (different spacing, placement or module), so the mechanics stay and meet elsewhere.
+        for (int i = Math.max(0, from); ok && i < c.size() - 1; i++) if (EncounterModel.link(c, T, i).conflict) { ok = false; failConflict++; }
         if (!ok) { while (c.size() > n0) c.elements.remove(c.size() - 1); while (c.hazards.size() > h0) c.hazards.remove(c.hazards.size() - 1); }
-        else if (!hz.isEmpty()) { hazardsPlaced += hz.size(); }
+        else { for (int i = Math.max(0, n0 - 1); i < c.size() - 1; i++) setLinkNeed(i, minMargin); if (!hz.isEmpty()) hazardsPlaced += hz.size(); }
         hazardTried += hz.isEmpty() ? 0 : 1;
         return ok;
     }
@@ -907,11 +1267,25 @@ public final class CourseGenerator {
      * (FramedGenerationTest, seed 21). A climber arrives at some moment and can wait for the gap, so the proof starts at the first quiet moment instead.
      * Untouched when time 0 is already safe, or when the start platform itself moves.
      */
-    private void quietStart(Sim sim, int i) {
+    private void quietStart(Sim sim, int i) { quietStart(c, sim, i); }
+    private static void quietStart(Course c, Sim sim, int i) {
         if (sim.mode != Sim.Mode.GROUND || c.get(i).isMoving() || c.get(i).crumbles()) return;
         float t0 = sim.time;
         for (int k = 0; k < 60 && !quiet(sim); k++) { sim.time = t0 + 0.15f * (k + 1); sim.syncElements(); }
         if (!quiet(sim)) { sim.time = t0; sim.syncElements(); }
+    }
+    /**
+     * The start a route link out of element i is proven from (commit): a standing start at the first quiet moment, and on the always-running balance
+     * conveyor the landing the proven jump onto it makes. Tests that measure a link's tolerance measure it from here, as the generator does.
+     */
+    public static Sim provenStart(Course c, Tuning t, int i) {
+        Sim sim = Sim.startOn(c, t, i); quietStart(c, sim, i);
+        if (i > 0 && c.get(i).tiltBelt()) {
+            Sim prev = Sim.startOn(c, t, i - 1); quietStart(c, prev, i - 1);
+            Autopilot.Result pr = Autopilot.plan(prev, i - 1, true);
+            if (pr.factory != null) { Sim land = Autopilot.trialEnd(prev, i - 1, pr.factory, 10.5f); if (land != null && land.onElem == i) sim = land; }
+        }
+        return sim;
     }
     private static boolean quiet(Sim sim) {
         Sim d = sim.copy(); InputState in = new InputState();
@@ -949,6 +1323,7 @@ public final class CourseGenerator {
             if (lagging && !vert) w[k.ordinal()] *= 0.12f;
             if (rushing && vert) w[k.ordinal()] *= 0.2f;
         }
+        // (PUNISHER no longer multiplies these weights: it reads the curve PUNISHER_SHIFT metres higher; owner directive 2026-10-24)
         if (prev != null) { w[prev.ordinal()] *= 0.35f; if (prev == prev2) w[prev.ordinal()] = 0f; }
         float sum = 0; for (float f : w) sum += f;
         float x = rnd.nextFloat() * sum;
@@ -973,6 +1348,7 @@ public final class CourseGenerator {
             else if (k == Kind.DROPS) es = buildDrops(last, Math.max(dd, 0.3f), zone, attempt, hz);
             else es = build(k, last, dd, zone, attempt);
             if (es == null) continue;
+            if (T.hard > 0) for (Element h : hz) if (h.type == Element.Type.CANNON || h.type == Element.Type.AIMED || h.type == Element.Type.MORTAR || h.type == Element.Type.BEE) h.period /= T.react();   // Build 79 PUNISHER / NEVER GONNA HAPPEN: they come round faster
             float margin = k == Kind.GRAB ? Math.min(0.05f, T.minLinkMargin) : T.minLinkMargin;
             boolean ok = commit(es, hz, margin);
             if (k == Kind.WET) { wetTried++; if (ok) wetOk++; }
@@ -1034,7 +1410,7 @@ public final class CourseGenerator {
      */
     private List<Element> buildCreature(Element last, float d, int z, int attempt, List<Element> hzOut) {
         float uR = last.s + last.w / 2f;
-        int roll = z >= 2 ? (rnd.nextBoolean() ? 0 : 1 + rnd.nextInt(2)) : 0;          // 0 skull (half), 1 blob on a platform, 2 blob on a tipping bridge
+        int roll = rnd.nextFloat() < 0.3f + 0.7f * Math.min(1f, level(last.y)) ? (rnd.nextBoolean() ? 0 : 1 + rnd.nextInt(2)) : 0;      // (blobs from Level 1 on, more often higher up; were world 3 on)          // 0 skull (half), 1 blob on a platform, 2 blob on a tipping bridge
         List<Element> es = new ArrayList<>();
         if (roll == 2) {
             float w = 7f + rnd.nextInt(2), dyIn = r(-0.4f, 0.3f);
@@ -1050,7 +1426,7 @@ public final class CourseGenerator {
         float dy = r(0f, 0.6f), gapIn = reach(dy) * lerp(0.5f, 0.85f, d) * (1f - 0.03f * attempt);
         float w = roll == 0 ? 8f + rnd.nextInt(2) : 7f + rnd.nextInt(2);
         Element p = plat(Element.Type.STATIC, uR + gapIn + w / 2f, last.y + dy, w, z);
-        if (roll == 0 && rnd.nextBoolean()) p.skin = 1;          // a fixed wooden bridge (owner: long platforms and bridges that do not move)
+        if (roll == 0 && rnd.nextBoolean()) { p.skin = 1; if (rnd.nextFloat() < 0.35f) holes(p); }          // a fixed wooden bridge (owner: long platforms and bridges that do not move); Build 79: some drop planks
         es.add(p);
         Element h = hz(roll == 0 ? Element.Type.SKULL : Element.Type.BLOB, roll == 0 ? p.s : p.s + (w / 2f - Element.BLOB_END), p.y, w, z);
         h.anchor = c.size(); h.phase = r(0f, 6.28f);
@@ -1059,6 +1435,20 @@ public final class CourseGenerator {
         float we = r(3.0f, 3.6f);          // a clear landing past the creature's deck: a breather, and the next module does not have to prove its jump with the creature at its back
         es.add(plat(Element.Type.STATIC, p.s + w / 2f + r(1.0f, 1.5f) * (1f - 0.03f * attempt) + we / 2f, p.y + r(-0.1f, 0.4f), we, z));
         return es;
+    }
+
+    /**
+     * Build 79 (owner: "some of these bridges should have sections of planks fall out of them when you land to leave holes to jump over"): marks one or two plank
+     * sections of a fixed wooden bridge to drop out (Element.holed), never the first two (you land there) or the last (you take off there), and never two side by side.
+     */
+    private void holes(Element br) {
+        int n = (int) (br.w / Element.HOLE_SEC), mask = 0;
+        if (n < 4) return;
+        int k = 2 + rnd.nextInt(Math.max(1, n - 3));
+        if (k > n - 2) k = n - 2;
+        mask |= 1 << k;
+        if (n >= 6 && rnd.nextBoolean()) { int k2 = k + 2 <= n - 2 ? k + 2 : k - 2; if (k2 >= 2) mask |= 1 << k2; }
+        br.color = mask;
     }
 
     /** Spike drops in a row never hang lower than this above the walkway when raised (owner: "dont make any too low"): head room with a margin. */
@@ -1085,6 +1475,20 @@ public final class CourseGenerator {
             h.amp = r(DROP_MIN_TOP, DROP_MAX_TOP); h.period = r(2.7f, 4.3f) - 0.3f * inten; h.phase = r(0f, 6.28f);
             h.anchor = base0 + k;
             hzOut.add(h);
+            if (k > 0 && rnd.nextFloat() < 0.2f + 0.3f * inten + 0.3f * T.hard) {             // Build 79 (owner: waiting out a drop is too easy): sometimes a crab on the deck or a bee over it as well
+                if (rnd.nextBoolean()) {                                    // crabs: never fewer than two on a deck (owner), one more per difficulty level
+                    int nc = 2 + T.hard; float span = w - 1.6f, step = span / (nc - 1);
+                    for (int q = 0; q < nc; q++) {
+                        Element m = hz(Element.Type.CRAB, p.s - span / 2f + q * step, p.y, 0f, z);
+                        m.amp = Math.max(0.3f, Math.min(0.9f, step * 0.5f - 0.3f)); m.period = r(3.0f, 4.0f) - 0.4f * inten; m.phase = r(0f, 6.28f); m.anchor = base0 + k;
+                        hzOut.add(m);
+                    }
+                } else {
+                    Element m = hz(Element.Type.BEE, p.s, p.y + 2.2f, 0f, z); m.amp = 0.6f; m.len = 0.8f; m.period = r(7.0f, 9.5f) - 1.5f * inten; m.dir = rnd.nextBoolean() ? 1 : -1;
+                    m.phase = r(0f, 6.28f); m.anchor = base0 + k;
+                    hzOut.add(m);
+                }
+            }
             cur = p;
         }
         // a clear landing after the chain: a breather, and the next module starts from safe footing instead of under a drop (proving the jump
@@ -1108,7 +1512,9 @@ public final class CourseGenerator {
             boolean cannonOk = cur.w >= 3f && cur.type == Element.Type.STATIC;
             int roll = wantCreature && j == 0 ? 3 : rnd.nextInt(cannonOk ? 5 : 4);
             if ((roll == 1 && prevRoll == 3) || (roll == 3 && prevRoll == 1)) roll = 2;      // Build 71: the bee now homes in and bumps you, so it never sits next to a saw you must time (it cut the saw's window to 0.2 s; SawFairnessTest)
+            if ((roll == 1 && prevRoll == 4) || (roll == 4 && prevRoll == 1)) roll = 2;      // Build 79: nor a cannon lane right before or after it (a cannon across the landing cut a saw's window from its whole cycle to 0.36; SawFairnessTest, seed 3)
             prevRoll = roll;
+            if (roll == 1 && creatureReaches(j == 0 ? c.size() - 1 : base + j - 1)) roll = 2;      // Build 79: nor next to a skull, blob or crab that can roam onto its decks (a skull there cut the window to 0.36; SawFairnessTest)
             if (roll == 1) dy = Math.min(dy, 0.1f);      // a saw never guards an uphill jump: the blade would sit higher than the take-off
             float g = Math.min(3.05f, Math.max(2.3f, reach(Math.max(0f, dy)) * lerp(0.68f, 0.90f, d) * r(0.95f, 1f) * (1f - 0.03f * attempt)));
             if (roll == 1) g = Math.min(g, 2.6f);      // a saw hangs in the gap: keep the gap well short of a full-length jump so there is room to time the arc over the blade
@@ -1135,13 +1541,18 @@ public final class CourseGenerator {
                 float muzzle = cur.s - cur.w / 2f + 0.7f;
                 h = hz(Element.Type.CANNON, muzzle, cur.y + 2.35f, 0f, z);
                 h.len = (uR - muzzle) + g + 1.2f; h.dir = 1; h.period = r(3.0f, 4.0f) - 0.5f * inten;
-                if (z >= 3 && rnd.nextFloat() < 0.6f) {          // late game (the night world on): an aimed cannon instead of the side cannon: it turns to the player, locks, flashes, fires along the locked line
+                if (rnd.nextFloat() < 0.15f + 0.5f * Math.min(1f, level(cur.y))) {          // owner directive 2026-10-24: aimed cannons anywhere, more often higher up (were the night world on)          // late game (the night world on): an aimed cannon instead of the side cannon: it turns to the player, locks, flashes, fires along the locked line
                     h = hz(Element.Type.AIMED, muzzle, cur.y + 2.0f, 0f, z);
                     h.period = r(4.2f, 5.2f) - 0.4f * inten;
                 }
             }
             h.phase = r(0f, 6.28f); h.anchor = anchor;
             hzOut.add(h);
+            if (roll == 3 && rnd.nextFloat() < 0.3f + 0.4f * inten + 0.3f * T.hard) {        // Build 79 (owner): sometimes a second bee at once, from the other side (never the same side)
+                Element b2 = hz(Element.Type.BEE, mid, top + 1.3f, 0f, z);
+                b2.amp = h.amp; b2.len = h.len; b2.period = h.period; b2.dir = -1; b2.phase = h.phase + r(0.15f, 0.45f); b2.anchor = anchor;
+                hzOut.add(b2);
+            }
             cur = v;
         }
         return es;
@@ -1153,7 +1564,9 @@ public final class CourseGenerator {
         float uR = last.s + last.w / 2f, dy = r(0f, 0.6f);
         float gapIn = reach(dy) * lerp(0.5f, 0.85f, d) * (1f - 0.03f * attempt);
         int roll = wantCreature ? 4 : rnd.nextInt(5);
-        float w = roll == 4 ? 9f : 8f;
+        if (roll == 1 && creatureReaches(c.size())) roll = 2;      // Build 79: no floor saw where a skull, blob or crab can roam onto it (see sawsClearOfCreatures)
+        int crabs = roll == 4 ? 2 + (rnd.nextFloat() < inten * 0.7f ? 1 : 0) + (rnd.nextFloat() < late(last.y) * 0.6f ? 1 : 0) + T.hard : 0;      // (PUNISHER one more, NEVER GONNA HAPPEN two)      // Build 79 (owner): never fewer than two crabs, more higher up
+        float w = roll == 4 ? 9f + 2f * (crabs - 2) : 8f;
         Element p = plat(Element.Type.STATIC, uR + gapIn + w / 2f, last.y + dy, w, z);
         // bug #14: the spike-follow fix (Sim.carryS/carryY + the renderer) rides a spike with its platform whenever that platform moves.
         // Generating NEW sliding spike platforms here is deferred: a moving spike platform grows the local climb and tips the streaming-vs-whole
@@ -1172,14 +1585,19 @@ public final class CourseGenerator {
         } else if (roll == 3) {         // a spiked stone slab on a chain that slams down on the middle of the platform: slip under it while it is raised
             h = hz(Element.Type.SPIKE_DROP, p.s, p.y, 1.8f, z);
             h.amp = 3.3f; h.period = r(3.4f, 4.4f) - 0.4f * inten;
-        } else {                        // a crab patrols the middle and shoves you around; a spiked club floats on the platform before it, if you want to clear it
-            h = hz(Element.Type.CRAB, p.s, p.y, 0f, z);
-            h.amp = 1.4f; h.period = r(3.0f, 4.2f) - 0.4f * inten;
+        } else {                        // crabs patrol the deck and shove you around; a spiked club floats on the platform before it, if you want to clear them
             if (last.w >= 3f && last.isPlatform() && rnd.nextInt(3) > 0) {
                 Element club = hz(Element.Type.CLUB, last.s, last.y + 1.0f, 0f, z); club.anchor = c.size() - 1; club.phase = r(0f, 6.28f);
                 hzOut.add(club);
                 if (!wantCreature) clubBoost = 3;          // three more crab or bee modules follow, so the 30 seconds are worth having
             }
+            float span = w - 3f, step = span / (crabs - 1), amp = Math.max(0.5f, Math.min(1.4f, step * 0.5f - 0.35f));
+            for (int k = 0; k < crabs; k++) {           // Build 79: each on its own stretch of the deck, out of step with the others
+                Element cr = hz(Element.Type.CRAB, p.s - span / 2f + k * step, p.y, 0f, z);
+                cr.amp = amp; cr.period = r(3.0f, 4.2f) - 0.4f * inten; cr.phase = r(0f, 6.28f); cr.anchor = c.size();
+                hzOut.add(cr);
+            }
+            return es;
         }
         h.phase = r(0f, 6.28f); h.anchor = c.size();      // the platform being added (first appended element)
         hzOut.add(h);
@@ -1194,11 +1612,34 @@ public final class CourseGenerator {
         Element.Type S = Element.Type.STATIC;
         switch (k) {
             case HOP: {
+                if (rnd.nextFloat() < 0.2f && !lastDip && y0 >= routeTop() - 0.5f && y0 > c.get(0).y + 3f) {          // (one dip at a time, and only from the route's high point: never more than two steps below it)          // Build 79 (owner): now and then the route steps down one or two blocks before it climbs on, just to throw you off
+                    int n = 1 + rnd.nextInt(2); float s = eR, y = y0;
+                    for (int i = 0; i < n; i++) {
+                        float dy = -r(0.4f, 1.1f), w = 2 + rnd.nextInt(2);
+                        s += reach(0f) * lerp(0.45f, 0.85f, d) * r(0.9f, 1.05f) + w / 2; y += dy; l.add(plat(S, s, y, w, z)); s += w / 2;
+                    }
+                    lastDip = true;
+                    break;
+                }
+                lastDip = false;
                 float dy = tier(last.y) == 0 ? r(0f, 0.8f) : r(0f, 1.4f);
                 float frac = lerp(0.45f, 0.92f, d) * r(0.9f, 1.1f);
+                if (y0 - wideHopY > (T.hard > 0 ? 18f : 36f)) { frac = Math.max(frac, r(0.66f, 0.74f)); wideHopY = y0; }          // now and then a wide hop (about 2.5 m): the open air a fork drops through (owner directive 2026-10-24, sections 15-16)
                 float w = 2 + rnd.nextInt(3);
                 if (tier(last.y) == 3 && rnd.nextBoolean()) w = 1 + rnd.nextInt(2);
                 l.add(plat(S, eR + reach(dy) * frac + w / 2, y0 + dy, w, z));
+                break;
+            }
+            case FORK: {          // entry, risers over the branch's room, rejoin (see Kind.FORK); every gap and rise is an ordinary hop
+                float dy = r(0f, 0.4f), w = 4f;
+                Element E = plat(S, eR + reach(dy) * r(0.4f, 0.55f) + w / 2f, y0 + dy, w, z); l.add(E);
+                float s = E.s + w / 2f, ye = E.y; int n = forkRisers;
+                for (int i = 0; i < n; i++) {
+                    float gap = i == 0 ? r(2.5f, 2.8f) : r(1.5f, 1.8f), rw = 2.5f;
+                    s += gap + rw / 2f; l.add(plat(S, s, ye + 0.4f + 1.8f * i / Math.max(1, n - 1), rw, z)); s += rw / 2f;
+                }
+                float jw = 4f; s += r(2.5f, 2.8f) + jw / 2f;
+                l.add(plat(S, s, ye + 2.8f, jw, z));
                 break;
             }
             case STAIRS: {
@@ -1291,7 +1732,7 @@ public final class CourseGenerator {
                 break;
             }
             case SWING: {
-                float len = 5f, th = 0.5f, ext = len * (float) Math.sin(th), wm = 2f;
+                float len = 5f, th = 0.5f, ext = len * (float) StrictMath.sin(th), wm = 2f;
                 float gapIn = lerp(1.0f, 1.8f, d), gapOut = lerp(1.0f, 1.8f, d);
                 Element sw = plat(Element.Type.SWING, eR + gapIn + ext + wm / 2, y0 - 0.35f, wm, z);
                 sw.len = len; sw.amp = th; sw.period = r(3.6f, 4.4f); sw.phase = r(0f, 6.28f);
@@ -1301,7 +1742,7 @@ public final class CourseGenerator {
             }
             case SPRING: {
                 float ang = r(0.32f, 0.62f) * (1f - 0.04f * attempt);
-                float v = T.padBounce, vy0 = v * (float) Math.cos(ang), vx0 = v * (float) Math.sin(ang);
+                float v = T.padBounce, vy0 = v * (float) StrictMath.cos(ang), vx0 = v * (float) StrictMath.sin(ang);
                 float gap = lerp(1.0f, 1.8f, d) * r(0.9f, 1.1f);
                 float sS = eR + gap + 1f;
                 float dy = r(-0.8f, 2.8f);
@@ -1318,6 +1759,7 @@ public final class CourseGenerator {
                 float w = 7f + rnd.nextInt(2), dyIn = r(-0.4f, 0.3f);
                 float gapIn = reach(dyIn) * lerp(0.5f, 0.85f, d) * r(0.92f, 1f) * (1f - 0.03f * attempt);
                 Element sw = plat(Element.Type.SEESAW, eR + gapIn + w / 2f, y0 + dyIn, w, z); sw.skin = 1;
+                if (beltSawNow) { sw.skin = 4; sw.phase = lerp(2.2f, 3.0f, d) * r(0.95f, 1.05f); }      // Build 77 (owner): the balance conveyor - its belt runs toward the low end, up to this fast
                 l.add(sw);
                 float gapOut = lerp(0.5f, 1.3f, d) * r(0.9f, 1.1f) * (1f - 0.05f * attempt);
                 l.add(plat(S, sw.s + w / 2f + gapOut + 1.5f, sw.y + r(-0.5f, 0.6f), 3f, z));
@@ -1328,7 +1770,7 @@ public final class CourseGenerator {
                 float w = 6f + rnd.nextInt(3), dy = r(0f, 0.9f);
                 float gapIn = reach(dy) * lerp(0.45f, 0.85f, d) * r(0.9f, 1f) * (1f - 0.03f * attempt);
                 Element br = plat(S, eR + gapIn + w / 2f, y0 + dy, w, z); br.skin = 1;
-                if (w >= 7f && d > 0.12f && rnd.nextInt(10) < 4) { br.skin = 4; br.phase = lerp(1.0f, 2.6f, d) * r(0.95f, 1.05f); }      // Build 72 (owner): some long bridges are wooden plank conveyor belts running to the left
+                if (w >= 7f && d > 0.12f && rnd.nextInt(10) < 4) { br.skin = 4; br.phase = lerp(1.6f, 3.4f, d) * r(0.95f, 1.05f); }      // Build 72 (owner): some long bridges are wooden plank conveyor belts running to the left; Build 76 (owner: "I can just walk right over"): 1.0-2.6 -> 1.6-3.4 m/s
                 l.add(br);
                 if (z >= 1 && rnd.nextInt(5) < 3) {
                     float L = r(4.5f, 6f);
@@ -1337,6 +1779,7 @@ public final class CourseGenerator {
                     l.add(rope);
                     l.add(plat(S, rope.s + lerp(1.0f, 2.2f, d) + 1.5f, rope.y - T.handHeight + 0.4f, 3f, z));
                 } else {
+                    if (br.skin == 1 && d > 0.1f && rnd.nextFloat() < 0.45f) holes(br);          // Build 79 (owner): some bridges drop plank sections when you land
                     l.add(plat(S, br.s + w / 2f + reach(0.6f) * lerp(0.4f, 0.8f, d) * (1f - 0.04f * attempt) + 1.5f, br.y + 0.6f, 3f, z));
                 }
                 break;

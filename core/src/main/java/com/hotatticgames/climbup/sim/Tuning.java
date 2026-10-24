@@ -21,6 +21,7 @@ public class Tuning {
     public float fallRespawnDepth = 12f;
     public float hitKnockSide = 6.9f, hitKnockUp = 6.9f;   // a hazard hit (saw, spikes, pendulum, cannon ball) throws you off: sideways and upward speed (owner: 15 % more than the earlier 6 / 6, nothing kills you)
     public float seesawMaxTilt = 0.55f, seesawRate = 1.0f, seesawRelax = 1.0f, seesawSlide = 5f, seesawUphill = 0.45f;   // seesaw bridge: slope (height per metre), tip / relax speed, downhill slide, uphill slow-down
+    public float beltSeesawDead = 0.5f;      // Build 77 (owner): the balance conveyor stays level while you are within this many metres of its pivot
     public float courseHeight = 520f;        // finite test towers only; the shipped game is endless
     public float zoneHeight = 400f; public int zoneCount = 5; public float gemSpacing = 30f;   // red-gem checkpoints about every gemSpacing metres (+-15%);   // each world (meadow, frost, dusk, night, space) lasts zoneHeight metres, then they repeat
     public float rampHeight = 520f;          // height over which base difficulty (gap sizes, mover amplitude) ramps up in the endless climb
@@ -49,6 +50,19 @@ public class Tuning {
     }
 
     public float circumference() { return (float) (2 * Math.PI * radius); }
+
+    /** Build 79 (owner): the climb's difficulty - 0 NORMAL, 1 PUNISHER, 2 NEVER GONNA HAPPEN - set only on the copy such a climb runs with (never in tuning.json).
+     *  Creatures and cannons react REACT[hard] times faster and the generator puts {@code hard} more creatures in each group and more groups in the way. */
+    public int hard;
+    public static final float[] REACT = {1f, 1.25f, 1.5f};
+    public static final String[] HARD_NAMES = {"NORMAL", "PUNISHER", "NEVER GONNA HAPPEN"};
+    /** Owner 2026-10-24: new climbs offer NORMAL and PUNISHER only until the difficulty design infrastructure is in place. NEVER GONNA HAPPEN keeps its code
+     *  and its times board, and a climb already begun on it carries on with it; it is just not offered for new climbs. */
+    public static final int PLAYABLE_MODES = 2;
+    /** How much faster creatures and cannons react on this climb (1 on NORMAL). */
+    public float react() { return REACT[Math.max(0, Math.min(REACT.length - 1, hard))]; }
+    /** A copy of this tuning for a climb at difficulty {@code level}. */
+    public Tuning hardCopy(int level) { Tuning c = parse(new Json().toJson(this)); c.hard = level; return c; }
 
     public static Tuning parse(String json) {
         Json j = new Json();

@@ -15,6 +15,7 @@ import com.badlogic.gdx.graphics.g3d.utils.ModelBuilder;
 import com.badlogic.gdx.graphics.g3d.environment.DirectionalLight;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.math.MathUtils;
+import com.badlogic.gdx.math.Matrix4;
 import com.badlogic.gdx.utils.Array;
 import com.badlogic.gdx.utils.Disposable;
 import com.hotatticgames.climbup.sim.Course;
@@ -31,10 +32,11 @@ import com.hotatticgames.climbup.sim.Tuning;
 public final class WorldRenderer implements Disposable {
     private static final class Part {
         ModelInstance inst; float du, dy, dz, sx = 1, sy = 1, sz = 1, yaw, roll; Color color; boolean fall; boolean tinted = true; boolean fixed; ColorAttribute tintAttr;
-        boolean belt; float beltSpan, beltSlope;   // Build 72: a conveyor slat that rides the belt, wrapping round within beltSpan (and along the ramp's slope)
+        boolean belt; float beltSpan, beltSlope, beltInset;   // Build 72: a conveyor slat that rides the belt, wrapping round within beltSpan (and along the ramp's slope); Build 76: cut off beltInset short of each end (the rollers)
+        int hole = -1;  // Build 79: the plank section of a holed bridge this plank belongs to (it drops out with it), else -1
         float localZ;   // optional pre-rotation translate along the model's own Z (model units, applied before scale): used to recentre an off-origin mesh (the ramp) so it can sit at the element centre without a big arc offset
     }
-    private static final class Vis { Part[] parts; Element e; boolean built; }
+    private static final class Vis { Part[] parts; Element e; boolean built; float beltU, beltT; }      // beltU: how far a balance conveyor's belt has run (its speed follows the tilt)
 
     private final Tuning T;
     private final Course course;
@@ -56,6 +58,9 @@ public final class WorldRenderer implements Disposable {
     private boolean whooshPending;
     /** True once after a spaceship has flown past the player (the play screen plays the sound). */
     public boolean takeWhoosh() { boolean w = whooshPending; whooshPending = false; return w; }
+    private boolean scanPending;
+    /** True once when the scanning ship starts to hover (Build 78): the play screen plays its hum and scan sweep. */
+    public boolean takeScan() { boolean w = scanPending; scanPending = false; return w; }
     private final java.util.ArrayList<Vis> vis = new java.util.ArrayList<>();
     private int[] builtIdx = new int[256]; private int builtN, builtScan;       // every element whose model parts exist right now, so they can be freed wherever the player has moved away from them (up or down)
     private int pruneCursor;
@@ -71,7 +76,7 @@ public final class WorldRenderer implements Disposable {
 
     private float camY, camShake, shakeT, camPull;
     private double originY, originS;          // the world is expressed relative to a floating origin; absolute height = originY + local y (see Tower)
-    private final Color skyTop = new Color(), skyBot = new Color(), tint = new Color(), amb = new Color();
+    private final Color skyTop = new Color(), skyBot = new Color(), skyMid = new Color(), tint = new Color(), amb = new Color();
     private float renderS, renderY;
     public float lastCamS;
     public int cloudsBroken;          // PlayScreen reads and clears this to play the poof sound
@@ -176,7 +181,7 @@ public final class WorldRenderer implements Disposable {
         boolean snow = e.zone == 1 || e.zone == 3;
         String base = snow ? "block-snow" : "block-grass";
         switch (e.type) {
-            case SEESAW: bridgeParts(ps, e.w, true, false); break;
+            case SEESAW: bridgeParts(ps, e.w, true, e.tiltBelt()); break;
             case RAMP: {
                 float sc = e.len;
                 // The ramp wedge's walking surface runs model-Z 2.0 (high, top y=1.39) -> 4.1 (low); its centre is model-Z ~3.1.
@@ -185,6 +190,8 @@ public final class WorldRenderer implements Disposable {
                 // sy=0.84 matches the wedge's steeper native slope to the sim's RAMP_SLOPE (0.576); sx shapes the ~1.35 m depth centred on the lane; dy drops the surface mid-point onto e.y.
                 // Build 72 (owner): the spinning ramp is as deep as it is long, so the lane always crosses its full length whichever way it faces
                 Part rp = part(models.space("ramp"), 0f, -0.571f * sc, 0f, (e.spins() ? 1.17f : 0.72f) * sc, 0.84f * sc, sc); rp.yaw = -90f; rp.localZ = -3.1f; rp.tinted = false; ps.add(rp);
+                // Build 79 (owner: the middle vanished when the spinning ramp showed its back): the deck is a single-sided plate, so draw both sides of it
+                if (e.spins()) for (com.badlogic.gdx.graphics.g3d.Material m : rp.inst.materials) m.set(com.badlogic.gdx.graphics.g3d.attributes.IntAttribute.createCullFace(GL20.GL_NONE));
                 if (e.spins()) {            // it turns on a round turntable: a dark plinth with a glowing rim, which stays still
                     Color glow = new Color(0.30f, 0.85f, 1f, 1f), pad = new Color(0.22f, 0.24f, 0.32f, 1f);
                     float rad = e.halfW() * 2.3f, plinth = -e.amp * e.halfW() - 0.12f;
@@ -205,7 +212,7 @@ public final class WorldRenderer implements Disposable {
                 break;
             }
             case STATIC: case GOAL: case CRUMBLE: {
-                if ((e.skin == 1 || e.skin == 4) && e.type == Element.Type.STATIC) { bridgeParts(ps, e.w, false, e.skin == 4); break; }
+                if ((e.skin == 1 || e.skin == 4) && e.type == Element.Type.STATIC) { int p0 = ps.size; bridgeParts(ps, e.w, false, e.skin == 4); if (e.holed()) markHoles(ps, p0, e); break; }
                 int w = Math.max(1, Math.round(e.w));
                 boolean thick = w >= 5 || e.type == Element.Type.GOAL;
                 String name = thick ? base : base + "-low";
@@ -238,10 +245,14 @@ public final class WorldRenderer implements Disposable {
                     int hh = hash(idx, 41); boolean big = w >= 5;
                     String rock = big ? new String[]{"rock_large_1", "rock_large_2", "rock_large_3"}[hh % 3] : new String[]{"rock_1", "rock_2", "rock_3", "rock_4"}[hh % 4];
                     float sc = Math.max(0.3f, Math.min(w, 6f) * 0.85f / (big ? 7.6f : 3.0f)), top = big ? 0.3f : 0.4f;
-                    Part rk = part(models.space(rock), ((hh >> 5) % 5 - 2) * 0.08f * w, -h - 0.25f - top * sc, ((hh >> 9) % 3 - 1) * 0.15f, sc, sc, sc);
-                    rk.roll = 180f; rk.yaw = (hh >> 3) % 360; ps.add(rk);
+                    sc = fitRock(idx, e, rock, sc, h + 0.25f, w);          // Build 79 (owner): never hangs down over anything below
+                    if (sc > 0f) {
+                        Part rk = part(models.space(rock), ((hh >> 5) % 5 - 2) * 0.08f * w, -h - 0.25f - top * sc, ((hh >> 9) % 3 - 1) * 0.15f, sc, sc, sc);
+                        rk.roll = 180f; rk.yaw = (hh >> 3) % 360; ps.add(rk);
+                    }
                 }
                 if (orbit || deck) { /* decorated by spacePlatform / bare so the tower fits */ }
+                else if (insideCastle(e)) { /* Build 79 (owner): nothing inside castles */ }
                 else if (thick && e.type != Element.Type.GOAL && quality > 0) decorate(ps, e, idx, w, snow);
                 else if (!thick && e.type == Element.Type.STATIC && quality > 0 && hash(idx, 7) % 3 == 0) decorate(ps, e, idx, w, snow);
                 // checkpoints are marked by a hovering red gem (drawn every frame in drawGem), not baked into the platform
@@ -322,13 +333,25 @@ public final class WorldRenderer implements Disposable {
     }
 
     /** Wooden bridge: plank deck on two beams, back rail with posts; the seesaw also gets a stone fulcrum and red end caps. */
+    /** Build 79: the planks over a holed bridge's drop-out sections: a paler, cracked-looking wood so you can read them before you land, tagged to fall with their section. */
+    private void markHoles(Array<Part> ps, int from, Element e) {
+        int n = e.holeSections(); float sec = e.w / n;
+        Color loose = new Color(0.80f, 0.66f, 0.44f, 1f);
+        for (int i = from; i < ps.size; i++) {
+            Part p = ps.get(i);
+            if (p.sx > 0.6f || p.dy != -0.10f) continue;           // planks only (not the beams, posts and rails)
+            int k = (int) Math.floor((p.du + e.w * 0.5f) / sec);
+            if (k < 0 || k >= n || (e.color & (1 << k)) == 0) continue;
+            p.hole = k; p.color = loose; p.fall = true; p.tinted = false; if (p.tintAttr != null) p.tintAttr.color.set(loose);
+        }
+    }
     private void bridgeParts(Array<Part> ps, float w, boolean seesaw, boolean belt) {
         Color wood1 = new Color(0.66f, 0.47f, 0.26f, 1f), wood2 = new Color(0.58f, 0.40f, 0.22f, 1f), beam = new Color(0.36f, 0.24f, 0.14f, 1f), rope = new Color(0.62f, 0.50f, 0.30f, 1f);
         Color painted = new Color(0.86f, 0.36f, 0.16f, 1f);         // Build 72: on a plank conveyor every fourth plank is painted, so you can see the deck rolling left
         int n = Math.max(4, Math.round(w / 0.5f)); float pl = w / n;
         for (int i = 0; i < n; i++) {
             Part pk = boxPart(-w / 2f + (i + 0.5f) * pl, -0.10f, 0f, pl * (belt ? 0.82f : 0.92f), 0.16f, 1.5f, belt && i % 4 == 0 ? painted : i % 2 == 0 ? wood1 : wood2);
-            if (belt) { pk.belt = true; pk.beltSpan = w; }
+            if (belt) { pk.belt = true; pk.beltSpan = w; pk.beltInset = 0.31f; }      // Build 76 (owner): stop at the rollers instead of passing through them
             ps.add(pk);
         }
         if (belt) {           // a big iron roller under each end that the plank belt wraps round
@@ -400,6 +423,45 @@ public final class WorldRenderer implements Disposable {
     /** Vertical offset that puts a mover block's top face exactly on the simulation surface (the blue block used to be placed as if it were 0.3 m tall, so it stood 0.2 m proud and the hero sank into it). */
     public static float moverBlockDy(Element.Type t) { return -(t == Element.Type.MOVE_H ? BLUE_MOVER_BLOCK_H : MOVER_BLOCK_H); }
 
+    /** Build 79 (owner: "the bottoms of the big rocks get in the way... they cannot block platforms"): head room kept between a hanging rock's bottom and anything under it. */
+    static final float ROCK_CLEAR = 3.2f;
+    private final java.util.HashMap<String, float[]> rockBox = new java.util.HashMap<>();
+    /**
+     * The scale a rock hanging under platform idx may have: {@code sc}, or smaller so that its bottom (depth {@code base} plus its height below the platform's top) stays
+     * ROCK_CLEAR above any platform, castle or rope top beneath its span; 0 (no rock) when even a small one would not fit or a rope runs up through the platform.
+     */
+    /** Build 79 (owner: "nothing inside castles"): platform e lies within a castle's walls (its span and height), so it gets no props or hanging rock. */
+    private boolean insideCastle(Element e) {
+        for (Element o : course.hazards) if (o.type == Element.Type.GATE && Math.abs(course.dsWrap(o.s, e.s)) < 2.5f + e.halfW() && e.y > o.y - 0.5f && e.y < o.y + o.len + 0.5f) return true;
+        return false;
+    }
+    private float fitRock(int idx, Element e, String rock, float sc, float base, float w) {
+        if (insideCastle(e)) return 0f;
+        float[] bb = rockBox.get(rock);
+        if (bb == null) { com.badlogic.gdx.math.collision.BoundingBox b = new com.badlogic.gdx.math.collision.BoundingBox(); models.space(rock).calculateBoundingBox(b); bb = new float[]{b.getHeight(), Math.max(b.getWidth(), b.getDepth())}; rockBox.put(rock, bb); }
+        float span = Math.max(w * 0.5f + 0.5f, bb[1] * sc * 0.5f), room = 1e9f;
+        for (int j = 0; j < course.size(); j++) {
+            if (j == idx) continue;
+            Element o = course.get(j);
+            boolean rope = o.type == Element.Type.ROPE;
+            if (!rope && !o.isPlatform()) continue;
+            if (Math.abs(course.dsWrap(o.s, e.s)) > span + (rope ? 0.8f : o.halfW())) continue;
+            float top = rope ? o.y + 1.2f : o.y + (o.type == Element.Type.MOVE_V ? Math.abs(o.amp) : 0f);
+            if (rope && o.y - o.len < e.y && top > e.y - base) return 0f;              // a rope running up past the platform: no rock in its way
+            if (top >= e.y - 0.05f) continue;
+            room = Math.min(room, e.y - top - ROCK_CLEAR);
+        }
+        for (Element o : course.hazards) {
+            if (o.type != Element.Type.GATE || Math.abs(course.dsWrap(o.s, e.s)) > span + 2.5f) continue;
+            float top = o.y + o.len;
+            if (o.y >= e.y - 0.05f) continue;
+            room = Math.min(room, e.y - Math.max(top, o.y) - ROCK_CLEAR);
+        }
+        float most = (room - base) / Math.max(0.01f, bb[0]);
+        if (most >= sc) return sc;
+        return most >= 0.3f ? most : 0f;
+    }
+
     /** Space biome platform: a metal deck with beacon lights, hanging from a Space Kit asteroid. */
     private void spacePlatform(Array<Part> ps, Element e, int idx) {
         float w = e.w;
@@ -418,8 +480,11 @@ public final class WorldRenderer implements Disposable {
             boolean big = w >= 4.5f;
             String rock = big ? new String[]{"rock_large_1", "rock_large_2", "rock_large_3"}[h % 3] : new String[]{"rock_1", "rock_2", "rock_3", "rock_4"}[h % 4];
             float sc = Math.max(0.35f, w * 1.1f / (big ? 7.6f : 3.0f)), top = big ? 0.3f : 0.4f;
-            Part rk = part(models.space(rock), ((h >> 5) % 5 - 2) * 0.1f * w, -0.42f - top * sc, ((h >> 9) % 3 - 1) * 0.2f, sc, sc, sc);
-            rk.roll = 180f; rk.yaw = (h >> 3) % 360; rk.tinted = false; ps.add(rk);
+            sc = fitRock(idx, e, rock, sc, 0.42f, w);              // Build 79 (owner): big rocks are fine, but never over a platform, rope or castle below
+            if (sc > 0f) {
+                Part rk = part(models.space(rock), ((h >> 5) % 5 - 2) * 0.1f * w, -0.42f - top * sc, ((h >> 9) % 3 - 1) * 0.2f, sc, sc, sc);
+                rk.roll = 180f; rk.yaw = (h >> 3) % 360; rk.tinted = false; ps.add(rk);
+            }
             Part small = part(models.space("rock_" + (1 + (h >> 11) % 4)), -w * 0.25f + ((h >> 13) % 5) * w * 0.12f, 0f, 0.55f, 0.16f, 0.16f, 0.16f);
             small.yaw = (h >> 17) % 360; small.tinted = false; ps.add(small);
         }
@@ -475,14 +540,20 @@ public final class WorldRenderer implements Disposable {
         float bgY = (float) ((camY + originY) % 65536.0);          // continuous across origin moves (and across the shift, nothing pops); wraps only every 65 km
         float zf = (float) Math.max(0.0, (camY + originY) / T.zoneHeight);      // Build 70 (owner): below the start is still the start area (Meadow), never the last world wrapped round
         float zoneF = Math.min(Palette.ZONES - 0.001f, ((zf % Palette.ZONES) + Palette.ZONES) % Palette.ZONES);        // the five worlds repeat for ever
-        Palette.blend(Palette.SKY_TOP, zoneF, skyTop); Palette.blend(Palette.SKY_BOT, zoneF, skyBot);
+        Palette.blend(Palette.SKY_TOP, zoneF, skyTop); Palette.blend(Palette.SKY_BOT, zoneF, skyBot); Palette.blend(Palette.SKY_MID, zoneF, skyMid);
+        if (zoneF < 2f) {         // Build 77 (owner): the sun comes up as you climb the two morning worlds - the violet low sky slowly lifts and lightens
+            float rise = MathUtils.clamp(zoneF / 1.8f, 0f, 1f) * 0.35f;
+            skyBot.lerp(skyMid, rise); skyMid.lerp(skyTop, rise * 0.4f);
+        }
         Palette.blend(Palette.TINT, zoneF, tint); Palette.blend(Palette.AMBIENT, zoneF, amb);
         float gold = goldenHour(zoneF);            // Build 71 (owner): castle 1 to castle 2 is a late-afternoon Meadow, not just more of the start
         if (gold > 0f) {
-            skyTop.lerp(0.40f, 0.52f, 0.86f, 1f, gold); skyBot.lerp(1.00f, 0.80f, 0.56f, 1f, gold);
+            skyTop.lerp(0.46f, 0.66f, 0.96f, 1f, gold * 0.6f); skyBot.lerp(0.86f, 0.70f, 0.62f, 1f, gold * 0.6f); skyMid.lerp(0.90f, 0.82f, 0.74f, 1f, gold * 0.6f);      // Build 77: in the morning worlds the golden stretch warms the low sky to cream, not sunset orange
             tint.lerp(1.00f, 0.93f, 0.82f, 1f, gold); amb.lerp(0.66f, 0.58f, 0.52f, 1f, gold);
         }
-        Grade.saturate(skyTop); Grade.saturate(skyBot);          // Build 72 (owner): richer colour, the sky included
+        Grade.saturate(skyTop); Grade.saturate(skyBot); Grade.saturate(skyMid);
+        { float mw = Palette.blendF(Palette.SKY_MORNING, zoneF); float r0 = MathUtils.lerp(skyBot.r, skyTop.r, Palette.SKY_MID_AT), g0 = MathUtils.lerp(skyBot.g, skyTop.g, Palette.SKY_MID_AT), b0 = MathUtils.lerp(skyBot.b, skyTop.b, Palette.SKY_MID_AT);
+          skyMid.set(MathUtils.lerp(r0, skyMid.r, mw), MathUtils.lerp(g0, skyMid.g, mw), MathUtils.lerp(b0, skyMid.b, mw), 1f); }      // two-colour skies stay exactly as they were          // Build 72 (owner): richer colour, the sky included
         ((ColorAttribute) env.get(ColorAttribute.AmbientLight)).color.set(amb.r * Grade.AMBIENT, amb.g * Grade.AMBIENT, amb.b * Grade.AMBIENT, 1f);
         Palette.blend(Palette.SUN, zoneF, lc); if (gold > 0f) lc.lerp(1.00f, 0.78f, 0.52f, 1f, gold); sun.color.set(lc.r * Grade.KEY, lc.g * Grade.KEY, lc.b * Grade.KEY, 1f); Palette.blendDir(Palette.SUN_DIR, zoneF, lv); if (gold > 0f) lv.lerp(GOLD_SUN, gold).nor(); sun.direction.set(lv);
         Palette.blend(Palette.FILL, zoneF, lc); fillL.color.set(lc);
@@ -517,14 +588,17 @@ public final class WorldRenderer implements Disposable {
         if (!scaled) Gdx.gl.glViewport(0, 0, Gdx.graphics.getBackBufferWidth(), Gdx.graphics.getBackBufferHeight());
         Gdx.gl.glClearColor(skyBot.r, skyBot.g, skyBot.b, 1f);
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT | GL20.GL_DEPTH_BUFFER_BIT);
-        bg.render(sb, shapes, skyTop, skyBot, ps, bgY, zoneF, T.circumference(), reducedMotion, time);
+        bg.render(sb, shapes, skyTop, skyMid, skyBot, ps, bgY, zoneF, T.circumference(), reducedMotion, time);
         Gdx.gl.glClear(GL20.GL_DEPTH_BUFFER_BIT);
         if (quality > 0 && GfxHooks.skyEffects) bg.renderGlow(sb, zoneF);
         if (quality > 0) {                 // planets and sky ships far behind the tower (wide-range camera, drawn first)
             if (space == null) { farCam = new com.badlogic.gdx.graphics.PerspectiveCamera(40f, cam.viewportWidth, cam.viewportHeight); farCam.near = 1f; farCam.far = 2500f; space = new SpaceScene(models, farCam, T.radius); }
             space.cloudGlow.set(skyTop).lerp(skyBot, 0.5f).lerp(Color.WHITE, 0.4f);
+            space.playerCharacter = character;
+            space.setZone(zoneF);
             space.update(frameDt, py, reducedMotion);
             if (space.whoosh) whooshPending = true;
+            if (space.scanSound) scanPending = true;
             farCam.viewportWidth = cam.viewportWidth; farCam.viewportHeight = cam.viewportHeight; farCam.fieldOfView = cam.fieldOfView;
             farCam.position.set(cam.position); farCam.direction.set(cam.direction); farCam.up.set(cam.up); farCam.update();
             if (GfxHooks.skyEffects) { batch.begin(farCam); space.renderFar(batch, ps, bgY, zoneF); batch.end(); }
@@ -581,7 +655,7 @@ public final class WorldRenderer implements Disposable {
         try {
             if (sceneFbo == null || sceneFbo.getWidth() != w || sceneFbo.getHeight() != h) {
                 if (sceneFbo != null) sceneFbo.dispose();
-                sceneFbo = new com.badlogic.gdx.graphics.glutils.FrameBuffer(com.badlogic.gdx.graphics.Pixmap.Format.RGBA8888, w, h, true);
+                sceneFbo = new com.badlogic.gdx.graphics.glutils.FrameBuffer(com.badlogic.gdx.graphics.Pixmap.Format.RGBA8888, w, h, true, true);      // with stencil, for the shadows (ShadowPass)
                 sceneFbo.getColorBufferTexture().setFilter(com.badlogic.gdx.graphics.Texture.TextureFilter.Linear, com.badlogic.gdx.graphics.Texture.TextureFilter.Linear);
             }
             sceneFbo.begin();
@@ -624,8 +698,9 @@ public final class WorldRenderer implements Disposable {
         float shakeX = 0, fallY = 0;
         boolean gone = sim.gone[i];
         float crumble = sim.crumbleT[i];
+        if (e.tiltBelt()) { float st = sim.time - v.beltT; if (st > 0f && st < 0.25f) v.beltU += sim.surfaceCarry(i) * st; v.beltT = sim.time; }
         for (Part p : v.parts) {
-            float du = p.du, dy = p.dy, extraYaw = p.yaw; float sy = p.sy, roll = p.roll;
+            float du = p.du, dy = p.dy, extraYaw = p.yaw; float sx = p.sx, sy = p.sy, roll = p.roll;
             float y = e.isPlatform() ? ey - Math.max(-0.1f, Math.min(0.22f, dip[i])) : ey;
             if (e.type == Element.Type.RAMP) {
                 y = e.y;
@@ -633,14 +708,18 @@ public final class WorldRenderer implements Disposable {
                 if (e.spins() && !p.fixed) extraYaw = p.yaw - e.spinAngle(sim.time) * MathUtils.radiansToDegrees;      // turning like a record (heading 0 = uphill toward +s)
             }
             if (p.belt) {       // Build 72: a conveyor slat rides along the belt and wraps round to the far end
-                float span = p.beltSpan, u = ((p.du + span / 2f + e.beltV() * sim.time) % span + span) % span - span / 2f;
+                float span = p.beltSpan, u = ((p.du + span / 2f + (e.tiltBelt() ? v.beltU : e.beltV() * sim.time)) % span + span) % span - span / 2f;
+                // Build 76 (owner: the planks clipped through the end rollers): the slat is cut where it reaches a roller, so it shrinks into one end and grows out of the other
+                float lo = Math.max(u - p.sx / 2f, -span / 2f + p.beltInset), hi = Math.min(u + p.sx / 2f, span / 2f - p.beltInset);
+                if (hi - lo < 0.02f) continue;
+                u = (lo + hi) / 2f; sx = hi - lo;
                 dy = p.dy + p.beltSlope * (u - p.du); du = u;
             }
             if (e.type == Element.Type.SEESAW) {
                 y = e.y - Math.max(-0.1f, Math.min(0.22f, dip[i]));
                 if (!p.fixed) {         // tilt the plank about its pivot
                     float th = (float) Math.atan(sim.tilt[i]), c = (float) Math.cos(th), sn = (float) Math.sin(th);
-                    du = p.du * c - p.dy * sn; dy = p.du * sn + p.dy * c; roll = th * MathUtils.radiansToDegrees;
+                    float u0 = du, v0 = dy; du = u0 * c - v0 * sn; dy = u0 * sn + v0 * c; roll = p.roll + th * MathUtils.radiansToDegrees;      // (du, dy: after a belt slat has moved along)
                 }
             }
             switch (e.type) {
@@ -650,6 +729,12 @@ public final class WorldRenderer implements Disposable {
                     break;
                 }
                 default: break;
+            }
+            float holeY = 0f, holeX = 0f;
+            if (p.hole >= 0) {                                 // Build 79: a drop-out plank: it rattles once you land, then falls and is gone until the bridge resets
+                float ct = i < sim.crumbleT.length ? sim.crumbleT[i] : -1f;
+                if (ct >= Element.HOLE_DELAY) { float el = ct - Element.HOLE_DELAY; if (el > 1.1f) continue; holeY = -0.5f * 30f * el * el; extraYaw = el * 50f * (p.du >= 0 ? 1 : -1); }
+                else if (ct >= 0f && !reducedMotion) holeX = 0.04f * MathUtils.sin(time * 80f + p.du * 7f);
             }
             if (e.crumbles()) {
                 if (gone) {
@@ -671,7 +756,7 @@ public final class WorldRenderer implements Disposable {
                 else if (p.tinted) p.tintAttr.color.set(tint);
                 else p.tintAttr.color.set(Color.WHITE);
             }
-            place(p.inst, es + du + shakeX, y + dy + fallY, p.dz + (e.type == Element.Type.MOVE_Z ? e.zAt(sim.time) : 0f), camS, p.sx, sy, p.sz, extraYaw, roll);
+            place(p.inst, es + du + shakeX + holeX, y + dy + fallY + holeY, p.dz + (e.type == Element.Type.MOVE_Z ? e.zAt(sim.time) : 0f), camS, sx, sy, p.sz, extraYaw, roll);
             if (p.localZ != 0f) p.inst.transform.translate(0f, 0f, p.localZ);     // recentre an off-origin mesh along its own Z (applied before scale): see Part.localZ / the ramp
             batch.render(p.inst, env);
         }
@@ -772,7 +857,7 @@ public final class WorldRenderer implements Disposable {
     public static float[] mouthFromAxle(float yaw, float tilt, float[] out) {
         double t = Math.toRadians(tilt), c = Math.cos(t), s = Math.sin(t);
         float x = (float) ((MOUTH_X * c - MOUTH_Y * s) * PK), y = (float) ((MOUTH_X * s + MOUTH_Y * c) * PK);
-        if (Math.abs(((yaw % 360f) + 360f) % 360f - 180f) < 1f) x = -x;
+        x *= (float) Math.cos(Math.toRadians(yaw));           // Build 79: the turret turns flat like a record, so the mouth's reach along the lane shrinks through the turn (0 and 180 as before)
         out[0] = x; out[1] = y; return out;
     }
     /** Lane units (s) that a rigid length of {@code metres} along the lane covers at depth {@code dz} behind it: the ring there is drawn at radius - dz, so the same metres span more arc. */
@@ -955,11 +1040,13 @@ public final class WorldRenderer implements Disposable {
         return r;
     }
 
-    private void drawRig(Rig r, float arc, float y, float dz, float camS, float scale, float yaw, float roll, float speed) {
+    private void drawRig(Rig r, float arc, float y, float dz, float camS, float scale, float yaw, float roll, float speed) { drawRig(r, arc, y, dz, camS, scale, scale, scale, yaw, roll, speed); }
+
+    private void drawRig(Rig r, float arc, float y, float dz, float camS, float sx, float sy, float sz, float yaw, float roll, float speed) {
         r.ctrl.update(frameDt * speed);
         float phi = wrapDiff(arc, camS) / T.radius, rr = T.radius - dz;
         r.inst.transform.idt().translate(rr * MathUtils.sin(phi), y, -T.radius + rr * MathUtils.cos(phi))
-                .rotate(0, 1, 0, phi * MathUtils.radiansToDegrees + yaw).rotate(0, 0, 1, roll).scale(scale, scale, scale);
+                .rotate(0, 1, 0, phi * MathUtils.radiansToDegrees + yaw).rotate(0, 0, 1, roll).scale(sx, sy, sz);
         batch.render(r.inst, env);
     }
 
@@ -972,6 +1059,15 @@ public final class WorldRenderer implements Disposable {
         drawBox(es, ey - 0.62f, -e.amp * 0.0f, camS, 0.12f, 0.1f, e.amp * 2f + 1.6f, 0.30f + 0.5f * live, 0.34f + 0.4f * live, 0.44f);
         drawBox(es - e.halfW() - 0.2f, ey - 0.62f, e.amp + 0.8f, camS, 0.2f, 0.9f, 0.2f, 0.3f, 0.32f, 0.4f);
         drawBox(es - e.halfW() - 0.2f, ey - 0.62f, -e.amp - 0.8f, camS, 0.2f, 0.9f, 0.2f, 0.3f, 0.32f, 0.4f);
+    }
+
+    /** A coloured block placed in a rig's model space (the base transform already holds its position, yaw, tilt and scale). */
+    private void eyeBox(Matrix4 base, float lx, float ly, float lz, float w, float h, float d, float cr, float cg, float cb) {
+        int key = ((int) (cr * 255) << 16) | ((int) (cg * 255) << 8) | (int) (cb * 255);
+        ModelInstance st = boxByColour.get(key);
+        if (st == null) { st = new ModelInstance(models.box); st.materials.get(0).set(ColorAttribute.createDiffuse(cr, cg, cb, 1f)); boxByColour.put(key, st); }
+        st.transform.set(base).translate(lx, ly, lz).scale(w, h, d);
+        batch.render(st, env);
     }
 
     private void drawBox(float arc, float y, float dz, float camS, float w, float h, float d, float cr, float cg, float cb) {
@@ -1020,9 +1116,11 @@ public final class WorldRenderer implements Disposable {
         float in = MathUtils.clamp((zoneF - 0.45f) / 0.05f, 0f, 1f), out = 1f - MathUtils.clamp((zoneF - 0.8f) / 0.2f, 0f, 1f);
         return in * in * (3f - 2f * in) * out;
     }
-    /** The skull's turn toward the camera (degrees from facing along its way) and where its eyes sit on its face; tuned on CreatureShot captures. */
-    private static final float SKULL_YAW = Float.parseFloat(System.getProperty("climb.skullYaw", "160")), SKULL_EYE_GAP = Float.parseFloat(System.getProperty("climb.skullEyeGap", "0.13")),
-            SKULL_EYE_Z = Float.parseFloat(System.getProperty("climb.skullEyeZ", "-0.5")), SKULL_EYE_UP = Float.parseFloat(System.getProperty("climb.skullEyeUp", "0.05")), SKULL_EYE_FWD = Float.parseFloat(System.getProperty("climb.skullEyeFwd", "0.62"));
+    /** Build 77: how far the skull's face turns toward its way of travel (degrees; the model's face looks straight at the camera at yaw -22 (the skull turns against the tower curve to face you, measured on CreatureShot renders), so +22 going right and -22 going left), and where its two eye sockets sit
+     *  in the model's own space (measured from skull_anim's mesh: centres at x = +-0.36, y = 0.84; the eyes are drawn with the skull's own transform so they stay in the sockets at any yaw, tilt or squash). */
+    private static final float SKULL_YAW = Float.parseFloat(System.getProperty("climb.skullYaw", "22")), SKULL_EYE_X = Float.parseFloat(System.getProperty("climb.skullEyeX", "0.36")),
+            SKULL_EYE_Y = Float.parseFloat(System.getProperty("climb.skullEyeY", "0.82")), SKULL_EYE_Z = Float.parseFloat(System.getProperty("climb.skullEyeZ", "0.4")),
+            SKULL_EYE_W = Float.parseFloat(System.getProperty("climb.skullEyeW", "0.46")), SKULL_EYE_H = Float.parseFloat(System.getProperty("climb.skullEyeH", "0.42"));
     private Sim rsim; private int rhz;            // the simulation and hazard index being drawn (aimed cannons draw the sim's own aim, crabs where the sim has them)
 
     /** Build 71 (owner): how far the platform a trap sits on has dipped from a landing (the same spring the platform is drawn with); traps on it move with it. */
@@ -1038,6 +1136,10 @@ public final class WorldRenderer implements Disposable {
         float cs = h.type == Element.Type.CANNON ? h.s + h.dir * h.len * 0.5f : h.s;
         float half = h.type == Element.Type.AIMED ? 17f : h.type == Element.Type.CANNON ? h.len * 0.5f + 1.5f + CANNON_OFFSCREEN : (h.type == Element.Type.SAW_H ? h.amp + 1.5f : h.type == Element.Type.SKULL || h.type == Element.Type.BLOB ? h.w * 0.5f + 1.5f : 2f);
         float cy = h.type == Element.Type.SAW_V ? h.y + h.amp * 0.5f : h.y;
+        if (rsim != null && rhz >= 0 && rhz < rsim.mobState.length) {       // Build 79: creatures roam to the decks either side of their own: cull them where they are
+            if (h.type == Element.Type.CRAB) { cs = rsim.crabAt(rhz, h); cy = rsim.crabY(rhz, h); half = 2f; }
+            else if ((h.type == Element.Type.SKULL || h.type == Element.Type.BLOB) && rsim.mobState[rhz] > 0) { int j = rsim.mobDeckIdx(rhz, h); cs = rsim.mobS[rhz]; if (j >= 0) cy = rsim.deckY(j); half = 3f; }
+        }
         if (!visible(cs, cy, camS, half)) return;
         switch (h.type) {
             case SAW_H: {
@@ -1089,19 +1191,20 @@ public final class WorldRenderer implements Disposable {
                 // the SIMULATION's own aim, so the picture is where the ball goes, and it faces down the lane or back up it rather than ever
                 // turning upside down. Locked = a red glow at the muzzle that pulses faster; the ball then glides into the play plane in front.
                 float dz = AIM_DEPTH, deck = h.y - 2.0f;
-                float ang = rsim != null && rhz < rsim.aimAng.length ? rsim.aimAng[rhz] : (float) Math.PI * 0.5f;
+                float ang = rsim != null && rhz < rsim.aimAng.length ? rsim.aimAng[rhz] : 0f;
+                // Build 79 (owner): the simulation turns the turret flat like a record (aimYaw) and only tilts the barrel a little: draw exactly that
+                float yawDeg = rsim != null && rhz < rsim.aimYaw.length ? rsim.aimYaw[rhz] * MathUtils.radiansToDegrees : 0f;
                 float deg = ang * MathUtils.radiansToDegrees;
-                boolean left = Math.cos(ang) < 0f;
-                float tilt = left ? 180f - deg : deg; tilt = ((tilt + 180f) % 360f + 360f) % 360f - 180f;
+                float tilt = Math.cos(yawDeg * MathUtils.degreesToRadians) >= 0f ? deg : 180f - deg; tilt = ((tilt + 180f) % 360f + 360f) % 360f - 180f;
                 drawSlab(h.s, deck, dz, camS, h.zone);
                 drawBox(h.s, deck, dz, camS, 1.25f, AIM_LIFT, 1.25f, 0.34f, 0.31f, 0.40f);
                 drawBox(h.s, deck + AIM_LIFT, dz, camS, 1.45f, 0.16f, 1.45f, 0.3f, 0.27f, 0.36f);
-                drawCannon(h.s, h.y - CANNON_AXIS_UP, dz, camS, left ? 180f : 0f, tilt);
+                drawCannon(h.s, h.y - CANNON_AXIS_UP, dz, camS, yawDeg, tilt);
                 // Build 67 (owner: the ball must leave the centre of the mouth): the cradle turns about its axle, so the drawn mouth wanders
                 // up to half a metre from the simulation's launch point (AIM_MUZZLE along the aim from the barrel's resting axis) as it aims;
                 // the turret stays put and the ball is drawn from the mouth instead, gliding onto its simulated path over the same BALL_SWOOP
                 // it already glides from the slab's depth into the play plane. The flash sits on the drawn mouth too. The simulation is untouched.
-                float[] mz = mouthFromAxle(left ? 180f : 0f, tilt, mouthTmp);
+                float[] mz = mouthFromAxle(yawDeg, tilt, mouthTmp);
                 float mouthS = h.s + laneUnits(mz[0], dz, T.radius), mouthY = h.y - CANNON_AXIS_UP + mz[1];
                 float offS = mouthS - (h.s + (float) Math.cos(ang) * Element.AIM_MUZZLE), offY = mouthY - (h.y + (float) Math.sin(ang) * Element.AIM_MUZZLE);
                 float c = h.cyc(t);
@@ -1184,8 +1287,12 @@ public final class WorldRenderer implements Disposable {
                 float crabX = rsim != null ? rsim.crabAt(rhz, h) : h.sAt(t);
                 float face = rsim != null ? rsim.crabFacing(rhz, h) : (h.amp * (float) Math.cos(2 * Math.PI * t / h.period + h.phase) >= 0f ? 1f : -1f);
                 boolean chasing = rsim != null && rsim.crabChasing(rhz);
-                Rig crabRig = rig(h, "crab_anim", "Walk"); castShadow(crabRig.inst, crabX, h.y - dipY);
-                drawRig(crabRig, crabX, h.y - dipY, 0f, camS, 0.34f, face >= 0f ? 90f : -90f, 0f, chasing ? 2.4f : 1.6f);
+                float crabY = rsim != null ? rsim.crabY(rhz, h) : h.y;                  // Build 79: on a deck it followed you onto, mid-hop, or falling with a crumbled deck
+                boolean home = rsim == null || (rhz < rsim.deckOff.length && rsim.deckOff[rhz] == 0f && rsim.crabJump[rhz] < 0f && !rsim.crabFalling(rhz));
+                if (home) crabY -= dipY;
+                boolean falling = rsim != null && rsim.crabFalling(rhz);
+                Rig crabRig = rig(h, "crab_anim", "Walk"); if (!falling) castShadow(crabRig.inst, crabX, crabY);
+                drawRig(crabRig, crabX, crabY, 0f, camS, 0.34f, face >= 0f ? 90f : -90f, falling ? rsim.crabFall[rhz] * 300f : 0f, chasing ? 2.4f : 1.6f);
                 break;
             }
             case BEE: {
@@ -1198,33 +1305,44 @@ public final class WorldRenderer implements Disposable {
             }
             case SKULL: {
                 // Build 71: a floating skull with glowing eyes. It bobs at the hover height, drops low and shivers before a dash, streaks along its deck leaving mist, rises and turns round.
-                Element deck = h.anchor >= 0 && h.anchor < course.size() ? course.get(h.anchor) : null;
-                float dY = deck != null ? deck.y : h.y, end = h.w * 0.5f - Element.SKULL_END;
+                if (done) break;      // Build 79: batted away by the club (drawn as it flies off: drawFlung)
+                int dj = rsim != null ? rsim.mobDeckIdx(rhz, h) : h.anchor;      // Build 79: the deck it is hunting on now (its own, or the one before or after)
+                Element deck = dj >= 0 && dj < course.size() ? course.get(dj) : null;
+                float dY = deck != null ? (rsim != null ? rsim.deckY(dj) : deck.y) : h.y, end = h.w * 0.5f - Element.SKULL_END;
                 int st = rsim != null && rhz < rsim.mobState.length ? rsim.mobState[rhz] : 1;
                 float ks = rsim != null && st > 0 ? rsim.mobS[rhz] : h.s + end, ky = dY + (rsim != null && st > 0 ? rsim.mobY[rhz] : Element.SKULL_HOVER + 0.12f * MathUtils.sin(time * 2.6f + h.phase));
                 float dir = rsim != null && st > 0 ? rsim.mobDir[rhz] : -1f;
-                if (st == 2 && !reducedMotion) ks += 0.04f * MathUtils.sin(time * 70f);                 // it shivers as it winds up
-                float sc = 0.6f, yaw = (dir >= 0f ? -1f : 1f) * SKULL_YAW;                              // its face mostly toward you, a little toward where it is going, so both eyes show
-                Rig skullRig = rig(h, "skull_anim", st == 3 ? "Bite_Front" : "Idle"); castShadow(skullRig.inst, ks, ky - 0.62f * sc);
-                drawRig(skullRig, ks, ky - 0.62f * sc, 0f, camS, sc, yaw, st == 3 ? -dir * 12f : 0f, st == 3 ? 2f : 1f);
-                float glow = st == 2 || st == 3 ? 1f : 0.65f + 0.2f * MathUtils.sin(time * 4f);
-                for (int e = -1; e <= 1; e += 2) {                                                       // the eyes: two glowing sockets with dark pupils on the face (which looks at you)
-                    float es = ks + dir * SKULL_EYE_FWD + e * SKULL_EYE_GAP, ez = SKULL_EYE_Z, ew = 0.14f;
-                    drawBox(es, ky + SKULL_EYE_UP, ez, camS, ew, ew, 0.04f, 1f, 0.35f + 0.4f * glow, 0.1f);
-                    drawBox(es + dir * 0.025f, ky + SKULL_EYE_UP + 0.035f, ez - 0.03f, camS, ew * 0.45f, ew * 0.45f, 0.03f, 0.05f, 0.08f, 0.1f);
+                if (st == 2 && !reducedMotion && rsim.mobT[rhz] > Element.SKULL_LOOP_T) ks += 0.04f * MathUtils.sin(time * 70f);      // it shivers as it swoops down for the dash (after its loop-the-loop, Build 77)
+                float sc = 0.6f, yaw = -22f + (dir >= 0f ? SKULL_YAW : -SKULL_YAW) * (st == 3 ? 0.6f : 1f) - wrapDiff(ks, camS) / T.radius * MathUtils.radiansToDegrees;      // its face toward YOU wherever it is round the cylinder, turned a little toward where it is going (mirrored per direction)
+                float mt = rsim != null ? rsim.mobT[rhz] : 0f, roll = 0f, qx = 1f, qy = 1f;               // personality (renderer only): a lazy wobble and breathing while it hovers, a lean through the loop, a stretch in the dash
+                if (!reducedMotion) {
+                    if (st <= 1) { ky += 0.05f * MathUtils.sin(time * 5.3f + h.phase); roll = 7f * MathUtils.sin(time * 2.1f + h.phase); qy = 1f + 0.05f * MathUtils.sin(time * 5.3f + h.phase + 1.2f); qx = 2f - qy; }
+                    else if (st == 2 && mt < Element.SKULL_LOOP_T) { float a = MathUtils.PI2 * mt / Element.SKULL_LOOP_T; roll = -dir * 22f * MathUtils.sin(a); qy = 1f + 0.1f * MathUtils.sin(a * 2f); qx = 2f - qy; }
+                    else if (st == 2) { float k = (mt - Element.SKULL_LOOP_T) / (Element.SKULL_WINDUP - Element.SKULL_LOOP_T); qy = 1f - 0.12f * k; qx = 1f + 0.12f * k; roll = dir * 10f * k; }   // crouching to spring
+                    else if (st == 3) { qx = 1.18f; qy = 0.9f; roll = -dir * 12f; }
+                    else if (st == 4) { qy = 1f + 0.08f * MathUtils.sin(mt * 18f) * Math.max(0f, 1f - mt * 2f); qx = 2f - qy; }
                 }
-                if (st == 3 || (st == 2 && rsim != null && rsim.mobT[rhz] > Element.SKULL_WINDUP * 0.6f)) {     // the misty trail
+                Rig skullRig = rig(h, "skull_anim", "Idle"); castShadow(skullRig.inst, ks, ky - 0.62f * sc);
+                drawRig(skullRig, ks, ky - 0.62f * sc, 0f, camS, sc * qx, sc * qy, sc * (st == 3 ? 1f : 0.5f * (qx + qy)), yaw, roll, st == 3 ? 2f : 1f);
+                float glow = st == 2 || st == 3 ? 1f : 0.65f + 0.2f * MathUtils.sin(time * 4f);
+                for (int e = -1; e <= 1; e += 2) {                                                       // the eyes: a glowing block filling each socket with a dark pupil, placed in the skull's own space
+                    eyeBox(skullRig.inst.transform, e * SKULL_EYE_X, SKULL_EYE_Y, SKULL_EYE_Z, SKULL_EYE_W, SKULL_EYE_H, 0.1f, 1f, 0.35f + 0.4f * glow, 0.1f);
+                    eyeBox(skullRig.inst.transform, e * SKULL_EYE_X + dir * 0.07f, SKULL_EYE_Y + 0.04f, SKULL_EYE_Z + 0.07f, SKULL_EYE_W * 0.45f, SKULL_EYE_H * 0.5f, 0.06f, 0.05f, 0.08f, 0.1f);
+                }
+                if (st == 3 || (st == 2 && rsim != null && rsim.mobT[rhz] > Element.SKULL_LOOP_T)) {     // the misty trail
                     for (int q = 0; q < 3; q++) { mistCol.set(0.82f, 0.9f, 1f, 0.55f); particles.spawn(ks - dir * MathUtils.random(0.2f, 0.6f), ky + MathUtils.random(-0.3f, 0.3f), -dir * MathUtils.random(0.2f, 0.8f), MathUtils.random(0.1f, 0.5f), mistCol, MathUtils.random(0.12f, 0.22f), -0.3f, MathUtils.random(0.45f, 0.8f)); }
                 }
                 break;
             }
             case BLOB: {
                 // Build 71: the green blob. It wobbles, leaps off the top of the screen, and drops: only its growing shadow shows where, in the last BLOB_SHADOW seconds.
-                Element deck = h.anchor >= 0 && h.anchor < course.size() ? course.get(h.anchor) : null;
-                float dY = deck != null ? deck.y : h.y;
+                int dj = rsim != null ? rsim.mobDeckIdx(rhz, h) : h.anchor;      // Build 79: the deck it is on now (its own, or the one before or after)
+                Element deck = dj >= 0 && dj < course.size() ? course.get(dj) : null;
+                float dY = deck != null ? (rsim != null ? rsim.deckY(dj) : deck.y) : h.y;
+                if (dj != h.anchor) dipY = 0f;
                 int st = rsim != null && rhz < rsim.mobState.length ? rsim.mobState[rhz] : 1;
                 float bs = rsim != null && st > 0 ? rsim.mobS[rhz] : h.s;
-                float surf = (rsim != null ? rsim.blobSurfaceY(rhz, deck, h.anchor, dY) : dY) - dipY;
+                float surf = (rsim != null ? rsim.blobSurfaceY(rhz, deck, dj, dY) : dY) - dipY;
                 float lift = rsim != null && st > 0 ? rsim.mobY[rhz] : 0f;
                 float sx = 1f, sy = 1f;
                 if (st == 2 && !reducedMotion) { float w = MathUtils.sin(time * 26f) * 0.13f; sx = 1f + w; sy = 1f - w; }          // the wobble before the leap
@@ -1232,7 +1350,7 @@ public final class WorldRenderer implements Disposable {
                 float shadow = rsim != null ? rsim.blobShadow(rhz) : -1f;
                 if (shadow >= 0f) {
                     float tgt = rsim.mobTgt[rhz], k = 1f - shadow / Element.BLOB_SHADOW, sw = 0.5f + 0.9f * k;
-                    float ty = rsim.blobSurfaceY(rhz, deck, h.anchor, dY);
+                    float ty = rsim.blobSurfaceY(rhz, deck, dj, dY);
                     drawPuddle(0, tgt, ty + SHADOW_LIFT, 0f, camS, sw, SHADOW_THICK, sw * 0.8f, 0.06f, 0.07f, 0.09f);
                 }
                 float sc = 0.6f, face = rsim != null && course.dsWrap(rsim.s, bs) < 0f ? -1f : 1f;
@@ -1434,16 +1552,27 @@ public final class WorldRenderer implements Disposable {
     private int[] dipAct = new int[64]; private int dipN; private boolean[] dipOn = new boolean[16];      // platforms whose landing spring is still moving: the per-frame update touches only these, never the whole (ever-growing) tower
     private final Color ambCol = new Color();
 
-    private static final class Flung { float s, y, vx, vy, rot, age; boolean bee; }
+    private static final class Flung { float s, y, z, vx, vy, rot, age; int kind; }
     private final java.util.ArrayList<Flung> flung = new java.util.ArrayList<>();
     /** A crab was knocked off its platform: it tumbles away (purely visual). */
-    public void crabFlung(float s, float y, int dir, boolean bee) { Flung f = new Flung(); f.s = s; f.y = y; f.vx = dir * 6f; f.vy = bee ? 5f : 7f; f.bee = bee; flung.add(f); }
+    /** Something the club knocked away (kind 0 crab, 1 bee, 2 skull): it tumbles away (purely visual). Build 79: a skull is batted like a hooked golf shot, up and away, curling in toward the middle of the tower. */
+    public void crabFlung(float s, float y, int dir, int kind) { Flung f = new Flung(); f.s = s; f.y = y; f.vx = dir * (kind == 2 ? 11f : 6f); f.vy = kind == 1 ? 5f : kind == 2 ? 9f : 7f; f.kind = kind; flung.add(f); }
 
     private void drawFlung(float dt, float camS) {
         for (int i = flung.size() - 1; i >= 0; i--) {
-            Flung f = flung.get(i); f.age += dt; f.vy -= 30f * dt; f.s += f.vx * dt; f.y += f.vy * dt; f.rot += 540f * dt;
+            Flung f = flung.get(i); f.age += dt;
+            if (f.kind == 2) {          // the hook: it climbs, slows along the lane and curls away into the depth, shrinking out of sight
+                f.vy -= 6f * dt; f.vx *= (float) Math.pow(0.35f, dt); f.s += f.vx * dt; f.y += f.vy * dt; f.z -= (2f + 14f * f.age) * dt; f.rot += 900f * dt;
+                if (f.age > 2.4f) { flung.remove(i); continue; }
+                float sc = 0.6f * Math.max(0.15f, 1f - f.age / 2.6f);
+                drawPack("skull", f.s, f.y, f.z, camS, sc, sc, sc, f.rot * 0.4f, f.rot);
+                if (quality > 0 && !reducedMotion) { mistCol.set(0.82f, 0.9f, 1f, 0.5f); particles.spawn(f.s, f.y, -f.vx * 0.1f, 0.2f, mistCol, 0.14f, -0.3f, 0.5f); }
+                continue;
+            }
+            f.vy -= 30f * dt; f.s += f.vx * dt; f.y += f.vy * dt; f.rot += 540f * dt;
             if (f.age > 2f) { flung.remove(i); continue; }
-            drawPack(f.bee ? "bee_anim" : "crab", f.s, f.y, 0f, camS, f.bee ? 0.36f : 0.34f, f.bee ? 0.36f : 0.34f, f.bee ? 0.36f : 0.34f, 0f, f.rot);
+            boolean bee = f.kind == 1;
+            drawPack(bee ? "bee_anim" : "crab", f.s, f.y, 0f, camS, bee ? 0.36f : 0.34f, bee ? 0.36f : 0.34f, bee ? 0.36f : 0.34f, 0f, f.rot);
         }
     }
 

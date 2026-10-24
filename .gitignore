@@ -20,3 +20,6 @@ ANDROID_KEY*
 assets/.lwjgl/
 assets/hs_err_pid*.log
 __pycache__/
+
+# Minifantasy Forgotten Plains audio (licensed to the owner, may not be redistributed): converted at build time by tools/ci/fetch_pack_sfx.sh, never committed
+assets/audio/pack_mf/

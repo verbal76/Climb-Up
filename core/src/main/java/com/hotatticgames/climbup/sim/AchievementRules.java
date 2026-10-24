@@ -160,7 +160,7 @@ public final class AchievementRules {
             earn(out, SUMMIT);
             if (t.runFalls == 0) earn(out, CLEAN_RUN);                                           // never fell back to a checkpoint
             if (t.runFalls == 0 && t.runHits == 0) earn(out, PERFECT_SUMMIT);                    // flawless: no fall-backs AND no hazard hits
-            if (t.finishTimeSec > 0f && t.finishTimeSec <= SPEED_SUMMIT_SECONDS) earn(out, SPEED_SUMMIT);
+            if (t.finishTimeSec > 0f && Math.round(t.finishTimeSec * 60.0) <= Math.round(SPEED_SUMMIT_SECONDS * 60.0)) earn(out, SPEED_SUMMIT);      // Build 74: compared in whole simulation steps
         }
 
         // ---- worlds / space ----

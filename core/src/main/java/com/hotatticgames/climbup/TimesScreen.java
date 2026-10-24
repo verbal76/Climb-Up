@@ -24,10 +24,11 @@ public final class TimesScreen extends ScreenAdapter {
     private final ClimbGame g; private final Screen back;
     private boolean leave;
     private int page;                 // 0 = the run's own course (or the newest), then the other recorded courses
+    private int boardNo;              // Build 79: which difficulty's times table is shown (it opens on the climb in progress's)
     public TimesScreen(ClimbGame g, Screen back) { this.g = g; this.back = back; }
 
     @Override public void show() {
-        leave = false; page = 0;
+        leave = false; page = 0; boardNo = Math.max(0, Math.min(2, g.save.difficulty));
         Gdx.input.setInputProcessor(new InputMultiplexer(g.ui, new InputAdapter() {
             @Override public boolean keyDown(int k) { if (k == Input.Keys.ESCAPE || k == Input.Keys.BACK || k == Input.Keys.BACKSPACE) { leave = true; return true; } return false; }
         }));
@@ -35,9 +36,9 @@ public final class TimesScreen extends ScreenAdapter {
     @Override public void resize(int w, int h) { g.ui.resize(w, h); }
 
     /** m:ss.t or a dash for "no time yet". */
-    static String time(float s) { return s > 0f ? PlayScreen.fmtTime(s) : "--:--.-"; }
+    static String time(float s) { return s > 0f ? PlayScreen.fmtTime(s) : "--:--.---"; }
     static String metres(float m) { return m > 0f ? (long) m + " M" : "--"; }
-    /** The signed difference of a run's time against a best ("-0:01.5" faster, "+0:03.2" slower), or a dash when either is missing. */
+    /** The signed difference of a run's time against a best ("-0:01.500" faster, "+0:03.200" slower), or a dash when either is missing. */
     static String diff(float run, float best) { return run > 0f && best > 0f ? PlayScreen.fmtDelta(run - best) : "--"; }
     /** Green for faster, red for slower; the "--" placeholder and FIRST are dim (a dash is not a minus). */
     /** A time (or distance) with its NEW / PB tag after it: the tag is smaller and sits a short gap after the number, never touching it or the next column (Build 67). */
@@ -72,14 +73,16 @@ public final class TimesScreen extends ScreenAdapter {
         Gdx.gl.glClearColor(0.06f, 0.08f, 0.16f, 1f); Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
         Ui ui = g.ui; ui.begin();
         float W = ui.w(), H = ui.h();
-        RecordsData rec = g.save.records(); RecordsData.Run lr = rec.shown(g.save.seed);
+        RecordsData rec = g.save.board(boardNo);
+        long climbSeed = boardNo == g.save.difficulty ? g.save.seed : 0L;             // the climb in progress belongs to its own mode's board only
+        RecordsData.Run lr = rec.shown(climbSeed);
         int climbRules = g.save.climbRules > 0 ? g.save.climbRules : CourseGenerator.rulesOfBuild(g.save.climbBuild);
-        List<Page> pages = pages(rec, lr, g.save.seed, climbRules);
+        List<Page> pages = pages(rec, lr, climbSeed, climbRules);
         if (page >= pages.size()) page = Math.max(0, pages.size() - 1);
         Page pg = pages.isEmpty() ? null : pages.get(page);
         boolean current = pg != null && pg.run != null && pg.run == rec.current;
         int legs = Math.max(1, Math.min(RecordsData.LEGS, (int) g.tuning.finishCastle));
-        ui.textC("TIMES TABLE", W / 2, H - 56, 5.6f, Ui.TEXT);
+        ui.textC(boardNo == 0 ? "TIMES TABLE" : com.hotatticgames.climbup.sim.Tuning.HARD_NAMES[boardNo] + " TIMES", W / 2, H - 56, Math.min(5.6f, (W - 360f) / ((boardNo == 2 ? 24 : 14) * 6f)), boardNo > 0 ? new Color(1f, 0.45f, 0.4f, 1f) : Ui.TEXT);
         // the course header: the full code (never shortened: two codes must never look alike) and its rules; other-rules courses are shown but not compared
         String head = pg == null ? "NO COURSE TIMED YET" : "SEED " + SeedCode.encode(pg.seed) + (pg.rules == CourseGenerator.RULES_VERSION ? "   RULES " + pg.rules : pg.rules > 0 ? "   RULES " + pg.rules + " (NOT THESE)" : "   OLD RULES");
         ui.textC(head, W / 2, H - 100, Math.min(3.6f, (W - 320f) / (head.length() * 6f)), Ui.ACCENT);
@@ -108,7 +111,7 @@ public final class TimesScreen extends ScreenAdapter {
             ui.text("TOWER " + (i + 1), x0, y, px, Ui.TEXT);
             ui.text(time(rec.bestLegs[i]), xBest, y, px, gold);
             tagged(ui, time(seedT), spb && seedT == runT && runT > 0f ? "NEW" : "", xSeed, y, px, Ui.TEXT, Ui.ACCENT);      // NEW: this run set the course best (the pixel font has no asterisk)
-            tagged(ui, runT > 0f ? time(runT) : "--:--.-", pb ? "PB" : "", xRun, y, px, pb ? Ui.GOOD : runT > 0f ? Ui.TEXT : Ui.DIM, Ui.GOOD);
+            tagged(ui, runT > 0f ? time(runT) : "--:--.---", pb ? "PB" : "", xRun, y, px, pb ? Ui.GOOD : runT > 0f ? Ui.TEXT : Ui.DIM, Ui.GOOD);
             String d = runT > 0f && prev > 0f ? diff(runT, prev) : runT > 0f && sb != null ? "FIRST" : "--";
             ui.text(d, xDiff, y, px, diffColour(d, faster, slower));
             if (i < legs - 1) y -= step;
@@ -120,7 +123,7 @@ public final class TimesScreen extends ScreenAdapter {
         ui.text("TOTAL", x0, y, px, Ui.TEXT);
         ui.text(time(rec.bestTotal), xBest, y, px, gold);
         tagged(ui, time(seedTotal), fin && run.totalSeedPb && seedTotal == run.total ? "NEW" : "", xSeed, y, px, Ui.TEXT, Ui.ACCENT);
-        tagged(ui, fin ? time(run.total) : "--:--.-", fin && run.totalPb ? "PB" : "", xRun, y, px, fin && run.totalPb ? Ui.GOOD : fin ? Ui.TEXT : Ui.DIM, Ui.GOOD);
+        tagged(ui, fin ? time(run.total) : "--:--.---", fin && run.totalPb ? "PB" : "", xRun, y, px, fin && run.totalPb ? Ui.GOOD : fin ? Ui.TEXT : Ui.DIM, Ui.GOOD);
         String dt2 = fin && run.totalSeedPrev > 0f ? diff(run.total, run.totalSeedPrev) : fin && sb != null ? "FIRST" : "--";
         ui.text(dt2, xDiff, y, px, diffColour(dt2, faster, slower));
         y -= step;
@@ -133,6 +136,7 @@ public final class TimesScreen extends ScreenAdapter {
         String foot2 = !comparable && pg != null ? "" : "DIFF = THIS RUN MINUS THE COURSE BEST BEFORE IT (- FASTER, + SLOWER).";
         ui.textC(foot1, W / 2, 134f, Math.min(2.4f, (W - 80f) / (foot1.length() * 6f)), Ui.DIM);
         if (!foot2.isEmpty()) ui.textC(foot2, W / 2, 110f, Math.min(2.4f, (W - 80f) / (foot2.length() * 6f)), Ui.DIM);
+        if (ui.button(new String[]{"PUNISHER", "NEVER...", "NORMAL"}[boardNo], W - 360, 22, 330, 78)) { g.audio.play("click"); boardNo = (boardNo + 1) % 3; page = 0; }      // Build 79: the next difficulty's board
         if (ui.button("BACK", W / 2 - 150, 22, 300, 78, true) || leave) { g.audio.play("click"); g.setScreen(back); }
         ui.end();
         g.autoShot("times", dt);

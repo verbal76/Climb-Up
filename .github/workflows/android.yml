@@ -8,10 +8,18 @@ on:
         description: "Owner test build: attach the APK to a DRAFT GitHub Release (visible to collaborators only, no tag, nothing public) and skip the OTA baseline publish. Off = the normal published release."
         type: boolean
         default: false
+      publish_public:
+        description: "Make the completed three-platform release public and publish the OTA baseline. Off (default, owner 2026-10-24) = the release stays a private draft and the OTA channel is untouched."
+        type: boolean
+        default: false
       build_number:
         description: "Build number for the versionCode, APK name, tag and release title (blank = this run's number). Set it so a re-run after a failure, or the desktop build dispatched alongside, still carries the number the owner expects."
         type: string
         default: ""
+      skip_tests:
+        description: "Skip the core unit-test step, as the desktop workflow's skip_tests (owner 2026-10-24: a private playtest draft while the generator's expected values are being refreshed). Signing, the certificate gate, the emulator update test and the OTA checks still run. Default off."
+        type: boolean
+        default: false
 permissions:
   contents: write   # publish GitHub Releases
   actions: read
@@ -23,7 +31,9 @@ env:
 
 jobs:
   build:
-    if: github.ref == 'refs/heads/ccr-cb458cd1-w4dh5c'   # branch guard: a dispatch from any other branch can never publish
+    # branch guard: a dispatch from any other branch can never publish. Build 74 (owner, 2026-10-22): its own branch publishes too, and every build
+    # is a full (published) release so it shows in the owner's GitHub app.
+    if: github.ref == 'refs/heads/ccr-cb458cd1-w4dh5c' || github.ref == 'refs/heads/build-74-determinism'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -48,7 +58,16 @@ jobs:
           printf '\n84831b9409646a918e30573bab4c9c91346d8abd\n' > "$ANDROID_HOME/licenses/android-sdk-preview-license"
       - uses: gradle/actions/setup-gradle@v4
       - name: Unit tests (headless simulation, generator, persistence, OTA incl. end-to-end over local HTTP)
+        if: ${{ !inputs.skip_tests }}
         run: ./gradlew :core:test --no-daemon
+      - name: Fetch the licensed sound pack (the owner's "Sfx" release in this repository, GITHUB_TOKEN, SHA-256 checked; the build fails if it is missing or corrupted)
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          (command -v ffmpeg >/dev/null 2>&1 || sudo apt-get install -y --no-install-recommends ffmpeg >/dev/null 2>&1) || true
+          tools/ci/fetch_pack_sfx.sh --download
       - name: Assemble the release APK (not debuggable; signed with the Build 42 identity)
         env:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -74,7 +93,8 @@ jobs:
           "$BT/aapt2" dump badging "$OUT" > badging.txt; grep -E "^package|sdkVersion|targetSdkVersion|uses-permission|launchable-activity|native-code" badging.txt
           if grep -q "application-debuggable" badging.txt; then echo "::error::the released APK must not be debuggable"; exit 1; fi
           echo "not debuggable"
-          "$BT/apksigner" verify --verbose --print-certs "$OUT" > cert.txt; head -8 cert.txt
+          # the Android 8.x view (v2 block): since Build 73 a plain --print-certs shows the rotated v3 signer first
+          "$BT/apksigner" verify --verbose --print-certs --max-sdk-version 27 "$OUT" > cert.txt; head -8 cert.txt
           GOT=$(grep -m1 "certificate SHA-256 digest" cert.txt | sed 's/.*: //' | tr 'a-f' 'A-F' | sed 's/../&:/g; s/:$//')
           echo "SIGNING_CERT_SHA256=$GOT"
           if [ "$GOT" != "$EXPECTED_CERT_SHA256" ]; then echo "::error::APK is not signed with the installed Build 42 identity for Android 8.x (expected $EXPECTED_CERT_SHA256)"; exit 1; fi
@@ -111,7 +131,7 @@ jobs:
           BASE=$(grep -oP "BUNDLED_CONTENT_VERSION = \K[0-9]+" core/src/main/java/com/hotatticgames/climbup/ota/OtaConfig.java)
           python3 tools/ota/make_ota.py --version "$BASE" --sign
           ./gradlew :core:verifyOta -PotaDir=build/ota -PexpectBundled --no-daemon -q
-      - name: Publish GitHub Release (APK)
+      - name: Release notes, and the owner test build's draft (a production APK goes to the release job below)
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -122,16 +142,22 @@ jobs:
           RT=$(grep -oP "RUNTIME = \K[0-9]+" core/src/main/java/com/hotatticgames/climbup/ota/OtaConfig.java)
           BV=$(grep -oP "BUNDLED_CONTENT_VERSION = \K[0-9]+" core/src/main/java/com/hotatticgames/climbup/ota/OtaConfig.java)
           if [ "${{ inputs.test_build }}" = "true" ]; then KIND='Physical-test build'; else KIND='Production release, build'; fi
-          printf "$KIND"' ${{ env.BUILD_NUMBER }} (sideload; signed with the same certificate as every build since 37, so it installs over the previous one).\n\nVersion: %s build ${{ env.BUILD_NUMBER }}\nSource: ${{ github.sha }}\nPackage: com.hotatticgames.climbup, versionName %s, versionCode ${{ env.BUILD_NUMBER }}\nSHA-256: %s\nSigning certificate SHA-256: %s\nOTA: signed manifests, runtime %s, bundled content version %s\n' "$VER" "$VER" "$SHA" "$EXPECTED_CERT_SHA256" "$RT" "$BV" > notes.md
+          printf "$KIND"' ${{ env.BUILD_NUMBER }} (sideload; installs over the previous build and keeps its saves).\n\nVersion: %s build ${{ env.BUILD_NUMBER }}\nSource: ${{ github.sha }}\nPackage: com.hotatticgames.climbup, versionName %s, versionCode ${{ env.BUILD_NUMBER }}\nSHA-256: %s\nSigning (key rotation since Build 74): Android 9+ private release key %s; Android 8.x the Build 37+ certificate %s\nOTA: signed manifests, runtime %s, bundled content version %s\n' "$VER" "$VER" "$SHA" "$ROTATED_SIGNER_SHA256" "$EXPECTED_CERT_SHA256" "$RT" "$BV" > notes.md
           if [ "${{ inputs.test_build }}" = "true" ]; then
             # owner test build: a DRAFT release (collaborators only, creates no tag, never public) carries the APK
             gh release create "v${VER}-build${{ env.BUILD_NUMBER }}" "$APK" --target ${{ github.sha }} --title "Upwardly v${VER} (build ${{ env.BUILD_NUMBER }}) — Android APK (owner test build, draft)" --notes-file notes.md --draft
-          else
-            # release name as the owner specified for the published test releases: "Upwardly build NN apk"
-            gh release create "v${VER}-build${{ env.BUILD_NUMBER }}" "$APK" --target ${{ github.sha }} --title "Upwardly build ${{ env.BUILD_NUMBER }} apk" --notes-file notes.md --latest
           fi
+          mkdir -p candidate && cp "$APK" notes.md candidate/
+          echo "TAG=v${VER}-build${{ env.BUILD_NUMBER }}" > candidate/tag.env
+      - name: Hand the signed APK and its notes to the release job
+        if: ${{ inputs.test_build != true }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-candidate-android-${{ env.BUILD_NUMBER }}
+          path: candidate/
+          retention-days: 14
       - name: Publish the OTA baseline (only if the channel does not already carry this version or a newer one)
-        if: ${{ inputs.test_build != true }}   # an owner test build never touches the OTA channel
+        if: ${{ inputs.test_build != true && inputs.publish_public == true }}   # an owner test build, or a private draft release, never touches the OTA channel
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -143,3 +169,29 @@ jobs:
           if [ "$CUR" -ge "$BV" ]; then echo "channel already at v$CUR (>= baseline v$BV): left untouched"; exit 0; fi
           gh release upload ota build/ota/payload.zip build/ota/manifest.json build/ota/manifest.sig --clobber
           echo "published OTA baseline v$BV"
+
+  release:
+    # owner: one release per build with the APK, EXE and Linux build together ("Upwardly build NN"); windows.yml adds to the same tag.
+    # Build 78 release gate (tools/ci/publish_release.sh): the APK joins a draft candidate; the release goes public only when the Windows and Linux
+    # packages from this same commit are on it too. The lock is shared with windows.yml's release job so the two never check and publish at once.
+    needs: build
+    if: ${{ inputs.test_build != true }}
+    runs-on: ubuntu-latest
+    concurrency:
+      group: upwardly-release-publish
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-candidate-android-${{ env.BUILD_NUMBER }}
+          path: candidate
+      - name: Add the APK to the release candidate (publishes only when all three packages are on it, and only with publish_public)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PUBLISH_PUBLIC: ${{ inputs.publish_public }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -e
+          . candidate/tag.env
+          bash tools/ci/publish_release.sh "$TAG" "${{ env.BUILD_NUMBER }}" candidate/notes.md candidate/*.apk

@@ -38,6 +38,58 @@ public final class SettingsScreen extends ScreenAdapter {
     }
     private static final String[] Q = {"LOW", "MEDIUM", "HIGH"}, HAP = {"OFF", "LOW", "HIGH"};
 
+    // ---- Build 74 (owner): the hidden determinism check. Replays the bundled seed 12 climb (ReplayCheck) on this device's own runtime, on a background
+    // thread, and shows its finish step, run clock and hashes next to what Linux, Windows and the Android emulator print, so a real phone can be compared.
+    private int versionTaps;
+    private static volatile boolean checkRunning;
+    private static volatile String checkStatus = "REPLAYS A RECORDED CLIMB TO THE FINISH (A FEW MINUTES) AND COMPARES IT WITH THE DESKTOP.";
+    private void startCheck() {
+        if (checkRunning) return;
+        checkRunning = true; checkStatus = "STARTING...";
+        Thread t = new Thread(() -> {
+            try {
+                com.hotatticgames.climbup.sim.Tuning tuning = com.hotatticgames.climbup.sim.Tuning.parse(Gdx.files.internal("data/tuning.json").readString("UTF-8"));        // the bundled tuning, never an update's
+                // the Android build unpacks .gz assets and drops the extension (Build 74 APK holds replays/seed12.bin), the desktop keeps the .gz
+                com.badlogic.gdx.files.FileHandle gz = Gdx.files.internal(ReplayCheck.BUNDLED), raw = Gdx.files.internal(ReplayCheck.BUNDLED.substring(0, ReplayCheck.BUNDLED.length() - 3));
+                boolean packed = gz.exists();
+                byte[] in; try (java.io.InputStream i = packed ? new java.util.zip.GZIPInputStream(gz.read()) : raw.read()) { java.io.ByteArrayOutputStream o = new java.io.ByteArrayOutputStream(); byte[] b = new byte[65536]; int n; while ((n = i.read(b)) > 0) o.write(b, 0, n); in = o.toByteArray(); }      // (readAllBytes needs Android 13)
+                long t0 = System.nanoTime();
+                ReplayCheck.Climb c = ReplayCheck.replay(tuning, ReplayCheck.BUNDLED_SEED, in, false, 150f, f -> checkStatus = "RUNNING " + (int) (f * 100) + "%");
+                String ev = ReplayCheck.hex(c.events.digest()), st = ReplayCheck.hex(c.states.digest());
+                boolean same = c.finishStep == ReplayCheck.EXPECT_FINISH_STEP && c.finishClock == ReplayCheck.EXPECT_CLOCK_STEPS && ev.equals(ReplayCheck.EXPECT_EVENTS) && st.equals(ReplayCheck.EXPECT_STATES);
+                checkStatus = (same ? "MATCHES THE DESKTOP. " : "DIFFERS FROM THE DESKTOP. ") + "FINISH STEP " + c.finishStep + "  CLOCK " + c.finishClock + " STEPS  TIME "
+                    + ClockText.time((float) (c.finishClock / (double) RunRecord.STEPS_PER_SECOND)) + "  EVENTS " + ev + "  STATES " + st + "  (" + (System.nanoTime() - t0) / 1_000_000_000L + " S)";
+            } catch (Throwable e) { checkStatus = "CHECK FAILED: " + e; }
+            finally { checkRunning = false; }
+        }, "determinism-check");
+        t.setDaemon(true); t.setPriority(Thread.MIN_PRIORITY); t.start();
+    }
+
+    // ---- Build 76 (owner: "game play footage from all the different areas"): the hidden world picker, next to the determinism check. Starts a new climb in
+    // the chosen world: the tower is grown up to that world on a background thread (a few seconds to a minute for Deep Space), then the climb starts on the
+    // first route platform there. Such a climb is assisted (no best times or splits) and earns no achievements (SaveData.devPicked).
+    private int pickWorld;
+    private static volatile boolean pickBusy, pickReady;
+    private static volatile String pickStatus = "";
+    private void startPick() {
+        if (pickBusy || checkRunning) return;
+        pickBusy = true; final int w = pickWorld; final String name = com.hotatticgames.climbup.render.Palette.NAMES[w].toUpperCase();
+        final int h = w == 0 ? 0 : (int) (w * g.tuning.zoneHeight) + 5;
+        pickStatus = "PREPARING " + name + "...";
+        Thread t = new Thread(() -> {
+            try {
+                g.beginFreshRun(null);
+                ClimbGame.Run r = g.openRun(true);
+                while (r.tower.topAbsY() < h + 80f) { r.tower.extend(); pickStatus = "PREPARING " + name + "  " + (int) Math.min(h, r.tower.topAbsY()) + " / " + h + " M"; }
+                r.startHeight = h;
+                g.save.devPicked = true; RunRecord.noteAssist(g.save, true);
+                g.preparedRun = r; g.runFresh = false; pickStatus = ""; pickReady = true;
+            } catch (Throwable e) { pickStatus = "WORLD PICKER FAILED: " + e; }
+            finally { pickBusy = false; }
+        }, "world-picker");
+        t.setDaemon(true); t.start();
+    }
+
     public float rowTop() { return rowY; }
     public void skip(float dy) { rowY -= dy; }
 
@@ -116,7 +168,16 @@ public final class SettingsScreen extends ScreenAdapter {
             toggle("REDUCED MOTION", s.reducedMotion, () -> s.reducedMotion = !s.reducedMotion);
             toggle("CONTEXTUAL TIPS", s.tips, () -> s.tips = !s.tips);
         } else if (page == 2) {                                     // ABOUT (+ the data reset on desktop, whose controls live in the launcher's own tab)
-            rowY -= 24; ui.textC(g.platform.title() + "  " + Legacy.versionLine(ClimbGame.VERSION, ClimbGame.appBuild), W / 2, rowY + 30, 4.5f, Ui.TEXT); rowY -= 72;
+            rowY -= 24; ui.textC(g.platform.title() + "  " + Legacy.versionLine(ClimbGame.VERSION, ClimbGame.appBuild), W / 2, rowY + 30, 4.5f, Ui.TEXT);
+            if (ui.tappedIn(0, rowY, W, 72)) versionTaps++;                 // Build 74: seven taps on the version line show the determinism check
+            rowY -= 72;
+            if (versionTaps >= 7) {
+                row("DETERMINISM CHECK", checkRunning ? "RUNNING" : "RUN", null, null, this::startCheck);
+                rowY = aboutLines(checkStatus, 2.4f, W, rowY, 54);
+                row("WORLD PICKER", com.hotatticgames.climbup.render.Palette.NAMES[pickWorld].toUpperCase(), () -> pickWorld = (pickWorld + 4) % 5, () -> pickWorld = (pickWorld + 1) % 5, null);
+                row("START IN THIS WORLD", pickBusy ? "PREPARING" : "GO", null, null, this::startPick);
+                rowY = aboutLines(pickStatus.isEmpty() ? "A NEW CLIMB IN THAT WORLD, FOR FOOTAGE: IT REPLACES THE CURRENT CLIMB AND SETS NO RECORDS." : pickStatus, 2.4f, W, rowY, 54);
+            }
             if (g.platform.networkAllowed()) {
                 rowY = aboutLines("CONTENT: " + g.ota.describe(), 3.0f, W, rowY, 54);
                 rowY = aboutLines("UPDATES ARE SIGNED AND VERIFIED. " + (g.otaClient.status.isEmpty() ? "" : g.otaClient.status.toUpperCase()), 2.4f, W, rowY, 54);
@@ -134,8 +195,10 @@ public final class SettingsScreen extends ScreenAdapter {
             toggle("COLOURBLIND-SAFE COLOURS", s.colourblind, () -> s.colourblind = !s.colourblind);
             toggle("ASSIST: SLOWER SPEED", s.assistSlow, () -> s.assistSlow = !s.assistSlow);
             toggle("ASSIST: JUMP FORGIVENESS", s.assistForgive, () -> s.assistForgive = !s.assistForgive);
+            row("DIFFICULTY (NEW CLIMBS)", com.hotatticgames.climbup.sim.Tuning.HARD_NAMES[Math.max(0, Math.min(com.hotatticgames.climbup.sim.Tuning.PLAYABLE_MODES - 1, s.difficulty))], null, null, () -> s.difficulty = (Math.min(s.difficulty, com.hotatticgames.climbup.sim.Tuning.PLAYABLE_MODES - 1) + 1) % com.hotatticgames.climbup.sim.Tuning.PLAYABLE_MODES);      // NORMAL / PUNISHER (owner 2026-10-24: NEVER GONNA HAPPEN not offered for now); a climb keeps the one it began with
         }
         ui.end();
+        if (pickReady) { pickReady = false; if (back instanceof PlayScreen) back.dispose(); g.setScreen(new PlayScreen(g, false)); return; }      // the world picker's climb is ready
         g.autoShot("settings", dt);
     }
 }

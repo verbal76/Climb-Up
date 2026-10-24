@@ -35,7 +35,7 @@ public final class DesktopLauncher {
             DesktopLog.append("first run: display " + nat.width + "x" + nat.height + " @" + nat.refreshRate + " -> " + cfg.display);
         }
         DisplayManager.configureStartup(c, cfg, System.getProperty("climb.w") != null ? Integer.getInteger("climb.w", cfg.width) : 0, Integer.getInteger("climb.h", cfg.height));
-        c.setBackBufferConfig(8, 8, 8, 8, 24, 0, cfg.aa);
+        c.setBackBufferConfig(8, 8, 8, 8, 24, 8, cfg.aa);      // 8 stencil bits: the shadows draw each pixel once (ShadowPass)
         c.setWindowSizeLimits(640, 360, -1, -1);
         c.setWindowIcon(Files.FileType.Classpath, "icons/upwardly_256.png", "icons/upwardly_128.png", "icons/upwardly_64.png", "icons/upwardly_48.png", "icons/upwardly_32.png", "icons/upwardly_16.png");
         c.useVsync(cfg.vsync);
@@ -52,7 +52,7 @@ public final class DesktopLauncher {
         } catch (Throwable t) {
             if (cfg.aa > 0 && !platform.attached) {          // the window could not be made with anti-aliasing: try once more without it
                 DesktopLog.error("the window could not be created with " + cfg.aa + "x anti-aliasing; trying again without it", t);
-                cfg.aa = 0; c.setBackBufferConfig(8, 8, 8, 8, 24, 0, 0);
+                cfg.aa = 0; c.setBackBufferConfig(8, 8, 8, 8, 24, 8, 0);
                 try { run(game, c); DesktopLog.append("clean exit"); return; } catch (Throwable t2) { t = t2; }
             }
             DesktopLog.error("the game stopped with an error", t); t.printStackTrace(); System.exit(1);       // never leave a half-started process behind

@@ -49,6 +49,8 @@ public final class SaveData {
     public float bestFinish = 0f;                // fastest finish ever (0 = none)
     public float bestSplit = 0f;                 // fastest single tower ever (0 = none)
     public float[] bestTotals = new float[0];    // fastest run clock at the Nth unlock, ever
+    public boolean devPicked = false;            // Build 76 (owner): started from the hidden world picker (footage): never a record, a split or an achievement
+    public int difficulty = 0;                   // Build 79 (owner): the climb in progress's difficulty (0 NORMAL, 1 PUNISHER, 2 NEVER GONNA HAPPEN), set when it starts from the setting; its times go on that difficulty's board
     public boolean assisted = false;             // owner (Build 71): this climb's clock has run with an assist on (slower speed or jump forgiveness); its times stay with the run but never become bests
     // personal records (times table, infinity distance): one self-contained object owned by whoever owns this save, stored as its own JSON text (see RecordsData)
     public String recordsJson = "";
@@ -61,7 +63,18 @@ public final class SaveData {
         }
         return recordsObj;
     }
-    public void syncRecords() { if (recordsObj != null) recordsJson = recordsObj.toJson(); }       // call before writing
+    /** Build 79 (owner): PUNISHER and NEVER GONNA HAPPEN climbs keep their own times tables, apart from the normal one. */
+    public String punisherRecordsJson = "", neverRecordsJson = "";
+    private transient RecordsData punisherObj, neverObj;
+    /** The times table of difficulty {@code d} (0 the normal one). */
+    public RecordsData board(int d) {
+        if (d == 1) { if (punisherObj == null) punisherObj = RecordsData.fromJson(punisherRecordsJson); return punisherObj; }
+        if (d == 2) { if (neverObj == null) neverObj = RecordsData.fromJson(neverRecordsJson); return neverObj; }
+        return records();
+    }
+    /** The times table this climb's times go on (its difficulty's). */
+    public RecordsData board() { return board(difficulty); }
+    public void syncRecords() { if (recordsObj != null) recordsJson = recordsObj.toJson(); if (punisherObj != null) punisherRecordsJson = punisherObj.toJson(); if (neverObj != null) neverRecordsJson = neverObj.toJson(); }       // call before writing
 
     /** A run that was in progress when an update changed the rules, kept as a stamped record (it cannot be resumed: its castles and obstacles came from the old rules). */
     public static final class LegacyRun {

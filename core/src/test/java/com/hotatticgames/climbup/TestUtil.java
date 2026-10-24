@@ -15,7 +15,7 @@ final class TestUtil {
         return c;
     }
     private static final java.util.Map<String, java.util.List<Course>> SLICES = new java.util.HashMap<>();
-    /** The slices of an endless run of this seed, generated (and cached for the whole test run) until the route passes {@code top} metres. */
+    /** The slices of an endless run of this seed up to the one whose route passes {@code top} metres (generated once and cached for the whole test run). */
     static synchronized java.util.List<Course> slices(long seed, float top) throws Exception {
         java.util.List<Course> l = SLICES.computeIfAbsent(seed + "", k -> new java.util.ArrayList<>());
         Tuning t = tuning();
@@ -23,7 +23,10 @@ final class TestUtil {
             Course prev = l.isEmpty() ? null : l.get(l.size() - 1);
             l.add(CourseGenerator.chunk(seed, l.size(), prev, t));
         }
-        return l;
+        // only the slices up to top, even when another test has grown the shared cache higher (Build 77: a check meant for the first 1,100 m was measuring
+        // whole 5,300 m runs whenever a 5,300 m test happened to run first in the same JVM)
+        int n = 0; while (n < l.size() && l.get(n).get(l.get(n).routeSize() - 1).y < top) n++;
+        return java.util.Collections.unmodifiableList(l.subList(0, Math.min(l.size(), n + 1)));
     }
     /** Flat test world: a long platform plus helpers. */
     static Course flat(Tuning t, Element... extra) {

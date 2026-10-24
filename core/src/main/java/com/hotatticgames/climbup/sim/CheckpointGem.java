@@ -28,7 +28,9 @@ public final class CheckpointGem {
     public static final float LIFT = 0.90f;
 
     /** Where the bottom edge is (above the deck) for a given bob phase sin(...) in [-1, 1] and roll angle. */
-    public static float bottomAt(float bobSin, float rollDeg) { return LIFT + BOB * bobSin - HALF_H * (float) Math.cos(Math.toRadians(rollDeg)); }
+    /** Build 74: degrees to radians as one fixed multiplication (OpenJDK's Math.toRadians formula); Android's Math.toRadians divides by 180 first, which can differ in the last bit. */
+    private static final double DEG = 0.017453292519943295;
+    public static float bottomAt(float bobSin, float rollDeg) { return LIFT + BOB * bobSin - HALF_H * (float) StrictMath.cos(rollDeg * DEG); }
     /** The highest the gem's top ever reaches above the deck. */
     public static float topMax() { return LIFT + BOB + HALF_H; }
 

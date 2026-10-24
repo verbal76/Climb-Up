@@ -136,4 +136,52 @@ d = 1.6; t = t_arr(d)
 doppler = sq(np.cumsum(260 - 160 * (t / d) ** 1.4) / SR, 0.5) * 0.18 + sweep(520, 130, d, np.sin) * 0.2
 rush = lp(noise2(d), 0.25) * np.sin(np.pi * np.clip(t / d, 0, 1)) ** 2.2 * 0.9
 save('whoosh', (doppler + rush) * np.sin(np.pi * np.clip(t / d, 0, 1)) ** 0.8)
+# ---------------- Build 77 creature / trap cues and the conveyor hum (own seeded generator, added last so every earlier sound stays byte-identical)
+r3 = np.random.default_rng(2026)
+def noise3(d): return r3.uniform(-1, 1, int(SR * d))
+def bp(x, lo, hi): return lp(x, hi) - lp(x, lo)         # crude band-pass from two one-pole low-passes
+# dash: the skull's swoosh - a band of air that sweeps up and then falls away, with a low body
+d = 0.42; t = t_arr(d); sh = np.sin(np.pi * np.clip(t / d, 0, 1)) ** 1.4
+save('dash', (bp(noise3(d), 0.04, 0.55) * 2.2 + 0.35 * sweep(420, 120, d, np.sin)) * sh, 0.75)
+# skull: an eerie hollow moan that rises and fades, for its hover and wind-up (played sparingly)
+d = 0.9; t = t_arr(d)
+moan = np.sin(2 * np.pi * np.cumsum(150 + 55 * np.sin(np.pi * t / d) + 6 * np.sin(2 * np.pi * 7 * t)) / SR) * 0.6 + 0.25 * bp(noise3(d), 0.03, 0.2)
+save('skull', moan * np.sin(np.pi * np.clip(t / d, 0, 1)) ** 1.2, 0.6)
+# blob: wobble = two wet wobbling blips, blobup = the leap (goofy rising boing), splat = the landing / squash
+d = 0.55; t = t_arr(d)
+save('wobble', sweep(180, 300, d, np.sin) * (0.55 + 0.45 * np.sin(2 * np.pi * 11 * t)) * np.sin(np.pi * np.clip(t / d, 0, 1)) ** 0.6, 0.7)
+d = 0.32; t = t_arr(d)
+save('blobup', sweep(150, 720, d, np.sin) * (1 + 0.3 * np.sin(2 * np.pi * 18 * t)) * env(len(t), 0.004, 0.12), 0.75)
+d = 0.34; t = t_arr(d)
+save('splat', (lp(noise3(d), 0.3) * np.exp(-t * 16) * 1.1 + sweep(260, 60, d, np.sin) * np.exp(-t * 11) + 0.3 * bp(noise3(d), 0.05, 0.3) * np.exp(-t * 26)) * env(len(t), 0.001, 0.1), 0.85)
+# crab: a dry double click-clack of claws
+d = 0.2
+c1 = (lp(noise3(0.04), 0.7) + 0.6 * note(1900, 0.04, 'sq', 0.5, 0.0005, 0.03)) * env(int(SR * 0.04), 0.0005, 0.03)
+c2 = (lp(noise3(0.05), 0.6) + 0.6 * note(1500, 0.05, 'sq', 0.5, 0.0005, 0.04)) * env(int(SR * 0.05), 0.0005, 0.04)
+save('clack', mix([(0, c1), (0.07, c2)], d), 0.7)
+# bee dive: the buzz falls in pitch as it swoops at you
+d = 0.5; t = t_arr(d)
+dv = sq(np.cumsum(430 - 230 * (t / d)) / SR, 0.5) * 0.35 + 0.2 * np.sin(2 * np.pi * np.cumsum(860 - 460 * (t / d)) / SR)
+save('dive', lp(dv, 0.5) * (0.6 + 0.4 * np.sin(2 * np.pi * 34 * t)) * np.sin(np.pi * np.clip(t / d, 0, 1)) ** 0.7, 0.7)
+# spike drop: the stone slams home - a heavy thud with a short metallic chain rattle
+d = 0.5; t = t_arr(d)
+slam = sweep(130, 38, d, np.sin) * np.exp(-t * 9) + 0.6 * lp(noise3(d), 0.2) * np.exp(-t * 22)
+rattle = bp(noise3(d), 0.2, 0.7) * np.exp(-t * 11) * (rng.uniform(0, 1, len(t)) > 0.55) * 0.35
+save('slam', (slam + rattle) * env(len(t), 0.001, 0.15), 0.9)
+# conveyor motor: a light, seamless 1 s loop (whole cycles of every component, so it loops without a click): a low belt-motor hum, a slow flutter and two soft belt ticks
+d = 1.0; t = t_arr(d)
+hum = np.sin(2 * np.pi * 70 * t) * 0.5 + np.sin(2 * np.pi * 140 * t + 0.6) * 0.3 + np.sin(2 * np.pi * 211 * t) * 0.1
+hum *= 0.8 + 0.2 * np.sin(2 * np.pi * 5 * t)
+tick = np.zeros(len(t))
+for k in (0.0, 0.5):
+    i = int(k * SR); tt = t_arr(0.03); tick[i:i + len(tt)] += lp(r3.uniform(-1, 1, len(tt)), 0.25) * np.exp(-tt * 140) * 0.35
+save('motor', hum + tick, 0.5)
+# ---------------- Build 78: the scanning ship's hum and scan sweep (own seeded generator, added last so every earlier sound stays byte-identical)
+r4 = np.random.default_rng(2078)
+d = 4.2; t = t_arr(d)
+shum = (np.sin(2 * np.pi * 92 * t) * 0.5 + np.sin(2 * np.pi * 184 * t + 0.4) * 0.25 + 0.08 * lp(r4.uniform(-1, 1, len(t)), 0.05)) * (0.85 + 0.15 * np.sin(2 * np.pi * 3 * t))
+shum *= np.clip(t / 0.6, 0, 1) * np.clip((d - t) / 0.9, 0, 1)                              # swells in, fades out
+f = 700 + 500 * np.sin(np.pi * np.clip((t - 0.7) / 2.6, 0, 1)) ** 2 * (0.6 + 0.4 * np.sin(2 * np.pi * 0.77 * t))   # the beam sweeping over you
+scanw = np.sin(2 * np.pi * np.cumsum(f) / SR) * (0.6 + 0.4 * np.sin(2 * np.pi * 9 * t)) * np.clip((t - 0.7) / 0.3, 0, 1) * np.clip((3.4 - t) / 0.4, 0, 1)
+save('scan', shum + 0.18 * scanw, 0.45)
 print('ok')

@@ -12,6 +12,7 @@ public final class Settings {
     public boolean leftHanded = false;
     public boolean assistSlow = false;        // game speed assist
     public boolean assistForgive = false;     // jump forgiveness assist
+    public int difficulty = 0;                // Build 79 (owner): for the next new climb - 0 NORMAL, 1 PUNISHER, 2 NEVER GONNA HAPPEN (faster creatures and cannons, more of them; own times table)
     public boolean tips = true;
     public int character = 0;                 // 0 = Quaternius bunny, 1 = chibi hamster
     public boolean otaEnabled = true;         // OTA: check for signed gameplay-number updates (Settings > About)

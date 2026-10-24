@@ -162,17 +162,67 @@ public final class Autopilot {
                 else phase = 1;
             }
             if (phase == 1) {
-                float at = crab >= 0 && crab < s.course.hazards.size() ? s.crabAt(crab, s.course.hazards.get(crab)) : hx;
-                float ahead = s.course.dsWrap(at, s.s) * dir;
+                float ahead = crab >= 0 ? crabAhead(s) : s.course.dsWrap(hx, s.s) * dir;
                 in.moveX = dir;
                 if (ahead <= hopDist) { in.jumpPressed = true; in.jumpHeld = true; phase = 2; }
                 return;
             }
             if (phase == 2) {
                 in.moveX = dir; in.jumpHeld = s.vy > 0f && s.mode == Sim.Mode.AIR;
-                if (s.mode == Sim.Mode.GROUND) phase = 3; else return;
+                if (s.mode != Sim.Mode.GROUND) return;
+                phase = crab >= 0 && crabAhead(s) < 1e8f ? 1 : 3;          // Build 79: several crabs share a deck: hop each in turn
+                if (phase == 1) return;
             }
             rest.act(s, in);
+        }
+        /** Distance ahead (along dir) of the nearest live crab on this deck that is still in front of you (1e9 when none). */
+        private float crabAhead(Sim s) {
+            Course c = s.course; Element ref = crab < c.hazards.size() ? c.hazards.get(crab) : null;
+            float best = 1e9f;
+            for (int k = 0, n = s.hz == null ? c.hazards.size() : s.hz.length; k < n; k++) {
+                int hi = s.hz == null ? k : s.hz[k];
+                if (hi >= c.hazards.size()) continue;
+                Element h = c.hazards.get(hi);
+                if (h.type != Element.Type.CRAB || (hi < s.featDone.length && s.featDone[hi]) || s.crabFalling(hi) || ref == null || s.mobDeckIdx(hi, h) != s.mobDeckIdx(crab, ref)) continue;
+                float ahead = c.dsWrap(s.crabAt(hi, h), s.s) * dir;
+                if (ahead > -0.2f && ahead < best) best = ahead;
+            }
+            return best;
+        }
+    }
+
+    /** Build 79: runs across a bridge whose planks drop out (Element.holed), hopping each hole {@code hopDist} before its near edge, then leaves like {@link GroundPolicy}. */
+    static final class HoleHopPolicy implements Policy {
+        final int a, dir; final float hopDist; final GroundPolicy rest; boolean inHop;
+        HoleHopPolicy(int a, int b, int dir, float hopDist, int steerMode) { this.a = a; this.dir = dir; this.hopDist = hopDist; rest = new GroundPolicy(a, b, dir, 0f, 0f, 0.9f, steerMode); }
+        public void act(Sim s, InputState in) {
+            if (s.mode == Sim.Mode.LEDGE || s.mode == Sim.Mode.PULLUP) { in.moveY = 1f; return; }
+            if (inHop) {
+                if (s.mode == Sim.Mode.AIR) { in.moveX = dir; in.jumpHeld = s.vy > 0f; return; }
+                inHop = false;
+            }
+            if (s.mode == Sim.Mode.GROUND && s.onElem == a) {
+                float near = nextHole(s);
+                if (near < 1e8f) {
+                    in.moveX = dir;
+                    if (near <= hopDist) { in.jumpPressed = true; in.jumpHeld = true; inHop = true; }
+                    return;
+                }
+            }
+            rest.act(s, in);
+        }
+        /** Distance (along dir) from you to the near edge of the next hole section ahead on deck a (negative when already over it), else 1e9. */
+        private float nextHole(Sim s) {
+            Element e = s.course.get(a);
+            if (!e.holed()) return 1e9f;
+            float x = s.course.dsWrap(s.s, s.es1[a]); int n = e.holeSections(); float sec = e.w / n, best = 1e9f;
+            for (int k = 0; k < n; k++) {
+                if ((e.color & (1 << k)) == 0) continue;
+                float lo = -e.w * 0.5f + k * sec, hi = lo + sec, near = dir > 0 ? lo : hi, far = dir > 0 ? hi : lo;
+                if ((far - x) * dir <= Sim.HOLE_FOOT) continue;          // behind you
+                best = Math.min(best, (near - x) * dir);
+            }
+            return best;
         }
     }
 
@@ -180,7 +230,8 @@ public final class Autopilot {
     static Policy make(PolicyFactory f) { return f == null ? null : new Reflex(f); }
 
     /**
-     * Build 71 creatures need reflexes rather than a plan made in advance: a skull dashes at you wherever you are, a green blob lands where you were.
+     * Build 71 creatures need reflexes rather than a plan made in advance: a skull dashes at you wherever you are, a green blob lands where you were
+     * (Build 79: and a crab that followed you onto another platform runs at you there: hop it as it closes in; crabs on their own deck are the plan's job).
      * On foot, this hops a dashing skull just before it reaches you (its dash is low, so a hop clears it) and steps out of a blob's shadow (away from its
      * centre, or the other way when the deck's edge is too close). The planned move is then started again from wherever that left you. Without either
      * creature nearby it is exactly the planned move.
@@ -206,16 +257,21 @@ public final class Autopilot {
                 if (hi >= c.hazards.size()) continue;
                 Element h = c.hazards.get(hi);
                 if (h.type == Element.Type.SKULL && s.skullDashing(hi)) {
-                    Element deck = h.anchor >= 0 && h.anchor < c.size() ? c.get(h.anchor) : null;
-                    if (deck == null || Math.abs(s.y - deck.y) > 0.6f) continue;
+                    int dj = s.mobDeckIdx(hi, h);                       // Build 79: the deck it hunts on now
+                    if (dj < 0 || Math.abs(s.y - s.deckY(dj)) > 0.6f) continue;
                     float ahead = c.dsWrap(s.s, s.mobS[hi]) * s.mobDir[hi], gap = ahead - (Element.SKULL_R + hw);
                     if (ahead > 0f && gap / Element.SKULL_SPEED < 0.15f) { in.jumpPressed = true; in.jumpHeld = true; busy = 1; return true; }
+                } else if (h.type == Element.Type.CRAB && s.crabChasing(hi) && !(hi < s.featDone.length && s.featDone[hi]) && !s.crabFalling(hi)
+                        && s.crabJump[hi] < 0f && hi < s.deckOff.length && Math.round(s.deckOff[hi]) != 0 && s.mobDeckIdx(hi, h) == s.onElem) {   // Build 79: a crab that followed you off its own deck runs at you: hop it as it comes (on its own deck the plan's crab hop handles it)
+                    float d = c.dsWrap(s.crabAt(hi, h), s.s);
+                    if (Math.abs(d) < 1.35f && Math.abs(d) > 0.25f && s.crabFacing(hi, h) * d < 0f) { in.jumpPressed = true; in.jumpHeld = true; busy = 1; return true; }
                 } else if (h.type == Element.Type.BLOB && s.blobShadow(hi) >= 0f && s.mobDir[hi] == 0f) {
                     float d = c.dsWrap(s.s, s.mobTgt[hi]);
                     if (Math.abs(d) >= Element.BLOB_R + hw + 0.35f) continue;
-                    Element deck = h.anchor >= 0 && h.anchor < c.size() ? c.get(h.anchor) : null;
+                    int dj = s.mobDeckIdx(hi, h);                       // Build 79: the deck it comes down on
+                    Element deck = dj >= 0 ? c.get(dj) : null;
                     float dir = d > 0f ? 1f : d < 0f ? -1f : s.facing;
-                    if (deck != null) { float room = c.dsWrap(s.es1[h.anchor] + dir * deck.halfW(), s.s) * dir; if (room < 1.3f) dir = -dir; }
+                    if (deck != null) { float room = c.dsWrap(s.es1[dj] + dir * deck.halfW(), s.s) * dir; if (room < 1.3f) dir = -dir; }
                     dodge = dir; blob = hi; busy = 2; in.moveX = dir; return true;
                 }
             }
@@ -231,24 +287,30 @@ public final class Autopilot {
 
     static boolean movingNear(Course c, int a) {
         for (int i = a; i <= Math.min(c.routeSize() - 1, a + 2); i++) if (c.get(i).isMoving() || c.get(i).spins()) return true;
-        int a0 = anchorIdx(c, a); for (Element h : c.hazards) if (h.anchor >= a0 && h.anchor <= a0 + 2 && h.isMoving()) return true;
+        int a0 = anchorIdx(c, a); for (Element h : c.hazards) if (h.anchor >= a0 - (firesAhead(h) ? 1 : 0) && h.anchor <= a0 + 2 && h.isMoving()) return true;
         return false;
     }
 
     static float maxPeriod(Course c, int a) {
         float p = 0;
         for (int i = a; i <= Math.min(c.routeSize() - 1, a + 2); i++) if (c.get(i).isMoving() || c.get(i).spins()) p = Math.max(p, c.get(i).period);
-        int a0 = anchorIdx(c, a); for (Element h : c.hazards) if (h.anchor >= a0 && h.anchor <= a0 + 2 && h.isMoving()) p = Math.max(p, h.period);
+        int a0 = anchorIdx(c, a); for (Element h : c.hazards) if (h.anchor >= a0 - (firesAhead(h) ? 1 : 0) && h.anchor <= a0 + 2 && h.isMoving()) p = Math.max(p, h.period);
         return p;
     }
+    /** Build 79: a cannon (or mortar) on the platform before fires across this one, as CourseGenerator.commit proves it: a person waits for a clear moment here too
+     *  (framed seed 5 slice 6: off a spring the cannon from the platform before was always in the way, as the planner never tried waiting before the spring). */
+    private static boolean firesAhead(Element h) { return h.type == Element.Type.CANNON || h.type == Element.Type.AIMED || h.type == Element.Type.MORTAR; }
 
     static boolean succeeded(Sim s, int a) {
         switch (s.mode) {
             case GROUND: case LEDGE: case PULLUP: case ROPE: case CABLE: case BEAM:
-                return s.onElem > a && s.onElem < s.course.routeSize() && (s.mode != Sim.Mode.GROUND || !s.gone[s.onElem]);
-            default: return s.lastPad > a && s.lastPad < s.course.routeSize();
+                return s.onElem > a && onRoute(s.course, s.onElem) && (s.mode != Sim.Mode.GROUND || !s.gone[s.onElem]);
+            default: return s.lastPad > a && onRoute(s.course, s.lastPad);
         }
     }
+    /** A route element, not a dead end or lure. Build 79: a streaming tower's world keeps each slice's decoys among the route indices, so "below routeSize()"
+     *  alone took a grab of a dead end's ledge (a left-hand spur hanging over the route a few steps back) for progress (StreamingReplayTest, seed 12). */
+    static boolean onRoute(Course c, int i) { return i >= 0 && i < c.routeSize() && c.get(i).anchor < 0; }
 
     /** Pair mode (key-room detours): success means attaching to exactly element {@code tgt}. */
     static boolean succeededTo(Sim s, int tgt) {
@@ -281,7 +343,7 @@ public final class Autopilot {
         Policy p = make(f);
         InputState in = new InputState();
         int fallsBefore = s.setbacks();
-        float floorY = (tgt >= 0 ? Math.min(s.course.get(a).y, s.course.get(tgt).y) : Math.min(s.course.get(a).y, s.course.get(Math.min(s.course.routeSize() - 1, a + 1)).y)) - 4.5f;
+        float floorY = (tgt >= 0 ? Math.min(s.course.get(a).y, s.course.get(tgt).y) : Math.min(s.course.get(a).y, s.course.get(Math.min(s.course.routeSize() - 1, s.course.nextRoute(a))).y)) - 4.5f;
         int n = (int) (limit / Sim.DT);
         for (int i = 0; i < n; i++) {
             in.clear();
@@ -289,7 +351,7 @@ public final class Autopilot {
             s.step(in);
             if (s.setbacks() != fallsBefore) return null;
             if (tgt >= 0 ? succeededTo(s, tgt) : succeeded(s, a)) return tgt >= 0 && !staysOn(s, tgt) ? null : s;
-            if (tgt < 0 && s.mode == Sim.Mode.GROUND && s.onElem >= 0 && (s.onElem < a || s.onElem >= s.course.routeSize())) return null;   // fell back, or onto a dead end
+            if (tgt < 0 && s.mode == Sim.Mode.GROUND && s.onElem >= 0 && (s.onElem < a || !onRoute(s.course, s.onElem))) return null;   // fell back, or onto a dead end
             if (s.mode == Sim.Mode.AIR && s.vy < 0 && s.y < floorY) return null;
         }
         return null;
@@ -309,7 +371,7 @@ public final class Autopilot {
     public static Result plan(Sim base, int a, boolean measureMargin) { return plan(base, a, measureMargin, false); }
 
     /** With lookahead, prefers moves that leave a state from which the next link is also solvable (used when actually playing the course). */
-    public static Result plan(Sim base, int a, boolean measureMargin, boolean lookahead) { return planTo(base, a, a + 1, false, measureMargin, lookahead); }
+    public static Result plan(Sim base, int a, boolean measureMargin, boolean lookahead) { return planTo(base, a, base.course.nextRoute(a), false, measureMargin, lookahead); }
 
     /** Plans a link between any two elements (not just consecutive route elements): key-room detours. */
     public static Result planPair(Sim base, int a, int b, boolean measureMargin) { return planTo(base, a, b, true, measureMargin, false); }
@@ -351,6 +413,10 @@ public final class Autopilot {
                 cands.add(() -> new WalkOffPolicy(b, dir, wt, fsm));
                 group.add(24 + sm);
             }
+        }
+        if (base.mode == Sim.Mode.GROUND && c.get(a).holed()) {           // Build 79: a bridge that drops planks: hop the holes (tried first: a plain run falls through)
+            int at = 0;
+            for (float hd : new float[]{0.15f, 0.45f, 0.8f}) for (int sm : new int[]{0, 3}) { final float fhd = hd; final int fsm = sm; cands.add(at, () -> new HoleHopPolicy(a, b, dir, fhd, fsm)); group.add(at++, 16); }
         }
         if (base.mode == Sim.Mode.GROUND && c.get(a).isPlatform()) {      // a hazard in the middle of this platform: hop-over moves
             for (int hi = 0; hi < c.hazards.size(); hi++) {
@@ -448,6 +514,7 @@ public final class Autopilot {
         return true;      // undecided within the time: let the real run find out, as before
     }
 
+    static boolean crabDeck(Course c, int a) { for (Element h : c.hazards) if (h.anchor == a && h.type == Element.Type.CRAB) return true; return false; }
     static boolean hasMidHazard(Course c, int a) {
         Element p = c.get(a);
         if (!p.isPlatform()) return false;
@@ -518,7 +585,7 @@ public final class Autopilot {
         }
         for (int q = 0; q < 24; q++) { in.clear(); real.step(in); }
         if (real.mode != Sim.Mode.GROUND) recover(real, r, in);      // like a person: knocked off by a hazard on the way back, so land and carry on from wherever that is (the key is already in hand)
-        if (real.mode == Sim.Mode.GROUND && real.onElem >= 0 && real.onElem < c.routeSize()) return true;
+        if (real.mode == Sim.Mode.GROUND && onRoute(c, real.onElem)) return true;
         why = "back on the route platform"; return false;
     }
     /** Like a person arriving on a platform with momentum: counter-steer to brake and drift to the middle, then stand still. */
@@ -541,7 +608,27 @@ public final class Autopilot {
             real.step(in);
             if (real.setbacks() != f0) return false;
         }
-        return real.mode == Sim.Mode.GROUND && real.onElem >= 0 && real.onElem < c.routeSize();
+        return real.mode == Sim.Mode.GROUND && onRoute(c, real.onElem);
+    }
+    /** Stops within a few cm of {@code toS} on the platform underfoot the way a person does with a direction-only stick: back off if too close to stop cleanly, run in, let go at the stopping distance. */
+    static void standAt(Sim real, float toS, InputState in) {
+        Course c = real.course; int a = real.onElem; Element el = c.get(a);
+        float room = Math.max(0f, el.halfW() - 0.35f);
+        for (int tries = 0; tries < 3 && real.mode == Sim.Mode.GROUND && real.onElem == a; tries++) {
+            float d = c.dsWrap(toS, real.s);
+            if (Math.abs(d) < 0.07f) return;
+            if (Math.abs(d) < 0.5f) {           // too close for a clean stop: step back first
+                float off = Math.max(-room, Math.min(room, c.dsWrap(toS, real.es1[a]) - Math.signum(d) * 0.8f)), back = c.wrap(real.es1[a] + off);
+                for (int q = 0; q < 120 && real.mode == Sim.Mode.GROUND && real.onElem == a; q++) { float db = c.dsWrap(back, real.s); if (Math.abs(db) < 0.3f) break; in.clear(); in.moveX = Math.signum(db); real.step(in); }
+                for (int q = 0; q < 40 && real.mode == Sim.Mode.GROUND && Math.abs(real.vx) > 0.02f; q++) { in.clear(); real.step(in); }
+            }
+            for (int q = 0; q < 240 && real.mode == Sim.Mode.GROUND && real.onElem == a; q++) {
+                float dd = c.dsWrap(toS, real.s), stop = real.vx * real.vx / (2f * real.T.groundDecel);
+                if (Math.abs(dd) < 0.07f || (Math.signum(real.vx) == Math.signum(dd) && Math.abs(dd) <= stop + 0.04f)) break;
+                in.clear(); in.moveX = Math.signum(dd); real.step(in);
+            }
+            for (int q = 0; q < 40 && real.mode == Sim.Mode.GROUND && Math.abs(real.vx) > 0.02f; q++) { in.clear(); real.step(in); }
+        }
     }
     private static int[] chain(int first, int n) { int[] a = new int[n]; for (int i = 0; i < n; i++) a[i] = first + i; return a; }
 
@@ -585,8 +672,16 @@ public final class Autopilot {
                 if (!detour(real, kr, in)) { rep.failedLink = a; rep.simTime = real.time; rep.failInfo = "detour " + why + String.format(" mode=%s on=%d s=%.2f y=%.2f t=%.2f", real.mode, real.onElem, real.s, real.y, real.time); return rep; }
                 a = real.onElem;
             }
-            if (real.mode == Sim.Mode.GROUND && real.onElem == a && hasMidHazard(c, a)) {   // like a person would: stop in the safe pocket before sizing up the hazard
+            if (real.mode == Sim.Mode.GROUND && real.onElem == a && hasMidHazard(c, a) && !crabDeck(c, a)) {   // like a person would: stop in the safe pocket before sizing up the hazard (not with crabs closing in: they shove whoever stands still, so the plan's crab hop goes straight from the landing; seed 7 slice 9)
                 for (int q = 0; q < 40 && Math.abs(real.vx) > 0.05f && real.mode == Sim.Mode.GROUND; q++) { in.clear(); real.step(in); }
+            }
+            if (real.mode == Sim.Mode.BEAM && real.onElem == a && c.get(a).type == Element.Type.ROPE) {
+                // like a person: knocked off a ledge back onto the rope and hauled up onto its top beam, so climb back down onto the rope and size the move up
+                // again from there (the moves off a rope are planned from the rope). Build 77, seed 2 slice 55: an aimed cannon hit the pull-up onto the next
+                // block; the loop only took the beam as "nothing to do" and went round again without a step until it gave up
+                for (int q = 0; q < 120 && real.mode == Sim.Mode.BEAM; q++) { in.clear(); in.moveY = -1f; real.step(in); }
+                for (int q = 0; q < 6 && real.mode == Sim.Mode.ROPE; q++) { in.clear(); real.step(in); }
+                continue;
             }
             if (real.mode == Sim.Mode.AIR && !(real.lastPad == a && (c.get(a).type == Element.Type.PAD || c.get(a).type == Element.Type.SPRING))) {      // shoved into the air by a bee or crab: settle first
                 if (!recover(real, a, in)) { rep.failedLink = a; rep.simTime = real.time; rep.failInfo = "recover " + String.format("mode=%s s=%.2f y=%.2f", real.mode, real.s, real.y); return rep; }
@@ -633,9 +728,16 @@ public final class Autopilot {
                     if (r.ok) break;
                 }
             }
+            if (!r.ok && real.mode == Sim.Mode.GROUND && real.onElem == a && !hasMidHazard(c, a)) {
+                // like a person: stand right where the jump was proven (the platform's middle) and repeat it as proven. The walks above stop anywhere within 0.45 m of
+                // a spot, and a standing jump off a short step can need ~0.35 m and the proof's exact start timing (Build 77, seed 3 slice 54: castle 7's staircase,
+                // a 2.5 m step that works from -0.2..+0.15 m; proofs start with the stick just let go, a long-idle solver moved 0.1 s sooner and missed)
+                standAt(real, real.es1[a], in);
+                if (real.mode == Sim.Mode.GROUND && real.onElem == a) { real.restartHold(); r = plan(real, a, false, true); if (!r.ok) r = plan(real, a, false, false); }      // and from the stick state the proof started in
+            }
             if (!r.ok && real.mode == Sim.Mode.GROUND && real.onElem == a && hasMidHazard(c, a) && c.get(a).isPlatform()) {
                 // like a person: a hazard in the middle of this platform, and the spot we arrived at gives no clean hop. Wait for a better moment, step to another spot on the near side and size it up again (tried on a copy first: the stand-in never walks into the hazard)
-                float dirA = c.dsWrap(real.es1[a + 1], real.es1[a]) >= 0 ? 1f : -1f;
+                float dirA = c.dsWrap(real.es1[c.nextRoute(a)], real.es1[a]) >= 0 ? 1f : -1f;
                 search:
                 for (float off : new float[]{1.0f, 0.6f, 1.4f, 0.8f, 1.8f, 2.4f}) {
                     if (off > c.get(a).halfW() - 0.3f) continue;
@@ -725,7 +827,7 @@ public final class Autopilot {
                 if (d.failed) return false;
                 s.step(in);
                 if (s.setbacks() != sb) return false;
-                if (s.mode == Sim.Mode.GROUND && s.onElem > a && s.onElem < s.course.routeSize() && !s.course.get(s.onElem).crumbles()) return true;
+                if (s.mode == Sim.Mode.GROUND && s.onElem > a && onRoute(s.course, s.onElem) && !s.course.get(s.onElem).crumbles()) return true;
             }
             return false;
         }
@@ -752,7 +854,7 @@ public final class Autopilot {
                 a = s.mode == Sim.Mode.AIR ? s.lastPad : s.onElem;
             }
             if (brakeT > 0 && p == null && s.mode == Sim.Mode.GROUND && s.onElem == a) { brakeT--; return; }
-            if (p == null && !inner && s.mode == Sim.Mode.GROUND && s.onElem == a && a + 1 < s.course.routeSize() && s.course.get(a + 1).crumbles() && !s.course.get(a).crumbles()) {
+            if (p == null && !inner && s.mode == Sim.Mode.GROUND && s.onElem == a && s.course.nextRoute(a) < s.course.routeSize() && s.course.get(s.course.nextRoute(a)).crumbles() && !s.course.get(a).crumbles()) {
                 // like a person: crumbling footing leaves no time to wait out a hazard, so size up the whole crossing from solid ground and wait here until it is clear
                 if (waitedAt != a) { waitedAt = a; waited = 0; holdT = 0; }
                 if (holdT > 0) { holdT--; return; }

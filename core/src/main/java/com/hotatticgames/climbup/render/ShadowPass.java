@@ -20,13 +20,17 @@ import com.badlogic.gdx.utils.Disposable;
  * top ends, so a hero standing half over the edge casts half a shadow. No shadow map and no extra framebuffer: the cost is drawing the casters once more,
  * so it runs at every graphics quality.
  * <p>
- * Overlapping parts of one silhouette (an arm over the body) are drawn once, not darkened twice: the flattened triangles all lie in one plane, and the depth
- * test (strictly less) lets only the first of them colour a pixel.
+ * Overlapping parts of one silhouette (an arm over the body) are drawn once, not darkened twice. Build 76 (owner, on a PC: a speckled shadow): the depth test
+ * alone could not promise that, since the flattened triangles lie in one plane and a desktop GPU (with anti-aliasing above all) rounds their depths
+ * differently pixel by pixel. Each caster now clears the stencil and a pixel takes the shadow only while its stencil is 0, so one coat per pixel on every
+ * GPU. Where the frame has no stencil bits the depth test (strictly less) does it as before.
  */
 public final class ShadowPass implements Disposable {
     private static final Matrix4 PROJ = new Matrix4();
     private static final float[] CLIP = new float[4];
     private static final Color COL = new Color();
+    private static boolean stencil;          // the frame being drawn into has stencil bits (checked per draw: the scaled scene is its own buffer)
+    private static final java.nio.IntBuffer BITS = com.badlogic.gdx.utils.BufferUtils.newIntBuffer(16);
 
     private final ModelBatch batch;
 
@@ -46,9 +50,16 @@ public final class ShadowPass implements Disposable {
     public void draw(Camera cam, ModelInstance[] casters, float a, float b, float c, float d, float lx, float ly, float lz, float x0, float x1, float z0, float z1, Color col) {
         planarShadow(PROJ, a, b, c, d, lx, ly, lz);
         CLIP[0] = x0; CLIP[1] = x1; CLIP[2] = z0; CLIP[3] = z1; COL.set(col);
+        com.badlogic.gdx.graphics.GL20 gl = com.badlogic.gdx.Gdx.gl;
+        BITS.clear(); gl.glGetIntegerv(GL20.GL_STENCIL_BITS, BITS); stencil = BITS.get(0) > 0;
+        if (stencil) {
+            gl.glClearStencil(0); gl.glStencilMask(0xFF); gl.glClear(GL20.GL_STENCIL_BUFFER_BIT);
+            gl.glEnable(GL20.GL_STENCIL_TEST); gl.glStencilFunc(GL20.GL_EQUAL, 0, 0xFF); gl.glStencilOp(GL20.GL_KEEP, GL20.GL_KEEP, GL20.GL_INCR);
+        }
         batch.begin(cam);
         for (ModelInstance m : casters) if (m != null) batch.render(m);
         batch.end();
+        if (stencil) gl.glDisable(GL20.GL_STENCIL_TEST);
     }
 
     /** The matrix that flattens any point onto the plane P along the direction toward the light l: S = (P.l) I - l P^T (column-major, as libGDX stores it). */
@@ -70,8 +81,8 @@ public final class ShadowPass implements Disposable {
             super.bindMaterial(attributes);
             context.setCullFace(0);                                              // a flattened triangle can face either way
             context.setBlending(true, GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
-            context.setDepthTest(GL20.GL_LESS, 0f, 1f);                          // one coat of shadow per pixel (see the class note)
-            context.setDepthMask(true);
+            if (stencil) { context.setDepthTest(GL20.GL_LEQUAL, 0f, 1f); context.setDepthMask(false); }      // one coat per pixel by the stencil; the scene still hides it
+            else { context.setDepthTest(GL20.GL_LESS, 0f, 1f); context.setDepthMask(true); }                  // no stencil: one coat per pixel by the depth test (see the class note)
         }
     }
 

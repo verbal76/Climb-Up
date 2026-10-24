@@ -1,6 +1,7 @@
 package com.hotatticgames.climbup;
 
 import com.hotatticgames.climbup.audio.Audio;
+import com.hotatticgames.climbup.audio.Cues;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Input;
 import com.badlogic.gdx.InputAdapter;
@@ -113,9 +114,9 @@ public final class PlayScreen extends ScreenAdapter {
             course = CourseGenerator.chunk(Long.getLong("climb.seed", 11L), Integer.getInteger("climb.slice", 4), null, g.tuning);
             sim = Sim.startOn(course, g.tuning, 0);
         } else {
-            ClimbGame.Run run = g.openRun(g.runFresh); g.runFresh = false;
+            ClimbGame.Run run = g.preparedRun != null ? g.preparedRun : g.openRun(g.runFresh); g.preparedRun = null; g.runFresh = false;
             tower = run.tower; course = tower.world;
-            int hStart = Integer.getInteger("climb.startHeight", 0);              // test hook: begin partway up
+            int hStart = run.startHeight > 0 ? run.startHeight : Integer.getInteger("climb.startHeight", 0);              // test hook / the hidden world picker: begin partway up
             while (hStart > 0 && tower.topAbsY() < hStart + 80f) tower.extend();
             String hzType = System.getProperty("climb.hazard");              // test hook: start beside the first hazard of this type (e.g. CANNON)
             if (hzType != null) {
@@ -128,7 +129,7 @@ public final class PlayScreen extends ScreenAdapter {
             }
             boolean fromSnapshot = false;
             if (run.resumed && run.snapshot != null) {            // CONTINUE after SAVE & EXIT: the climb exactly as it was left
-                Sim ss = new Sim(course, g.tuning);
+                Sim ss = new Sim(course, g.runTuning());
                 ss.keysFree = false; ss.deferRespawn = true; ss.floorOverride = tower.floorLocal(); ss.setRange(0, course.size() - 1);
                 tower.openedUpTo = g.save.openedUpTo;
                 ResumeState.restore(g.save, ss, tower);
@@ -136,12 +137,18 @@ public final class PlayScreen extends ScreenAdapter {
                 else { g.store.deleteRun(); run = g.openRun(false); tower = run.tower; course = tower.world; }       // does not fit the world on disk: resume from the checkpoint
             }
             if (!fromSnapshot) {
-                sim = Sim.startOn(course, g.tuning, run.startIdx);
+                sim = Sim.startOn(course, g.runTuning(), run.startIdx);
                 sim.checkpoint = run.startIdx; sim.keysFree = false; sim.keys = 0;
                 if (hzType != null) sim.s += Float.parseFloat(System.getProperty("climb.startDs", "0"));     // test hook: stand this much further along the start platform (camera angle on the hazard)
                 if (run.resumed) { sim.deferRespawn = true; sim.setRange(0, course.size() - 1); ResumeState.restore(g.save, sim, tower); }
             }
-            if (hStart > 0 && hzType == null) { int i = 0; while (i < course.size() - 1 && course.get(i + 1).y < hStart) i++; while (i > 0 && course.get(i).anchor >= 0) i--; sim = Sim.startOn(course, g.tuning, i); sim.checkpoint = i; sim.keysFree = false; sim.keys = 0; }
+            if (hStart > 0 && hzType == null) {
+                // Build 77 (owner): the world picker starts you at the castle where the world begins (castle hStart / spacing), on the platform past its door, with no keys:
+                // the next castle's key lies ahead in its section. (It used to walk the element list to a height: local heights vs an absolute one, and side platforms in the list.)
+                int i = tower.afterCastle((int) (hStart / g.tuning.castleSpacing));
+                if (i < 0) { i = 0; double oy = tower.originY; while (i < course.routeSize() - 1 && course.get(i + 1).y + oy < hStart) i++; }
+                sim = Sim.startOn(course, g.runTuning(), i); sim.checkpoint = i; sim.keysFree = false; sim.keys = 0;
+            }
             if (tower != null) { tower.openedUpTo = g.save.openedUpTo; sim.deferRespawn = true; sim.floorOverride = tower.floorLocal(); }
             sim.setRange(0, course.size() - 1); simSize = course.size(); if (tower != null) seenRebuilds = tower.rebuilds;
         }
@@ -155,8 +162,8 @@ public final class PlayScreen extends ScreenAdapter {
         if (gi() != null) gi().controllerLost();          // a pad unplugged on the menus before this climb began is no reason to start it paused (found by the Build 64 scenario)
         g.audio.playlist(Audio.GAME_TRACKS);
         runTime = 0; maxAbs = absNow(); milestone = (int) (maxAbs / 50f);
-        if (!demo && tower != null && g.save.assisted && g.save.seed != 0) g.save.records().markAssisted(g.save.seed);      // a resumed assisted climb stays assisted in the times table too
-        if (!demo && tower != null) g.save.records().catchUp(g.save.seed, runRules(), g.save.splits, g.save.towers, g.save.finished, g.save.finishTime);          // times table: a climb begun before the records existed
+        if (!demo && tower != null && g.save.assisted && g.save.seed != 0) g.save.board().markAssisted(g.save.seed);      // a resumed assisted climb stays assisted in the times table too
+        if (!demo && tower != null) g.save.board().catchUp(g.save.seed, runRules(), g.save.splits, g.save.towers, g.save.finished, g.save.finishTime);          // times table: a climb begun before the records existed
         if (!demo) {        // seed the cross-session achievement counters from Steam's stored stats (all 0 when there is no Steam)
             com.hotatticgames.climbup.platform.Achievements a = g.platform.achievements();
             achRules = new AchievementRules(a.stat(AchievementRules.STAT_TOWER_FELL_MASK));
@@ -164,7 +171,7 @@ public final class PlayScreen extends ScreenAdapter {
             achMarathonBase = a.stat(AchievementRules.STAT_MARATHON_M);
             achSessionStartMax = maxAbs;
         }
-        if (Boolean.getBoolean("climb.finishDemo")) { g.save.runClock = 3723.4f; g.save.finished = true; g.save.finishTime = 3723.4f; finishNewBest = true; state = State.FINISHED; if (tower != null) g.save.records().finish(g.save.seed, 3723.4f); }       // test hook: shows the finish screen
+        if (Boolean.getBoolean("climb.finishDemo")) { g.save.runClock = 3723.4f; g.save.finished = true; g.save.finishTime = 3723.4f; finishNewBest = true; state = State.FINISHED; if (tower != null) g.save.board().finish(g.save.seed, 3723.4f); }       // test hook: shows the finish screen
         if (Boolean.getBoolean("climb.ropeScript")) {   // test hook: start low on the first rope; readInput() then climbs it, mounts the beam and jumps (screenshots of the rope top)
             for (int e = 0; e < course.size(); e++) if (course.get(e).type == Element.Type.ROPE && course.get(e).y > 5f) {
                 Element el = course.get(e); sim.mode = Sim.Mode.ROPE; sim.onElem = e; sim.s = sim.es1[e]; sim.y = el.y - el.len + 0.6f; sim.vx = sim.vy = 0; world.snapCamera(sim); break;
@@ -291,21 +298,13 @@ public final class PlayScreen extends ScreenAdapter {
         if (play) {
             float speed = g.settings.assistSlow ? g.tuning.assistSlowFactor : 1f;
             if (hitstop > 0) hitstop -= dt; else acc += dt * speed;
-            if (tower != null) {
-                try { tower.openedUpTo = g.save.openedUpTo; tower.ensureAbove(maxAbs, BUILD_AHEAD); tower.maintain(sim); }
-                catch (RuntimeException ex) {          // the next stretch of tower could not be built (never expected): keep the run as a stamped record and go back to the title instead of crashing
-                    Gdx.app.error("climb", "tower generation failed", ex);
-                    if (g.save.seed != 0) Legacy.archive(g.save, Legacy.today());
-                    g.history.delete(); g.persist(); next = new TitleScreen(g); disposeOnLeave = true;
-                }
-                if (tower.rebuilds != seenRebuilds) { seenRebuilds = tower.rebuilds; world.rebased(tower.lastRemap, tower.originY, tower.originS); simSize = course.size(); }
-                if (course.size() != simSize) { sim.setRange(0, course.size() - 1); simSize = course.size(); }
-                g.syncHistory(tower);
-            }
+            boolean towerOk = tower == null || keepTower();
+            if (tower != null && towerOk) g.syncHistory(tower);
             if (PerfProbe.ON) { PerfProbe.tStream = System.nanoTime(); PerfProbe.generating = tower != null && tower.generating(); if (PerfProbe.forceFall) { PerfProbe.forceFall = false; sim.respawn(); }
                 if (PerfProbe.skipAhead) { PerfProbe.skipAhead = false; int idx = Math.min(course.routeSize() - 1, Math.max(sim.bestElem, sim.onElem) + 3); while (idx < course.routeSize() - 1 && !course.get(idx).isPlatform()) idx++; sim.checkpoint = idx; sim.respawn(); } }
             int steps = 0;
-            while (acc >= Sim.DT && steps < 6) {
+            while (towerOk && acc >= Sim.DT && steps < 6) {
+                if (tower != null && !(towerOk = keepTower())) break;           // Build 74: before EVERY step, not once per frame (see keepTower)
                 if (demo || AUTOPILOT) { long d0 = PerfProbe.ON ? System.nanoTime() : 0L; driver[0].drive(sim, in); if (AUTOPILOT && driver[0].failed) driver[0] = new Autopilot.Driver(sim); if (PerfProbe.ON) PerfProbe.tDrive += System.nanoTime() - d0; } else readInput();
                 sim.step(in);
                 in.jumpPressed = false; jumpLatch = false; kJump = false; in.swingPressed = false; swingLatch = false; kSwing = false;
@@ -323,9 +322,10 @@ public final class PlayScreen extends ScreenAdapter {
             if (steps == 6) acc = 0;
             if (PerfProbe.ON) { PerfProbe.tSim = System.nanoTime(); PerfProbe.steps = steps; PerfProbe.mode = sim.mode.ordinal(); PerfProbe.absY = absNow(); }
             if (world.takeWhoosh()) g.audio.play("whoosh", 0.6f, 1f);
+            if (world.takeScan()) g.audio.play("scan", 0.5f, 1f);
             g.save.playSeconds += dt;
             if (maxAbs > g.save.bestHeight) g.save.bestHeight = (float) maxAbs;
-            if (g.save.finished && tower != null && !demo) g.save.records().infinity(g.save.seed, infinityMetres());
+            if (g.save.finished && tower != null && !demo) g.save.board().infinity(g.save.seed, infinityMetres());
             int ms = (int) (maxAbs / 50f);
             if (ms > milestone) { milestone = ms; toast = ms * 50 + " M!"; toastT = 1.6f; g.audio.play("checkpoint", 0.55f, 1.35f); world.particles.burst(sim.s, sim.y + 1f, 12, gold, 2.6f, 3.2f, 0.1f, -0.5f, 1f); }
             for (int pi = pops.size() - 1; pi >= 0; pi--) { Pop pp = pops.get(pi); pp.age += dt; pp.liftShown += (pp.lift - pp.liftShown) * Math.min(1f, dt * 14f); if (pp.age > 1.1f) pops.remove(pi); }
@@ -347,13 +347,14 @@ public final class PlayScreen extends ScreenAdapter {
     }
 
     private final java.util.HashMap<Element, Integer> cycleSeen = new java.util.HashMap<>();
-    private float sawT;
+    private float sawT, crabT;
 
     /** Hazards you can hear: cannon booms, spikes snapping up, the saw's whir. Volume falls off with distance. */
     private void hazardSounds(float dt) {
-        sawT -= dt;
+        sawT -= dt; crabT -= dt;
         for (int k = 0, cnt = sim.hz == null ? course.hazards.size() : sim.hz.length; k < cnt; k++) {
-            Element h = course.hazards.get(sim.hz == null ? k : sim.hz[k]);
+            int hk = sim.hz == null ? k : sim.hz[k];
+            Element h = course.hazards.get(hk);
             float d = Math.abs(course.dsWrap(h.sAt(sim.time), sim.s)) + Math.abs(h.y - sim.y) * 0.6f;
             if (d > 14f) continue;
             float vol = Math.max(0f, 1f - d / 14f);
@@ -368,8 +369,30 @@ public final class PlayScreen extends ScreenAdapter {
                     }
                     break;
                 }
+                case SPIKE_DROP: {      // the chained stone slams home (a quarter of the way through its cycle)
+                    int cyc = (int) Math.floor(sim.time / h.period + h.phase / 6.2832f - 0.30f);
+                    Integer prev = cycleSeen.put(h, cyc);
+                    if (prev != null && prev != cyc) { g.audio.play("slam", 0.8f * vol + 0.05f, 1f); g.audio.playPack("hit_brick", 0.45f * vol, 0.8f); say("[THUD]"); }
+                    break;
+                }
+                case CRAB:
+                    if (crabT <= 0f && d < 8f) { crabT = 0.9f + MathUtils.random(0.7f); g.audio.play("clack", 0.3f * vol, 0.9f + MathUtils.random(0.25f)); }
+                    break;
+                case SKULL: {           // an eerie moan when it changes mood (hover, wind-up, turn) nearby; the dash itself is EV_DASH
+                    int st = hk < sim.mobState.length ? sim.mobState[hk] : 0;
+                    Integer prev = cycleSeen.put(h, st);
+                    if (prev != null && prev != st && st != 3 && st != 0 && d < 12f) g.audio.play("skull", 0.4f * vol + 0.05f, 0.9f + MathUtils.random(0.2f));
+                    break;
+                }
+                case BLOB: {            // wobbles before it leaps
+                    int st = hk < sim.mobState.length ? sim.mobState[hk] : 0;
+                    Integer prev = cycleSeen.put(h, st);
+                    if (prev != null && prev != st && st == 2 && d < 12f) { g.audio.play("wobble", 0.6f * vol + 0.05f, 1f); say("[WOBBLE]"); }
+                    break;
+                }
                 case BEE:
                     if (h.beePresent(sim.time) && sawT <= 0f && d < 11f) { sawT = 0.3f; g.audio.play("buzz", 0.4f * vol, 0.9f + MathUtils.random(0.2f)); }
+                    { int diving = h.beePresent(sim.time) && h.beeDive(sim.time) > 0.5f ? 1 : 0; Integer prev = cycleSeen.put(h, diving); if (prev != null && prev == 0 && diving == 1 && d < 11f) g.audio.play("dive", 0.5f * vol + 0.05f, 1f); }
                     break;
                 case SAW_H: case SAW_V:
                     if (sawT <= 0f && d < 9f) { sawT = 0.45f; g.audio.play("saw", 0.35f * vol, 0.95f + MathUtils.random(0.1f)); }
@@ -380,8 +403,35 @@ public final class PlayScreen extends ScreenAdapter {
         if (cycleSeen.size() > 64) cycleSeen.clear();
     }
 
+    private Element underfoot() { return sim.onElem >= 0 && sim.onElem < course.size() ? course.get(sim.onElem) : null; }
+
+    private float humT, humNear; private boolean humOn;
+    /** Conveyor motor hum: the nearest belt in the simulated window sets the loudness (scanned ten times a second); one looping instance, faded by Audio. */
+    private void conveyorHum(float dt) {
+        humT -= dt;
+        if (humT <= 0f) {
+            humT = 0.1f;
+            Element on = underfoot();
+            humOn = sim.mode == Sim.Mode.GROUND && Cues.isConveyor(on);
+            float best = Float.MAX_VALUE;
+            int[] act = sim.act;
+            for (int k = 0, n = act == null ? course.size() : act.length; k < n; k++) {
+                int i = act == null ? k : act[k];
+                if (i >= course.size() || !Cues.isConveyor(course.get(i))) continue;
+                Element b = course.get(i);
+                float dx = Math.max(0f, Math.abs(course.dsWrap(sim.es1[i], sim.s)) - b.halfW()), dy = Math.abs(sim.ey1[i] - sim.y) * 1.4f;
+                best = Math.min(best, (float) Math.sqrt(dx * dx + dy * dy));
+            }
+            humNear = best;
+        }
+        g.audio.hum(Cues.humLevel(humNear, humOn), dt);
+    }
+
     private void ambientSounds(float dt) {
         hazardSounds(dt);
+        conveyorHum(dt);
+        int zone = (int) Math.floorMod((long) Math.floor(Math.max(0.0, absNow()) / sim.T.zoneHeight), (long) com.hotatticgames.climbup.render.Palette.ZONES);
+        g.audio.ambience(Cues.ambience(zone), dt);
         if (sim.mode == Sim.Mode.LEDGE) {   // he is really trying not to fall
             gruntT -= dt;
             if (gruntT <= 0) {
@@ -391,7 +441,7 @@ public final class PlayScreen extends ScreenAdapter {
                 say("[STRAINING]"); vibrate(8, 2);
             }
         } else gruntT = 0.35f;
-        if (sim.mode == Sim.Mode.GROUND && Math.abs(sim.vx) > 2f) { stepT -= dt; if (stepT <= 0) { stepT = 0.27f; g.audio.play("step", 0.35f, 0.9f + MathUtils.random(0.2f)); world.particles.burst(sim.s - sim.facing * 0.3f, sim.y + 0.05f, 2, dust, 0.5f, 0.7f, 0.09f, 3f, 0.35f); } }
+        if (sim.mode == Sim.Mode.GROUND && Math.abs(sim.vx) > 2f) { stepT -= dt; if (stepT <= 0) { stepT = Cues.stepInterval(sim.vx); if (!g.audio.playPack(Cues.stepGroup(Cues.surface(underfoot())), 0.5f, 0.92f + MathUtils.random(0.16f))) g.audio.play("step", 0.35f, 0.9f + MathUtils.random(0.2f)); world.particles.burst(sim.s - sim.facing * 0.3f, sim.y + 0.05f, 2, dust, 0.5f, 0.7f, 0.09f, 3f, 0.35f); } }
         if (sim.mode == Sim.Mode.ROPE && Math.abs(in.moveY) > 0.3f) { ropeT -= dt; if (ropeT <= 0) { ropeT = 0.32f; g.audio.play("rope", 0.4f, 0.9f + MathUtils.random(0.2f)); } }
     }
 
@@ -405,6 +455,28 @@ public final class PlayScreen extends ScreenAdapter {
     /** Metres of tower kept built above the highest point reached. Slices are made (and every link proven) on a background thread; Build 71's
      *  denser content costs ~4 s a slice on average and ~19 s at worst on a desktop core, so this keeps two slices in hand (was 75 m, one slice). */
     static final float BUILD_AHEAD = 150f;
+    /** Build 74: slices join the window up to this far above the highest point climbed (below BUILD_AHEAD, so the background thread is normally there first); see Tower.admitAbs. */
+    static final float ADMIT_AHEAD = 100f;
+
+    /**
+     * Keeps the tower in step with the simulation: the next stretch requested, the window moved (and the floating origin with it) and a fall's respawn
+     * completed. Build 74 (owner: the same inputs on the same steps must give the same run on every device): this runs before every simulation step, not
+     * once per rendered frame. Run once per frame, a respawn asked for in the middle of a frame left the frame's remaining steps frozen, yet counted by the
+     * run clock and swallowing their inputs, so a fall cost 0 to 5 extra steps depending on the frame rate; and a window move happened at a step that
+     * depended on the frame rate too. The window admits new slices by height (Tower.admitAbs), not by when the background thread finished them. Returns false if the tower could not be built (the run is then closed).
+     */
+    private boolean keepTower() {
+        try { tower.openedUpTo = g.save.openedUpTo; tower.admitAbs = maxAbs + ADMIT_AHEAD; tower.ensureAbove(maxAbs, BUILD_AHEAD); tower.maintain(sim); }
+        catch (RuntimeException ex) {          // the next stretch of tower could not be built (never expected): keep the run as a stamped record and go back to the title instead of crashing
+            Gdx.app.error("climb", "tower generation failed", ex);
+            if (g.save.seed != 0) Legacy.archive(g.save, Legacy.today());
+            g.history.delete(); g.persist(); next = new TitleScreen(g); disposeOnLeave = true;
+            return false;
+        }
+        if (tower.rebuilds != seenRebuilds) { seenRebuilds = tower.rebuilds; world.rebased(tower.lastRemap, tower.originY, tower.originS); simSize = course.size(); }
+        if (course.size() != simSize) { sim.setRange(0, course.size() - 1); simSize = course.size(); }
+        return true;
+    }
     private static final Color SQUASH_GREEN = new Color(0.45f, 0.95f, 0.35f, 1f);
 
     /** A castle was opened: record the split (time since the previous unlock) and the total, keep the personal bests, start timing the next tower. */
@@ -417,11 +489,11 @@ public final class PlayScreen extends ScreenAdapter {
         sd.towerTotals = java.util.Arrays.copyOf(sd.towerTotals, n + 1); sd.towerTotals[n] = total;
         sd.towers = n + 1;
         RecordsData.Run cur = null;
-        if (n < RecordsData.LEGS) { sd.records().legDone(sd.seed, runRules(), n, split); cur = sd.records().current; }          // times table: this leg, its global and its on-this-course bests
-        boolean hadSplit = sd.bestSplit > 0f, pbSplit = !sd.assisted && (!hadSplit || split < sd.bestSplit);       // owner (Build 71): an assisted run's towers are timed but set no best
+        if (n < RecordsData.LEGS) { sd.board().legDone(sd.seed, runRules(), n, split); cur = sd.board().current; }          // times table: this leg, its global and its on-this-course bests
+        boolean hadSplit = sd.bestSplit > 0f, pbSplit = !sd.assisted && sd.difficulty == 0 && (!hadSplit || RunRecord.faster(split, sd.bestSplit));       // owner (Build 71): an assisted run's towers are timed but set no best
         if (pbSplit) sd.bestSplit = split;
         if (sd.bestTotals.length <= n) sd.bestTotals = java.util.Arrays.copyOf(sd.bestTotals, n + 1);
-        boolean hadTotal = sd.bestTotals[n] > 0f, pbTotal = !sd.assisted && (!hadTotal || total < sd.bestTotals[n]);
+        boolean hadTotal = sd.bestTotals[n] > 0f, pbTotal = !sd.assisted && sd.difficulty == 0 && (!hadTotal || RunRecord.faster(total, sd.bestTotals[n]));
         if (pbTotal) sd.bestTotals[n] = total;
         sd.towerStartClock = sd.runClock; sd.towerStartHeight = (float) Math.max(0.0, maxAbs);
         toast = keyName(sim.lastGateColor) + " CASTLE OPENED!"; toastT = 3.2f;
@@ -439,7 +511,7 @@ public final class PlayScreen extends ScreenAdapter {
     /** END RUN AND SAVE TIME: the times already stand in the records; the climb is forgotten and the end-of-run summary comes up. */
     private void endRunToSummary() {
         g.audio.play("click");
-        RecordsData.Run r = tower != null && !demo ? g.save.records().endRun(g.save.seed) : null;
+        RecordsData.Run r = tower != null && !demo ? g.save.board().endRun(g.save.seed) : null;
         g.forgetRun(); g.persist();
         next = new RunSummaryScreen(g, r); disposeOnLeave = true;
     }
@@ -447,10 +519,9 @@ public final class PlayScreen extends ScreenAdapter {
     /** m:ss.t (h:mm:ss.t from an hour). */
     /** Build 64: the generation rules the climb in progress was generated under (a Build 63 climb is dated from its build; older ones are unknown, 0, and never compared). */
     private int runRules() { return g.save.climbRules > 0 ? g.save.climbRules : com.hotatticgames.climbup.sim.CourseGenerator.rulesOfBuild(g.save.climbBuild); }
-    /** A faster/slower difference with its sign always written: "-0.5" is faster, "+1:02.3" slower. */
-    /** A signed time difference to the nearest tenth: "-0:04.8" faster, "+2:03.4" slower (fmtTime truncates, so the rounding happens there). */
+    /** A signed time difference in the speedrun format: "-0:04.800" faster, "+2:03.433" slower (see ClockText). */
     public static String fmtDelta(float d) { return ClockText.delta(d); }
-    /** m:ss.t, h:mm:ss.t from an hour, "N DAYS hh:mm:ss.t" from a day (Build 66, for marathon sessions); see {@link ClockText}. */
+    /** m:ss.mmm, h:mm:ss.mmm from an hour, "N DAYS hh:mm:ss.mmm" from a day (Build 74: speedrun format); see {@link ClockText}. */
     public static String fmtTime(float sec) { return ClockText.time(sec); }
 
     private boolean fallCaptioned;
@@ -485,7 +556,7 @@ public final class PlayScreen extends ScreenAdapter {
             world.platformLanded(sim.onElem, sim.landSpeed);
             Element le = course.get(sim.onElem);
             float edge = Math.abs(course.dsWrap(sim.s, sim.es1[sim.onElem])) - le.halfW();
-            if (le.type == Element.Type.SEESAW) { g.audio.play("bonk", 0.7f, 0.65f); world.particles.burst(sim.s, sim.y, 6, brown, 1.6f, 1.2f, 0.12f, 6f, 0.5f); }
+            if (le.type == Element.Type.SEESAW) { g.audio.play("bonk", 0.7f, 0.65f); g.audio.playPack("hit_wood", 0.5f, 0.85f); world.particles.burst(sim.s, sim.y, 6, brown, 1.6f, 1.2f, 0.12f, 6f, 0.5f); }
             if (le.type == Element.Type.RAMP && le.spins()) { g.audio.play("whoosh", 0.5f, 1.1f); world.particles.burst(sim.s, sim.y - 0.2f, 8, cyan, 1.6f, 0.8f, 0.1f, 1f, 0.6f); }
             if (le.type == Element.Type.RAMP && le.skin == 2) { g.audio.play("bonk", 0.5f, 1.2f); }
             if (le.isPlatform() && edge > 0.06f && sim.landSpeed > 5f) { pop(CLOSE[MathUtils.random(CLOSE.length - 1)], gold); freeze(0.07f); world.shake(0.5f); vibrate(25, 1); }
@@ -499,13 +570,15 @@ public final class PlayScreen extends ScreenAdapter {
         if ((ev & Sim.EV_JUMP) != 0) { g.audio.play("jump", 0.7f, 0.95f + MathUtils.random(0.1f)); world.particles.burst(s, y, 4, dust, 1.4f, 1.2f, 0.12f, 6f, 0.4f); vibrate(8, 2); }
         if ((ev & Sim.EV_LAND) != 0) {
             float k = MathUtils.clamp(sim.landSpeed / 16f, 0.3f, 1f);
-            g.audio.play("land", 0.4f + 0.5f * k, 0.9f + MathUtils.random(0.15f)); world.particles.burst(s, y, (int) (6 * k) + 2, dust, 2f, 1.5f, 0.14f, 7f, 0.45f);
+            { float lv = 0.4f + 0.5f * k, lp = 0.9f + MathUtils.random(0.15f);
+              if (!g.audio.playPack(Cues.landGroup(Cues.surface(underfoot())), Math.min(1f, lv * 1.1f), lp)) g.audio.play("land", lv, lp); }
+            world.particles.burst(s, y, (int) (6 * k) + 2, dust, 2f, 1.5f, 0.14f, 7f, 0.45f);
             if (sim.landSpeed > 15f) { world.shake(0.4f); vibrate(18, 1); }
         }
         if ((ev & Sim.EV_BOUNCE) != 0) { g.audio.play("bounce", 0.9f, 1f); world.particles.burst(s, y, 10, cyan, 3.2f, 3.2f, 0.12f, 4f, 0.6f); world.shake(0.5f); vibrate(30, 1); say("[BOING]"); }
         if ((ev & Sim.EV_GRAB) != 0) { g.audio.play("grab", 0.8f, 1f); vibrate(22, 1); say("[GRAB]"); }
         if ((ev & Sim.EV_PULL) != 0) { g.audio.play("pull", 0.7f, 1f); }
-        if ((ev & Sim.EV_CRUMBLE) != 0) { g.audio.play("crumble", 0.7f, 1f); world.particles.burst(s, y - 0.2f, 12, brown, 2.2f, 1f, 0.16f, 12f, 0.8f); say("[CRUMBLE]"); }
+        if ((ev & Sim.EV_CRUMBLE) != 0) { g.audio.play("crumble", 0.7f, 1f); g.audio.playPack("hit_wood", 0.4f, 0.8f); world.particles.burst(s, y - 0.2f, 12, brown, 2.2f, 1f, 0.16f, 12f, 0.8f); say("[CRUMBLE]"); }
         if ((ev & Sim.EV_CHECKPOINT) != 0) {
             g.audio.play("checkpoint", 0.8f, 1f);
             toast = "CHECKPOINT"; toastT = 2f; if (tower != null) g.rememberCheckpoint(tower, sim.checkpoint); g.persist(); say("[CHECKPOINT]");
@@ -521,17 +594,18 @@ public final class PlayScreen extends ScreenAdapter {
             toast = g.platform.tip("SPIKED CLUB! TAP SWING TO KNOCK CRABS AND BEES OFF"); toastT = 3f; say("[CLUB]");
         }
         if ((ev & Sim.EV_SWING) != 0) { g.audio.play("swing", 0.8f, 0.95f + MathUtils.random(0.1f)); vibrate(10, 2); }
-        if ((ev & Sim.EV_SHOVE) != 0 && (ev & (Sim.EV_SQUASH | Sim.EV_LAUNCH)) == 0) { g.audio.play("bonk", 0.9f, 0.9f + MathUtils.random(0.2f)); world.shake(0.4f); freeze(0.05f); vibrate(25, 1); pop("OOF!", Color.WHITE); say("[BONK]"); }
+        if ((ev & Sim.EV_SHOVE) != 0 && (ev & (Sim.EV_SQUASH | Sim.EV_LAUNCH)) == 0) { g.audio.play("bonk", 0.9f, 0.9f + MathUtils.random(0.2f)); g.audio.play("clack", 0.7f, 0.8f); world.shake(0.4f); freeze(0.05f); vibrate(25, 1); pop("OOF!", Color.WHITE); say("[BONK]"); }
         // Build 71 creatures: the skull's dash, the blob's leap and landing, being squashed, being launched
         if ((ev & Sim.EV_SLIP) != 0) { g.audio.play("slip", 1f, 1.45f + MathUtils.random(0.2f)); pop("WHOA!", Color.WHITE); say("[SQUEAK]"); vibrate(15, 2); }      // a squeaky-shoe skid on ice (sfx.json "slip")
-        if ((ev & Sim.EV_DASH) != 0) { g.audio.play("swing", 0.85f, 0.7f); say("[WHOOSH]"); }
-        if ((ev & Sim.EV_BLOB_JUMP) != 0) { g.audio.play("jump", 0.9f, 0.6f); say("[BOING]"); }
-        if ((ev & Sim.EV_BLOB_LAND) != 0) { g.audio.play("land", 1f, 0.55f); world.shake(0.25f); say("[THUD]"); }
-        if ((ev & Sim.EV_SQUASH) != 0) { g.audio.play("bonk", 1f, 0.6f); world.shake(0.6f); freeze(0.08f); vibrate(45, 1); pop("SQUASH!", SQUASH_GREEN); say("[SQUASH]"); }
+        if ((ev & Sim.EV_DASH) != 0) { g.audio.play("dash", 0.9f, 1f); say("[WHOOSH]"); }
+        if ((ev & Sim.EV_BLOB_JUMP) != 0) { g.audio.play("blobup", 0.9f, 1f); say("[BOING]"); }
+        if ((ev & Sim.EV_BLOB_LAND) != 0) { g.audio.play("splat", 1f, 1f); world.shake(0.25f); say("[THUD]"); }
+        if ((ev & Sim.EV_SQUASH) != 0) { g.audio.play("splat", 1f, 0.7f); g.audio.play("bonk", 0.7f, 0.6f); world.shake(0.6f); freeze(0.08f); vibrate(45, 1); pop("SQUASH!", SQUASH_GREEN); say("[SQUASH]"); }
         if ((ev & Sim.EV_LAUNCH) != 0) { g.audio.play("bounce", 1f, 0.8f); world.shake(0.5f); freeze(0.05f); vibrate(35, 1); pop("WHOOSH!", Color.WHITE); say("[LAUNCHED]"); }
         if ((ev & Sim.EV_CRAB_OFF) != 0) {
-            g.audio.play("squeak", 0.9f, 0.9f + MathUtils.random(0.3f)); world.crabFlung(sim.crabS, sim.crabY, sim.facing, sim.knockedBee); freeze(0.07f); world.shake(0.4f); vibrate(30, 1);
-            pop("BONK!", gold); world.particles.burst(sim.crabS, sim.crabY + 0.4f, 12, red, 3.5f, 3.5f, 0.12f, 6f, 0.6f);
+            g.audio.play("squeak", 0.9f, 0.9f + MathUtils.random(0.3f)); g.audio.play("clack", 0.7f, 1.2f); world.crabFlung(sim.crabS, sim.crabY, sim.facing, sim.knocked); freeze(0.07f); world.shake(0.4f); vibrate(30, 1);
+            if (sim.knocked == 2) { pop("FORE!", gold); g.audio.play("bonk", 1f, 0.8f); world.shake(0.7f); say("[CLUB BREAKS]"); } else pop("BONK!", gold);      // Build 79: a skull batted away, and the club gone with it
+            world.particles.burst(sim.crabS, sim.crabY + 0.4f, 12, red, 3.5f, 3.5f, 0.12f, 6f, 0.6f);
         }
         if ((ev & Sim.EV_KEY) != 0) {
             float[] kc = keyRgb(sim.lastKeyColor);
@@ -548,7 +622,7 @@ public final class PlayScreen extends ScreenAdapter {
             int r = RunRecord.complete(g.save);
             if (r >= 0) {
                 finishNewBest = r == 1;
-                if (tower != null) g.save.records().finish(g.save.seed, runRules(), g.save.finishTime);
+                if (tower != null) g.save.board().finish(g.save.seed, runRules(), g.save.finishTime);
                 g.audio.fallStop(); g.audio.play("win", 1f, 1f); world.particles.burst(s, y + 1.2f, 40, new Color(1f, 0.85f, 0.3f, 1f), 4f, 4f, 0.14f, 1f, 1.6f); vibrate(60, 1); say("[RUN COMPLETE]");
                 state = State.FINISHED; stickPtr = jumpPtr = -1; jumpHeldTouch = false; g.persist();
             }
@@ -560,7 +634,7 @@ public final class PlayScreen extends ScreenAdapter {
         if ((ev & Sim.EV_HIT) != 0) {
             g.save.climbHits++;
             world.particles.burst(sim.hitS, sim.hitY + 0.7f, 22, red, 4f, 4f, 0.13f, 8f, 0.7f);
-            g.audio.play("hit", 1f, com.hotatticgames.climbup.render.Characters.voice(g.settings.character)); world.shake(0.9f); freeze(0.09f); vibrate(60, 1); say("[OUCH]");
+            g.audio.play("hit", 1f, com.hotatticgames.climbup.render.Characters.voice(g.settings.character)); g.audio.playPack("hit_brick", 0.6f, 0.9f); world.shake(0.9f); freeze(0.09f); vibrate(60, 1); say("[OUCH]");
             toast = "OUCH! BE CAREFUL!"; toastT = 1.8f;
         }
     }
@@ -588,7 +662,7 @@ public final class PlayScreen extends ScreenAdapter {
         t.marathonMeters = (int) Math.min(Integer.MAX_VALUE, (long) achMarathonBase + (long) Math.max(0.0, maxAbs - achSessionStartMax));
         t.checkpointIndex = sim.checkpoint;
         t.height = abs;
-        for (String id : achRules.step(t)) a.unlock(id);
+        for (String id : achRules.step(t)) if (!g.save.devPicked) a.unlock(id);          // a world-picker climb (footage) earns nothing
         // mirror the persistent stats to Steam (the Steam layer caches and throttles the actual StoreStats; the no-op sink ignores them)
         a.stat(AchievementRules.STAT_FALLS, g.save.falls);
         a.stat(AchievementRules.STAT_TOWER_FELL_MASK, achRules.towerFellMask());
@@ -692,7 +766,7 @@ public final class PlayScreen extends ScreenAdapter {
         } else {
             boolean seedLine = g.settings.showSeed && !demo && g.save.seed != 0;                 // Build 64: the course code under the clocks (SHOW COURSE SEED)
             ui.rect(m - 6, H - m - (seedLine ? 160f : 136f) * zk, 380 * zk + 12, (seedLine ? 160f : 136f) * zk + 6, new Color(0.05f, 0.07f, 0.14f, 0.55f));
-            if (seedLine) ui.text("SEED " + SeedCode.encode(g.save.seed), m, H - m - 152 * zk, 2.7f * zk, Ui.DIM);      // Build 72: was 2.3, too small to read on a phone
+            if (seedLine) ui.text("SEED " + SeedCode.encode(g.save.seed) + (g.save.difficulty > 0 ? "  " + com.hotatticgames.climbup.sim.Tuning.HARD_NAMES[Math.min(2, g.save.difficulty)] : ""), m, H - m - 152 * zk, 2.7f * zk, g.save.difficulty > 0 ? new Color(1f, 0.45f, 0.4f, 1f) : Ui.DIM);      // Build 79: a harder climb says so      // Build 72: was 2.3, too small to read on a phone
             ui.text(hs, m, H - m - 30 * zk, 4f * zk, Ui.TEXT);
             ui.text("BEST " + (int) Math.max(g.save.bestHeight, maxAbs), m, H - m - 56 * zk, 2.9f * zk, Ui.DIM);         // Build 72: was 2.6
             // speed-run clock: distance and time on the tower being worked towards, and the total time of the climb (always shown)
@@ -873,9 +947,9 @@ public final class PlayScreen extends ScreenAdapter {
         ui.textC(fmtTime(sd.finishTime), W / 2, y + ph - 216, 8f, new Color(0.45f, 1f, 0.55f, 1f));
         ui.textC(sd.assisted ? "ASSISTED RUN - NOT A RECORD" : finishNewBest ? "NEW RECORD!" : "BEST " + fmtTime(sd.bestFinish), W / 2, y + ph - 270, 3.6f, finishNewBest ? new Color(1f, 0.85f, 0.3f, 1f) : Ui.DIM);
         if (sd.seed != 0) {                                                            // Build 64: the course this time was set on, and (SHOW BEST TIMES) how it compares with the best on it; two lines, both inside the panel
-            RecordsData.Run cur = sd.records().current; boolean mine = cur != null && cur.seed == sd.seed;
+            RecordsData.Run cur = sd.board().current; boolean mine = cur != null && cur.seed == sd.seed;
             String vs = g.settings.showBestTimes && mine && cur.totalSeedPrev > 0f ? fmtDelta(sd.finishTime - cur.totalSeedPrev) + " VS COURSE BEST " + fmtTime(cur.totalSeedPrev) : g.settings.showBestTimes && mine && cur.totalSeedPb ? "FIRST FINISH ON THIS COURSE" : "";
-            String line = "SEED " + SeedCode.encode(sd.seed);
+            String line = "SEED " + SeedCode.encode(sd.seed) + (sd.difficulty > 0 ? "  " + com.hotatticgames.climbup.sim.Tuning.HARD_NAMES[Math.min(2, sd.difficulty)] : "");
             ui.textC(line, W / 2, y + ph - 296, Math.min(2.8f, (pw - 40f) / (line.length() * 6f)), Ui.DIM);
             if (!vs.isEmpty()) ui.textC(vs, W / 2, y + ph - 322, Math.min(2.8f, (pw - 40f) / (vs.length() * 6f)), Ui.DIM);
         }
@@ -903,14 +977,14 @@ public final class PlayScreen extends ScreenAdapter {
             ui.text("NOW   " + fmtTime(sd.runClock - sd.towerStartClock), sx + 26, y + sh - 108, 3.4f, new Color(1f, 0.82f, 0.3f, 1f));
             ui.text("TOTAL " + fmtTime(sd.runClock), sx + 26, y + sh - 146, 3.4f, Ui.TEXT);
             boolean showPb = g.settings.showBestTimes;                                 // Build 64: bests and faster/slower marks only with SHOW BEST TIMES; the splits themselves always
-            RecordsData.Run cur = sd.records().current; boolean curRun = cur != null && cur.seed == sd.seed;
+            RecordsData.Run cur = sd.board().current; boolean curRun = cur != null && cur.seed == sd.seed;
             int first = Math.max(0, sd.towers - 6);
             for (int i = first; i < sd.towers; i++) {
                 String vs = showPb && curRun && i < RecordsData.LEGS && cur.legSeedPrev[i] > 0f ? "  " + fmtDelta(sd.splits[i] - cur.legSeedPrev[i]) : "";
                 ui.text((i + 1) + "  " + fmtTime(sd.splits[i]) + "  " + fmtTime(sd.towerTotals[i]) + vs, sx + 26, y + sh - 196 - (i - first) * 40, 3f, Ui.TEXT);
             }
             if (sd.towers == 0) ui.text("NO TOWER OPENED YET", sx + 26, y + sh - 196, 3f, Ui.DIM);
-            RecordsData.SeedBests sb = showPb ? sd.records().seedBests(sd.seed, runRules()) : null;
+            RecordsData.SeedBests sb = showPb ? sd.board().seedBests(sd.seed, runRules()) : null;
             if (sb != null && sb.bestTotal > 0f) ui.text("COURSE BEST " + fmtTime(sb.bestTotal), sx + 26, y + 76, 3f, Ui.DIM);
             if (showPb && sd.bestSplit > 0f) ui.text("FASTEST TOWER " + fmtTime(sd.bestSplit), sx + 26, y + 40, 3f, Ui.DIM);
         }
@@ -934,16 +1008,16 @@ public final class PlayScreen extends ScreenAdapter {
 
     // ------------------------------------------------------------------ lifecycle
 
-    private void pauseGame() { if (state == State.PLAYING) { if (gi() != null) gi().clear(); g.audio.fallStop(); state = State.PAUSED; confirmRestart = confirmEnd = false; stickPtr = jumpPtr = -1; jumpHeldTouch = false; g.audio.play("click"); g.persist(); saveRun(); } }
+    private void pauseGame() { if (state == State.PLAYING) { if (gi() != null) gi().clear(); g.audio.fallStop(); g.audio.stopLoops(); state = State.PAUSED; confirmRestart = confirmEnd = false; stickPtr = jumpPtr = -1; jumpHeldTouch = false; g.audio.play("click"); g.persist(); saveRun(); } }
     /** Writes the exact moment of the climb (not in the scripted demo, and not once the finish screen is up: that run is over). */
     private void saveRun() { if (tower != null && !demo && state != State.FINISHED) g.saveRun(tower, sim); }
     private void resumePlay() { if (gi() != null) gi().clear(); state = State.PLAYING; acc = 0; padLost = false; g.audio.play("click"); }
     public void resumeFromSettings() { applySettings(); }
 
-    @Override public void hide() { CrashContext.set(crashSnapshot()); CrashContext.source(null); g.audio.fallStop(); g.persist(); }      // the last play state stays as the crash line; the left screen is not kept alive by it
-    @Override public void pause() { /* app backgrounded */ g.audio.fallStop(); if (state == State.PLAYING) { state = State.PAUSED; confirmRestart = confirmEnd = false; stickPtr = jumpPtr = -1; jumpHeldTouch = false; } g.persist(); saveRun(); g.audio.pauseMusic(); }
+    @Override public void hide() { CrashContext.set(crashSnapshot()); CrashContext.source(null); g.audio.fallStop(); g.audio.stopLoops(); g.persist(); }      // the last play state stays as the crash line; the left screen is not kept alive by it
+    @Override public void pause() { /* app backgrounded */ g.audio.fallStop(); g.audio.stopLoops(); if (state == State.PLAYING) { state = State.PAUSED; confirmRestart = confirmEnd = false; stickPtr = jumpPtr = -1; jumpHeldTouch = false; } g.persist(); saveRun(); g.audio.pauseMusic(); }
     @Override public void resume() { g.audio.resumeMusic(); }
 
-    @Override public void dispose() { g.audio.fallStop(); if (world != null) { world.dispose(); world = null; } shapes.dispose(); }
+    @Override public void dispose() { g.audio.fallStop(); g.audio.stopLoops(); if (world != null) { world.dispose(); world = null; } shapes.dispose(); }
 
 }

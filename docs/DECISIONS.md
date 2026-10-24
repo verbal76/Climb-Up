@@ -456,3 +456,275 @@ This replaces the earlier centre-mass placement instruction. The gem's lowest vi
   - written permission for the hamster model;
   - Suno terms for the music;
   - the raw jeageroni SFX files in this public repository.
+
+## Build 74: cross-platform determinism and competitive timing (owner directive, 2026-10-22)
+- **Real phone, Build 76 (owner, 2026-10-23, Pixel 10 Pro XL):** MATCHES the desktop on the rules-4 simulation: finish step 473864, clock 473865 (2:11:37.750), events 72be852f104d3b56bfea46e9, states 868e2110e7de476a401f2551, 67 s. With CI (Linux, Windows, Android emulator) all four agree for Build 76.
+- **Real phone (owner, 2026-10-22, Build 75 on a Pixel 10 Pro XL, ARM64):** the hidden SETTINGS > ABOUT check MATCHES the desktop: finish step 472941, clock 472942 steps (2:11:22.367), events 3c707ee80e8447367acba1e1, states ca307cb19875318112e846dd, 238 s. With CI (Linux, Windows, Android x86_64 emulator) all four agree.
+- **Releases (owner, 2026-10-22):** every build is a full, published GitHub Release (not a draft) so it shows in the owner's GitHub app. From Build 74 on, one release per build ("Upwardly build NN", tag `v<version>-buildNN`) carries the APK, the Windows EXE and the Linux build: `android.yml` and `windows.yml` both publish through `tools/ci/publish_release.sh`, which creates the release or adds to it. Build 74 publishes from `build-74-determinism`. The release signing key (`ANDROID_RELEASE_*`) was created by the owner and verified by `key-check.yml` (new key, opens with its password and alias; public fingerprint 9C:2F:B5:BB:...:B1:AE). The four original `ANDROID_KEYSTORE_*`/`ANDROID_KEY_*` secrets stay: they sign the proof of rotation.
+
+Requirement: the same seed, the same inputs on the same simulation steps, give the same run, the same finish step and the same recorded time on Windows, Linux and Android.
+
+**Causes found (with evidence) and fixed:**
+1. **Respawns waited for the next rendered frame** (`PlayScreen` maintained the tower once per frame). Any simulation steps left in that frame were frozen, yet counted by the run clock and swallowing their inputs.
+   - A fall therefore cost 0 to 5 extra steps depending on frame rate. `PacingProbe`: 174 frozen steps and a different climb under uneven pacing, from the same inputs.
+   - Fix: `PlayScreen.keepTower` runs before every simulation step. A steady 60 fps device behaves exactly as before.
+2. **Origin shifts shifted stored platform heights** (`Sim.rebase` subtracted the shift from `ey0`/`ey1`). A platform rebuilt around the new origin can differ from the shifted copy in the last bit.
+   - Static platforms keep that height for good, and whether a far platform was resident during a shift depended on how far ahead the tower had been generated.
+   - `ReplayTool diff`: same inputs with the tower generated 150 m vs 400 m ahead gave a 1-ulp landing difference at step 56,683, then a different climb (5 doors instead of 9, no finish).
+   - Fix: the current height is taken from the rebuilt element (`e.yAt(time)`). Movers, seesaws and ramps recompute it every step anyway.
+3. **Window decisions depended on the background generator's progress.** Generated slices joined the window as soon as the thread finished them, so rebuilds (and origin shifts) happened at device-dependent steps. With the fix above, the next difference was a rebuild at step 57,258 in one run only.
+   - Fix: `Tower.admitAbs`. Slices join the window only once their bottom is at or below the highest point climbed + 100 m (`PlayScreen.ADMIT_AHEAD`), checked every step. If the thread has not finished a needed slice, it is made on the spot (never skipped, never partial). The thread still works 150 m ahead, so that wait is normally never needed.
+4. **Transcendental maths:** `Math.sin`/`cos`/`atan2` may differ by an ulp between JVMs/ART. All 35 simulation and generation calls now use `StrictMath` (fdlibm, identical everywhere).
+   - Measured before the switch: replays and generation were unchanged with every result nudged ±1 ulp (results are stored as floats). The switch removes the residual risk.
+   - Desktop course fingerprints are unchanged.
+
+**Timing (owner decision):**
+- The clock is the integer step count at 60 steps/s (`SaveData.runTicks`), independent of frame rate, device speed and wall time. Resolution is 1/60 s ≈ 16.667 ms. No interpolated sub-step finish.
+- **Rankings and ties:** compared in whole steps (`RunRecord.ticksOf`/`faster`: finish, legs, totals, per-seed bests, splits, the Express Elevator achievement). Every stored time is a step count / 60, recovered exactly below 18 hours.
+- **Display (owner: the standard speedrun format):** the clock is in-game time (IGT: simulation steps only; pauses, menus, loading and frame rate never count). It is shown as **m:ss.mmm / h:mm:ss.mmm / N DAYS hh:mm:ss.mmm**, with the milliseconds converted from the step count and rounded to the nearest millisecond (one step = 0:00.017). The resolution stays 1/60 s. Differences use the same format with a sign. Times screen, HUD, pause and finish all checked in the desktop scenario screenshots (PASS, 103 checks).
+
+**Not changed:**
+- simulation rate, movement, physics, course generation (fingerprints identical), saves and records (same fields; comparisons only);
+- the hero's own position is still re-expressed at an origin shift, but the shift happens at the same step on every device;
+- input is sampled per rendered frame, so a 30 fps device can change input only every second step. That is fairness, not determinism; it is documented and not changed.
+
+**Verification:**
+- `ReplayTool` (record/replay/diff) plays climbs exactly as `PlayScreen` does. Recorded: seed 12 to the castle-10 finish (472,941 steps, 9 castle doors; 35 harness SKIP actions where the autopilot stalls) and seed 21 with a respawn every 20,000 steps.
+- The seed 12 replay is identical with generation 150 m, 400 m and 1,000 m ahead.
+- `determinism.yml` replays the files on Linux, Windows (desktop JVMs) and Android (ART, x86_64 emulator) and requires byte-identical output.
+- A real ARM phone is not covered (owner did not choose the in-app check).
+- **Hidden determinism check for a real phone (owner, Pixel 10 Pro XL):** SETTINGS > ABOUT, tap the version line seven times → DETERMINISM CHECK → RUN.
+  - It replays the bundled seed 12 climb (`assets/replays/seed12.bin.gz`, the same file CI replays) on the device's own runtime, on a background thread, through the same `ReplayCheck` code CI uses.
+  - It shows the finish step, the run clock, the event and state hashes, and whether they MATCH the desktop.
+  - Expected: finish step 472,941, clock 472,942 steps (2:11:22.367); `BundledReplayTest` pins these values.
+  - This is the only way to cover ARM64, where Android's StrictMath runs as native code.
+
+## Build 77 (2026-10-23)
+
+- **Skull (owner):** dash 10 -> 13 m/s; after it turns to face you it does a loop-the-loop and a swoop (wind-up 0.55 -> 1.2 s) before the dash; a hit throws you 30% farther (launch 11/7.5 -> 14/9.5). Its face (sockets and teeth) now looks at the camera, a little toward where it is going; each eye sits in its own socket, about twice the old size, placed in the model's own space. Hover wobble and dash stretch are drawn only; collision is unchanged.
+- **Key side routes and the skull (root cause, seed 8):** the generator proved key detours only with the skull at its starting end; after it dashes at someone crossing its deck it waits at the other end. Detours are now also proved with every skull parked at the far end.
+- **Balance conveyor (owner):** a tipping bridge (SEESAW skin 4) whose plank belt runs toward the low end at up to `phase` m/s (2.2-3.0) scaled by the tilt, on top of the plank's own slide, so it reverses when you cross the middle. Within `beltSeesawDead` (0.5 m, tuning.json) of the pivot it stays level. Exactly one per section from Castle 6 to Castle 10 (sections 7-10), at a height fixed by seed and section like the keys. Existing tipping bridges are unchanged.
+- **Solver (test stand-in for a person, not the generator):** when every other try fails it stands precisely on the proven spot and repeats the move from the stick state the proof started in (`Sim.restartHold`, which can only delay inputs). Seed 3 slice 54: a 2.5 m castle step whose jump works only from -0.2..+0.15 m of its middle. Known, not changed in this build: such tight standing windows are allowed by the castle staircase proofs.
+- **Rules version 5:** courses from Build 77 differ from Build 76 from the first balance conveyor (about 3,000 m) and wherever a key detour sits beside a skull. Records stay stamped with their rules version.
+- **Night clouds (owner):** where stars show, far clouds thin out by number instead of fading see-through, and are tinted dusky; daytime unchanged.
+- **Sound pack (owner-supplied, Leohpaz "Minifantasy - Forgotten Plains Audio Pack"):** licence allows use in commercial games and forbids redistributing the pack, so its files are never in this public repository. The Android and desktop build workflows fetch the zip from the repo's `Sfx` release (checked by sha256), convert only the clips used, and package them; if that fails the game uses its built-in sounds. The two desktop jobs got `contents: write` only so they can see that release if it is a draft. Creature, trap and conveyor-hum sounds are original (tools/gen_audio.py).
+- **Morning sky (owner):** Meadow Base and Frost Ridge are morning, the inverse of Dusk Spire: a three-stop sky (bottom, `SKY_MID` at 35% height, top) with muted violet low down, lavender with a pale-yellow hint above it and a richer, brighter blue at the top; the violet lifts slightly as you climb the two worlds. Dusk Spire, Night Summit and Deep Space keep their two-colour skies (their middle stop is recomputed on the line; max pixel difference 1/255). The Build 71 golden stretch (Castle 1 to 2) keeps its warm light but its sky is a warm cream instead of sunset orange, to read as morning.
+- **World picker start (owner):** a picked world starts on the route platform just past the castle where it begins (castle `startHeight / castleSpacing`, found by the gate's castle number), with no keys; the next castle's key lies ahead in its section. Root cause of starting mid-world: the old search compared local element heights (floating origin) with an absolute height and walked an element list that also holds side platforms. `WorldPickerStartTest` covers worlds 2-5.
+- **Replays re-recorded on the rules-5 simulation:** seed 12 to the castle-10 finish at step 425,348 (clock 425,349 = 1:58:09.150; events e9e2aaf5..., states 32df0bb3..., 23 harness skips). Seed 21 with falls: finish step 529,553 (2:27:05.900, 75 respawns). The phone determinism check now expects these values.
+
+## Build 77 closeout and release gate (2026-10-23)
+
+- **Release gate (owner chose "last one publishes").** Question: how to stop one platform publishing a partial release (Build 77's Android run made an APK-only release public from about 06:18 to 06:59 UTC while the desktop build was failing)? Alternatives: one combined workflow; a gate in the existing publish script. Chosen: the gate, in `tools/ci/publish_release.sh`. Every run adds its files to a draft candidate. Each upload is checked against GitHub's SHA-256 of the stored file. A draft from another commit loses its files and is re-pointed at the new commit. A release that is already public is never changed. Only the run that completes the set (APK + EXE zip + Linux tar.gz from one commit) writes `checksums.sha256` and `build-manifest.json` for all three and publishes. Android's publish moved to its own `release` job, so the two publishing jobs share the concurrency group `upwardly-release-publish` and never check and publish at once. Offline test: `bash tools/ci/test_publish_release.sh` (fake GitHub; 21 cases incl. either order, failed platform, mixed commits, corrupt upload, refused publish, re-run on a public release). Files: `tools/ci/publish_release.sh`, `tools/ci/test_publish_release.sh`, `.github/workflows/android.yml`, `.github/workflows/windows.yml`.
+- **OTA baseline left in the Android build job.** It publishes only when the bundled content version rises (still v1, so it does nothing today). Gating it on the full release would mean it never runs when the desktop build finishes last. Revisit if the content version is ever raised.
+- **Sound pack storage (owner chose a private repository + token; SUPERSEDED the same day, see "Sound pack through GITHUB_TOKEN" below).** The `Sfx` release in this public repository let anyone download the purchased Leohpaz pack (5 downloads by 2026-10-23), which its licence forbids. `tools/ci/fetch_pack_sfx.sh` now reads it from the private repository `verbal76/upwardly-licensed-assets` (tag `Sfx`, same file name and SHA-256) using the secret `LICENSED_ASSETS_TOKEN` (fine-grained, read-only Contents on that one repository). Without the secret it still uses the old location, only until the switch-over. Production builds now fail if the pack is missing or does not convert (20 clips), instead of quietly shipping without its sounds; owner test builds stay tolerant. `ci.yml` checks on every push that the pack can be downloaded and matches its SHA-256 (nothing converted or kept). The converted clips inside the built game are the use the licence allows.
+- **Steam Linux depot upload script** (`tools/steam/upload_linux_depot.sh`) looked for the release `build-N-desktop`, which builds from 74 on no longer make. It now finds the release by tag (`v<version>-buildN`, falling back to `build-N-desktop`); checked against Build 77's checksums.
+- **Build 77 test fixes reviewed:** (1) `TestUtil.slices` returns only the slices up to the height asked for, so the 1,100 m difficulty check no longer measures whole 5,300 m runs; the threshold was not changed. (2) The solver climbs down from a rope-top beam after a knock-back (seed 2 slice 55); the generator and the game are unchanged. (3) The title-upright check (1.5x): on the Build 77 title shot it reads 107/63 upright, and fails both a vertical flip (63/107) and a 180° rotation (61/118), so it still catches an inverted picture.
+
+## Build 78: nothing blocks the view of the course (owner rule, 2026-10-23)
+
+- **Owner:** a floating rock in deep space covered the next platforms (seed 22222-225V-JS78, 4,049 m). Asked whether it should turn see-through like a castle, the owner set a rule instead: "nothing blocks the player's view of the course."
+- **Cause:** the planets and rocks floating inside the tower (`SpaceScene.renderNear`) turn with the tower. They were kept off the play plane only (`inside`), so as the climb went round they swung between the camera and the platforms further round the curve. The close ship's fly-by also passed 1.2 m behind the player, which is in front of the platforms round the curve.
+- **Rule as built:** scenery inside the tower is drawn only while its nearest point is behind the deepest point the renderer can draw course at (`WorldRenderer.visible`: 1.3 rad either side plus a 3 m margin, plus about 2 m for platform depth and the hazards set behind the lane). It fades out over the last 1.5 m before that limit, where it still covers nothing, so nothing pops. It now shows only through the gaps, from the back of the tower. The fly-by ship passes behind the whole course (17 m behind the front, scale 0.6 so it still reads). Render-only: no simulation, generation, replay or record change.
+- **Left as they are (part of the course, not in front of it):** the rain cloud over a wet platform (it marks the hazard), and the small clouds in the play plane that burst when you run through them.
+
+## Build 78: astronauts tumbling past in Deep Space (owner, 2026-10-23)
+
+- **Owner:** random astronauts floating in the background of the space levels, cartwheeling like the hero's flip, crossing at random angles and drifting out of range. Owner choices: Deep Space only; one every 20-40 s; never the astronaut the player is using.
+- **Built** in `SpaceScene` (far sky layer, drawn before the tower and depth-cleared, so it can never come between the camera and the course): one of the four Space Kit astronauts in its tucked mid-air pose (`Jump_Idle`), facing the camera, cartwheeling 45-95°/s about its middle with a slow turn. It crosses the view in a straight line at a random angle and offset, from beyond one edge to beyond the other in 14-22 s, sinking 30% farther away as it goes. Off with reduced motion and with the sky effects off (the far layer itself). Render-only.
+
+## Build 78: the scanning ship (owner, 2026-10-23)
+
+- **Owner:** outside the space levels, one of the zoom-by ships sometimes slows, hovers above the player, scans them with a see-through beam and flies off; it does nothing to the character. Owner choices: every world except Deep Space; it hovers BEHIND the course (the clear-view rule); rare, every 2-4 minutes; a soft hum and scan sound.
+- **Built** in `SpaceScene.renderScan`: a 7.5 s pass. It slows in from one side (2.2 s), hovers 6 m above and 17 m behind the player (the fly-by depth, behind every drawn platform) for 3.6 s, then speeds off up and away (1.7 s). The beam is a cone from the ship to the player, faint green and 32% opaque, with no depth writes so nothing behind it is hidden. Its foot sweeps slowly over the player. The close fly-by never starts during a scan. New original sound `scan` (`tools/gen_audio.py`, its own seeded generator appended last, so every earlier sound is byte-identical): a soft hum swelling in and out, with a light sweep while the beam is on. Off with reduced motion and at the lowest graphics quality. Render and audio only.
+- **Astronaut size:** the Deep Space astronauts were drawn at the size of a character on the course, so they read as near; halved so they read as far away.
+- **Fix found on the way:** a ModelInstance copies its materials, so the beam's opacity must be set on the instance's own BlendingAttribute (it showed nothing until it was).
+
+## Build 78: sound pack through GITHUB_TOKEN (owner, 2026-10-23)
+
+- **Owner:** the pack is already on a release in this repository; no personal access token; use the built-in GITHUB_TOKEN with the least permission (preferably contents: read); keep the pack where it is; fail clearly if it is missing or corrupted; no silent fallback.
+- **Found:** the `Sfx` release is published (not a draft) in this public repository, asset `Minifantasy_Forgotten_Plains_SFX.zip`, 47,813,471 bytes, GitHub digest sha256 d94e9fd5..., equal to the SHA-256 the script pins. A published release in the same repository is readable by GITHUB_TOKEN with `contents: read` (and, because the repository is public, by anyone). A draft release is listed only to a token that can write, so it would need `contents: write`. The builds already used GITHUB_TOKEN (the personal-token path was never set up); the desktop fetch jobs held `contents: write` only to see a draft.
+- **Changed:** `tools/ci/fetch_pack_sfx.sh` finds the asset on the `Sfx` release through the REST API with GITHUB_TOKEN only (the personal-token path is gone), downloads it by id, checks the size against the release and the SHA-256 against the pinned value, and fails the run with a clear `::error::` on every problem (no release or asset, no access, download failure, wrong size or hash, unzip or conversion failure, fewer than 20 clips). The `continue-on-error` and the test-build leniency are gone from all three build jobs. The Windows and Linux build jobs drop from `contents: write` to `contents: read`. The Android build job keeps the workflow's `contents: write`, because the same job publishes the OTA baseline release. `ci.yml` (contents: read) checks the download and hash on every push. The authorization header is never forwarded to the storage host the download redirects to.
+- **Verified here (narrow):** a real download with SHA-256 match; a repository without the release fails; a corrupted zip fails on the SHA-256; the full download-and-convert path writes 20 clips. The push's CI run is the proof that GITHUB_TOKEN with `contents: read` reads it inside Actions.
+- **Owner chose option 2 (draft), below.**
+
+## Build 78: the Sfx release is a draft; builds fetch it with GITHUB_TOKEN (contents: write) (owner, 2026-10-23)
+
+- **Verified first, with a throwaway draft** (`.github/workflows/sfx-pack-access.yml`, run 40002288773; the throwaway was deleted by the run): a
+  `contents: read` GITHUB_TOKEN cannot see a draft in the list (fetch refused) and gets HTTP 403 even for a direct asset download by id; an
+  anonymous request gets 404; a `contents: write` GITHUB_TOKEN fetches it and passes the SHA-256 check on Linux and Windows. So the minimum is
+  `contents: write`: Android build job (already the workflow's, also needed for the OTA release), Windows job and Linux job.
+- **Then the owner's release** (run 40002427931): release 421373876 tagged `Sfx`, asset 667670730 (47,813,471 bytes, sha256 d94e9fd5...) made a
+  draft with nothing deleted, moved or re-uploaded (same release id, asset id and digest after). Anonymous checks from the GitHub runner:
+  download page 404, release by tag 404, asset by id 404. With GITHUB_TOKEN the pack was fetched from the draft and converted to all 20 clips on
+  Linux and on Windows.
+- **Caution for later checks:** requests from the development sandbox go through a proxy that adds GitHub credentials (rate limit 15,000, drafts
+  visible), so "anonymous" tests must run somewhere without them (the GitHub runner, or a browser logged out).
+- `ci.yml` no longer checks the pack on every push (it is read-only and cannot see a draft); a missing or corrupt pack fails the build workflows.
+- **Licence** (verbatim in `assets/licenses/Leohpaz_Minifantasy_ForgottenPlains_Audio.txt`, from the owner's screenshots of the itch.io page):
+  personal or commercial projects may use the base pack and the exclusive content; the asset pack may not be sold or distributed, even for
+  free; credit appreciated. Upwardly uses 20 converted clips inside the game, which is use in a commercial project; it does not offer the pack
+  or its files as such, and the source zip is no longer public. Residual point: like any game asset, the clips can be extracted from a
+  package by someone determined; that is normal for licensed game audio and not distribution of the pack. Not used: the pack's music and the
+  patron-only sounds. Credit is on the Credits screen.
+
+## Build 78 first attempt: publish refused (2026-10-23)
+
+- Both build workflows on e57036e built and tested green; both publish jobs (Android release, desktop release) stopped at their first GitHub
+  call with `gh: Resource not accessible by integration (HTTP 403)`, once each and again on one re-run each. Their logs show the token had
+  `Contents: write`. Nothing was created: no Build 78 release or draft exists.
+- Not reproduced: the same `publish_release.sh` with a fake tag ran clean from a push-triggered job, from a hand-dispatched job and while
+  holding the shared publish lock (runs 40004773866, 40005206740, 40005402672); each probe deleted its draft. No tag v1.3.0-build78 exists
+  and the repository has no rulesets. Cause unknown.
+- Found while probing (fixed in a23bb0c): an update of a DRAFT release that omits `tag_name` makes GitHub list it as `untagged-...`, so the
+  other platform's run could not find the draft by tag and would have made a second one. Every update now re-sends tag, title and commit,
+  and the lookup also matches a draft by its title. The offline test's fake GitHub reproduces the reset.
+- The e57036e runs can only re-run their own (unfixed) script, so Build 78 is dispatched again from the current head.
+
+## Build 79: the owner's play-through notes (rules 6, 2026-10-23)
+
+All from the owner's Build 78 play-through. Everything that changes the simulation or the generator is one rules bump (5 -> 6): courses,
+generator proofs and the bundled replays are redone together.
+
+- **Spinning ramp, middle vanished from behind** (render only): the ramp deck is a single-sided plate, so its back face was culled when the
+  ramp turned its back to the camera. The spinning ramp's material now draws both sides.
+- **Blob** (owner: telegraphs too long, too easy to avoid): no wobble - it leaps as soon as it has noticed you (0.3 s), lands, rests 1.0 s
+  (was 1.2) and leaps again at once if you are still there. It reaches the platform before and after its own: it lands on whichever of the
+  three you stand on, and leaps home after 1.5 s without you on any of them. A squash now knocks you away (9 / 7 m/s, was 4.5 / 8: "it hits
+  me and I just stand there"). Neighbour decks must be fixed, flat platforms within 3 m height (no movers, ramps, tipping bridges or
+  crumbling decks).
+- **Skull** (owner: same range, attack faster): rest 1.3 -> 0.6 s, wind-up 1.2 -> 0.8 s (loop 0.75 -> 0.5 s), dash 13 -> 16 m/s. Standing
+  on the platform before or after its own, it flies over (8 m/s, it does not hit on the way) to the end of that deck away from you and hunts
+  you there; it flies home after 1.5 s without you on any of the three.
+- **Club vs skull** (owner): the club bats a skull away like a hooked golf shot (it curls off into the middle of the tower); doing so breaks
+  the club (its time goes to 0). Every crab or bee knocked away costs 5 s of club.
+- **Crabs** (owner): never fewer than two on a crab deck, more higher up (2-4, deck 9-13 m); each patrols its own stretch. A chasing crab
+  follows you onto the next (or previous) platform by hopping the gap (up to 3.2 m wide, 1.8 m up), up to three platforms from home, and
+  hops back home when it loses you. Crabs do not understand crumbling: one on a deck that crumbles (or over a bridge hole that opens) falls
+  with it and is gone. The planner hops each crab on a deck in turn.
+- **Bees** (owner: two at once, never from the same side): a bee's `dir` (-1) now brings it in from the other side; a guarded gap that has a
+  bee gets a second one from the opposite side 30-70 % of the time, slightly out of step.
+- **Spike drops** (owner: just wait and walk under): 20-50 % of drop platforms after the first get crabs on the deck (two, plus one per difficulty level: never fewer than two) or a bee over it.
+- **Aimed cannon** (owner: it spun through its pedestal): the turret turns flat like a record (aimYaw, 4 rad/s) to face your side and its
+  barrel only tilts between -20 and +29 degrees; it only arms once it faces along the lane. The ball flies along that limited angle, so a
+  climber far below or above the barrel's reach is not targeted.
+- **Balance conveyor** (owner: always moving): runs at full speed all the time, toward the end you last stood on (stored per element in
+  `onT`, which the save already carries); the calm middle no longer stops it.
+- **Bridges that drop planks** (owner): some fixed wooden bridges (45 % of plain floating bridges, 35 % of skull bridges) mark one or two
+  plank sections (about 1.3 m) that rattle when you land and drop out 0.45 s later, for the crumble respawn time. Never the first two
+  sections (you land there) or the last (take-off), never side by side. Drawn paler so they can be read before you land. Stored as a bit
+  mask in the element's `color` (unused on platforms). You fall through once your middle is 0.2 m inside a hole. The planner gets a
+  hole-hop move; link proofs never start a climber standing on a loose plank.
+- **Decoys across ropes** (owner screenshot, seed 22222-243N-ZJHT): side platforms (dead ends / lures) were placed on a rope's top beam
+  because the overlap test allowed head room above. A decoy is now refused anywhere along a rope or within 2.2 m above its top.
+- **Big rocks under platforms** (owner: keep them, but they cannot block platforms): the dusk, night and space rocks are scaled down so their
+  bottom stays 3.2 m above any platform, castle or rope top beneath them, or left off when even a small one would not fit (render only).
+- **First world** (owner: "dawn base is a little too easy" - read as the first world, the sunrise sky at the tower's base): hazards start at
+  40 m (was 70) and reach full frequency over 950 m (was 1100).
+- **DIFFICULTY: NORMAL / PUNISHER / NEVER GONNA HAPPEN** (owner; answers: new climbs only, one DIFFICULTY row, a separate board each;
+  PUNISHER about 25 % faster with one more enemy, NEVER GONNA HAPPEN about 50 % faster with two more). The setting (ACCESS tab, next to
+  the assists) is read when a climb starts and the climb keeps it (`SaveData.difficulty`). Its tuning is a copy with `hard` = 1 or 2:
+  creature and cannon reactions are `Tuning.REACT[hard]` (1.25 / 1.5) times faster (skull, blob, crab, bee and aimed-cannon timings and
+  speeds), cannon, aimed, mortar and bee periods are that much shorter, `hard` more crabs per deck, more bee pairs and drop-row creatures,
+  more creature decks and guarded gaps. The generator still proves every link with the faster creatures. Each difficulty has its own times
+  table (`recordsJson`, `punisherRecordsJson`, `neverRecordsJson`; the Times screen cycles them) and a harder climb never touches the normal
+  bests. The HUD seed line and the pause menu name the difficulty. The owner's notes for Build 79 were all from playing on PC.
+
+### Build 79 verification: failures traced to their cause (2026-10-24)
+
+The 16 CI failures on 832f6fa were classified one by one against the last green baseline (Build 78, 3e47227) and against 970a615.
+No approved rule was changed to suit the solver, and no test or tolerance was relaxed.
+
+- **No crab decks at all** (DifficultyTest): a regression in my own solver change (13e6976). The crab-hop reflex fired on every crab's home
+  deck too, pre-empting the plan's own timed crab hop, so the link off any crab deck lost its margin and every section with crabs was
+  rebuilt without them. The reflex now acts only on a crab that has followed you off its own deck (`deckOff != 0`). With only that fix the
+  crab-deck counts per seed are exactly those of 970a615.
+- **Balance conveyor never placed** (BalanceConveyorTest x2, WorldPickerStartTest "slice climbed past the exact structure"): the course is
+  not impossible. A brute-force run of plain human input (stick held forward, one jump on, one off, 100 ms stick hold) crosses every
+  layout tried, at 127-2911 of 4275 timings. The proof was at fault: it stood the climber still 0.7 m from the belt's back end, where the
+  always-running belt (owner rule, unchanged) and the plank tipping that way carry anyone off before they can move, so the trial looped on
+  ledge pull-ups. Nobody stands still on that belt, so the crossing is now proven from exactly where and how the proven jump onto it
+  lands (`CourseGenerator.commit`). With that, every probe layout passes with full margin. The end-to-end solver run still plays it continuously.
+- **Saws with too narrow a window** (SawFairnessTest, 0.36 and 0.44 of a cycle): each saw on its own leaves its whole cycle (1.00). The
+  narrowing came from a skull on the deck before, which since Build 79 roams onto the saw's deck. As with the homing bee since Build 71, a
+  horizontal saw is no longer placed within a roaming creature's reach (skull or blob one deck, crab `CRAB_FOLLOW` decks); the gap or floor
+  becomes a spiked block, and `commit` refuses any later pairing.
+- **Platform speed depended on the frame** (TowerStreamingTest, after a trampoline; probably PlayDeterminismTest's restored save):
+  `Sim.platformVy` was `(ey1 - ey0) / DT` on absolute local heights, so a mover's vertical speed carried rounding that depended on where
+  the frame's origin is (about 2e-3 m/s at 460 m), and a rebuild mixed two roundings. This is the vertical twin of the Build 76 `sOffsetAt` fix. The
+  rise per step is now taken from the element's own motion (`Element.yOffsetAt`, the seesaw tilt, the ramp slope) into `Sim.edy`. The
+  tolerances are unchanged.
+- **Spinning ramps "never appear"** (RampVarietiesTest): the generator is not dropping them. In isolation a spinning ramp proves exactly as
+  in Build 78 (22 of 24 layouts, both builds). Counted in generation, seed 3 up to 2,600 m rolled only six ramps above 1,000 m (where they
+  start) and none came up as the spinner, one ramp in five (a 26 % chance). The test now looks at seeds 1-3 (the seeds the suite already
+  climbs to 5,300 m), with the same assertions.
+- **Long dead ends gone** (DeadEndTest, 0 in its 60 slices; Build 78 had 5): every forced long spur was refused by the Build 79 rule that keeps
+  decoys off ropes (owner screenshot): even refusing only a spur that physically crosses the rope's grab width leaves none, so the long dead
+  ends Build 78 counted were ones across ropes. Elsewhere a spur that only climbed backward or only dropped forward met the route either side.
+  Resolved by the owner's new design below, which brings them back without touching the rope rule.
+- **Dead ends both ways, up and down; the route dips** (owner, 2026-10-24: "the dead end spurs need to go left and right periodically ... they
+  can go both up and down ... the main route sometimes can go down one or two steps and then continue to go up. It's just to throw them off"):
+  spurs now branch left and right in turn (`spurLeft` flips with every spur placed; the side whose turn it is is tried first, then the other),
+  and each step goes up 0.2-0.8 m or down 0.3-1.0 m (a left spur leans up and first jumps 1.2-1.5 m up, clear of the lower block the route came
+  from; a right one leans down, under the block it goes on to). Every gap is sized for the step taken upward, so the way back is always a normal
+  jump. One hop module in five is instead one or two steps down (0.4-1.1 m each) before the route climbs on; the spiral-pitch controller makes
+  the height up. On DeadEndTest's 60 slices: 33 long plain dead ends, 44 spurs left and 34 right, 40 that step both up and down, 12 route dips;
+  the test now checks all four.
+- **Determinism confirmed locally** (on 17856f8): PlayDeterminismTest 8/8 (the save restored mid-creature now continues exactly) and
+  TowerStreamingTest 7/7 (streaming vs whole: 539 m, 412 rebuilds, no decision flip, worst divergence 1.55 mm against the unchanged 2 mm).
+- **Solver on the streaming tower** (StreamingReplayTest / TowerStreamingTest stopped at 35 m after the dead-end change): three planner
+  assumptions that only held while a slice's decoys were few. In a tower's world each slice's decoys follow its route (`routeCount` -1).
+  (1) Link success was "a later element below `routeSize()`", which there includes decoys, so a grab of a left spur's ledge, hanging over the
+  route three steps back, counted as progress. Success now needs a route element (`Autopilot.onRoute`), as it always did in a slice.
+  (2) The next route element was taken to be `a + 1`; `Course.nextRoute` skips the decoys between a slice's last route platform and the next
+  slice's route. (3) The planning window took raw indices; in a tower's world it now counts route elements and brings the decoys and hazards
+  anchored there. Slice courses are untouched (`nextRoute` is `a + 1`, decoys already sit past the route). Seed 12's streaming tower now climbs
+  401 m in the test's 26,000 steps (was 35 m).
+- **Waiting for a cannon on the platform before** (FramedGenerationTest seed 5 slice 6, a spring the cannon from the previous platform
+  always crossed): the planner tried waits only for movers and hazards from the current platform on, while `commit` proves a cannon's lane
+  across the platform after it. Cannons, aimed cannons and mortars anchored one platform back now count too (`Autopilot.firesAhead`); the slice completes.
+- **Saw next to a cannon lane** (SawFairnessTest, still 0.36 after the creature rule): the probe found the remaining narrow saw (seed 3, slice
+  16) with no creature near, but a cannon across the deck it lands on, inside the same chain of guarded gaps; alone it leaves its whole cycle.
+  As the bee rule since Build 71, a saw and a cannon are never next to each other in a chain (the later one becomes a spiked block).
+- **Saw next to a cannon from another module** (SawFairnessTest 0.36 on b831e7f: seed 3 slice 16, a saw on platform 37 and a cannon on 38
+  built by the next module, so the chain rule never saw them together): `sawsClearOfCreatures` now also refuses a commit that puts a cannon or
+  aimed cannon on a platform next to a saw's, wherever the two came from; the generator then tries another module.
+- **No ceiling over a route platform** (EndlessTest seed 224 slice 12: a left spur 2.6 m over the route blocked its jump). A dead-end piece
+  may not sit 0.5-3.9 m above a route platform it overlaps. Proving the margin alone did not catch it (the margin-only experiment still failed
+  seed 224), so both rules stay: a decoy near a link must also leave that link the 0.05 m margin every route link is proven with (CourseTest
+  link margin 0.017 on b831e7f).
+- **Left spurs** (owner: spurs go left and right). The route climbs to the right, so a left spur branches back towards the platform it came
+  up from; with the ceiling rule the main pass found room for only 3-6 in DeadEndTest's 60 slices. A left spur now climbs or drops steeply
+  first, and a third pass from its own RNG looks along each slice for a platform with room on its left and builds one there if the slice has
+  none (DeadEndTest: left 14, right 35, up-and-down 21, route dips 12).
+- **Route dips are bounded** (CourseTest ascent): a hop module steps down only from the highest route platform so far and never twice in a
+  row, so a dip is one or two steps and the climb then goes on; the ascent never loses more than one dip's height.
+- **Every link a new piece can touch is proven with it** (SawFairnessTest seed 3 slice 16, FramedGenerationTest seed 5 slice 17, CourseTest
+  tower 3 link 192). `commit` re-proved only from the platform a module starts on. Three cases slipped through: a saw from the next module on
+  that platform sweeping the landing of the link before it (0.36 of its cycle); a skull from the next module that roams back onto the deck
+  before its own (it jumped the pad link); and a slider just past a ramp landing (margin 0.25 -> 0.017). A commit now also re-proves the link
+  onto the platform the module starts from, and any link a new hazard or creature can reach (a creature's roaming reach further back).
+  Generation takes about 1.6x as long on the desktop (mean 4.2 -> 6.8 s per slice); the game makes the next slice in the background while
+  the current one is climbed, so this is not felt.
+- **No route dip off a tower's start** (CourseTest ascent, tower 1: the route stepped down from the start platform). A dip needs the route
+  3 m above its start.
+- **The solver does not stop and wait on a crab deck** (OfficialRunTest seed 7 slice 9). It braked "in the safe pocket" on arriving at a deck
+  with a mid-deck hazard, and the crabs shoved it 28 m down. With crabs closing in it now plans the crab hop straight from the landing,
+  which is how the generator proves those links.
+- **Tolerance is measured from the proven start** (CourseTest link margins). The test measured each link from a standing start at time 0.
+  The generator proves from the first quiet moment (a crab deck: a crab can be shoving at time 0) and, on the always-running belt, from the
+  landing. `CourseGenerator.provenStart` gives that start, and the test measures from it with the same 0.04 m bar.
+- **TowerStreamingTest rebuild: a landing on a rounding knife-edge (needs the owner).** `RebuildFlipProbe` replays the test's inputs. The
+  rebuilt tower first differs from the resident one by an ulp at frame 135, the first rebuild. It stays within 3e-5 m until frame 1578. There the
+  resident climber is 0.141 mm above the start platform, just outside the 0.1 mm landing tolerance, and the rebuilt one, rounding at heights
+  around -1000 m (ulp 6e-5 m), is inside it. One lands a step before the other. This is the float re-rounding Build 72 traced and documented
+  (StreamingReplayTest allows such a one-step timing difference). The new courses only moved the test's scripted wander onto that edge. It is
+  not fixed here: no tolerance may be widened to hide it (owner rule), and the exact cures (one absolute frame, doubles for element and body
+  positions, or fixed point) change the simulation's arithmetic, which Build 72 left for the owner to decide.
+
+## Generator redesign (owner master directive, 2026-10-24)
+
+- **Audit and plan:** `docs/GENERATOR_AUDIT.md`.
+- **Modes:** only NORMAL and PUNISHER are offered for new climbs until the difficulty infrastructure is in place. NEVER GONNA HAPPEN keeps its code, its board and any climb begun on it.
+- **Build 79:** held until the redesign lands.
+- **Dead-end spurs:** replaced by reconnecting forks.
+- **Difficulty:** estimated per link by `EncounterModel` (demand categories and interaction terms, all reasons logged). The weights are first estimates, to be calibrated against playtests. A score is an estimate, not proof of human feasibility.

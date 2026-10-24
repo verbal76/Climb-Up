@@ -14,6 +14,10 @@ on:
         description: "Owner test build: attach the packages to a DRAFT GitHub Release (visible to collaborators only, no tag, nothing public). Off = the normal published release."
         type: boolean
         default: false
+      publish_public:
+        description: "Make the completed three-platform release public. Off (default, owner 2026-10-24) = the release with all three packages stays a private draft."
+        type: boolean
+        default: false
       skip_tests:
         description: "Skip the test job (core, desktop, scenario, limb guard) for an art-only rebuild whose commit already passed them elsewhere. The Windows EXE and Linux launcher smoke checks still run. Default off."
         type: boolean
@@ -27,7 +31,7 @@ env:
 
 jobs:
   tests:
-    if: github.ref == 'refs/heads/ccr-cb458cd1-w4dh5c' && !inputs.skip_tests
+    if: (github.ref == 'refs/heads/ccr-cb458cd1-w4dh5c' || github.ref == 'refs/heads/build-74-determinism') && !inputs.skip_tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -68,9 +72,14 @@ jobs:
           retention-days: 7
 
   windows:
-    if: always() && github.ref == 'refs/heads/ccr-cb458cd1-w4dh5c' && (needs.tests.result == 'success' || (inputs.skip_tests && needs.tests.result == 'skipped'))
+    if: always() && (github.ref == 'refs/heads/ccr-cb458cd1-w4dh5c' || github.ref == 'refs/heads/build-74-determinism') && (needs.tests.result == 'success' || (inputs.skip_tests && needs.tests.result == 'skipped'))
     needs: tests
     runs-on: windows-latest
+    # contents: write ONLY because the sound pack sits on the owner's DRAFT "Sfx" release, which GitHub shows only to a token that can write
+    # (proved by sfx-pack-access.yml: a contents: read token cannot see it); nothing in this job publishes or writes
+    permissions:
+      contents: write
+      actions: read
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -78,6 +87,15 @@ jobs:
       - uses: actions/setup-python@v5
         with: { python-version: '3.12' }
       - run: pip install pillow
+      - name: Fetch the licensed sound pack (the owner's "Sfx" release in this repository, GITHUB_TOKEN, SHA-256 checked; the build fails if it is missing or corrupted)
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          (command -v ffmpeg >/dev/null 2>&1 || choco install ffmpeg --no-progress -y >/dev/null 2>&1) || true
+          export PATH="$PATH:/c/ProgramData/chocolatey/bin"
+          tools/ci/fetch_pack_sfx.sh --download
       - name: Package (jar, jlink runtime, EXE, assets, checksums, Steam layout)
         shell: powershell
         run: powershell -File tools/windows/package.ps1 -BuildNumber ${{ env.BUILD_NUMBER }} -Channel ${{ inputs.test_build && 'experimental' || 'release' }}
@@ -137,13 +155,26 @@ jobs:
           retention-days: 14
 
   linux:
-    if: always() && github.ref == 'refs/heads/ccr-cb458cd1-w4dh5c' && (needs.tests.result == 'success' || (inputs.skip_tests && needs.tests.result == 'skipped'))
+    if: always() && (github.ref == 'refs/heads/ccr-cb458cd1-w4dh5c' || github.ref == 'refs/heads/build-74-determinism') && (needs.tests.result == 'success' || (inputs.skip_tests && needs.tests.result == 'skipped'))
     needs: tests
     runs-on: ubuntu-latest
+    # contents: write ONLY because the sound pack sits on the owner's DRAFT "Sfx" release, which GitHub shows only to a token that can write
+    # (proved by sfx-pack-access.yml: a contents: read token cannot see it); nothing in this job publishes or writes
+    permissions:
+      contents: write
+      actions: read
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: '17' }
+      - name: Fetch the licensed sound pack (the owner's "Sfx" release in this repository, GITHUB_TOKEN, SHA-256 checked; the build fails if it is missing or corrupted)
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          (command -v ffmpeg >/dev/null 2>&1 || sudo apt-get install -y --no-install-recommends ffmpeg >/dev/null 2>&1) || true
+          tools/ci/fetch_pack_sfx.sh --download
       - name: Package the native Linux x86-64 app-image + tar.gz (jpackage)
         run: bash tools/linux/package.sh ${{ env.BUILD_NUMBER }}
       - name: Smoke the native launcher headless (bundled runtime, no system Java)
@@ -163,11 +194,14 @@ jobs:
           retention-days: 14
 
   release:
-    if: always() && github.ref == 'refs/heads/ccr-cb458cd1-w4dh5c' && needs.windows.result == 'success' && needs.linux.result == 'success'
+    if: always() && (github.ref == 'refs/heads/ccr-cb458cd1-w4dh5c' || github.ref == 'refs/heads/build-74-determinism') && needs.windows.result == 'success' && needs.linux.result == 'success'
     needs: [windows, linux]
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    concurrency:   # shared with android.yml's release job (Build 78 release gate)
+      group: upwardly-release-publish
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
@@ -212,6 +246,7 @@ jobs:
             gh release create "$TAG" "$EXE" "$LINUX" build-manifest.json checksums.sha256 --repo "$REPO" --target "${{ github.sha }}" --title "Upwardly Build ${N} — Desktop (Windows + Linux) (owner test build, draft)" --notes-file notes.md --draft
             echo "draft release created for $TAG (visible to collaborators only)"
           else
-            gh release create "$TAG" "$EXE" "$LINUX" build-manifest.json checksums.sha256 --repo "$REPO" --target "${{ github.sha }}" --title "Upwardly Build ${N} — Desktop (Windows + Linux)" --notes-file notes.md --latest=false
-            echo "published https://github.com/$REPO/releases/tag/$TAG"
+            # owner: one release per build with the APK, EXE and Linux build together, under the Android workflow's tag. The packages join a draft
+            # candidate; it goes public only when the APK from this same commit is on it too, with checksums and a manifest for all three (Build 78)
+            PUBLISH_PUBLIC="${{ inputs.publish_public }}" bash tools/ci/publish_release.sh "v${VER}-build${N}" "$N" notes.md "$EXE" "$LINUX"
           fi

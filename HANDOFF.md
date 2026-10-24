@@ -8,6 +8,82 @@
 
 # Handoff
 
+## Recovery point (2026-10-24, generator redesign: playtest candidate pending packaging)
+
+- **Where things are:** branch `build-74-determinism` (PR #9). Generator rules 7 (`rulesOfBuild(80) = 7`).
+- **Build 80 playtest (owner choice: built with the core tests skipped):**
+  - Private draft release "Upwardly build 80" (v1.3.0-build80, untagged draft) from `7ed261d`.
+  - APK versionCode 80, SHA-256 `826d138618ff13d773e0d2090d04622755079088fc5b4d1caeda80fa0da8ea02`, plus the Windows EXE zip and the Linux tar.gz.
+  - Runs: Android 40116021811 (emulator update from Build 71 passed), desktop 40116023900 (EXE 30 s launch and Linux launcher smoke passed).
+  - Not public; the OTA channel was not touched. Awaiting the owner's hands-on playtest.
+- **Done (details in `docs/GENERATOR_AUDIT.md`):**
+  - Two playable modes.
+  - Encounter model and conflict rule.
+  - No level gates.
+  - PUNISHER on its own curve (head start, late ramp to 1.4).
+  - Route-reserved splits with proven reconnecting branches (`Kind.FORK`, `tryReservedFork`), trampoline forks, no dead ends.
+- **Smoke evidence:**
+  - ForkProbe: NORMAL 8 / PUNISHER 10 forks in 5 slices, 0 broken.
+  - Level1Probe: 6 NORMAL + 3 PUNISHER seeds, enemies, hazards and 14-25 forks in Level 1; aimed cannons in 3 of 6 NORMAL seeds.
+  - LevelReport on seed 7, before the fork module and late-ramp change.
+  - DeterminismTest resume test passes.
+- **Before any build** (both build workflows run `:core:test`), these core tests still hold old-generator expectations:
+  - the generation fingerprint;
+  - the three replays, which need re-recording;
+  - DeadEndTest, which must become a fork test;
+  - AimedCannonTest, BalanceConveyorTest, OfficialRunTest;
+  - TowerStreamingTest (the approved one-step tolerance is not yet applied).
+
+  The in-game hidden replay check (ReplayCheck expected values) also needs the re-recorded seed 12.
+- **Owner decisions in force:**
+  - All mechanics stay; aimed cannons are mandatory.
+  - No public release or OTA update.
+  - Not Gonna Happen code kept but not offered.
+  - At most five smoke rounds (two used).
+- `replays-pending/` holds the `bd0b550` recordings: obsolete now.
+
+## Recovery point (2026-10-24, Build 79 on hold for the generator directive)
+
+- **Where things are:**
+  - Branch `build-74-determinism`, HEAD at the commit carrying this note (generator source is `bd0b550`), PR #9.
+  - No Build 79 artifacts and no draft release exist.
+- **Owner decisions in force:**
+  - All existing mechanics stay; aimed cannons are mandatory.
+  - Approved: a one-simulation-step landing tolerance for TowerStreamingTest. Verified rounding; not yet applied.
+  - Not Gonna Happen stays.
+  - No public release and no OTA update.
+  - The master generator directive of 2026-10-24 (difficulty model, 10-level curves, forks instead of dead ends).
+- **Audit, gap analysis, design and open owner questions:** `docs/GENERATOR_AUDIT.md`.
+- **Replays recorded on `bd0b550`:** in `replays-pending/` (uncommitted by owner instruction), listed in `replays-pending/RECORDINGS.txt`. They are invalid after any generator change.
+- **Still failing on `bd0b550` (CI):** see GENERATOR_AUDIT.md.
+
+
+## Build 78 status (2026-10-23) - PUBLISHED
+
+Release v1.3.0-build78 (public) from build-74-determinism @ cf07f34; tag v1.3.0-build78 -> cf07f34. First release through the new gate: the
+desktop run (40005658733) left a draft with the EXE zip + Linux tar.gz, the Android run (40005654773, emulator update from Build 71 passed)
+added the APK and published it with checksums.sha256 (3 lines) and build-manifest.json (3 artifacts, source cf07f34), all matching GitHub's
+digests. APK sha256 f2eb188b..., EXE zip 1e734774..., Linux 9890f6fd.... New in 78: clear-view rule (space scenery behind the course),
+tumbling astronauts (Deep Space), scanning ship (other worlds), sound pack from the draft Sfx release. The first Build 78 attempt (e57036e)
+was refused at publish (HTTP 403, cause not found) and published nothing; see DECISIONS.
+Owner's phone, Build 78 installed: determinism check MATCHES the desktop (finish 425348, clock 425349, 1:58:09.150, same event and state
+hashes as Build 77, as expected: Build 78 changed only rendering and audio).
+
+## Build 77 status (2026-10-23) - PUBLISHED; closeout in progress
+
+Release v1.3.0-build77 (public) from build-74-determinism @ e1c8b55 (game code = 311fb2b). Verified: APK c35d3d1d...570ca, EXE zip 73e5f787...,
+Linux 9ec85d53..., the checksums and manifest match GitHub's digests (the manifest and checksums cover the two desktop files only, the APK hash is in
+the notes). Phone (owner's Pixel) determinism check MATCHES the desktop (finish 425348, 1:58:09.150). Android runs 39911402687, desktop 39911400270 green.
+
+Closeout work (commit after 2143ec9, see DECISIONS "Build 77 closeout"):
+* Release gate: publish_release.sh drafts, checks the same commit, publishes only with all three packages; offline test tools/ci/test_publish_release.sh.
+* Sound pack: the "Sfx" release is a DRAFT (not public); builds fetch it with GITHUB_TOKEN (contents: write on the Android, Windows and Linux jobs), SHA-256 checked, every build fails if missing/corrupt (DECISIONS "the Sfx release is a draft").
+* Steam Linux upload script finds v<ver>-buildN releases.
+
+Waiting on the owner: (1) paste the corrected Android notes into the Build 77 release; (2) create the private repo, upload the pack zip to its
+"Sfx" release, create the token + secret, then delete the zip from this repo's public "Sfx" release (exact steps in the session report);
+(3) Steam: owner says app, store page, Coming Soon and a build upload are done; Build 77 is not yet on Steam.
+
 ## Build 72 (version 1.2.0, rules version 3) - playtest candidate
 
 New since Build 71 (details in docs/DECISIONS.md, evidence in docs/VERIFICATION.md):

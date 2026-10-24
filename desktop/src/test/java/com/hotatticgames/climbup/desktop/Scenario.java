@@ -473,7 +473,10 @@ public final class Scenario implements ApplicationListener {
     private static boolean logoUpright(File f) {
         java.awt.image.BufferedImage i = readPng(f); if (i == null) return false;
         int top = orangeOnRow(i, (int) (i.getHeight() * 0.18f)), bottom = orangeOnRow(i, (int) (i.getHeight() * 0.82f));
-        return top > 20 && top > 2 * bottom;
+        // A mirrored picture swaps the two rows exactly, so upright means the logo row clearly beats its mirror. Build 77: the morning sky's violet fog warms
+        // the platforms' sides, so the 82% row reads more orange (upright 107 vs 63 = 1.70; that picture flipped would read 63 vs 107 = 0.59); 1.5x still
+        // separates the two with a wide gap (the old 2x margin left the Build 76 sky at 109 vs 50, barely above it).
+        return top > 20 && top * 2 > bottom * 3;
     }
     private static String orangeNote(File f) { java.awt.image.BufferedImage i = readPng(f); return i == null ? "unreadable" : "orange at 18%: " + orangeOnRow(i, (int) (i.getHeight() * 0.18f)) + ", at 82%: " + orangeOnRow(i, (int) (i.getHeight() * 0.82f)); }
     private static int centreLuma(File f) { java.awt.image.BufferedImage i = readPng(f); return i == null ? -1 : luma(i, i.getWidth() / 2, i.getHeight() / 2); }

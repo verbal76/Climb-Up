@@ -15,7 +15,7 @@ import java.util.Random;
 /** Sky gradient plus parallax layers (voxel clouds, stars). Generated procedurally; scrolls with the tower's rotation. */
 public final class Background implements Disposable {
     private final Texture[] clouds = new Texture[2];
-    private final Texture stars;
+    private final Texture stars, farStars;
     private int w = 1280, h = 720;
     private final Texture glow, shaft;
     private final TextureRegion shaftR;
@@ -65,14 +65,28 @@ public final class Background implements Disposable {
         stars = new Texture(pm); stars.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
         stars.setWrap(Texture.TextureWrap.Repeat, Texture.TextureWrap.Repeat);
         pm.dispose();
+        // Build 77 (owner: deep space looked "in stereo"): the second, slower star layer had reused the first one's pattern, shifted, so every star showed
+        // twice side by side. It has its own pattern now: more, smaller, dimmer stars, so it reads as farther away.
+        Pixmap fp = new Pixmap(512, 512, Pixmap.Format.RGBA8888);
+        fp.setColor(0, 0, 0, 0); fp.fill();
+        Random fr = new Random(9113);
+        for (int i = 0; i < 260; i++) {
+            fp.setColor(0.9f, 0.94f, 1f, 0.35f + 0.4f * fr.nextFloat());
+            fp.fillRectangle(fr.nextInt(512), fr.nextInt(512), 1 + (fr.nextInt(6) == 0 ? 1 : 0), 1 + (fr.nextInt(6) == 0 ? 1 : 0));
+        }
+        farStars = new Texture(fp); farStars.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
+        farStars.setWrap(Texture.TextureWrap.Repeat, Texture.TextureWrap.Repeat);
+        fp.dispose();
     }
 
     public void resize(int w, int h) { this.w = w; this.h = h; }
 
-    public void render(SpriteBatch sb, ShapeRenderer sr, Color top, Color bot, float camS, float camY, float zoneF, float circumference, boolean reduced, float time) {
+    public void render(SpriteBatch sb, ShapeRenderer sr, Color top, Color mid, Color bot, float camS, float camY, float zoneF, float circumference, boolean reduced, float time) {
         sr.getProjectionMatrix().setToOrtho2D(0, 0, w, h);
         sr.begin(ShapeRenderer.ShapeType.Filled);
-        sr.rect(0, 0, w, h, bot, bot, top, top);
+        float hm = h * Palette.SKY_MID_AT;          // three stops (Build 77): bottom -> middle -> top
+        sr.rect(0, 0, w, hm, bot, bot, mid, mid);
+        sr.rect(0, hm, w, h - hm, mid, mid, top, top);
         sr.end();
         sb.getProjectionMatrix().setToOrtho2D(0, 0, w, h);
         sb.enableBlending();
@@ -86,7 +100,7 @@ public final class Background implements Disposable {
             sb.draw(stars, 0, 0, w, h, (int) sx % 512, -(int) sy % 512, w, h, false, false);
             if (deep > 0.01f) {          // a second, slower star layer shifted over the first
                 sb.setColor(0.85f, 0.9f, 1f, deep);
-                sb.draw(stars, 0, 0, w, h, (int) (sx * 0.5f) % 512 + 200, -(int) (sy * 0.5f) % 512 + 90, w, h, false, false);
+                sb.draw(farStars, 0, 0, w, h, (int) (sx * 0.5f) % 512, -(int) (sy * 0.5f) % 512, w, h, false, false);
             }
         }
         float wrap = MathUtils.clamp((zoneF - Palette.ZONES + 0.25f) / 0.25f, 0f, 1f);       // the last quarter-zone blends back to the meadows
@@ -143,5 +157,5 @@ public final class Background implements Disposable {
         sb.setColor(Color.WHITE); sb.setBlendFunction(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA); sb.end();
     }
 
-    @Override public void dispose() { for (Texture t : clouds) t.dispose(); stars.dispose(); glow.dispose(); shaft.dispose(); }
+    @Override public void dispose() { for (Texture t : clouds) t.dispose(); stars.dispose(); farStars.dispose(); glow.dispose(); shaft.dispose(); }
 }

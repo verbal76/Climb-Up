@@ -28,7 +28,7 @@ public final class RunSummaryScreen extends ScreenAdapter {
         Gdx.gl.glClearColor(0.06f, 0.08f, 0.16f, 1f); Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
         Ui ui = g.ui; ui.begin();
         float W = ui.w(), H = ui.h();
-        RecordsData rec = g.save.records();
+        RecordsData rec = g.save.board();
         Color gold = new Color(1f, 0.82f, 0.3f, 1f), green = new Color(0.45f, 1f, 0.55f, 1f);
         int legs = Math.max(1, Math.min(RecordsData.LEGS, (int) g.tuning.finishCastle));
         ui.textC(run.finished ? "RUN COMPLETE" : "RUN ENDED", W / 2, H - 76, 6.4f, Ui.TEXT);
@@ -44,7 +44,7 @@ public final class RunSummaryScreen extends ScreenAdapter {
             float x = i < perCol ? left : right, y = top - (i % perCol) * step;
             boolean done = run.legs[i] > 0f, pb = run.legPb[i];
             ui.text("TOWER " + (i + 1), x, y, px, Ui.TEXT);
-            String t = done ? PlayScreen.fmtTime(run.legs[i]) : "--:--.-";
+            String t = done ? PlayScreen.fmtTime(run.legs[i]) : "--:--.---";
             ui.text(t, x + 9 * 6 * px, y, px, done ? (pb ? green : Ui.TEXT) : Ui.DIM);
             if (pb) ui.text("PB", x + (9 + t.length() + 1) * 6 * px, y, px, gold);
         }

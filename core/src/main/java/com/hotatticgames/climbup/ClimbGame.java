@@ -172,7 +172,9 @@ public class ClimbGame extends Game {
     }
 
     /** A climb in progress: the growing tower plus the world element the player stands on. */
-    public static final class Run { public Tower tower; public int startIdx; public boolean resumed; public RunSnapshot snapshot; }
+    public static final class Run { public Tower tower; public int startIdx; public boolean resumed; public RunSnapshot snapshot; public int startHeight; }
+    /** Build 76: a climb the hidden world picker prepared on a background thread (the tower already grown to its world); the next PlayScreen takes it. */
+    public volatile Run preparedRun;
 
     public HistoryStore history;
     /** True if there is a climb in progress whose history is on disk and complete up to its checkpoint. */
@@ -202,6 +204,20 @@ public class ClimbGame extends Game {
         return false;
     }
 
+    private final Tuning[] hardTuning = new Tuning[3];
+    /** Build 79: the tuning a climb at difficulty {@code d} runs with (one shared copy per difficulty, so a prepared first slice is found again). */
+    public Tuning tuningFor(int d) {
+        d = Math.max(0, Math.min(2, d));
+        if (d == 0) return tuning;
+        Tuning t = hardTuning[d];
+        if (t == null || t.radius != tuning.radius) hardTuning[d] = t = tuning.hardCopy(d);
+        return t;
+    }
+    /** The tuning of the climb in progress, at the difficulty it began with. */
+    public Tuning runTuning() { return tuningFor(save != null ? save.difficulty : 0); }
+    /** The tuning the next new climb starts with (the DIFFICULTY setting). */
+    public Tuning newClimbTuning() { return tuningFor(settings != null ? Math.min(settings.difficulty, Tuning.PLAYABLE_MODES - 1) : 0); }      // a saved NEVER GONNA HAPPEN setting starts PUNISHER climbs (owner 2026-10-24)
+
     /** Opens the saved climb, or starts a new one (fresh seed) when there is none or {@code fresh} is set. */
     public Run openRun(boolean fresh) {
         Run r = new Run();
@@ -212,7 +228,7 @@ public class ClimbGame extends Game {
                 if (snap != null && (snap.seed != save.seed || hist == null || hist.size() <= snap.maxSlice)) { store.deleteRun(); snap = null; }
                 if (snap != null) { save.cpSlice = snap.cpSlice; save.cpLocal = snap.cpLocal; }
                 if (hist != null && hist.size() > save.cpSlice) {
-                    r.tower = new Tower(save.seed, tuning, hist, save.cpSlice);
+                    r.tower = new Tower(save.seed, runTuning(), hist, save.cpSlice);
                     Tower.Ref ref = new Tower.Ref(save.cpSlice, save.cpLocal);
                     int idx = r.tower.worldIndex(ref);
                     if (idx >= 0) {
@@ -227,8 +243,10 @@ public class ClimbGame extends Game {
         String sd = System.getProperty("climb.seed");
         long seed = pendingSeed != null ? pendingSeed : sd != null ? Long.parseLong(sd) : takeRandomSeed();   // Build 64: a typed course code wins; the random draw is unchanged (Build 71: drawn ahead, see prepareNextClimb)
         pendingSeed = null;
-        r.tower = new Tower(seed, tuning); r.startIdx = 0;
+        Tuning nt = newClimbTuning();
+        r.tower = new Tower(seed, nt); r.startIdx = 0;
         Legacy.stampNewClimb(save, VERSION, appBuild, Legacy.today());
+        save.difficulty = nt.hard;
         save.seed = seed; save.cpSlice = 0; save.cpLocal = 0;
         try { history.reset(seed); syncHistory(r.tower); } catch (java.io.IOException e) { /* cannot store the climb: it still plays, it just cannot be resumed */ save.seed = 0; }
         return r;
@@ -250,7 +268,7 @@ public class ClimbGame extends Game {
         long seed;
         if (sd != null) seed = Long.parseLong(sd);
         else { if (nextRandomSeed == null) nextRandomSeed = drawSeed(); seed = nextRandomSeed; }
-        com.hotatticgames.climbup.sim.Tower.prepare(seed, tuning);
+        com.hotatticgames.climbup.sim.Tower.prepare(seed, newClimbTuning());
     }
 
     /** Appends every slice the tower has generated since the last call to the history file. */

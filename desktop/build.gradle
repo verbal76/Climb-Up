@@ -166,3 +166,12 @@ tasks.register('perfRun', JavaExec) {
     if (System.getProperty('perf.jfr')) jvmArgs += ["-XX:FlightRecorderOptions=stackdepth=512", "-XX:StartFlightRecording=settings=profile,filename=${System.getProperty('perf.jfr')}"]      // optional Flight Recorder profile (samples and allocation sites)
     systemProperties System.properties.findAll { it.key.toString().startsWith('climb.') || it.key.toString().startsWith('perf.') }
 }
+// Build 79 (owner: the spinning ramp's middle vanished from behind): twelve shots through one turn of the first spinning ramp. Locally: xvfb-run -a -s "-screen 0 1280x720x24" ./gradlew :desktop:rampShot
+tasks.register('rampShot', JavaExec) {
+    group = 'verification'
+    description = 'Screenshots one turn of a spinning ramp to assets/build/rampshot/ (see RampShot).'
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.hotatticgames.climbup.desktop.RampShot'
+    workingDir = file('../assets')
+    systemProperties System.properties.findAll { it.key.toString().startsWith('climb.') }
+}

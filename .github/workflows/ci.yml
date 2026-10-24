@@ -4,7 +4,7 @@ name: CI (validation only)
 # Numbered releases are produced only by the explicitly owner-triggered android.yml (APK) and windows.yml (Windows+Linux).
 on:
   push:
-    branches: [ccr-cb458cd1-w4dh5c]
+    branches: [ccr-cb458cd1-w4dh5c, build-74-determinism]
   pull_request:
     branches: [ccr-cb458cd1-w4dh5c]
 permissions:
@@ -30,5 +30,9 @@ jobs:
               t=f=s=0
               for p in glob.glob(f'{mod}/build/test-results/test/*.xml'):
                   r=ET.parse(p).getroot(); t+=int(r.get('tests')); f+=int(r.get('failures'))+int(r.get('errors')); s+=int(r.get('skipped'))
+                  for c in r.iter('testcase'):        # each failed test by name and the first line of its message, at the end of the log where it is easy to read
+                      for bad in list(c.iter('failure')) + list(c.iter('error')):
+                          msg = (bad.get('message') or bad.get('type') or '').splitlines()
+                          print(f"TEST_FAILED {mod} {c.get('classname', '').split('.')[-1]}.{c.get('name')}: {msg[0][:300] if msg else ''}")
               print(f'TEST_TOTALS {mod}: tests={t} failures={f} skipped={s}')
           PY

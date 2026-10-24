@@ -1,0 +1,16 @@
+Minifantasy - Forgotten Plains Audio Pack (SFX)
+By Leohpaz (made in collaboration with Krishna Palacio)
+https://leohpaz.itch.io/minifantasy-forgotten-plains-sfx-pack   (published 31 Jul 2022, updated 8 May 2024; "Name your own price")
+
+LICENSING, verbatim from the pack's itch.io page (owner's screenshots, 23 Oct 2026):
+  - You can use both the base pack and the exclusive content in your personal or commercial projects;
+  - You may not sell it or distribute the asset pack for free, please redirect people to this page in case someone else shows interest in my work;
+  - Credits are not mandatory, but much appreciated!
+The downloaded zip (Minifantasy_Forgotten_Plains_SFX.zip, 37 wav files, sha256 d94e9fd53240fb2787dee72fcfdc2ee23f51113beb489d59c12e586ba711692a)
+contains no licence file of its own.
+
+How Upwardly uses it: the audio files are NOT stored in the source repository. The owner's copy sits on a DRAFT release ("Sfx") of the
+repository, visible only to collaborators and to build jobs holding a contents: write token. The build workflows convert 20 of the 37 clips
+(footsteps on grass/dirt/stone, landings on grass/stone, hits on wood/brick, three ambience loops) into small, trimmed, loudness-normalised mono
+OGG files that ship inside the built game only. The game is credited on its Credits screen. The pack's music tracks and the patron-only
+exclusive sounds are not used.

@@ -195,7 +195,7 @@ public final class SettingsScreen extends ScreenAdapter {
             toggle("COLOURBLIND-SAFE COLOURS", s.colourblind, () -> s.colourblind = !s.colourblind);
             toggle("ASSIST: SLOWER SPEED", s.assistSlow, () -> s.assistSlow = !s.assistSlow);
             toggle("ASSIST: JUMP FORGIVENESS", s.assistForgive, () -> s.assistForgive = !s.assistForgive);
-            toggle("PUNISHER MODE (NEW CLIMBS)", s.punisher, () -> s.punisher = !s.punisher);      // Build 79 (owner): much harder, still survivable; a climb keeps the mode it began in
+            row("DIFFICULTY (NEW CLIMBS)", com.hotatticgames.climbup.sim.Tuning.HARD_NAMES[Math.max(0, Math.min(2, s.difficulty))], null, null, () -> s.difficulty = (s.difficulty + 1) % 3);      // Build 79 (owner): NORMAL / PUNISHER / NEVER GONNA HAPPEN; a climb keeps the one it began with
         }
         ui.end();
         if (pickReady) { pickReady = false; if (back instanceof PlayScreen) back.dispose(); g.setScreen(new PlayScreen(g, false)); return; }      // the world picker's climb is ready

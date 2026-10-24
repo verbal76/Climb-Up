@@ -620,9 +620,11 @@ generator proofs and the bundled replays are redone together.
   bottom stays 3.2 m above any platform, castle or rope top beneath them, or left off when even a small one would not fit (render only).
 - **First world** (owner: "dawn base is a little too easy" - read as the first world, the sunrise sky at the tower's base): hazards start at
   40 m (was 70) and reach full frequency over 950 m (was 1100).
-- **PUNISHER mode** (owner; answers: new climbs only, separate board, about 25 % faster and one more enemy): a setting (ACCESS tab, next to
-  the assists) read when a climb starts; the climb keeps that mode (`SaveData.punisher`). Its tuning is a copy with `punisher = true`:
-  creature and cannon reactions are 1.25 x faster (skull, blob, crab, bee, aimed cannon timings and speeds), cannon, aimed, mortar and bee
-  periods are 20 % shorter, one more crab per deck, more bee pairs and drop-row creatures, more creature decks and guarded gaps. The
-  generator still proves every link. Its times go on their own board (`SaveData.punisherRecordsJson`; the Times screen switches between
-  NORMAL and PUNISHER) and never touch the normal bests. The HUD seed line and the pause menu say PUNISHER.
+- **DIFFICULTY: NORMAL / PUNISHER / NEVER GONNA HAPPEN** (owner; answers: new climbs only, one DIFFICULTY row, a separate board each;
+  PUNISHER about 25 % faster with one more enemy, NEVER GONNA HAPPEN about 50 % faster with two more). The setting (ACCESS tab, next to
+  the assists) is read when a climb starts and the climb keeps it (`SaveData.difficulty`). Its tuning is a copy with `hard` = 1 or 2:
+  creature and cannon reactions are `Tuning.REACT[hard]` (1.25 / 1.5) times faster (skull, blob, crab, bee and aimed-cannon timings and
+  speeds), cannon, aimed, mortar and bee periods are that much shorter, `hard` more crabs per deck, more bee pairs and drop-row creatures,
+  more creature decks and guarded gaps. The generator still proves every link with the faster creatures. Each difficulty has its own times
+  table (`recordsJson`, `punisherRecordsJson`, `neverRecordsJson`; the Times screen cycles them) and a harder climb never touches the normal
+  bests. The HUD seed line and the pause menu name the difficulty. The owner's notes for Build 79 were all from playing on PC.

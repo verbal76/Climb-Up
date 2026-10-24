@@ -286,7 +286,7 @@ public final class CourseGenerator {
             if (clubBoost > 0) { clubBoost--; k = rnd.nextBoolean() ? Kind.TRAP : Kind.HAZ; clubTarget = true; }      // Build 71 (owner): a club was just placed - the next few modules give it crabs and bees to hit
             wantCreature = clubTarget;
             if (th == 1 && last.type == Element.Type.STATIC && rnd.nextFloat() < 0.2f) k = Kind.WET;          // the Frost world: some platforms are under a rain cloud (slippery)
-            if (th >= 1 && k != Kind.WET && prev != Kind.CREATURE && !last.wet() && rnd.nextFloat() < (th >= 2 ? 0.065f : 0.06f) + 0.05f * late(last.y) + (T.punisher ? 0.05f : 0f)) k = Kind.CREATURE;
+            if (th >= 1 && k != Kind.WET && prev != Kind.CREATURE && !last.wet() && rnd.nextFloat() < (th >= 2 ? 0.065f : 0.06f) + 0.05f * late(last.y) + 0.05f * T.hard) k = Kind.CREATURE;
             else if (prev == Kind.CREATURE && !last.wet() && rnd.nextFloat() < 0.35f * late(last.y)) k = rnd.nextBoolean() ? Kind.HAZ : Kind.TRAP;      // Build 71: higher up, a creature deck runs straight into a trap      // Build 71: a skull's deck (world 2 on), or a green blob's (world 3 on)
             boolean secondHalf = endless && th == 0 && ((last.y + base) % T.zoneHeight) >= 0.5f * T.zoneHeight - 15f;      // castle 1 to castle 2: the Meadow's second, harder half (owner, Build 71)
             if (k != Kind.WET && k != Kind.CREATURE && !last.wet() && prev != Kind.DROPS && (secondHalf ? rnd.nextFloat() < 0.10f : th >= 1 && rnd.nextFloat() < 0.04f)) k = Kind.DROPS;
@@ -1001,7 +1001,7 @@ public final class CourseGenerator {
             if (lagging && !vert) w[k.ordinal()] *= 0.12f;
             if (rushing && vert) w[k.ordinal()] *= 0.2f;
         }
-        if (T.punisher) { w[Kind.CREATURE.ordinal()] *= 1.6f; w[Kind.TRAP.ordinal()] *= 1.4f; w[Kind.HAZ.ordinal()] *= 1.3f; }      // Build 79 PUNISHER: more creature decks and guarded gaps
+        if (T.hard > 0) { w[Kind.CREATURE.ordinal()] *= 1f + 0.6f * T.hard; w[Kind.TRAP.ordinal()] *= 1f + 0.4f * T.hard; w[Kind.HAZ.ordinal()] *= 1f + 0.3f * T.hard; }      // Build 79 PUNISHER / NEVER GONNA HAPPEN: more creature decks and guarded gaps
         if (prev != null) { w[prev.ordinal()] *= 0.35f; if (prev == prev2) w[prev.ordinal()] = 0f; }
         float sum = 0; for (float f : w) sum += f;
         float x = rnd.nextFloat() * sum;
@@ -1026,7 +1026,7 @@ public final class CourseGenerator {
             else if (k == Kind.DROPS) es = buildDrops(last, Math.max(dd, 0.3f), zone, attempt, hz);
             else es = build(k, last, dd, zone, attempt);
             if (es == null) continue;
-            if (T.punisher) for (Element h : hz) if (h.type == Element.Type.CANNON || h.type == Element.Type.AIMED || h.type == Element.Type.MORTAR || h.type == Element.Type.BEE) h.period /= T.react();   // Build 79 PUNISHER: they come round faster
+            if (T.hard > 0) for (Element h : hz) if (h.type == Element.Type.CANNON || h.type == Element.Type.AIMED || h.type == Element.Type.MORTAR || h.type == Element.Type.BEE) h.period /= T.react();   // Build 79 PUNISHER / NEVER GONNA HAPPEN: they come round faster
             float margin = k == Kind.GRAB ? Math.min(0.05f, T.minLinkMargin) : T.minLinkMargin;
             boolean ok = commit(es, hz, margin);
             if (k == Kind.WET) { wetTried++; if (ok) wetOk++; }
@@ -1153,7 +1153,7 @@ public final class CourseGenerator {
             h.amp = r(DROP_MIN_TOP, DROP_MAX_TOP); h.period = r(2.7f, 4.3f) - 0.3f * inten; h.phase = r(0f, 6.28f);
             h.anchor = base0 + k;
             hzOut.add(h);
-            if (k > 0 && rnd.nextFloat() < 0.2f + 0.3f * inten + (T.punisher ? 0.3f : 0f)) {             // Build 79 (owner: waiting out a drop is too easy): sometimes a crab on the deck or a bee over it as well
+            if (k > 0 && rnd.nextFloat() < 0.2f + 0.3f * inten + 0.3f * T.hard) {             // Build 79 (owner: waiting out a drop is too easy): sometimes a crab on the deck or a bee over it as well
                 Element m;
                 if (rnd.nextBoolean()) { m = hz(Element.Type.CRAB, p.s - 0.15f * w, p.y, 0f, z); m.amp = 0.9f; m.period = r(3.0f, 4.0f) - 0.4f * inten; }
                 else { m = hz(Element.Type.BEE, p.s, p.y + 2.2f, 0f, z); m.amp = 0.6f; m.len = 0.8f; m.period = r(7.0f, 9.5f) - 1.5f * inten; m.dir = rnd.nextBoolean() ? 1 : -1; }
@@ -1217,7 +1217,7 @@ public final class CourseGenerator {
             }
             h.phase = r(0f, 6.28f); h.anchor = anchor;
             hzOut.add(h);
-            if (roll == 3 && rnd.nextFloat() < 0.3f + 0.4f * inten + (T.punisher ? 0.3f : 0f)) {        // Build 79 (owner): sometimes a second bee at once, from the other side (never the same side)
+            if (roll == 3 && rnd.nextFloat() < 0.3f + 0.4f * inten + 0.3f * T.hard) {        // Build 79 (owner): sometimes a second bee at once, from the other side (never the same side)
                 Element b2 = hz(Element.Type.BEE, mid, top + 1.3f, 0f, z);
                 b2.amp = h.amp; b2.len = h.len; b2.period = h.period; b2.dir = -1; b2.phase = h.phase + r(0.15f, 0.45f); b2.anchor = anchor;
                 hzOut.add(b2);
@@ -1233,7 +1233,7 @@ public final class CourseGenerator {
         float uR = last.s + last.w / 2f, dy = r(0f, 0.6f);
         float gapIn = reach(dy) * lerp(0.5f, 0.85f, d) * (1f - 0.03f * attempt);
         int roll = wantCreature ? 4 : rnd.nextInt(5);
-        int crabs = roll == 4 ? 2 + (rnd.nextFloat() < inten * 0.7f ? 1 : 0) + (rnd.nextFloat() < late(last.y) * 0.6f ? 1 : 0) + (T.punisher ? 1 : 0) : 0;      // (PUNISHER: one more)      // Build 79 (owner): never fewer than two crabs, more higher up
+        int crabs = roll == 4 ? 2 + (rnd.nextFloat() < inten * 0.7f ? 1 : 0) + (rnd.nextFloat() < late(last.y) * 0.6f ? 1 : 0) + T.hard : 0;      // (PUNISHER one more, NEVER GONNA HAPPEN two)      // Build 79 (owner): never fewer than two crabs, more higher up
         float w = roll == 4 ? 9f + 2f * (crabs - 2) : 8f;
         Element p = plat(Element.Type.STATIC, uR + gapIn + w / 2f, last.y + dy, w, z);
         // bug #14: the spike-follow fix (Sim.carryS/carryY + the renderer) rides a spike with its platform whenever that platform moves.

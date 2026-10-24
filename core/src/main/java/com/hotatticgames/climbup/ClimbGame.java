@@ -204,13 +204,19 @@ public class ClimbGame extends Game {
         return false;
     }
 
-    private Tuning punisherTuning;
-    /** Build 79: the tuning a PUNISHER climb runs with (one shared copy, so a prepared first slice is found again). */
-    public Tuning punisherTuning() { if (punisherTuning == null || punisherTuning.radius != tuning.radius) punisherTuning = tuning.punisherCopy(); return punisherTuning; }
-    /** The tuning of the climb in progress: PUNISHER or normal, as it began. */
-    public Tuning runTuning() { return save != null && save.punisher ? punisherTuning() : tuning; }
-    /** The tuning the next new climb starts with (the PUNISHER setting). */
-    public Tuning newClimbTuning() { return settings != null && settings.punisher ? punisherTuning() : tuning; }
+    private final Tuning[] hardTuning = new Tuning[3];
+    /** Build 79: the tuning a climb at difficulty {@code d} runs with (one shared copy per difficulty, so a prepared first slice is found again). */
+    public Tuning tuningFor(int d) {
+        d = Math.max(0, Math.min(2, d));
+        if (d == 0) return tuning;
+        Tuning t = hardTuning[d];
+        if (t == null || t.radius != tuning.radius) hardTuning[d] = t = tuning.hardCopy(d);
+        return t;
+    }
+    /** The tuning of the climb in progress, at the difficulty it began with. */
+    public Tuning runTuning() { return tuningFor(save != null ? save.difficulty : 0); }
+    /** The tuning the next new climb starts with (the DIFFICULTY setting). */
+    public Tuning newClimbTuning() { return tuningFor(settings != null ? settings.difficulty : 0); }
 
     /** Opens the saved climb, or starts a new one (fresh seed) when there is none or {@code fresh} is set. */
     public Run openRun(boolean fresh) {
@@ -240,7 +246,7 @@ public class ClimbGame extends Game {
         Tuning nt = newClimbTuning();
         r.tower = new Tower(seed, nt); r.startIdx = 0;
         Legacy.stampNewClimb(save, VERSION, appBuild, Legacy.today());
-        save.punisher = nt.punisher;
+        save.difficulty = nt.hard;
         save.seed = seed; save.cpSlice = 0; save.cpLocal = 0;
         try { history.reset(seed); syncHistory(r.tower); } catch (java.io.IOException e) { /* cannot store the climb: it still plays, it just cannot be resumed */ save.seed = 0; }
         return r;

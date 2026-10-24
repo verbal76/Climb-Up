@@ -490,10 +490,10 @@ public final class PlayScreen extends ScreenAdapter {
         sd.towers = n + 1;
         RecordsData.Run cur = null;
         if (n < RecordsData.LEGS) { sd.board().legDone(sd.seed, runRules(), n, split); cur = sd.board().current; }          // times table: this leg, its global and its on-this-course bests
-        boolean hadSplit = sd.bestSplit > 0f, pbSplit = !sd.assisted && !sd.punisher && (!hadSplit || RunRecord.faster(split, sd.bestSplit));       // owner (Build 71): an assisted run's towers are timed but set no best
+        boolean hadSplit = sd.bestSplit > 0f, pbSplit = !sd.assisted && sd.difficulty == 0 && (!hadSplit || RunRecord.faster(split, sd.bestSplit));       // owner (Build 71): an assisted run's towers are timed but set no best
         if (pbSplit) sd.bestSplit = split;
         if (sd.bestTotals.length <= n) sd.bestTotals = java.util.Arrays.copyOf(sd.bestTotals, n + 1);
-        boolean hadTotal = sd.bestTotals[n] > 0f, pbTotal = !sd.assisted && !sd.punisher && (!hadTotal || RunRecord.faster(total, sd.bestTotals[n]));
+        boolean hadTotal = sd.bestTotals[n] > 0f, pbTotal = !sd.assisted && sd.difficulty == 0 && (!hadTotal || RunRecord.faster(total, sd.bestTotals[n]));
         if (pbTotal) sd.bestTotals[n] = total;
         sd.towerStartClock = sd.runClock; sd.towerStartHeight = (float) Math.max(0.0, maxAbs);
         toast = keyName(sim.lastGateColor) + " CASTLE OPENED!"; toastT = 3.2f;
@@ -766,7 +766,7 @@ public final class PlayScreen extends ScreenAdapter {
         } else {
             boolean seedLine = g.settings.showSeed && !demo && g.save.seed != 0;                 // Build 64: the course code under the clocks (SHOW COURSE SEED)
             ui.rect(m - 6, H - m - (seedLine ? 160f : 136f) * zk, 380 * zk + 12, (seedLine ? 160f : 136f) * zk + 6, new Color(0.05f, 0.07f, 0.14f, 0.55f));
-            if (seedLine) ui.text("SEED " + SeedCode.encode(g.save.seed) + (g.save.punisher ? "  PUNISHER" : ""), m, H - m - 152 * zk, 2.7f * zk, g.save.punisher ? new Color(1f, 0.45f, 0.4f, 1f) : Ui.DIM);      // Build 79: a PUNISHER climb says so      // Build 72: was 2.3, too small to read on a phone
+            if (seedLine) ui.text("SEED " + SeedCode.encode(g.save.seed) + (g.save.difficulty > 0 ? "  " + com.hotatticgames.climbup.sim.Tuning.HARD_NAMES[Math.min(2, g.save.difficulty)] : ""), m, H - m - 152 * zk, 2.7f * zk, g.save.difficulty > 0 ? new Color(1f, 0.45f, 0.4f, 1f) : Ui.DIM);      // Build 79: a harder climb says so      // Build 72: was 2.3, too small to read on a phone
             ui.text(hs, m, H - m - 30 * zk, 4f * zk, Ui.TEXT);
             ui.text("BEST " + (int) Math.max(g.save.bestHeight, maxAbs), m, H - m - 56 * zk, 2.9f * zk, Ui.DIM);         // Build 72: was 2.6
             // speed-run clock: distance and time on the tower being worked towards, and the total time of the climb (always shown)
@@ -949,7 +949,7 @@ public final class PlayScreen extends ScreenAdapter {
         if (sd.seed != 0) {                                                            // Build 64: the course this time was set on, and (SHOW BEST TIMES) how it compares with the best on it; two lines, both inside the panel
             RecordsData.Run cur = sd.board().current; boolean mine = cur != null && cur.seed == sd.seed;
             String vs = g.settings.showBestTimes && mine && cur.totalSeedPrev > 0f ? fmtDelta(sd.finishTime - cur.totalSeedPrev) + " VS COURSE BEST " + fmtTime(cur.totalSeedPrev) : g.settings.showBestTimes && mine && cur.totalSeedPb ? "FIRST FINISH ON THIS COURSE" : "";
-            String line = "SEED " + SeedCode.encode(sd.seed) + (sd.punisher ? "  PUNISHER" : "");
+            String line = "SEED " + SeedCode.encode(sd.seed) + (sd.difficulty > 0 ? "  " + com.hotatticgames.climbup.sim.Tuning.HARD_NAMES[Math.min(2, sd.difficulty)] : "");
             ui.textC(line, W / 2, y + ph - 296, Math.min(2.8f, (pw - 40f) / (line.length() * 6f)), Ui.DIM);
             if (!vs.isEmpty()) ui.textC(vs, W / 2, y + ph - 322, Math.min(2.8f, (pw - 40f) / (vs.length() * 6f)), Ui.DIM);
         }

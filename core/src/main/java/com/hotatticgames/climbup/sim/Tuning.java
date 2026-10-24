@@ -51,14 +51,15 @@ public class Tuning {
 
     public float circumference() { return (float) (2 * Math.PI * radius); }
 
-    /** Build 79 (owner): PUNISHER mode - set only on the copy a punisher climb runs with (never in tuning.json): creatures and cannons react PUNISH_REACT times faster and
-     *  the generator puts more creatures in the way. */
-    public boolean punisher;
-    public static final float PUNISH_REACT = 1.25f;
-    /** How much faster creatures and cannons react on this climb (1 normally). */
-    public float react() { return punisher ? PUNISH_REACT : 1f; }
-    /** A copy of this tuning for a PUNISHER climb. */
-    public Tuning punisherCopy() { Tuning c = parse(new Json().toJson(this)); c.punisher = true; return c; }
+    /** Build 79 (owner): the climb's difficulty - 0 NORMAL, 1 PUNISHER, 2 NEVER GONNA HAPPEN - set only on the copy such a climb runs with (never in tuning.json).
+     *  Creatures and cannons react REACT[hard] times faster and the generator puts {@code hard} more creatures in each group and more groups in the way. */
+    public int hard;
+    public static final float[] REACT = {1f, 1.25f, 1.5f};
+    public static final String[] HARD_NAMES = {"NORMAL", "PUNISHER", "NEVER GONNA HAPPEN"};
+    /** How much faster creatures and cannons react on this climb (1 on NORMAL). */
+    public float react() { return REACT[Math.max(0, Math.min(REACT.length - 1, hard))]; }
+    /** A copy of this tuning for a climb at difficulty {@code level}. */
+    public Tuning hardCopy(int level) { Tuning c = parse(new Json().toJson(this)); c.hard = level; return c; }
 
     public static Tuning parse(String json) {
         Json j = new Json();

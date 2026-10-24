@@ -24,11 +24,11 @@ public final class TimesScreen extends ScreenAdapter {
     private final ClimbGame g; private final Screen back;
     private boolean leave;
     private int page;                 // 0 = the run's own course (or the newest), then the other recorded courses
-    private boolean punBoard;         // Build 79: showing the PUNISHER times table (it opens on the board of the climb in progress)
+    private int boardNo;              // Build 79: which difficulty's times table is shown (it opens on the climb in progress's)
     public TimesScreen(ClimbGame g, Screen back) { this.g = g; this.back = back; }
 
     @Override public void show() {
-        leave = false; page = 0; punBoard = g.save.punisher;
+        leave = false; page = 0; boardNo = Math.max(0, Math.min(2, g.save.difficulty));
         Gdx.input.setInputProcessor(new InputMultiplexer(g.ui, new InputAdapter() {
             @Override public boolean keyDown(int k) { if (k == Input.Keys.ESCAPE || k == Input.Keys.BACK || k == Input.Keys.BACKSPACE) { leave = true; return true; } return false; }
         }));
@@ -73,8 +73,8 @@ public final class TimesScreen extends ScreenAdapter {
         Gdx.gl.glClearColor(0.06f, 0.08f, 0.16f, 1f); Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
         Ui ui = g.ui; ui.begin();
         float W = ui.w(), H = ui.h();
-        RecordsData rec = punBoard ? g.save.punisherRecords() : g.save.records();
-        long climbSeed = punBoard == g.save.punisher ? g.save.seed : 0L;             // the climb in progress belongs to its own mode's board only
+        RecordsData rec = g.save.board(boardNo);
+        long climbSeed = boardNo == g.save.difficulty ? g.save.seed : 0L;             // the climb in progress belongs to its own mode's board only
         RecordsData.Run lr = rec.shown(climbSeed);
         int climbRules = g.save.climbRules > 0 ? g.save.climbRules : CourseGenerator.rulesOfBuild(g.save.climbBuild);
         List<Page> pages = pages(rec, lr, climbSeed, climbRules);
@@ -82,7 +82,7 @@ public final class TimesScreen extends ScreenAdapter {
         Page pg = pages.isEmpty() ? null : pages.get(page);
         boolean current = pg != null && pg.run != null && pg.run == rec.current;
         int legs = Math.max(1, Math.min(RecordsData.LEGS, (int) g.tuning.finishCastle));
-        ui.textC(punBoard ? "PUNISHER TIMES" : "TIMES TABLE", W / 2, H - 56, 5.6f, punBoard ? new Color(1f, 0.45f, 0.4f, 1f) : Ui.TEXT);
+        ui.textC(boardNo == 0 ? "TIMES TABLE" : com.hotatticgames.climbup.sim.Tuning.HARD_NAMES[boardNo] + " TIMES", W / 2, H - 56, Math.min(5.6f, (W - 360f) / ((boardNo == 2 ? 24 : 14) * 6f)), boardNo > 0 ? new Color(1f, 0.45f, 0.4f, 1f) : Ui.TEXT);
         // the course header: the full code (never shortened: two codes must never look alike) and its rules; other-rules courses are shown but not compared
         String head = pg == null ? "NO COURSE TIMED YET" : "SEED " + SeedCode.encode(pg.seed) + (pg.rules == CourseGenerator.RULES_VERSION ? "   RULES " + pg.rules : pg.rules > 0 ? "   RULES " + pg.rules + " (NOT THESE)" : "   OLD RULES");
         ui.textC(head, W / 2, H - 100, Math.min(3.6f, (W - 320f) / (head.length() * 6f)), Ui.ACCENT);
@@ -136,7 +136,7 @@ public final class TimesScreen extends ScreenAdapter {
         String foot2 = !comparable && pg != null ? "" : "DIFF = THIS RUN MINUS THE COURSE BEST BEFORE IT (- FASTER, + SLOWER).";
         ui.textC(foot1, W / 2, 134f, Math.min(2.4f, (W - 80f) / (foot1.length() * 6f)), Ui.DIM);
         if (!foot2.isEmpty()) ui.textC(foot2, W / 2, 110f, Math.min(2.4f, (W - 80f) / (foot2.length() * 6f)), Ui.DIM);
-        if (ui.button(punBoard ? "NORMAL TIMES" : "PUNISHER TIMES", W - 360, 22, 330, 78)) { g.audio.play("click"); punBoard = !punBoard; page = 0; }      // Build 79: the two boards
+        if (ui.button(new String[]{"PUNISHER", "NEVER...", "NORMAL"}[boardNo], W - 360, 22, 330, 78)) { g.audio.play("click"); boardNo = (boardNo + 1) % 3; page = 0; }      // Build 79: the next difficulty's board
         if (ui.button("BACK", W / 2 - 150, 22, 300, 78, true) || leave) { g.audio.play("click"); g.setScreen(back); }
         ui.end();
         g.autoShot("times", dt);

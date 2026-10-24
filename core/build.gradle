@@ -24,3 +24,5 @@ tasks.register('probe', JavaExec) {
     if (project.hasProperty('dbg')) systemProperty 'dbg', 'true'
     ['noReach','noPrev'].each { if (project.hasProperty(it)) systemProperty it, 'true' }
 }
+// Dev: the test runtime classpath, for running several probes side by side without Gradle (./gradlew -q :core:probeClasspath)
+tasks.register('probeClasspath') { doLast { println sourceSets.test.runtimeClasspath.asPath } }

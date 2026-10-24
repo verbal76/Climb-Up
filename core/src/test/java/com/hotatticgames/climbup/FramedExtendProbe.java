@@ -6,7 +6,7 @@ import com.hotatticgames.climbup.sim.*;
 public class FramedExtendProbe {
     public static void main(String[] a) throws Exception {
         Tuning t = TestUtil.tuning(); CourseGenerator.Framed f = null; int k = 0; long seed = a.length > 0 ? Long.parseLong(a[0]) : 21;
-        try { for (; k < 45; k++) f = CourseGenerator.chunkFramed(seed, k, f, t); System.out.println("EXTEND framed " + seed + " ok 45 slices"); }
+        try { int n = a.length > 1 ? Integer.parseInt(a[1]) : 45; for (; k < n; k++) f = CourseGenerator.chunkFramed(seed, k, f, t); System.out.println("EXTEND framed " + seed + " ok " + n + " slices"); }
         catch (Exception e) { System.out.println("EXTEND framed " + seed + " failed at slice " + k + ": " + e.getMessage().substring(0, Math.min(90, e.getMessage().length()))); }
     }
 }

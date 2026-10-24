@@ -8,6 +8,35 @@
 
 # Handoff
 
+## Recovery point (2026-10-24, generator redesign: playtest candidate pending packaging)
+
+- **Where things are:** branch `build-74-determinism` (PR #9), HEAD at the commit carrying this note. Generator rules 7 (`rulesOfBuild(80) = 7`). No Build 79/80 artifacts or releases exist.
+- **Done (details in `docs/GENERATOR_AUDIT.md`):**
+  - Two playable modes.
+  - Encounter model and conflict rule.
+  - No level gates.
+  - PUNISHER on its own curve (head start, late ramp to 1.4).
+  - Route-reserved splits with proven reconnecting branches (`Kind.FORK`, `tryReservedFork`), trampoline forks, no dead ends.
+- **Smoke evidence:**
+  - ForkProbe: NORMAL 8 / PUNISHER 10 forks in 5 slices, 0 broken.
+  - Level1Probe: 6 NORMAL + 3 PUNISHER seeds, enemies, hazards and 14-25 forks in Level 1; aimed cannons in 3 of 6 NORMAL seeds.
+  - LevelReport on seed 7, before the fork module and late-ramp change.
+  - DeterminismTest resume test passes.
+- **Before any build** (both build workflows run `:core:test`), these core tests still hold old-generator expectations:
+  - the generation fingerprint;
+  - the three replays, which need re-recording;
+  - DeadEndTest, which must become a fork test;
+  - AimedCannonTest, BalanceConveyorTest, OfficialRunTest;
+  - TowerStreamingTest (the approved one-step tolerance is not yet applied).
+
+  The in-game hidden replay check (ReplayCheck expected values) also needs the re-recorded seed 12.
+- **Owner decisions in force:**
+  - All mechanics stay; aimed cannons are mandatory.
+  - No public release or OTA update.
+  - Not Gonna Happen code kept but not offered.
+  - At most five smoke rounds (two used).
+- `replays-pending/` holds the `bd0b550` recordings: obsolete now.
+
 ## Recovery point (2026-10-24, Build 79 on hold for the generator directive)
 
 - **Where things are:**

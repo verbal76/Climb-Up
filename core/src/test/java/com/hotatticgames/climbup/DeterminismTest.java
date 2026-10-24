@@ -75,8 +75,9 @@ public class DeterminismTest {
     }
 
     @Test public void theRulesVersionIsStampedAndOlderBuildsAreNotComparable() {
-        assertEquals(6, CourseGenerator.RULES_VERSION);           // Build 79: the owner's play-through notes, the difficulties, dead ends both ways, route dips (DECISIONS.md)
-        assertEquals(6, CourseGenerator.rulesOfBuild(79));
+        assertEquals(7, CourseGenerator.RULES_VERSION);           // Build 80: the owner's generator directive (no level gates, PUNISHER's own curve, conflicts, splits with reconnecting branches)
+        assertEquals(7, CourseGenerator.rulesOfBuild(80));
+        assertEquals(6, CourseGenerator.rulesOfBuild(79));        // Build 79: the owner's play-through notes, the difficulties, dead ends both ways, route dips (DECISIONS.md)
         assertEquals(5, CourseGenerator.rulesOfBuild(78));        // Build 77-78: faster skull with loop+swoop, key detours proved with the skull at either end
         assertEquals(5, CourseGenerator.rulesOfBuild(77));
         assertEquals(4, CourseGenerator.rulesOfBuild(76));        // Build 76: faster plank conveyor bridges

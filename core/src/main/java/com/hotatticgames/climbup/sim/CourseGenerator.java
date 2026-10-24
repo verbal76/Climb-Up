@@ -1006,8 +1006,8 @@ public final class CourseGenerator {
         // Every link a new hazard can touch is proven with it there: a hazard on the platform the previous link lands on touches that link too (a cannon
         // fires across it; a saw on it sweeps the landing: seed 3 slice 16, a saw from the next module cut a saw link to 0.36), and a creature also the
         // links into the decks it roams onto (framed seed 5 slice 17: a skull from the next module jumped the pad link before its deck).
-        for (Element h : hz) if (h.anchor >= 0) from = Math.min(from, h.anchor - 1 - Math.max(0, roamReach(h)));
-        if (n0 >= 2 && c.size() > n0) from = Math.min(from, n0 - 2);       // and the link onto the platform the module starts from: what comes next can crowd its landing (tower 3: a slider just past it cut a ramp link from 0.25 to 0.017)
+        if (!Boolean.getBoolean("noReach")) for (Element h : hz) if (h.anchor >= 0) from = Math.min(from, h.anchor - 1 - Math.max(0, roamReach(h)));
+        if (!Boolean.getBoolean("noPrev") && n0 >= 2 && c.size() > n0) from = Math.min(from, n0 - 2);       // and the link onto the platform the module starts from: what comes next can crowd its landing (tower 3: a slider just past it cut a ramp link from 0.25 to 0.017)
         from = Math.max(0, from);
         Sim prevStart = null; Autopilot.Result prevRes = null;
         for (int i = from; i < c.size() - 1 && ok; i++) {

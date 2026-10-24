@@ -22,4 +22,5 @@ tasks.register('probe', JavaExec) {
     workingDir = projectDir
     args = (project.findProperty('args') ?: '').toString().tokenize(' ')
     if (project.hasProperty('dbg')) systemProperty 'dbg', 'true'
+    ['noReach','noPrev'].each { if (project.hasProperty(it)) systemProperty it, 'true' }
 }

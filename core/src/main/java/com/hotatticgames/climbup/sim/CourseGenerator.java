@@ -998,7 +998,12 @@ public final class CourseGenerator {
         for (Element h : hz) { if (!ok) break; if (h.type == Element.Type.CLUB) continue; ok = hazardOk(h, ownerOf(h)); if (!ok) failHaz++; }
         if (ok && !sawsClearOfCreatures(hz)) { ok = false; failHaz++; }
         int from = n0 - 1;
-        for (Element h : hz) if (h.type == Element.Type.CANNON && h.anchor == n0 - 1 && n0 >= 2) from = n0 - 2;          // a cannon fires across the platform the previous link LANDS on: that link must be proven with the cannon there too
+        // Every link a new hazard can touch is proven with it there: a hazard on the platform the previous link lands on touches that link too (a cannon
+        // fires across it; a saw on it sweeps the landing: seed 3 slice 16, a saw from the next module cut a saw link to 0.36), and a creature also the
+        // links into the decks it roams onto (framed seed 5 slice 17: a skull from the next module jumped the pad link before its deck).
+        for (Element h : hz) if (h.anchor >= 0) from = Math.min(from, h.anchor - 1 - Math.max(0, roamReach(h)));
+        if (n0 >= 2 && c.size() > n0) from = Math.min(from, n0 - 2);       // and the link onto the platform the module starts from: what comes next can crowd its landing (tower 3: a slider just past it cut a ramp link from 0.25 to 0.017)
+        from = Math.max(0, from);
         Sim prevStart = null; Autopilot.Result prevRes = null;
         for (int i = from; i < c.size() - 1 && ok; i++) {
             Sim sim = Sim.startOn(c, T, i); quietStart(sim, i);
@@ -1033,11 +1038,25 @@ public final class CourseGenerator {
      * (FramedGenerationTest, seed 21). A climber arrives at some moment and can wait for the gap, so the proof starts at the first quiet moment instead.
      * Untouched when time 0 is already safe, or when the start platform itself moves.
      */
-    private void quietStart(Sim sim, int i) {
+    private void quietStart(Sim sim, int i) { quietStart(c, sim, i); }
+    private static void quietStart(Course c, Sim sim, int i) {
         if (sim.mode != Sim.Mode.GROUND || c.get(i).isMoving() || c.get(i).crumbles()) return;
         float t0 = sim.time;
         for (int k = 0; k < 60 && !quiet(sim); k++) { sim.time = t0 + 0.15f * (k + 1); sim.syncElements(); }
         if (!quiet(sim)) { sim.time = t0; sim.syncElements(); }
+    }
+    /**
+     * The start a route link out of element i is proven from (commit): a standing start at the first quiet moment, and on the always-running balance
+     * conveyor the landing the proven jump onto it makes. Tests that measure a link's tolerance measure it from here, as the generator does.
+     */
+    public static Sim provenStart(Course c, Tuning t, int i) {
+        Sim sim = Sim.startOn(c, t, i); quietStart(c, sim, i);
+        if (i > 0 && c.get(i).tiltBelt()) {
+            Sim prev = Sim.startOn(c, t, i - 1); quietStart(c, prev, i - 1);
+            Autopilot.Result pr = Autopilot.plan(prev, i - 1, true);
+            if (pr.factory != null) { Sim land = Autopilot.trialEnd(prev, i - 1, pr.factory, 10.5f); if (land != null && land.onElem == i) sim = land; }
+        }
+        return sim;
     }
     private static boolean quiet(Sim sim) {
         Sim d = sim.copy(); InputState in = new InputState();
@@ -1364,7 +1383,7 @@ public final class CourseGenerator {
         Element.Type S = Element.Type.STATIC;
         switch (k) {
             case HOP: {
-                if (rnd.nextFloat() < 0.2f && !lastDip && y0 >= routeTop() - 0.5f) {          // (one dip at a time, and only from the route's high point: never more than two steps below it)          // Build 79 (owner): now and then the route steps down one or two blocks before it climbs on, just to throw you off
+                if (rnd.nextFloat() < 0.2f && !lastDip && y0 >= routeTop() - 0.5f && y0 > c.get(0).y + 3f) {          // (one dip at a time, and only from the route's high point: never more than two steps below it)          // Build 79 (owner): now and then the route steps down one or two blocks before it climbs on, just to throw you off
                     int n = 1 + rnd.nextInt(2); float s = eR, y = y0;
                     for (int i = 0; i < n; i++) {
                         float dy = -r(0.4f, 1.1f), w = 2 + rnd.nextInt(2);

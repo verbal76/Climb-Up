@@ -69,7 +69,7 @@ public class CourseTest {
         Course c = TestUtil.tower(3);
         int checked = 0; float worst = 1f;
         for (int i = 0; i < c.routeSize() - 1; i += 3) {
-            Autopilot.Result r = Autopilot.plan(Sim.startOn(c, t, i), i, true);
+            Autopilot.Result r = Autopilot.plan(CourseGenerator.provenStart(c, t, i), i, true);      // from where the generator proves it: the first quiet moment (crabs), the landing on a running belt
             assertTrue("link " + i, r.ok);
             worst = Math.min(worst, r.margin()); checked++;
             assertTrue("link " + i + " margin " + r.margin(), r.margin() >= 0.04f);

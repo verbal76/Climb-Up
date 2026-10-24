@@ -698,3 +698,18 @@ No approved rule was changed to suit the solver, and no test or tolerance was re
   none (DeadEndTest: left 14, right 35, up-and-down 21, route dips 12).
 - **Route dips are bounded** (CourseTest ascent): a hop module steps down only from the highest route platform so far and never twice in a
   row, so a dip is one or two steps and the climb then goes on; the ascent never loses more than one dip's height.
+- **Every link a new piece can touch is proven with it** (SawFairnessTest seed 3 slice 16, FramedGenerationTest seed 5 slice 17, CourseTest
+  tower 3 link 192). `commit` re-proved only from the platform a module starts on. Three cases slipped through: a saw from the next module on
+  that platform sweeping the landing of the link before it (0.36 of its cycle); a skull from the next module that roams back onto the deck
+  before its own (it jumped the pad link); and a slider just past a ramp landing (margin 0.25 -> 0.017). A commit now also re-proves the link
+  onto the platform the module starts from, and any link a new hazard or creature can reach (a creature's roaming reach further back).
+  Generation takes about 1.6x as long on the desktop (mean 4.2 -> 6.8 s per slice); the game makes the next slice in the background while
+  the current one is climbed, so this is not felt.
+- **No route dip off a tower's start** (CourseTest ascent, tower 1: the route stepped down from the start platform). A dip needs the route
+  3 m above its start.
+- **The solver does not stop and wait on a crab deck** (OfficialRunTest seed 7 slice 9). It braked "in the safe pocket" on arriving at a deck
+  with a mid-deck hazard, and the crabs shoved it 28 m down. With crabs closing in it now plans the crab hop straight from the landing,
+  which is how the generator proves those links.
+- **Tolerance is measured from the proven start** (CourseTest link margins). The test measured each link from a standing start at time 0.
+  The generator proves from the first quiet moment (a crab deck: a crab can be shoving at time 0) and, on the always-running belt, from the
+  landing. `CourseGenerator.provenStart` gives that start, and the test measures from it with the same 0.04 m bar.

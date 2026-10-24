@@ -21,4 +21,5 @@ tasks.register('probe', JavaExec) {
     mainClass = project.findProperty('main') ?: 'com.hotatticgames.climbup.GenPrint'
     workingDir = projectDir
     args = (project.findProperty('args') ?: '').toString().tokenize(' ')
+    if (project.hasProperty('dbg')) systemProperty 'dbg', 'true'
 }

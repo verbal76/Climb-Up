@@ -514,6 +514,7 @@ public final class Autopilot {
         return true;      // undecided within the time: let the real run find out, as before
     }
 
+    static boolean crabDeck(Course c, int a) { for (Element h : c.hazards) if (h.anchor == a && h.type == Element.Type.CRAB) return true; return false; }
     static boolean hasMidHazard(Course c, int a) {
         Element p = c.get(a);
         if (!p.isPlatform()) return false;
@@ -671,7 +672,7 @@ public final class Autopilot {
                 if (!detour(real, kr, in)) { rep.failedLink = a; rep.simTime = real.time; rep.failInfo = "detour " + why + String.format(" mode=%s on=%d s=%.2f y=%.2f t=%.2f", real.mode, real.onElem, real.s, real.y, real.time); return rep; }
                 a = real.onElem;
             }
-            if (real.mode == Sim.Mode.GROUND && real.onElem == a && hasMidHazard(c, a)) {   // like a person would: stop in the safe pocket before sizing up the hazard
+            if (real.mode == Sim.Mode.GROUND && real.onElem == a && hasMidHazard(c, a) && !crabDeck(c, a)) {   // like a person would: stop in the safe pocket before sizing up the hazard (not with crabs closing in: they shove whoever stands still, so the plan's crab hop goes straight from the landing; seed 7 slice 9)
                 for (int q = 0; q < 40 && Math.abs(real.vx) > 0.05f && real.mode == Sim.Mode.GROUND; q++) { in.clear(); real.step(in); }
             }
             if (real.mode == Sim.Mode.BEAM && real.onElem == a && c.get(a).type == Element.Type.ROPE) {

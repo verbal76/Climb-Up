@@ -279,6 +279,20 @@ public final class Element {
         }
     }
 
+    /**
+     * How far the element is above its rest height y at time t (0 for anything that does not move up and down). Build 79: as {@link #sOffsetAt} for the
+     * arc, the simulation takes a mover's rise per step from this rather than from the difference of two {@link #yAt} values, whose rounding depends on
+     * how high y is in the current frame (the streaming tower's local origin or the whole tower's); divided by one step that rounding became a platform
+     * speed that differed by millimetres per second between the two.
+     */
+    public float yOffsetAt(float t) {
+        switch (type) {
+            case MOVE_V: case SAW_V: return amp * 0.5f * (1f - (float) StrictMath.cos(ang(t)));
+            case SWING: case PENDULUM: return len - len * (float) StrictMath.cos(amp * StrictMath.sin(ang(t)));
+            default: return 0f;
+        }
+    }
+
     public float yBottom() { return y - len; }   // rope bottom
     public float halfW() { return w * 0.5f; }
 }

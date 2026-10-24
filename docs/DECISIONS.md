@@ -628,3 +628,37 @@ generator proofs and the bundled replays are redone together.
   more creature decks and guarded gaps. The generator still proves every link with the faster creatures. Each difficulty has its own times
   table (`recordsJson`, `punisherRecordsJson`, `neverRecordsJson`; the Times screen cycles them) and a harder climb never touches the normal
   bests. The HUD seed line and the pause menu name the difficulty. The owner's notes for Build 79 were all from playing on PC.
+
+### Build 79 verification: failures traced to their cause (2026-10-24)
+
+The 16 CI failures on 832f6fa were classified one by one against the last green baseline (Build 78, 3e47227) and against 970a615.
+No approved rule was changed to suit the solver, and no test or tolerance was relaxed.
+
+- **No crab decks at all** (DifficultyTest): a regression in my own solver change (13e6976). The crab-hop reflex fired on every crab's home
+  deck too, pre-empting the plan's own timed crab hop, so the link off any crab deck lost its margin and every section with crabs was
+  rebuilt without them. The reflex now acts only on a crab that has followed you off its own deck (`deckOff != 0`). With only that fix the
+  crab-deck counts per seed are exactly those of 970a615.
+- **Balance conveyor never placed** (BalanceConveyorTest x2, WorldPickerStartTest "slice climbed past the exact structure"): the course is
+  not impossible. A brute-force run of plain human input (stick held forward, one jump on, one off, 100 ms stick hold) crosses every
+  layout tried, at 127-2911 of 4275 timings. The proof was at fault: it stood the climber still 0.7 m from the belt's back end, where the
+  always-running belt (owner rule, unchanged) and the plank tipping that way carry anyone off before they can move, so the trial looped on
+  ledge pull-ups. Nobody stands still on that belt, so the crossing is now proven from exactly where and how the proven jump onto it
+  lands (`CourseGenerator.commit`). With that, every probe layout passes with full margin. The end-to-end solver run still plays it continuously.
+- **Saws with too narrow a window** (SawFairnessTest, 0.36 and 0.44 of a cycle): each saw on its own leaves its whole cycle (1.00). The
+  narrowing came from a skull on the deck before, which since Build 79 roams onto the saw's deck. As with the homing bee since Build 71, a
+  horizontal saw is no longer placed within a roaming creature's reach (skull or blob one deck, crab `CRAB_FOLLOW` decks); the gap or floor
+  becomes a spiked block, and `commit` refuses any later pairing.
+- **Platform speed depended on the frame** (TowerStreamingTest, after a trampoline; probably PlayDeterminismTest's restored save):
+  `Sim.platformVy` was `(ey1 - ey0) / DT` on absolute local heights, so a mover's vertical speed carried rounding that depended on where
+  the frame's origin is (about 2e-3 m/s at 460 m), and a rebuild mixed two roundings. This is the vertical twin of the Build 76 `sOffsetAt` fix. The
+  rise per step is now taken from the element's own motion (`Element.yOffsetAt`, the seesaw tilt, the ramp slope) into `Sim.edy`. The
+  tolerances are unchanged.
+- **Spinning ramps "never appear"** (RampVarietiesTest): the generator is not dropping them. In isolation a spinning ramp proves exactly as
+  in Build 78 (22 of 24 layouts, both builds). Counted in generation, seed 3 up to 2,600 m rolled only six ramps above 1,000 m (where they
+  start) and none came up as the spinner, one ramp in five (a 26 % chance). The test now looks at seeds 1-3 (the seeds the suite already
+  climbs to 5,300 m), with the same assertions.
+- **Long dead ends gone** (DeadEndTest, 0 in its 60 slices; Build 78 had 5): every forced long spur is refused by the Build 79 rule that keeps
+  decoys off ropes (owner screenshot). With the rule off, 6 come back; with it reduced to refusing only a spur that physically crosses the
+  rope's grab width, still none. So the long dead ends Build 78 counted were the ones running across ropes, the thing the owner asked to remove. Elsewhere a
+  four-to-six-step spur meets the route either side. This conflicts with the test's expectation, not a generator fault; left for the owner
+  to decide (see HANDOFF).

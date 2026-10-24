@@ -920,6 +920,29 @@ public final class CourseGenerator {
 
     private float windowNeeded(float y) { return T.minTimingWindow - 0.06f * intensity(y); }
 
+    /** Build 79: how many decks either side of its own a creature can reach (skulls and blobs a neighbour, crabs follow up to CRAB_FOLLOW); -1 for anything else. */
+    private static int roamReach(Element h) {
+        return h.type == Element.Type.CRAB ? Sim.CRAB_FOLLOW : h.type == Element.Type.SKULL || h.type == Element.Type.BLOB ? 1 : -1;
+    }
+    /** True if a creature already on the course can roam onto the link from deck a (onto a or a + 1). */
+    private boolean creatureReaches(int a) {
+        for (Element o : c.hazards) { int r = roamReach(o); if (r >= 0 && a >= o.anchor - r - 1 && a <= o.anchor + r) return true; }
+        return false;
+    }
+    /**
+     * Build 79 (owner: skulls, blobs and crabs reach the platforms either side): a creature that roams onto a saw's link cut its timing window from a whole
+     * cycle to 0.36 (SawFairnessTest), so, as the homing bee since Build 71, a horizontal saw is never placed within a roaming creature's reach.
+     */
+    private boolean sawsClearOfCreatures(List<Element> hz) {
+        for (Element n : hz) for (Element o : c.hazards) {
+            if (n == o) continue;
+            Element saw = n.type == Element.Type.SAW_H ? n : o.type == Element.Type.SAW_H ? o : null, mob = saw == n ? o : n;
+            int r = saw == null ? -1 : roamReach(mob);
+            if (r >= 0 && saw.anchor >= mob.anchor - r - 1 && saw.anchor <= mob.anchor + r) return false;
+        }
+        return true;
+    }
+
     private boolean commit(List<Element> es, float minMargin) { return commit(es, new ArrayList<Element>(), minMargin); }
 
     /** Adds elements (and their hazards) if every link (prefix last -> e1 -> ... -> eN) is solvable with the required margin and timing window. */
@@ -931,11 +954,20 @@ public final class CourseGenerator {
         for (int i = n0; i < c.size() && ok; i++) ok = clearOfOtherLayers(i);
         if (!ok) failLayer++;
         for (Element h : hz) { if (!ok) break; if (h.type == Element.Type.CLUB) continue; ok = hazardOk(h, ownerOf(h)); if (!ok) failHaz++; }
+        if (ok && !sawsClearOfCreatures(hz)) { ok = false; failHaz++; }
         int from = n0 - 1;
         for (Element h : hz) if (h.type == Element.Type.CANNON && h.anchor == n0 - 1 && n0 >= 2) from = n0 - 2;          // a cannon fires across the platform the previous link LANDS on: that link must be proven with the cannon there too
+        Sim prevStart = null; Autopilot.Result prevRes = null;
         for (int i = from; i < c.size() - 1 && ok; i++) {
             Sim sim = Sim.startOn(c, T, i); quietStart(sim, i);
+            if (c.get(i).tiltBelt() && prevRes != null && prevRes.factory != null) {
+                // Build 79 (owner): the balance conveyor always runs, so nobody stands still on it: a climber crosses it straight from the landing. Its link is
+                // proven from where and how the proven jump onto it lands (a standing start at its back end is carried off it before anyone could move).
+                Sim land = Autopilot.trialEnd(prevStart, i - 1, prevRes.factory, 10.5f);
+                if (land != null && land.onElem == i) sim = land;
+            }
             Autopilot.Result res = Autopilot.plan(sim, i, true);
+            prevStart = sim; prevRes = res;
             boolean touched = false;
             for (Element h : hz) if (h.anchor == i || h.anchor + 1 == i || h.anchor == i + 1) touched = true;
             if (!res.ok || res.margin() < Math.max(minMargin, 0f)) { ok = false; failPlan++; if (trace.length() < 600) trace.append(String.format("[link %d %s->%s ok=%b %d/%d need %.3f]", i, c.get(i).type, c.get(i + 1).type, res.ok, res.successes, res.trials, minMargin)); }
@@ -1191,6 +1223,7 @@ public final class CourseGenerator {
             int roll = wantCreature && j == 0 ? 3 : rnd.nextInt(cannonOk ? 5 : 4);
             if ((roll == 1 && prevRoll == 3) || (roll == 3 && prevRoll == 1)) roll = 2;      // Build 71: the bee now homes in and bumps you, so it never sits next to a saw you must time (it cut the saw's window to 0.2 s; SawFairnessTest)
             prevRoll = roll;
+            if (roll == 1 && creatureReaches(j == 0 ? c.size() - 1 : base + j - 1)) roll = 2;      // Build 79: nor next to a skull, blob or crab that can roam onto its decks (a skull there cut the window to 0.36; SawFairnessTest)
             if (roll == 1) dy = Math.min(dy, 0.1f);      // a saw never guards an uphill jump: the blade would sit higher than the take-off
             float g = Math.min(3.05f, Math.max(2.3f, reach(Math.max(0f, dy)) * lerp(0.68f, 0.90f, d) * r(0.95f, 1f) * (1f - 0.03f * attempt)));
             if (roll == 1) g = Math.min(g, 2.6f);      // a saw hangs in the gap: keep the gap well short of a full-length jump so there is room to time the arc over the blade
@@ -1240,6 +1273,7 @@ public final class CourseGenerator {
         float uR = last.s + last.w / 2f, dy = r(0f, 0.6f);
         float gapIn = reach(dy) * lerp(0.5f, 0.85f, d) * (1f - 0.03f * attempt);
         int roll = wantCreature ? 4 : rnd.nextInt(5);
+        if (roll == 1 && creatureReaches(c.size())) roll = 2;      // Build 79: no floor saw where a skull, blob or crab can roam onto it (see sawsClearOfCreatures)
         int crabs = roll == 4 ? 2 + (rnd.nextFloat() < inten * 0.7f ? 1 : 0) + (rnd.nextFloat() < late(last.y) * 0.6f ? 1 : 0) + T.hard : 0;      // (PUNISHER one more, NEVER GONNA HAPPEN two)      // Build 79 (owner): never fewer than two crabs, more higher up
         float w = roll == 4 ? 9f + 2f * (crabs - 2) : 8f;
         Element p = plat(Element.Type.STATIC, uR + gapIn + w / 2f, last.y + dy, w, z);

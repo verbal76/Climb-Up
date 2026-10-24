@@ -652,17 +652,14 @@ public final class CourseGenerator {
     private void addDecoys(int lo, int hi) {
         c.finishRoute();
         Random dr = new Random(c.seed * 0x2545F4914F6CDD1DL + 99 + salt * 7919L);
+        spurLeft = (c.seed & 1L) == 0L;
         int rs = c.routeSize();
         java.util.Set<Integer> anchored = new java.util.HashSet<>();
         for (int a = lo; a < Math.min(rs - 4, hi + 1); a++) {
             Element p = c.get(a);
             if (p.type != Element.Type.STATIC || p.w < 3f) continue;
             if (dr.nextFloat() > 0.44f + 0.08f * tier(p.y)) continue;          // more dead ends than before (was 0.30)
-            for (int again = 0; again < 2; again++) {          // a second, different try when the first does not fit the surrounding geometry
-                pendingHaz = new ArrayList<>();
-                List<Element> es = buildDecoy(p, a, dr);
-                if (tryDecoy(es, pendingHaz, a)) { decoys += es.size(); anchored.add(a); break; }
-            }
+            if (placeDecoy(p, a, dr, false)) anchored.add(a);          // a second, different try when the first does not fit the surrounding geometry
         }
         // Guarantee that long dead-end spurs appear (DeadEndTest). This runs from a SEPARATE, deterministic RNG and only on
         // platforms that did not already get a decoy, so the main decoy pass above stays byte-for-byte identical - the streaming
@@ -673,15 +670,27 @@ public final class CourseGenerator {
             Element p = c.get(a);
             if (p.type != Element.Type.STATIC || p.w < 3f || anchored.contains(a)) continue;
             if (lr.nextFloat() > 0.5f) continue;              // spread the forced spurs across the slice
-            pendingHaz = new ArrayList<>();
-            List<Element> es = buildDecoy(p, a, lr, true);
-            if (tryDecoy(es, pendingHaz, a)) { decoys += es.size(); anchored.add(a); wantLong--; }
+            if (placeDecoy(p, a, lr, true)) { anchored.add(a); wantLong--; }
         }
         addKeyRooms();          // last, so every key-room link is proven against the final geometry
     }
 
-    /** Dead-end spurs (forward and gently down, or backward and up), crumbling lures, unreachable stepping stones, and trapped ledges guarded by hazards. */
-    private List<Element> buildDecoy(Element p, int a, Random dr) { return buildDecoy(p, a, dr, false); }
+    private boolean spurLeft, spurBuilt;      // Build 79: the side the next dead-end spur branches to (flips with every spur placed); the last decoy built was a spur
+
+    /** Two tries at a decoy off route platform a: a spur goes first to the side whose turn it is, then to the other; a placed spur hands the turn over. */
+    private boolean placeDecoy(Element p, int a, Random dr, boolean forceLong) {
+        boolean side = spurLeft;
+        for (int again = 0; again < 2; again++) {
+            pendingHaz = new ArrayList<>(); spurBuilt = false;
+            spurLeft = again == 0 ? side : !side;
+            List<Element> es = buildDecoy(p, a, dr, forceLong);
+            if (tryDecoy(es, pendingHaz, a)) { decoys += es.size(); spurLeft = spurBuilt ? !spurLeft : side; return true; }
+        }
+        spurLeft = side;
+        return false;
+    }
+
+    /** Dead-end spurs (to the left or the right, stepping up and down), crumbling lures, unreachable stepping stones, and trapped ledges guarded by hazards. */
     /** {@code forceLong}: always build a long spur (used by the separate-RNG long-spur pass so the main decoy RNG stays byte-identical). */
     private List<Element> buildDecoy(Element p, int a, Random dr, boolean forceLong) {
         List<Element> l = new ArrayList<>();
@@ -709,12 +718,17 @@ public final class CourseGenerator {
             return l;
         }
         if (kind < 7) {
-            boolean forward = kind < 4;
+            // Build 79 (owner): spurs branch off to the left and to the right in turn (spurLeft flips with every spur built), and each step may go up
+            // or down - up, down, up, up... - just to throw the climber off. Every gap is sized for the step taken upward, so the way back is always a
+            // normal jump too: a dead end only ever costs the walk back.
+            boolean forward = !spurLeft; spurBuilt = true;
             float edge = forward ? p.s + p.w / 2f : p.s - p.w / 2f, y = p.y;
             int n = longSpur ? 4 + dr.nextInt(3) : 2 + dr.nextInt(2);
             for (int k = 0; k < n; k++) {
-                float dy = forward ? -(longSpur ? 0.15f + dr.nextFloat() * 0.25f : 0.35f + dr.nextFloat() * 0.35f) : (longSpur ? 0.2f + dr.nextFloat() * 0.4f : 0.3f + dr.nextFloat() * 0.8f);
-                float gap = reach(Math.max(dy, 0f)) * (0.40f + 0.2f * dr.nextFloat());
+                boolean up = dr.nextFloat() < (forward ? 0.35f : 0.7f);      // both ways on either side, but a left spur leans up, clear of the lower block the route came from, a right one down, under the block it goes on to
+                float dy = up ? 0.2f + dr.nextFloat() * 0.6f : -(0.3f + dr.nextFloat() * 0.7f);
+                if (!forward && k == 0) dy = 1.2f + dr.nextFloat() * 0.3f;          // a left spur first jumps up clear of the block the route came from, which sits just behind and below
+                float gap = reach(Math.abs(dy)) * (0.40f + 0.2f * dr.nextFloat());
                 float w = k == n - 1 ? (longSpur ? 3f : 1f) : 1f + dr.nextInt(2);
                 float s = forward ? edge + gap + w / 2f : edge - gap - w / 2f; y += dy;
                 Element d = plat(Element.Type.STATIC, s, y, w, p.zone); d.anchor = a;       // a dead end costs only the walk back: no trap at the end
@@ -1321,6 +1335,14 @@ public final class CourseGenerator {
         Element.Type S = Element.Type.STATIC;
         switch (k) {
             case HOP: {
+                if (rnd.nextFloat() < 0.2f) {          // Build 79 (owner): now and then the route steps down one or two blocks before it climbs on, just to throw you off
+                    int n = 1 + rnd.nextInt(2); float s = eR, y = y0;
+                    for (int i = 0; i < n; i++) {
+                        float dy = -r(0.4f, 1.1f), w = 2 + rnd.nextInt(2);
+                        s += reach(0f) * lerp(0.45f, 0.85f, d) * r(0.9f, 1.05f) + w / 2; y += dy; l.add(plat(S, s, y, w, z)); s += w / 2;
+                    }
+                    break;
+                }
                 float dy = tier(last.y) == 0 ? r(0f, 0.8f) : r(0f, 1.4f);
                 float frac = lerp(0.45f, 0.92f, d) * r(0.9f, 1.1f);
                 float w = 2 + rnd.nextInt(3);

@@ -657,8 +657,15 @@ No approved rule was changed to suit the solver, and no test or tolerance was re
   in Build 78 (22 of 24 layouts, both builds). Counted in generation, seed 3 up to 2,600 m rolled only six ramps above 1,000 m (where they
   start) and none came up as the spinner, one ramp in five (a 26 % chance). The test now looks at seeds 1-3 (the seeds the suite already
   climbs to 5,300 m), with the same assertions.
-- **Long dead ends gone** (DeadEndTest, 0 in its 60 slices; Build 78 had 5): every forced long spur is refused by the Build 79 rule that keeps
-  decoys off ropes (owner screenshot). With the rule off, 6 come back; with it reduced to refusing only a spur that physically crosses the
-  rope's grab width, still none. So the long dead ends Build 78 counted were the ones running across ropes, the thing the owner asked to remove. Elsewhere a
-  four-to-six-step spur meets the route either side. This conflicts with the test's expectation, not a generator fault; left for the owner
-  to decide (see HANDOFF).
+- **Long dead ends gone** (DeadEndTest, 0 in its 60 slices; Build 78 had 5): every forced long spur was refused by the Build 79 rule that keeps
+  decoys off ropes (owner screenshot): even refusing only a spur that physically crosses the rope's grab width leaves none, so the long dead
+  ends Build 78 counted were ones across ropes. Elsewhere a spur that only climbed backward or only dropped forward met the route either side.
+  Resolved by the owner's new design below, which brings them back without touching the rope rule.
+- **Dead ends both ways, up and down; the route dips** (owner, 2026-10-24: "the dead end spurs need to go left and right periodically ... they
+  can go both up and down ... the main route sometimes can go down one or two steps and then continue to go up. It's just to throw them off"):
+  spurs now branch left and right in turn (`spurLeft` flips with every spur placed; the side whose turn it is is tried first, then the other),
+  and each step goes up 0.2-0.8 m or down 0.3-1.0 m (a left spur leans up and first jumps 1.2-1.5 m up, clear of the lower block the route came
+  from; a right one leans down, under the block it goes on to). Every gap is sized for the step taken upward, so the way back is always a normal
+  jump. One hop module in five is instead one or two steps down (0.4-1.1 m each) before the route climbs on; the spiral-pitch controller makes
+  the height up. On DeadEndTest's 60 slices: 33 long plain dead ends, 44 spurs left and 34 right, 40 that step both up and down, 12 route dips;
+  the test now checks all four.

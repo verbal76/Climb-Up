@@ -987,6 +987,11 @@ public final class CourseGenerator {
 
     private boolean commit(List<Element> es, float minMargin) { return commit(es, new ArrayList<Element>(), minMargin); }
 
+    /** The margin each committed link was proven with (route index of its start). */
+    private final ArrayList<Float> linkNeeds = new ArrayList<>();
+    private float linkNeed(int i) { return i < linkNeeds.size() && linkNeeds.get(i) != null ? linkNeeds.get(i) : Math.min(0.05f, T.minLinkMargin); }
+    private void setLinkNeed(int i, float m) { while (linkNeeds.size() <= i) linkNeeds.add(null); linkNeeds.set(i, m); }
+
     /** Adds elements (and their hazards) if every link (prefix last -> e1 -> ... -> eN) is solvable with the required margin and timing window. */
     private boolean commit(List<Element> es, List<Element> hz, float minMargin) {
         int n0 = c.size(), h0 = c.hazards.size();
@@ -1017,8 +1022,10 @@ public final class CourseGenerator {
             prevStart = sim; prevRes = res;
             boolean touched = false;
             for (Element h : hz) if (h.anchor == i || h.anchor + 1 == i || h.anchor == i + 1) touched = true;
-            if (!res.ok || res.margin() < Math.max(minMargin, 0f)) { ok = false; failPlan++; if (trace.length() < 600) trace.append(String.format("[link %d %s->%s ok=%b %d/%d need %.3f]", i, c.get(i).type, c.get(i + 1).type, res.ok, res.successes, res.trials, minMargin)); }
-            else if (touched && res.window < windowNeeded(c.get(i).y)) { ok = false; failWindow++; }
+            float need = i >= n0 - 1 ? minMargin : linkNeed(i);       // a link proven again keeps the margin it was proven with (a ledge grab 0.05), not this module's
+            boolean sawLink = false; for (Element h : c.hazards) if (h.type == Element.Type.SAW_H && h.anchor == i) sawLink = true;
+            if (!res.ok || res.margin() < Math.max(need, 0f)) { ok = false; failPlan++; if (trace.length() < 600) trace.append(String.format("[link %d %s->%s ok=%b %d/%d need %.3f]", i, c.get(i).type, c.get(i + 1).type, res.ok, res.successes, res.trials, minMargin)); }
+            else if ((touched || sawLink) && res.window < (sawLink ? Math.max(0.5f, windowNeeded(c.get(i).y)) : windowNeeded(c.get(i).y))) { ok = false; failWindow++; }      // a saw leaves at least half its cycle to time the jump (SawFairnessTest), whatever else shares the link
             else if (Autopilot.hasMidHazard(c, i)) {       // a person never stands on the exact spot the planner starts from: the move must work from nearby too
                 for (float dx : new float[]{-0.5f, 0.4f}) {
                     Sim b = Sim.startOn(c, T, i); b.s = c.wrap(b.s + dx); quietStart(b, i);
@@ -1027,7 +1034,7 @@ public final class CourseGenerator {
             }
         }
         if (!ok) { while (c.size() > n0) c.elements.remove(c.size() - 1); while (c.hazards.size() > h0) c.hazards.remove(c.hazards.size() - 1); }
-        else if (!hz.isEmpty()) { hazardsPlaced += hz.size(); }
+        else { for (int i = Math.max(0, n0 - 1); i < c.size() - 1; i++) setLinkNeed(i, minMargin); if (!hz.isEmpty()) hazardsPlaced += hz.size(); }
         hazardTried += hz.isEmpty() ? 0 : 1;
         return ok;
     }

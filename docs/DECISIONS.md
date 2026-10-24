@@ -713,3 +713,10 @@ No approved rule was changed to suit the solver, and no test or tolerance was re
 - **Tolerance is measured from the proven start** (CourseTest link margins). The test measured each link from a standing start at time 0.
   The generator proves from the first quiet moment (a crab deck: a crab can be shoving at time 0) and, on the always-running belt, from the
   landing. `CourseGenerator.provenStart` gives that start, and the test measures from it with the same 0.04 m bar.
+- **TowerStreamingTest rebuild: a landing on a rounding knife-edge (needs the owner).** `RebuildFlipProbe` replays the test's inputs. The
+  rebuilt tower first differs from the resident one by an ulp at frame 135, the first rebuild. It stays within 3e-5 m until frame 1578. There the
+  resident climber is 0.141 mm above the start platform, just outside the 0.1 mm landing tolerance, and the rebuilt one, rounding at heights
+  around -1000 m (ulp 6e-5 m), is inside it. One lands a step before the other. This is the float re-rounding Build 72 traced and documented
+  (StreamingReplayTest allows such a one-step timing difference). The new courses only moved the test's scripted wander onto that edge. It is
+  not fixed here: no tolerance may be widened to hide it (owner rule), and the exact cures (one absolute frame, doubles for element and body
+  positions, or fixed point) change the simulation's arithmetic, which Build 72 left for the owner to decide.

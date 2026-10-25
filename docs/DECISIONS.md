@@ -728,3 +728,9 @@ No approved rule was changed to suit the solver, and no test or tolerance was re
 - **Build 79:** held until the redesign lands.
 - **Dead-end spurs:** replaced by reconnecting forks.
 - **Difficulty:** estimated per link by `EncounterModel` (demand categories and interaction terms, all reasons logged). The weights are first estimates, to be calibrated against playtests. A score is an estimate, not proof of human feasibility.
+
+## Build 80 is the frozen base (owner, 2026-10-25)
+
+- The owner froze Build 80 (game code `7ed261d`, private draft release, versionCode 80) as the base model for the next set of work.
+- It is kept on branch `base/build-80`. The session's git proxy refuses tag pushes, so it is a branch rather than a tag.
+- Work continues on `build-74-determinism` from that base.

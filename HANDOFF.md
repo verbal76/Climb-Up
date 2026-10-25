@@ -8,6 +8,16 @@
 
 # Handoff
 
+## FROZEN BASE (owner, 2026-10-25): Build 80
+
+- **All next work starts from Build 80.**
+  - Game code: commit `7ed261d`, the commit the APK, Windows and Linux packages were built from.
+  - Frozen branch `base/build-80` at `196508c`: identical game code, plus handoff notes only. Do not push to it.
+- **Release:** private draft "Upwardly build 80" (v1.3.0, versionCode 80), APK SHA-256 `826d138618ff13d773e0d2090d04622755079088fc5b4d1caeda80fa0da8ea02`.
+- **Known open items on this base:** 12 core test failures, listed on PR #9 (comment 6390300212).
+  - Possible real defects: three solver failures (PUNISHER seed 2 slice 2 link 31; crab seed 34 slice 8 link 3; key detour seed 6 link 38), a layer clash, no conveyor ramps, no crab decks at difficulty 0, and less key-place variety.
+  - The rest are old-generator expectations.
+
 ## Recovery point (2026-10-24, generator redesign: playtest candidate pending packaging)
 
 - **Where things are:** branch `build-74-determinism` (PR #9). Generator rules 7 (`rulesOfBuild(80) = 7`).

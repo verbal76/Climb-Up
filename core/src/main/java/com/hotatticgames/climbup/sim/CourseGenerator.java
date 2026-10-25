@@ -1045,12 +1045,25 @@ public final class CourseGenerator {
             case MOVE_V: return e.y + e.amp + 2.8f; case RAMP: return e.y + e.amp * e.halfW() + 2.8f; default: return e.y + 2.8f;
         }
     }
-    /** True if two elements from different spiral revolutions would intersect or allow a shortcut between layers. */
+    /**
+     * True if two elements from different spiral revolutions would intersect or allow a shortcut between layers. Owner decision 2026-10-25 (rules 8):
+     * the 9.5 m shortcut spacing is kept wherever either platform can launch the climber well above a jump (pad, spring, seesaw, ramp, swing, anything
+     * that moves); two plain fixed platforms need only {@link #PLAIN_LAYER_DY}, as fork branches already did. Physics (tuning.json): a jump lifts the feet
+     * jumpVel^2 / 2g = 1.95 m and a ledge is caught up to handHeight + ledgeReachAbove = 1.3 m above them, 3.25 m in all (3.6 m with a skull's
+     * launch at the start of a jump); the body clearance above (2.8 m standing room + 0.8 m deck + 1.5 m) already keeps such platforms 5.1 m apart.
+     */
     public static boolean layersClash(Course c, Element e, Element f) {
         if (Math.abs(e.s - f.s) < c.circumference * 0.5f) return false;     // same revolution: handled by route order
         if (Math.abs(c.dsWrap(e.s, f.s)) > arcHalf(e) + arcHalf(f) + 2.5f) return false;
         if (vLo(e) - 1.5f < vHi(f) && vHi(e) + 1.5f > vLo(f)) return true;
-        return e.isPlatform() && f.isPlatform() && Math.abs(e.y - f.y) < 9.5f;   // no trampoline shortcuts between layers
+        if (!e.isPlatform() || !f.isPlatform()) return false;
+        return Math.abs(e.y - f.y) < (launches(e) || launches(f) ? 9.5f : PLAIN_LAYER_DY);   // no trampoline shortcuts between layers
+    }
+    /** Shortcut spacing between plain fixed platforms of different revolutions (see {@link #layersClash}). */
+    static final float PLAIN_LAYER_DY = 4f;
+    /** A platform that can throw the climber well above a jump, or carry them: these keep the full 9.5 m between revolutions. */
+    static boolean launches(Element e) {
+        switch (e.type) { case PAD: case SPRING: case SEESAW: case RAMP: case SWING: return true; default: return e.isMoving(); }
     }
 
     /**

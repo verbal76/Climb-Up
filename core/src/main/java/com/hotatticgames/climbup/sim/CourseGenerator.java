@@ -55,9 +55,9 @@ public final class CourseGenerator {
      * generator (the crab rules of Build 63 changed what a seed produced, so runs from earlier builds carry version 0, "old rules", and are not compared).
      * {@code GeneratorFingerprintTest} fails when generation changes without a bump.
      */
-    public static final int RULES_VERSION = 7;      // 7 = Build 80 (owner directive 2026-10-24): no level gates, PUNISHER on its own curve, encounter-conflict rule, splits with reconnecting branches instead of dead ends; 6 = Build 79: skulls, blobs and crabs reach the platforms either side (crabs follow up to three, fall with crumbling decks), faster skull, no blob wobble, two to four crabs a deck, bee pairs, creatures on spike-drop rows, bridges that drop planks, flat-turning aimed cannons, an always-running balance conveyor, decoys kept off ropes, a slightly harder first world; 5 = Build 77: faster skull with loop+swoop, key detours proved with the skull at either end, one balance conveyor per section from Castle 6 to 10; 4 = Build 76: faster plank conveyor bridges; 3 = Build 72: flush ramps, faster crumbling, a wilder shaking ramp, the spinning ramp; 2 = Build 71: the bee homes in, skulls and green blobs, mortars out of step at random
+    public static final int RULES_VERSION = 8;      // 8 = Build 81 (owner decisions 2026-10-25): keys lie on a main-route platform (no rooms, branches or perches); 7 = Build 80 (owner directive 2026-10-24): no level gates, PUNISHER on its own curve, encounter-conflict rule, splits with reconnecting branches instead of dead ends; 6 = Build 79: skulls, blobs and crabs reach the platforms either side (crabs follow up to three, fall with crumbling decks), faster skull, no blob wobble, two to four crabs a deck, bee pairs, creatures on spike-drop rows, bridges that drop planks, flat-turning aimed cannons, an always-running balance conveyor, decoys kept off ropes, a slightly harder first world; 5 = Build 77: faster skull with loop+swoop, key detours proved with the skull at either end, one balance conveyor per section from Castle 6 to 10; 4 = Build 76: faster plank conveyor bridges; 3 = Build 72: flush ramps, faster crumbling, a wilder shaking ramp, the spinning ramp; 2 = Build 71: the bee homes in, skulls and green blobs, mortars out of step at random
     /** The rules version a climb started on a given build used (0 = unknown or before the stamps: not comparable). */
-    public static int rulesOfBuild(int build) { return build >= 80 ? 7 : build >= 79 ? 6 : build >= 77 ? 5 : build >= 76 ? 4 : build >= 72 ? 3 : build >= 71 ? 2 : build >= 63 ? 1 : 0; }
+    public static int rulesOfBuild(int build) { return build >= 81 ? 8 : build >= 80 ? 7 : build >= 79 ? 6 : build >= 77 ? 5 : build >= 76 ? 4 : build >= 72 ? 3 : build >= 71 ? 2 : build >= 63 ? 1 : 0; }
 
     private CourseGenerator(long seed, Tuning t, long salt) {
         T = t; P = DifficultyProfile.of(t); this.salt = salt; rnd = new Random(seed * 0x9E3779B97F4A7C15L + 12345 + salt * 0x632BE59BD9B4E019L); c = new Course(seed, t.circumference());
@@ -477,7 +477,11 @@ public final class CourseGenerator {
         return best;
     }
 
-    /** Places the key of castle keyN at a random spot near height keyY: lying on a route platform, or at the end of an optional dead-end branch (a chain of 1-3 platforms, or a pad-boosted perch above), every branch proven both ways. Reachable, never equally convenient. */
+    /**
+     * Owner directive 2026-10-25 (keys): the key of castle keyN is a seeded collectible lying on a main-route platform near height keyY, in the section
+     * before its castle. No room, branch, pad perch or chain: the route links onto and off the platform are already proven, and the key is a walk across it.
+     * Preferred: a plain platform near keyY that no roaming creature reaches and with nothing low overhead; otherwise the nearest plain route platform.
+     */
     private void placeKey() {
         int rs = c.routeSize();
         List<Integer> cand = new ArrayList<>();
@@ -490,15 +494,23 @@ public final class CourseGenerator {
         final float hk = keyY;
         cand.sort((x, y) -> Float.compare(Math.abs(c.get(x).y - hk), Math.abs(c.get(y).y - hk)));
         int color = castleColor(c.seed, keyN);
-        float roll = rnd.nextFloat();
-        int[] order = roll < 0.2f ? new int[]{2, 0, 3} : roll < 0.7f ? new int[]{0, 3, 2} : new int[]{3, 0, 2};      // route / chain / pad-up first, the others as fall-backs
-        int tries = Math.min(cand.size(), 7);
-        for (int mode : order) {
-            if (mode == 2) { for (int q = 0; q < Math.min(cand.size(), 3); q++) if (keyOnRoute(cand.get(q), color)) return; continue; }
-            for (int q = 0; q < tries; q++) for (int att = 0; att < 6; att++) if (keyBranch(cand.get(q), mode, color)) return;
+        List<Integer> quiet = new ArrayList<>();
+        for (int q = 0; q < cand.size() && quiet.size() < KEY_CHOICES; q++) { int a = cand.get(q); if (keyClear(a) && EncounterModel.threatAt(c, T, a) == 0f) quiet.add(a); }
+        if (!quiet.isEmpty()) { keyOnRoute(quiet.get(rnd.nextInt(quiet.size())), color); return; }
+        for (int a : cand) if (keyClear(a)) { keyOnRoute(a, color); return; }
+        keyOnRoute(cand.get(0), color);
+    }
+    /** How many of the quiet route platforms nearest keyY the key's platform is drawn from. */
+    private static final int KEY_CHOICES = 3;
+    /** Nothing hangs low over route platform a (another layer's platform within head height above it), so the key there is in plain view and easy to take. */
+    private boolean keyClear(int a) {
+        Element A = c.get(a);
+        for (int i = 0; i < c.size(); i++) {
+            if (i == a) continue;
+            Element o = c.get(i); float dy = o.y - A.y;
+            if (o.isPlatform() && dy > 0.2f && dy < 2.6f && Math.abs(c.dsWrap(o.s, A.s)) < A.halfW() + o.halfW()) return false;
         }
-        for (int q = 0; q < cand.size(); q++) if (keyOnRoute(cand.get(q), color)) return;
-        throw new IllegalStateException("key of castle " + keyN + " could not be placed");
+        return true;
     }
 
     private boolean keyOnRoute(int a, int color) {
@@ -506,47 +518,6 @@ public final class CourseGenerator {
         Element key = new Element(Element.Type.KEY, A.s + (rnd.nextFloat() * 2f - 1f) * room, A.y + 0.95f, 0f);
         key.zone = A.zone; key.color = color; key.anchor = a; c.hazards.add(key);
         builtRooms.add(new Element[]{key, null}); roomIdx.add(new int[]{a, -1, 0, 2});
-        return true;
-    }
-
-    /** mode 0: a chain of 1-3 platforms; mode 3: a pad beside the platform and a perch 3-5 m above it. */
-    private boolean keyBranch(int a, int mode, int color) {
-        Element A = c.get(a); int side = rnd.nextBoolean() ? 1 : -1;
-        List<Element> es = new ArrayList<>(); float edge = A.s + side * A.w / 2f, y = A.y;
-        Element key;
-        if (mode == 3) {
-            float gap = r(0.4f, 1.3f);
-            Element P = plat(Element.Type.PAD, edge + side * (gap + 1f), A.y - r(0f, 0.3f), 2f, A.zone);
-            float uw = r(2.4f, 4.2f);
-            Element U = plat(Element.Type.STATIC, P.s + side * r(0.3f, 3.0f), A.y + r(3.0f, 4.8f), uw, A.zone);
-            P.anchor = a; U.anchor = a; es.add(P); es.add(U);
-            key = new Element(Element.Type.KEY, U.s + (rnd.nextFloat() * 2f - 1f) * Math.max(0f, U.halfW() - 0.5f), U.y + 0.95f, 0f);
-        } else {
-            int n = 1 + (rnd.nextFloat() < 0.35f ? 1 : 0) + (rnd.nextFloat() < 0.2f ? 1 : 0);
-            for (int i = 0; i < n; i++) {
-                float dy = r(-3.2f, 1.3f); if (y + dy > A.y + 4.5f || y + dy < A.y - 6f) dy = -dy * 0.5f;
-                float w = r(2.0f, 4.0f), gap = reach(dy) * r(0.30f, 0.78f);
-                Element e = plat(Element.Type.STATIC, edge + side * (gap + w / 2f), y + dy, w, A.zone); e.anchor = a; es.add(e);
-                edge = e.s + side * w / 2f; y = e.y;
-            }
-            Element L = es.get(es.size() - 1);
-            key = new Element(Element.Type.KEY, L.s + (rnd.nextFloat() * 2f - 1f) * Math.max(0f, L.halfW() - 0.5f), L.y + 0.95f, 0f);
-        }
-        key.zone = A.zone; key.color = color; key.anchor = a;
-        int n0 = c.size(), h0 = c.hazards.size(); boolean ok = true;
-        for (Element e : es) { c.add(e); if (!decoyOk(e, a)) { ok = false; break; } }
-        if (ok) c.hazards.add(key);
-        if (ok) {
-            c.indexDecoys(); int first = n0;
-            if (mode == 3) ok = pairOk(a, first) && pairOkAir(first, first + 1) && pairOk(first + 1, a);
-            else { int prevI = a; for (int i = 0; i < es.size() && ok; i++) { ok = pairOk(prevI, n0 + i) && pairOk(n0 + i, prevI); prevI = n0 + i; } }
-        }
-        if (ok) {                                                           // the branch must not break any route link nearby
-            int rs = c.routeSize();
-            for (int q = Math.max(0, a - 7); q <= Math.min(rs - 2, a + 5) && ok; q++) ok = Autopilot.plan(Sim.startOn(c, T, q), q, false).ok;
-        }
-        if (!ok) { while (c.size() > n0) c.elements.remove(c.size() - 1); while (c.hazards.size() > h0) c.hazards.remove(c.hazards.size() - 1); c.indexDecoys(); return false; }
-        builtRooms.add(new Element[]{key, null}); roomIdx.add(new int[]{a, n0, es.size(), mode});
         return true;
     }
 

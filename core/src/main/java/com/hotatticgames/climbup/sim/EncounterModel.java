@@ -67,9 +67,8 @@ public final class EncounterModel {
         float pursueRaw = 0f; int n = 0;
         for (Element h : c.hazards) {
             if (h.anchor < 0) continue;
-            int reach = roamReach(h);
-            if (reach >= 0) {
-                if (h.anchor >= i - reach && h.anchor <= j + reach) { pursueRaw += weight(h.type); n++; }
+            if (roamReach(h) >= 0) {
+                if (reaches(c, h, i) || reaches(c, h, j)) { pursueRaw += weight(h.type); n++; }
                 continue;
             }
             if (h.anchor != i && h.anchor != j) continue;
@@ -116,11 +115,43 @@ public final class EncounterModel {
         if (h.anchor < 0 || p < 0 || p >= c.routeSize()) return false;
         Element e = c.get(p);
         switch (h.type) {
-            case CRAB: return Math.abs(h.anchor - p) <= Sim.CRAB_FOLLOW;
-            case SKULL: case BLOB: return Math.abs(h.anchor - p) <= 1;
+            case CRAB: return crabReaches(c, h.anchor, p);
+            case SKULL: case BLOB: return neighbourReaches(c, h.anchor, p);
             case BEE: { float d = Math.abs(c.dsWrap(e.s, h.s)) - e.halfW(), dy = e.y - h.y; return h.anchor == p || (d <= Element.BEE_SEEK && dy > -4f && dy < 3f); }
             default: return false;
         }
+    }
+
+    // Owner decision A (2026-10-25): a creature threatens only the platforms the simulation lets it move onto (Sim.roamDeck, Sim.canHop, Element.ROAM_DY),
+    // read from the course as generated (fixed decks: the only kind a creature may move onto, so their generated place is their live place).
+
+    /** Sim.roamDeck on the generated course: a fixed, flat route platform (no mover, ramp or seesaw); skulls and blobs also not a crumbling one. */
+    static boolean roamDeck(Course c, int j, boolean crab) {
+        if (j < 0 || j >= c.routeSize()) return false;
+        Element d = c.get(j);
+        if (!d.isPlatform() || d.isMoving() || d.type == Element.Type.RAMP || d.type == Element.Type.SEESAW) return false;
+        return crab || !d.crumbles();
+    }
+    /** Sim.canHop: a crab hops from deck j to deck k across at most CRAB_HOP_GAP and up or down at most CRAB_HOP_DY. */
+    static boolean crabHop(Course c, int j, int k) {
+        if (!roamDeck(c, k, true) || j < 0 || j >= c.size()) return false;
+        Element a = c.get(j), b = c.get(k);
+        return Math.abs(c.dsWrap(b.s, a.s)) - a.halfW() - b.halfW() <= Sim.CRAB_HOP_GAP && Math.abs(b.y - a.y) <= Sim.CRAB_HOP_DY;
+    }
+    /** A crab from deck {@code home} follows you forward along the route, one hop at a time, up to CRAB_FOLLOW decks past its own (Sim.stepClubCrab: never below home). */
+    static boolean crabReaches(Course c, int home, int p) {
+        if (p == home) return true;
+        if (p < home || p > home + Sim.CRAB_FOLLOW) return false;
+        for (int j = home; j < p; j++) if (!crabHop(c, j, j + 1)) return false;
+        return true;
+    }
+    /** A skull or blob moves to the platform before or after its own when it is a roam deck within ROAM_DY of the deck it leaves (Sim.stepSkull, Sim.stepBlob). */
+    static boolean neighbourReaches(Course c, int home, int p) {
+        if (p == home) return true;
+        if (Math.abs(p - home) != 1 || !roamDeck(c, p, false)) return false;
+        if (Math.abs(c.get(p).y - c.get(home).y) <= Element.ROAM_DY) return true;
+        int q = 2 * home - p;           // or from the other neighbour, once it is there
+        return roamDeck(c, q, false) && Math.abs(c.get(q).y - c.get(home).y) <= Element.ROAM_DY && Math.abs(c.get(p).y - c.get(q).y) <= Element.ROAM_DY;
     }
 
     /** Weighted pursuit that can reach route platform {@code p}, with the same overlap growth as {@link #link}. */

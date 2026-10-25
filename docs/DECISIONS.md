@@ -734,3 +734,19 @@ No approved rule was changed to suit the solver, and no test or tolerance was re
 - The owner froze Build 80 (game code `7ed261d`, private draft release, versionCode 80) as the base model for the next set of work.
 - It is kept on branch `base/build-80`. The session's git proxy refuses tag pushes, so it is a branch rather than a tag.
 - Work continues on `build-74-determinism` from that base.
+
+## Owner decisions on keys and pursuit (2026-10-25), rules 8
+
+- **Keys (production path `CourseGenerator.placeKey`, every endless climb):** the key of each castle lies on a main-route platform near its
+  seeded height, in the section before the castle. The chain branch and the pad-and-perch detours (`keyBranch`) are gone. The platform is drawn
+  (seeded) from the three plain route platforms nearest the key height that no roaming creature reaches and that have nothing low overhead;
+  failing that, the nearest clear plain route platform; failing that, the nearest plain route platform. No extra geometry and no new proofs: the
+  links onto and off the platform are already proven, and the solver walks to the key (`Autopilot.detour`, mode 2). Finite test towers still use
+  `tryKeyRoom` (not shipped gameplay; unchanged).
+- **Threat evaluator (decision A):** `EncounterModel.reaches` counts only the platforms the simulation lets a creature move onto. Crabs: forward
+  along the route only (the simulation never takes a crab below its home deck), one hop at a time onto fixed, flat route platforms (crumbling ones
+  included), each hop at most `CRAB_HOP_GAP` 3.2 m across and `CRAB_HOP_DY` 1.8 m up or down, up to `CRAB_FOLLOW` 3 decks. Skulls and blobs: the
+  platform before or after their own when it is a fixed, flat, non-crumbling route platform within `ROAM_DY` 3 m of the deck they leave. The link
+  score's pursuit term uses the same predicate. Bees keep their 7 m seek range. The budget values are unchanged.
+- **Blob height (decision C):** already in the simulation: `Sim.stepBlob` (and `stepSkull`) refuse a neighbour deck more than `Element.ROAM_DY`
+  (3.0 m) above or below the deck they are on. No simulation change.

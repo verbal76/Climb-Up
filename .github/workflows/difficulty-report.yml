@@ -12,6 +12,7 @@ on:
       - 'core/src/test/java/com/hotatticgames/climbup/sim/DifficultyScore.java'
       - 'core/src/test/java/com/hotatticgames/climbup/sim/DifficultyReport.java'
       - 'tools/ci/difficulty_pdf.py'
+      - 'core/src/test/resources/difficulty_weights.properties'
 permissions:
   contents: read
 jobs:

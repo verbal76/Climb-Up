@@ -1,3 +1,65 @@
+## RECOVERY CHECKPOINT (2026-10-25, latest): consolidated owner directive, step 1-2 audits in progress
+
+**Read this section first; it supersedes the sections below wherever they disagree.**
+
+### Repository state
+- Branch `build-74-determinism`, draft PR #9. HEAD before this checkpoint: `0bc8308` (DifficultyProfile refactor, byte-identical courses). No uncommitted code changes existed at the stop; this checkpoint commit adds only docs and `docs/probes/`.
+- `base/build-80` (`196508c`, game code = `7ed261d`, Build 80 release) is frozen: never push to it.
+- Rules version 7 (`rulesOfBuild(80) = 7`). Nothing in the generator has changed since `0ed7c64` + `0bc8308`.
+- Probe sources (scratch tools, not part of the build): `docs/probes/` (GenHashProbe, PunisherHashProbe, ThreatProbe, VarietyProbe). To run one, copy it into `core/src/test/java/...`, compile against the core test classpath, run, then delete the copy so the tree stays clean. `Level1Probe` is already committed under core tests.
+
+### Completed work
+1. `0ed7c64`: NORMAL threat-budget repair (EncounterModel `threat`/`threatAt`/`cramped`, commit check `failThreat`).
+2. `0bc8308`: `DifficultyProfile` (NORMAL / PUNISHER; NGH uses PUNISHER) holds every per-mode generation value. Hashes identical before and after: NORMAL s1 `3189576066...`, NORMAL s2 `8a914aadbe...`, PUNISHER s2 `7da9bdb6aa...`, NGH s1 (2 slices) `d37ee5cf82...`.
+
+### Test evidence (VarietyProbe, recorded in docs/GENERATOR_AUDIT.md)
+- Threat repair, NORMAL seeds 1-3 to 1,100 m: 0 links over budget, solver 53/53. Build 80: 54/54.
+- PUNISHER: 35/36. The failure (seed 2, slice 2, link 31, 170.3 m) is solver bookkeeping after a cannon knockback (`on=27`), not an impossible course.
+- Crabs in Level 1, seeds 1/2/3: Build 79 0/11/8; Build 80 and the repair 0/0/0. Seed 3 to 2,600 m: crabs 20 -> 8, ramps 23 -> 18, conveyor ramp 1 -> 0, conveyor bridge 1 -> 0.
+- Build 80 Level 1 experiments: conflict rule off -> crabs 0/2/2; forks off -> crabs 0/0/6, pad-and-perch keys return, generation 6-13 s per slice instead of 15-27 s.
+- PUNISHER generation: 33-67 s per slice.
+- Layer clash: a rule mismatch (fork pad 8.9 m above a lower turn).
+
+### CORRECTION: key placement live path (important)
+- **`placeKey()` is the live gameplay path** (endless climbs: every mode the player plays). Order seeded per castle: 20% `{2,0,3}`, 50% `{0,3,2}`, 30% `{3,0,2}`, where 2 = on route (`keyOnRoute`), 0 = chain branch, 3 = pad and perch. Branch attempts: up to 7 candidates x 6 tries, each with `pairOk` both ways and re-proving route links a-7..a+5 (`keyBranch`). Fallback: `keyOnRoute` on any candidate; throws if no candidates. Candidates: STATIC, skin 0, not wet, w >= 2.5, anchor < 0, no mid hazard, sorted by distance to `keyY`.
+- **`tryKeyRoom()` is test-only in practice**: it runs only for finite towers through the `pendingCastles` path in `addKeyRooms` (`endless && gate.skin > 0` goes to `placeKey`). If no room fits, the castle gate is removed.
+- **The `quietKeyRooms` preference (0ed7c64, now `DifficultyProfile.quietKeyRooms`) only affects `tryKeyRoom`, so it never touched shipped gameplay.**
+- **INVALID conclusion:** the statement under "Recovery point ... NORMAL threat-budget repair" below that seed 6 key rooms at 266.9 m and 848.6 m "now have unthreatened take-offs" because of the quiet preference is wrong as a causal claim. Seed 6 passing after the repair came from course changes made by the threat budget, not from the key-room preference. Do not cite it as evidence that the key fix works.
+
+### Pursuit audit findings so far (report to the owner BEFORE changing behaviour)
+- Crab: Sim follows `Sim.CRAB_FOLLOW = 3` decks; `CourseGenerator.roamReach` 3; `EncounterModel.reaches` 3. Matches the owner (3 platforms).
+- Skull and blob: Sim reaches the platforms before and after (Build 79, rules 6); generator and EncounterModel use 1. Skull matches the owner. Blob history: Build 70 "wobble, high leap off screen, shadow, land on player (squash + bounce off)"; Build 79 "blob + skull reach neighbour platforms, faster attacks"; "blob squash should knock you away"; Build 79 "no blob wobble". Still to finish: confirm the full blob requirement from tests and git log.
+- **Bee: three different models (discrepancy).** Sim (`beeAt`, Sim.java ~595-613) is post- and distance-based: seeks when you are within `BEE_SEEK` 7 m of its post and dy in (-4, 3), drifting at `BEE_DRIFT` 2.2 m/s (x `react()`) up to `BEE_REACH` 2.4 m; it does not pursue platform-to-platform. `CourseGenerator.roamReach` returns -1 for bees (excluded from `creatureReaches`). `EncounterModel.roamReach` returns 0, while `EncounterModel.reaches` uses the 7 m distance. The owner wants bees to pursue across platforms like skulls: this is a behaviour change and needs owner confirmation first.
+- Not yet checked: what the solver (`Autopilot.plan`) models for each creature's reach.
+
+### Planned step 1 (not implemented)
+- `placeKey()`: seeded choice among main-route candidates near `keyY` only, preferring `EncounterModel.threatAt == 0`, falling back to any valid route candidate; drop chain and pad-perch branches (`keyBranch`). Finite towers: same rule in `addKeyRooms` (between `pc[0]` and the gate) instead of `tryKeyRoom`. Remove the dead room and branch code and the `quietKeyRooms` field.
+- This changes courses: bump the rules version, refresh the generation fingerprint and replays; the key-variety and branch-count expectations (e.g. OfficialWorldRulesTest branches >= 6) become obsolete.
+
+### Outstanding issues
+- Old-generator expectations among the 12 core failures (fingerprint, replays, DeadEndTest, key variety) need updating, not weakening.
+- Punisher UI gate not done: greyed-out button, "coming soon" popup, activation wiring disconnected (Nov 3 deadline: Normal release-ready). NGH stays hidden (`Tuning.PLAYABLE_MODES = 2`).
+- Scratch worktrees `wt_b79` (bd0b550) and `wt_b80` (7ed261d) live in the session scratchpad only and are lost when the container goes; recreate them with `git worktree add` if needed.
+
+### Owner directive "Consolidated Owner Decisions and Generator Corrections" (2026-10-25), binding
+1. **Three modes**, same generator, solver, physics and reachability rules, with difficulty-specific progression parameters (DifficultyProfile). Normal: baseline over 10 castles. Punisher: starts at about Normal Level 5, then its own 10 castles. Not Gonna Happen: starts at about Normal Level 8, then its own 10 castles (the old NGH became practically impossible after about 4 levels: a progression failure, not the design). Difficulty comes organically from geometry, precision, hazard combinations, timing, encounter density, route complexity and recovery opportunities. Not allowed: arbitrary fixed counts, blanket percentages, mechanic unlocks. Mechanics are eligible wherever physically appropriate. Punisher and NGH stay unavailable until validated and explicitly approved.
+2. **Restore meaningful crab encounters**: multiple crabs, or crabs with other enemies (one crab confined to one platform is ineffective). Do not remove crabs because combinations are hard to generate. Restore the crab and club variety lost in Build 80. Keep the Normal threat-budget gains without needlessly rejecting meaningful combinations.
+3. **Enemy pursuit**: skulls pursue onto the previous and next platform; crabs across up to 3 platforms; bees across platforms like skulls, respecting their established detection and movement; blobs: recover the original requirements from code, tests and history, do not invent. Sim, encounter generator, threat evaluator and solver must agree. Do not simply forbid overlapping threat areas. Report discrepancies before changing established enemy behaviour.
+4. **Forks**: every fork reconnects to the main route or a connected fork network; higher difficulty means richer networks with more subforks. Optimize redundant re-checks without removing necessary validation. If nesting is too costly, reduce depth while keeping or raising the frequency of meaningful forks. Measure performance and route complexity before and after.
+5. **Solver recovery fix (approved)**: after a knockback, recognize the actual position and replan; no stranded platforms or dead ends; no physics changes; distinguish real impossibility from solver failure.
+6. **Generation fallback**: a failure must not end a playable run; no easier substitute course; preserve difficulty, encounters, determinism and progression; bounded retries; report if a fallback cannot preserve difficulty.
+7. **Key placement**: a seeded collectible on the validated main route (not an optional fork), between the start and Castle 1 and between each pair of castles; reachable, reliably collectible, before its castle; no room, branch, pad detour or chain. Audit the key-room implementation for unnecessary structure, retries and validation. Losing key-room types is not a regression.
+8. **Architecture**: keep the shared architecture; DifficultyProfile (`0bc8308`) is the foundation. Optimize fork generation cost (Punisher 33-67 s per section).
+9. **Order of work**: (1) key placement, (2) pursuit verification and restoring Normal variety, (3) fork optimization, (4) solver knockback recovery and connectivity, (5) difficulty-preserving deterministic fallback, (6) Punisher calibration, (7) preserve and evaluate NGH without activating it.
+- **Rules**: report genuine conflicts before substantial changes; smallest corrections; bump the rules version and fingerprints for intentional generator changes; targeted validation, no repeated full campaigns; no publishing, no enabling unfinished modes, no Steam pushes without approval; report changes, measurements, risks and decisions needing owner input.
+
+### Standing constraints
+- No movement physics changes without approval; no seed special cases (6, 34, 2); do not weaken validation; do not remove legitimate obstacles; no nondeterminism.
+- No APK/Windows/Linux packages, no Steam/OTA/release changes, no parallel agents or full test campaigns. Do not cancel running diagnostics to answer routine questions. Cancel only CI runs started by my own pushes.
+
+### Next action after recovery
+Finish the pursuit audit (solver reach model, blob history), report the discrepancies above to the owner, then implement step 1 with targeted validation.
+
 ## Current state (2026-10-22, Build 72 playtest hold)
 
 - **Build 72 for playtesting:** the private draft releases from `0bf3bf8` (1.2.0, versionCode 72). Android APK SHA-256 `29bf7c23528f7dc035e6643a2e494a9eaeff022a23ccda681e272bb84202c448`; the Windows + Linux build is from the same commit. Do not publish them, and do not replace them without the owner's approval.

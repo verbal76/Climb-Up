@@ -1050,7 +1050,8 @@ public final class CourseGenerator {
      * the 9.5 m shortcut spacing is kept wherever either platform can launch the climber well above a jump (pad, spring, seesaw, ramp, swing, anything
      * that moves); two plain fixed platforms need only {@link #PLAIN_LAYER_DY}, as fork branches already did. Physics (tuning.json): a jump lifts the feet
      * jumpVel^2 / 2g = 1.95 m and a ledge is caught up to handHeight + ledgeReachAbove = 1.3 m above them, 3.25 m in all (3.6 m with a skull's
-     * launch at the start of a jump); the body clearance above (2.8 m standing room + 0.8 m deck + 1.5 m) already keeps such platforms 5.1 m apart.
+     * launch at the start of a jump), so 4 m leaves a margin. Where their arcs come within 2.5 m the body clearance above (2.8 m standing room + 0.8 m deck
+     * + 1.5 m) keeps them 5.1 m apart anyway. Validated with the planner itself (docs/probes/ShortcutProbe): no plain pair of revolutions reachable.
      */
     public static boolean layersClash(Course c, Element e, Element f) {
         if (Math.abs(e.s - f.s) < c.circumference * 0.5f) return false;     // same revolution: handled by route order

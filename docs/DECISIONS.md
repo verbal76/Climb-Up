@@ -763,3 +763,14 @@ No approved rule was changed to suit the solver, and no test or tolerance was re
 - **Build 81 = rules 8:** builds take their number from the workflows' `build_number` input (`android/build.gradle`), Build 80 shipped as
   versionCode 80, and `rulesOfBuild` is only a fallback for saves from before Build 64 that carry no rules stamp (newer saves store
   `climbRules`), so the mapping cannot mislabel a real save.
+- **Spacing between spiral revolutions (owner decision 2026-10-25, rules 8):** the 9.5 m "no trampoline shortcuts" spacing stays wherever either
+  platform can launch the climber (pad, spring, seesaw, ramp, swing, anything that moves); two plain fixed platforms need only
+  `PLAIN_LAYER_DY` 4 m, as fork branches already did. Physics (tuning.json): a jump lifts the feet 1.95 m (11.5^2 / 2 x 34) and a ledge is caught up to
+  1.3 m above them (handHeight 1.15 + ledgeReachAbove 0.15), 3.25 m in all; the strongest knockback (skull, 9.5 m/s) taken early in a jump gives
+  3.6 m. Body clearance is unchanged (5.1 m where arcs come within 2.5 m). Measured: cross-revolution plain pairs now come as close as 4.18 m (only
+  where they are more than 2.5 m apart sideways). Root cause it addresses: the route rises 18.8-20.1 m per revolution (Build 79: 20.9-21.4 m), so
+  wide crab decks met the 9.5 m rule (61 of 64 refused crab decks on seed 1).
+- **Shortcuts (owner clarification 2026-10-25):** Upwardly is partly for speedrunners. Rare, skill-based shortcuts between revolutions are acceptable;
+  common, easy ones that skip large parts of the course are not wanted; progression-breaking ones (skipping a required key, softlocks, invalid
+  states) are unacceptable. Shortcuts are measured (`docs/probes/ShortcutProbe`: every cross-revolution platform pair within 10 m up and 6 m
+  sideways, tried with the planner), not eliminated at any cost, and never manufactured.

@@ -36,4 +36,6 @@ jobs:
         run: cat report/summary.md >> "$GITHUB_STEP_SUMMARY" || true
       - uses: actions/upload-artifact@v4
         if: always()
-        with: { name: difficulty-report-mode-${{ matrix.mode }}, path: report/ }
+        with:
+          name: difficulty-report-mode-${{ matrix.mode }}
+          path: report/

@@ -1,0 +1,39 @@
+name: Difficulty report
+# DIAGNOSTIC ONLY (owner directive 2026-10-25, Priority 1): scores seeded NORMAL, PUNISHER and NEVER GONNA HAPPEN climbs through ten castles with
+# core/src/test/java/.../sim/DifficultyScore (never used by the generator). Publishes nothing; uploads windows.csv, castles.csv and summary.md.
+on:
+  workflow_dispatch:
+  push:
+    branches: [build-74-determinism]
+    paths:
+      - '.github/workflows/difficulty-report.yml'
+      - 'core/src/test/java/com/hotatticgames/climbup/sim/DifficultyScore.java'
+      - 'core/src/test/java/com/hotatticgames/climbup/sim/DifficultyReport.java'
+permissions:
+  contents: read
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: ['0', '1', '2']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '17' }
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Scoring unit test
+        run: ./gradlew :core:test --tests 'com.hotatticgames.climbup.sim.DifficultyScoreTest' --no-daemon -q
+      - name: Score seeds 1 and 2 through ten castles
+        run: |
+          set -e
+          GDX=$(find ~/.gradle -name 'gdx-1.14.2.jar' | head -1); CP="core/build/classes/java/main:core/build/classes/java/test:$GDX"
+          cd core && java -Xmx2g -cp "$(echo $CP | sed 's#core/#../core/#g')" com.hotatticgames.climbup.sim.DifficultyReport ../assets/data/tuning.json 5300 ${{ matrix.mode }} 1,2 ../report
+      - name: Summary
+        if: always()
+        run: cat report/summary.md >> "$GITHUB_STEP_SUMMARY" || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: difficulty-report-mode-${{ matrix.mode }}, path: report/ }

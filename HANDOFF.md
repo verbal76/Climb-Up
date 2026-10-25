@@ -2,6 +2,13 @@
 
 **Read this section first; it supersedes the sections below wherever they disagree.**
 
+### PRIORITY 1 (owner master directive 2026-10-25): weighted difficulty scoring - implemented, CI report pending
+- Diagnostic only, never used by the generator: `core/src/test/java/com/hotatticgames/climbup/sim/DifficultyScore.java` (one scoring table: crab +1, blob +2, skull +3, bee +2, club -1 when on a route platform; ropes, cables, plain jumps, pads/springs 0; saws, cannons, mortars, spikes, pendulums counted as unscored hazard families). Layers kept apart: A signed points (threat / protective separately), B distinct families, C repetition (first 3 identical per window full, then x0.25) and interactions (+0.5 per route link reachable by 2+ enemy families, cap 2 per window). Eligibility = `EncounterModel.reaches` (current behaviour; unreachable enemies reported, not scored). 25 m windows; enemies counted once in their home window and as exposure in every window their reach touches; castles aggregated per 500 m (as the probes); low-challenge = adjusted net < 1.
+- `DifficultyReport` writes windows.csv, castles.csv, summary.md; `.github/workflows/difficulty-report.yml` (push on this branch when the scorer changes, or dispatch once it is on the default branch) runs NORMAL / PUNISHER / NGH, seeds 1 and 2, to 5,300 m (ten castles), artifacts `difficulty-report-mode-N`, summary in the run page.
+- Validation: `DifficultyScoreTest` 3/3 locally (table, repetition, determinism, course untouched). The CI report run was triggered by the push of the commit that added this section; its result is not yet reviewed.
+- PRIORITY 2 (multi-platform enemy activation): NOT STARTED, deferred to after the weekly usage reset. PRIORITY 3 (enemy attacks on ropes/traverses): deferred, untouched.
+- **Single next action:** read the Difficulty report run summary for that commit (Actions, workflow "Difficulty report"), fix only real failures, then start Priority 2.
+
 ### Repository state
 - Branch `build-74-determinism`, draft PR #9. HEAD before this checkpoint: `0bc8308` (DifficultyProfile refactor, byte-identical courses). No uncommitted code changes existed at the stop; this checkpoint commit adds only docs and `docs/probes/`.
 - `base/build-80` (`196508c`, game code = `7ed261d`, Build 80 release) is frozen: never push to it.

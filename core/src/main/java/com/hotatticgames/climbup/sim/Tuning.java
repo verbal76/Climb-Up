@@ -57,8 +57,10 @@ public class Tuning {
     public static final float[] REACT = {1f, 1.25f, 1.5f};
     public static final String[] HARD_NAMES = {"NORMAL", "PUNISHER", "NEVER GONNA HAPPEN"};
     /** Owner 2026-10-24: new climbs offer NORMAL and PUNISHER only until the difficulty design infrastructure is in place. NEVER GONNA HAPPEN keeps its code
-     *  and its times board, and a climb already begun on it carries on with it; it is just not offered for new climbs. */
-    public static final int PLAYABLE_MODES = 2;
+     *  and its times board, and a climb already begun on it carries on with it; it is just not offered for new climbs.
+     *  Owner 2026-10-25: Build 81 is a private owner playtest with all three modes selectable (3). Public builds (Steam) must gate PUNISHER and
+     *  NEVER GONNA HAPPEN again until the owner approves them: set this back before any public build. */
+    public static final int PLAYABLE_MODES = 3;
     /** How much faster creatures and cannons react on this climb (1 on NORMAL). */
     public float react() { return REACT[Math.max(0, Math.min(REACT.length - 1, hard))]; }
     /** A copy of this tuning for a climb at difficulty {@code level}. */

@@ -195,7 +195,7 @@ public final class SettingsScreen extends ScreenAdapter {
             toggle("COLOURBLIND-SAFE COLOURS", s.colourblind, () -> s.colourblind = !s.colourblind);
             toggle("ASSIST: SLOWER SPEED", s.assistSlow, () -> s.assistSlow = !s.assistSlow);
             toggle("ASSIST: JUMP FORGIVENESS", s.assistForgive, () -> s.assistForgive = !s.assistForgive);
-            row("DIFFICULTY (NEW CLIMBS)", com.hotatticgames.climbup.sim.Tuning.HARD_NAMES[Math.max(0, Math.min(com.hotatticgames.climbup.sim.Tuning.PLAYABLE_MODES - 1, s.difficulty))], null, null, () -> s.difficulty = (Math.min(s.difficulty, com.hotatticgames.climbup.sim.Tuning.PLAYABLE_MODES - 1) + 1) % com.hotatticgames.climbup.sim.Tuning.PLAYABLE_MODES);      // NORMAL / PUNISHER (owner 2026-10-24: NEVER GONNA HAPPEN not offered for now); a climb keeps the one it began with
+            row("DIFFICULTY (NEW CLIMBS)", com.hotatticgames.climbup.sim.Tuning.HARD_NAMES[Math.max(0, Math.min(com.hotatticgames.climbup.sim.Tuning.PLAYABLE_MODES - 1, s.difficulty))], null, null, () -> s.difficulty = (Math.min(s.difficulty, com.hotatticgames.climbup.sim.Tuning.PLAYABLE_MODES - 1) + 1) % com.hotatticgames.climbup.sim.Tuning.PLAYABLE_MODES);      // the modes Tuning.PLAYABLE_MODES offers (Build 81 private playtest: all three); a climb keeps the one it began with
         }
         ui.end();
         if (pickReady) { pickReady = false; if (back instanceof PlayScreen) back.dispose(); g.setScreen(new PlayScreen(g, false)); return; }      // the world picker's climb is ready

@@ -1069,10 +1069,13 @@ public final class CourseGenerator {
 
     private boolean clearOfOtherLayers(int idx) {
         Element e = c.get(idx);
-        for (int i = 0; i < idx - 3; i++) if (layersClash(c, e, c.get(i))) return false;
-        for (Element g : ghostElems) if (layersClash(c, e, g)) return false;
+        for (int i = 0; i < idx - 3; i++) if (layersClash(c, e, c.get(i))) { lastClash = c.get(i); lastClashGhost = false; return false; }
+        for (Element g : ghostElems) if (layersClash(c, e, g)) { lastClash = g; lastClashGhost = true; return false; }
         return true;
     }
+    private Element lastClash; private boolean lastClashGhost;      // diagnostics: what the last refused element ran into
+    /** Diagnostics: what crab decks refused for a layer clash ran into {route body, route 9.5 m rule, branch body, branch 9.5 m rule} x {this slice, earlier slice}. */
+    public static final int[] CRABCLASH = new int[8];
 
     // ---- hazard geometry: lethal-region bounding box (centre arc, half extent, low, high)
     private static float hzS(Element h) { return h.type == Element.Type.CANNON ? h.s + h.dir * h.len * 0.5f : h.s; }
@@ -1205,8 +1208,12 @@ public final class CourseGenerator {
         for (Element e : es) c.add(e);
         for (Element h : hz) c.hazards.add(h);
         boolean ok = true;
-        for (int i = n0; i < c.size() && ok; i++) ok = clearOfOtherLayers(i);
+        int clashAt = -1;
+        for (int i = n0; i < c.size() && ok; i++) { ok = clearOfOtherLayers(i); if (!ok) clashAt = i; }
         if (!ok) failLayer++;
+        if (!ok) { boolean cr = false; for (Element h : hz) if (h.type == Element.Type.CRAB) cr = true;
+            if (cr) { Element e = c.get(clashAt), f = lastClash; boolean body = vLo(e) - 1.5f < vHi(f) && vHi(e) + 1.5f > vLo(f);
+                CRABCLASH[(f.anchor >= 0 ? 2 : 0) + (body ? 0 : 1) + (lastClashGhost ? 4 : 0)]++; } }
         for (Element h : hz) { if (!ok) break; if (h.type == Element.Type.CLUB) continue; ok = hazardOk(h, ownerOf(h)); if (!ok) failHaz++; }
         if (ok && !sawsClearOfCreatures(hz)) { ok = false; failHaz++; }
         Sim prevStart = null; Autopilot.Result prevRes = null;

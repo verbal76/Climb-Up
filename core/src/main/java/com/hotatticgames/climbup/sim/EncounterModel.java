@@ -102,6 +102,56 @@ public final class EncounterModel {
         return s;
     }
 
+    // ---- NORMAL threat budget (Build 80 diagnostics, 2026-10-25): what can really reach a take-off, not only what is placed on the link
+
+    /** Budget for the weighted pursuit that may reach one link at level {@code lv} (0 = Level 1, 1 = Level 10), and its share from a cramped take-off. */
+    static final float THREAT_BASE = 5.0f, THREAT_PER_LEVEL = 6.0f, THREAT_CRAMPED = 0.75f;
+
+    /**
+     * True if roaming creature {@code h} can reach route platform {@code p}: a crab follows the climber up to {@link Sim#CRAB_FOLLOW} platforms, a
+     * skull or green blob reaches the platforms either side of its own, and a bee seeks a climber within {@link Element#BEE_SEEK} of its post (4 m below
+     * to 3 m above it). Anything else does not roam.
+     */
+    static boolean reaches(Course c, Element h, int p) {
+        if (h.anchor < 0 || p < 0 || p >= c.routeSize()) return false;
+        Element e = c.get(p);
+        switch (h.type) {
+            case CRAB: return Math.abs(h.anchor - p) <= Sim.CRAB_FOLLOW;
+            case SKULL: case BLOB: return Math.abs(h.anchor - p) <= 1;
+            case BEE: { float d = Math.abs(c.dsWrap(e.s, h.s)) - e.halfW(), dy = e.y - h.y; return h.anchor == p || (d <= Element.BEE_SEEK && dy > -4f && dy < 3f); }
+            default: return false;
+        }
+    }
+
+    /** Weighted pursuit that can reach route platform {@code p}, with the same overlap growth as {@link #link}. */
+    public static float threatAt(Course c, Tuning t, int p) {
+        float raw = 0f; int n = 0;
+        for (Element h : c.hazards) if (roamReach(h) >= 0 && reaches(c, h, p)) { raw += weight(h.type); n++; }
+        return n == 0 ? 0f : raw * (1f + OVERLAP * (n - 1));
+    }
+
+    /** Weighted pursuit that can reach the take-off or the landing of the link out of route element i (each creature counted once). */
+    public static float threat(Course c, Tuning t, int i) {
+        int j = c.nextRoute(i);
+        float raw = 0f; int n = 0;
+        for (Element h : c.hazards) if (roamReach(h) >= 0 && (reaches(c, h, i) || reaches(c, h, j))) { raw += weight(h.type); n++; }
+        return n == 0 ? 0f : raw * (1f + OVERLAP * (n - 1));
+    }
+
+    /** The take-off asks for footing: a narrow or moving platform, or one carrying a spiked block or timed spikes. */
+    public static boolean cramped(Course c, int i) {
+        Element a = c.get(i);
+        if (a.isMoving() || (a.isPlatform() && a.w < 2.6f)) return true;
+        for (Element h : c.hazards) if (h.anchor == i && (h.type == Element.Type.SPIKE_BLOCK || h.type == Element.Type.SPIKE_TRAP || h.type == Element.Type.SPIKE_DROP)) return true;
+        return false;
+    }
+
+    /** The most weighted pursuit one link may carry at level {@code lv} (0..1) in NORMAL. */
+    public static float threatBudget(float lv, boolean cramped) {
+        float b = THREAT_BASE + THREAT_PER_LEVEL * Math.max(0f, Math.min(1f, lv));
+        return cramped ? b * THREAT_CRAMPED : b;
+    }
+
     static int roamReach(Element h) {
         switch (h.type) { case CRAB: return Sim.CRAB_FOLLOW; case SKULL: case BLOB: return 1; case BEE: return 0; default: return -1; }
     }

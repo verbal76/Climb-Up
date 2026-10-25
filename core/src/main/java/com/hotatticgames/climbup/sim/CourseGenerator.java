@@ -593,10 +593,15 @@ public final class CourseGenerator {
             if (endless && gate.skin > 0) continue;           // exact castles: the key already lies in the section before (placeKey)
             boolean ok = false;
             int gIdx = gate.anchor;
-            for (int anchor = pc[0]; anchor < gIdx && !ok; anchor++) {          // the rest platform first, then any plain platform between it and the gate
-                Element pl = c.get(anchor);
-                if (pl.type != Element.Type.STATIC || (anchor != pc[0] && pl.w < 3f)) continue;
-                for (int attempt = 0; attempt < 14 && !ok; attempt++) ok = tryKeyRoom(anchor, gate, attempt);
+            // NORMAL (Build 80 diagnostics, seed 6 at 834 m: a skull from the next platform hit the climber setting off for the key): platforms no roaming
+            // creature can reach are tried first; a platform within reach of one is used only when no quiet one takes a room, so no castle loses its key.
+            for (int pass = T.hard == 0 ? 0 : 1; pass < 2 && !ok; pass++) {
+                for (int anchor = pc[0]; anchor < gIdx && !ok; anchor++) {          // the rest platform first, then any plain platform between it and the gate
+                    Element pl = c.get(anchor);
+                    if (pl.type != Element.Type.STATIC || (anchor != pc[0] && pl.w < 3f)) continue;
+                    if (pass == 0 && EncounterModel.threatAt(c, T, anchor) > 0f) continue;
+                    for (int attempt = 0; attempt < 14 && !ok; attempt++) ok = tryKeyRoom(anchor, gate, attempt);
+                }
             }
             if (!ok) { removeGates.add(gate); roomFailed++; } else roomOk++;
         }
@@ -1193,6 +1198,7 @@ public final class CourseGenerator {
     private boolean commit(List<Element> es, float minMargin) { return commit(es, new ArrayList<Element>(), minMargin); }
 
     public int failConflict;      // diagnostics: modules refused for incompatible demands (EncounterModel)
+    public int failThreat;        // diagnostics: NORMAL modules refused for putting more pursuit within reach of a link than its level allows
     /** The margin each committed link was proven with (route index of its start). */
     private final ArrayList<Float> linkNeeds = new ArrayList<>();
     private float linkNeed(int i) { return i < linkNeeds.size() && linkNeeds.get(i) != null ? linkNeeds.get(i) : Math.min(0.05f, T.minLinkMargin); }
@@ -1211,6 +1217,13 @@ public final class CourseGenerator {
         // An earlier link is held against the module only if it held before it: some earlier links are proven from a start a plain re-check does not
         // reproduce (the landing on a running belt, a skull parked at the far end), and re-checking those unconditionally rejected every module after
         // them, so generation ran out of modules (framed seed 21 slice 49).
+        // NORMAL threat budget (Build 80 diagnostics): the pursuit each link can meet before this module, so the module is judged only on what it adds.
+        // A bee seeks a climber within 7 m, so the links it can reach start up to two platforms before its own.
+        int thFrom = from;
+        if (T.hard == 0) for (Element h : hz) if (h.type == Element.Type.BEE && h.anchor >= 0) thFrom = Math.min(thFrom, h.anchor - 3);
+        thFrom = Math.max(0, thFrom);
+        float[] threatBefore = new float[Math.max(0, n0 - 1 - thFrom)];
+        if (T.hard == 0) for (int i = thFrom; i < n0 - 1; i++) threatBefore[i - thFrom] = EncounterModel.threat(c, T, i);
         boolean[] heldBefore = new boolean[Math.max(0, n0 - 1 - from)];
         for (int i = from; i < n0 - 1; i++) {
             boolean cannonOnLanding = false; for (Element h : hz) if (h.type == Element.Type.CANNON && h.anchor == i + 1) cannonOnLanding = true;
@@ -1255,6 +1268,17 @@ public final class CourseGenerator {
         // jump also has to wait for a cycle from a cramped take-off. Such a module is not dropped from the game; this arrangement of it is refused and the
         // generator tries another (different spacing, placement or module), so the mechanics stay and meet elsewhere.
         for (int i = Math.max(0, from); ok && i < c.size() - 1; i++) if (EncounterModel.link(c, T, i).conflict) { ok = false; failConflict++; }
+        // NORMAL (Build 80 diagnostics, seed 34 at 512 m: four crabs and two bees could all reach a spiked take-off two platforms on): the creatures that
+        // can really reach a link's take-off or landing - crabs that follow, skulls and blobs from the next platform, bees within their seeking range - stay
+        // within a budget that grows with the level, smaller from a cramped take-off. A module is refused only where it pushes a link over the budget;
+        // the generator then tries another arrangement, so the creatures still come, just not all at once this early.
+        if (T.hard == 0) for (int i = thFrom; ok && i < c.size() - 1; i++) {
+            if (i >= c.routeSize() - 1) break;
+            float th = EncounterModel.threat(c, T, i);
+            if (th <= EncounterModel.threatBudget(Math.min(1f, level(c.get(i).y)), EncounterModel.cramped(c, i))) continue;
+            if (i < n0 - 1 && th <= threatBefore[i - thFrom] + 1e-4f) continue;          // over before this module, and no worse with it
+            ok = false; failThreat++;
+        }
         if (!ok) { while (c.size() > n0) c.elements.remove(c.size() - 1); while (c.hazards.size() > h0) c.hazards.remove(c.hazards.size() - 1); }
         else { for (int i = Math.max(0, n0 - 1); i < c.size() - 1; i++) setLinkNeed(i, minMargin); if (!hz.isEmpty()) hazardsPlaced += hz.size(); }
         hazardTried += hz.isEmpty() ? 0 : 1;

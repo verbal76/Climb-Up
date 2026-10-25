@@ -129,3 +129,49 @@ Smoke round 2 (ForkProbe, seed 160, 5 slices each):
 | PUNISHER | 10 (7 long, 3 trampoline) | 7 of 7 laid (after the narrow-foothold change) | 0 |
 
 The probe's reconnection check runs `Autopilot.linkExists` over every fork link: take-off to branch, along the branch, and branch to rejoin.
+
+## Shared difficulty architecture and validation (2026-10-25)
+
+### Architecture
+- **Shared:** one generator (`CourseGenerator`), one solver (`Autopilot`, no difficulty branches) and one physics (`Sim`). Both modes are proven with the same margins and timing windows.
+- **What differs per difficulty:**
+  - `Tuning.react()`: creatures and cannons act 1.25x faster in PUNISHER.
+  - `Tuning.hard`: extra creatures per group.
+  - Everything else now lives in `sim/DifficultyProfile` (curve shift, late cap, split spacing and risers, branch hop, narrow foothold, wide-hop spacing, opportunistic fork rates, threat budget, quiet key rooms).
+- The profile reproduces rules-7 courses byte for byte. GenHashProbe SHA-256 over the first slices, before and after:
+  - NORMAL seeds 1 and 2;
+  - PUNISHER seed 2;
+  - NEVER GONNA HAPPEN seed 1.
+- **Open:** PUNISHER's threat budget and quiet key rooms are off pending the owner's decision. Turning them on changes PUNISHER courses only.
+- **Retries:** bounded (8 attempts per module, 5 fallback modules, 24 attempts per slice, the last 12 with relaxed layer clearance). Exhaustion throws; there is no graceful fallback yet.
+
+### Measurements (VarietyProbe: NORMAL seeds 1-3 and PUNISHER seeds 1-2 to 1,100 m; seed 3 to 2,600 m; 4 jobs in parallel, so timings are relative)
+
+| | Build 79 (bd0b550) | Build 80 (7ed261d) | threat repair (0ed7c64) | PUNISHER (repair) |
+|---|---|---|---|---|
+| links over the NORMAL threat budget, per seed | 8 / 23 / 14 | 10 / 6 / 2 | 0 / 0 / 0 | 12 / 26 |
+| worst link threat | 17.5 | 13.5 | 4.5 | 32.5 |
+| solver completed | (not run) | 54/54 slices | 53/53 slices | 35/36 slices |
+| generation, s per slice | 12-18 | 15-23 | 15-27 | 33-67 |
+| crabs, Level 1, per seed | 0 / 11 / 8 | 0 / 0 / 0 | 0 / 0 / 0 | 3 / 14 |
+| seed 3 to 2,600 m: crabs / ramps / conveyor ramps / conveyor bridges | 20 / 23 / 1 / 1 | - | 8 / 18 / 0 / 0 | - |
+| key-room kinds (0 chain, 2 on the route, 3 pad and perch) | {0,2}, {0,3}, {0,2} | {0}, {0}, {2} | {0}, {0}, {0,2} | {2}, {0,2} |
+
+### Experiments on Build 80, level 1 (throwaway copies, never committed)
+- Conflict rule off: crabs 0 / 2 / 2.
+- Forks off: crabs 0 / 0 / 6. The pad-and-perch key room returns (seed 1). Generation drops to 6-13 s per slice.
+
+### Classification
+- **Threat repair:** works. NORMAL density is unchanged versus Build 80 and no NORMAL link is over budget.
+- **Fewer crabs:** a regression from the Build 80 redesign, not the repair. The conflict rule and forks each account for part of it.
+- **Conveyor ramps:** rare even in Build 79 (1 in 2,600 m). The test's sample is too small, and there are now none.
+- **Key-room variety:** reduced by forks taking the room key rooms need.
+- **Layer clash:** a rule mismatch. The fork pad is 8.9 m above a lower turn, out of jump reach.
+- **PUNISHER seed 2, castle/level 1, 170.3 m:** a solver limitation. After a cannon knock-back to platform 27 it keeps planning toward link 31. The jump itself is a 1.64 m gap with a 0.6 m rise.
+- **Forks roughly double generation time.** PUNISHER generation (33-67 s per slice) is a phone performance risk.
+
+### Awaiting owner decisions
+1. PUNISHER threat-budget values: proposed base 7, growth 8 and cramped factor 0.85. These are heuristic, about 40% above NORMAL.
+2. Restoring crab decks.
+3. Fork generation cost.
+4. Solver recovery after a knock-back to an earlier platform.

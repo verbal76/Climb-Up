@@ -104,7 +104,7 @@ public final class EncounterModel {
 
     // ---- NORMAL threat budget (Build 80 diagnostics, 2026-10-25): what can really reach a take-off, not only what is placed on the link
 
-    /** Budget for the weighted pursuit that may reach one link at level {@code lv} (0 = Level 1, 1 = Level 10), and its share from a cramped take-off. */
+    /** NORMAL's budget for the weighted pursuit that may reach one link (see {@link DifficultyProfile#threatBudget}): base, growth over the 10 levels, share from a cramped take-off. */
     static final float THREAT_BASE = 5.0f, THREAT_PER_LEVEL = 6.0f, THREAT_CRAMPED = 0.75f;
 
     /**
@@ -144,12 +144,6 @@ public final class EncounterModel {
         if (a.isMoving() || (a.isPlatform() && a.w < 2.6f)) return true;
         for (Element h : c.hazards) if (h.anchor == i && (h.type == Element.Type.SPIKE_BLOCK || h.type == Element.Type.SPIKE_TRAP || h.type == Element.Type.SPIKE_DROP)) return true;
         return false;
-    }
-
-    /** The most weighted pursuit one link may carry at level {@code lv} (0..1) in NORMAL. */
-    public static float threatBudget(float lv, boolean cramped) {
-        float b = THREAT_BASE + THREAT_PER_LEVEL * Math.max(0f, Math.min(1f, lv));
-        return cramped ? b * THREAT_CRAMPED : b;
     }
 
     static int roamReach(Element h) {

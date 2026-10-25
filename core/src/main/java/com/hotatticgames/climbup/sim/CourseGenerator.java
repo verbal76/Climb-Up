@@ -30,6 +30,7 @@ public final class CourseGenerator {
         FORK }
 
     private final Tuning T;
+    private final DifficultyProfile P;          // what this difficulty changes (owner 2026-10-25: one shared generator, difficulty as configuration)
     private final Random rnd;
     private final Course c;
     public int rejected;       // modules re-planned easier (diagnostics)
@@ -59,7 +60,7 @@ public final class CourseGenerator {
     public static int rulesOfBuild(int build) { return build >= 80 ? 7 : build >= 79 ? 6 : build >= 77 ? 5 : build >= 76 ? 4 : build >= 72 ? 3 : build >= 71 ? 2 : build >= 63 ? 1 : 0; }
 
     private CourseGenerator(long seed, Tuning t, long salt) {
-        T = t; this.salt = salt; rnd = new Random(seed * 0x9E3779B97F4A7C15L + 12345 + salt * 0x632BE59BD9B4E019L); c = new Course(seed, t.circumference());
+        T = t; P = DifficultyProfile.of(t); this.salt = salt; rnd = new Random(seed * 0x9E3779B97F4A7C15L + 12345 + salt * 0x632BE59BD9B4E019L); c = new Course(seed, t.circumference());
         rampH = t.courseHeight;
     }
 
@@ -136,8 +137,7 @@ public final class CourseGenerator {
      * Owner directive 2026-10-24 (two 10-level curves): PUNISHER reads the whole difficulty curve this far further up the tower, so its Level 1 plays like
      * NORMAL's Levels 3-4 and its later levels go past anything NORMAL reaches. Only the curve moves: the worlds, castles and gems stay at their heights.
      */
-    static final float PUNISHER_SHIFT = 1500f;
-    private float modeShift() { return endless && T.hard > 0 ? PUNISHER_SHIFT : 0f; }
+    private float modeShift() { return endless ? P.curveShift : 0f; }
     /**
      * Where height y sits in the 10-level timed climb, as a difficulty from 0 (NORMAL Level 1) to 1 (NORMAL's top castle), and beyond 1 for PUNISHER's
      * last levels. Every mechanic's chance of appearing grows with it smoothly; none is locked behind a level (directive section 6).
@@ -155,7 +155,7 @@ public final class CourseGenerator {
     static final float LATE_RAMP = 3800f;
     float late(float y) {
         float done = endless ? T.hazardStartY + T.hazardRampY : T.courseHeight;
-        return Math.min(endless && T.hard > 0 ? 1.4f : 1f, Math.max(0f, (float) ((y + base + modeShift() - done) / LATE_RAMP)));          // PUNISHER keeps climbing past NORMAL's top (its head start would otherwise flatten it from Level 8)
+        return Math.min(endless ? P.lateCap : 1f, Math.max(0f, (float) ((y + base + modeShift() - done) / LATE_RAMP)));          // PUNISHER keeps climbing past NORMAL's top (its head start would otherwise flatten it from Level 8)
     }
 
     // ------------------------------------------------------------------ physics helpers
@@ -304,10 +304,10 @@ public final class CourseGenerator {
             if (last.y - lastRestY >= nextGap && targetY - last.y > 0.4f * T.gemSpacing && !(castlePending && last.y > castleTarget - 14f)) {      // (not right before the slice's own closing rest)
                 addRest(th); sinceRest = 0; lastRestY = c.get(c.size() - 1).y; nextGap = T.gemSpacing * r(0.85f, 1.15f); maybeCastle(th); continue;
             }
-            float forkEvery = T.hard > 0 ? 34f : 70f;          // PUNISHER splits about twice as often, and its splits are longer
+            float forkEvery = P.forkEvery;          // PUNISHER splits about twice as often, and its splits are longer
             if (Float.isNaN(lastForkY)) lastForkY = last.y - forkEvery * 0.5f;
             if (last.y - lastForkY >= forkEvery && last.isPlatform() && !last.isMoving() && !last.wet() && !(castlePending && last.y > castleTarget - 24f)) {
-                int e0 = c.size(), n = T.hard > 0 ? 5 : 3;
+                int e0 = c.size(), n = P.forkRisers;
                 forkRisers = n;
                 if (tryModuleBelow(Kind.FORK, d, th)) { forkEntries.add(new int[]{e0, n}); lastForkY = last.y; prev2 = prev; prev = Kind.FORK; sinceRest++; continue; }
                 lastForkY = last.y - forkEvery + 8f;          // no room here: try again a little higher
@@ -595,7 +595,7 @@ public final class CourseGenerator {
             int gIdx = gate.anchor;
             // NORMAL (Build 80 diagnostics, seed 6 at 834 m: a skull from the next platform hit the climber setting off for the key): platforms no roaming
             // creature can reach are tried first; a platform within reach of one is used only when no quiet one takes a room, so no castle loses its key.
-            for (int pass = T.hard == 0 ? 0 : 1; pass < 2 && !ok; pass++) {
+            for (int pass = P.quietKeyRooms ? 0 : 1; pass < 2 && !ok; pass++) {
                 for (int anchor = pc[0]; anchor < gIdx && !ok; anchor++) {          // the rest platform first, then any plain platform between it and the gate
                     Element pl = c.get(anchor);
                     if (pl.type != Element.Type.STATIC || (anchor != pc[0] && pl.w < 3f)) continue;
@@ -697,23 +697,22 @@ public final class CourseGenerator {
         // Owner directive 2026-10-24 (sections 15-16): no dead ends. Now and then the route forks: the route itself is the quick way, and a longer branch drops
         // below it, runs on under it and bounces back up onto a later route platform. Both go forward and meet again. NORMAL forks now and then, one branch
         // at a time; PUNISHER forks more often, with longer branches, and sometimes a second branch off the first.
-        boolean punisher = T.hard > 0;
         for (int[] fe : forkEntries) {          // the splits the route reserved room for: their branches first
             if (fe[0] < lo || fe[0] + fe[1] + 1 > Math.min(rs - 2, hi + 6)) continue;
             if (tryReservedFork(fe[0], fe[1], dr) < 0) tryPadFork(fe[0], dr);
         }
-        float chance = punisher ? 0.9f : 0.5f;          // of the take-offs a branch can drop from (open air past the edge: few of them)
-        int spacing = punisher ? 4 : 7, last = -100;
+        float chance = P.forkChance;          // of the take-offs a branch can drop from (open air past the edge: few of them)
+        int spacing = P.forkSpacing, last = -100;
         for (int a = lo; a < Math.min(rs - 5, hi + 1); a++) {
             if (a - last < spacing) continue;
             Element p = c.get(a);
             if (!p.isPlatform() || p.isMoving() || p.crumbles() || p.w < 2f || p.anchor >= 0 || !forkable(a)) continue;
             if (dr.nextFloat() > chance) continue;
-            int built = tryFork(a, a, dr, punisher ? 9 : 7);
+            int built = tryFork(a, a, dr, P.forkReach);
             if (built < 0) built = tryPadFork(a, dr);          // no room for a branch under the route here: the short fork, a bounce pad down in the gap
             if (built < 0) continue;
             last = a;
-            if (punisher && c.forks.get(c.forks.size() - 1)[2] > 2 && dr.nextFloat() < 0.35f) {          // a second branch off a long one, rejoining the route further on
+            if (P.nestedForks && c.forks.get(c.forks.size() - 1)[2] > 2 && dr.nextFloat() < 0.35f) {          // a second branch off a long one, rejoining the route further on
                 int[] f = c.forks.get(c.forks.size() - 1);
                 int from = f[1] + Math.max(0, f[2] / 2 - 1);
                 tryFork(a, from, dr, 10);
@@ -740,10 +739,9 @@ public final class CourseGenerator {
         float x0 = E.s + E.halfW(), y0 = E.y;
         float padC = (U.s + U.halfW() + J.s - J.halfW()) / 2f;
         float b0 = x0 + 1.7f, bl = padC - 3.6f;
-        boolean pun = T.hard > 0;
-        int m = Math.max(1, Math.round((bl - b0) / (pun ? 3.4f : 4.4f)));          // PUNISHER: more, shorter hops
+        int m = Math.max(1, Math.round((bl - b0) / P.branchHop));          // PUNISHER: more, shorter hops
         float[] wd = new float[m + 1]; float sumW = 0f;
-        for (int k = 0; k <= m; k++) { wd[k] = k == 0 ? 3f : pun && m >= 2 && k == m / 2 ? 1.4f : 2.4f; if (k > 0) sumW += wd[k]; }          // (PUNISHER's middle foothold is a narrow one)
+        for (int k = 0; k <= m; k++) { wd[k] = k == 0 ? 3f : P.narrowFoothold && m >= 2 && k == m / 2 ? 1.4f : 2.4f; if (k > 0) sumW += wd[k]; }          // (PUNISHER's middle foothold is a narrow one)
         float g = (bl + wd[m] / 2f - (b0 + 1.5f) - sumW) / m;          // even gaps edge to edge, the last landing centred at bl
         if (g < 1.1f) { FORKWHY[1]++; return -1; }
         List<Element> es = new ArrayList<>();
@@ -1220,10 +1218,10 @@ public final class CourseGenerator {
         // NORMAL threat budget (Build 80 diagnostics): the pursuit each link can meet before this module, so the module is judged only on what it adds.
         // A bee seeks a climber within 7 m, so the links it can reach start up to two platforms before its own.
         int thFrom = from;
-        if (T.hard == 0) for (Element h : hz) if (h.type == Element.Type.BEE && h.anchor >= 0) thFrom = Math.min(thFrom, h.anchor - 3);
+        if (P.threatBudget) for (Element h : hz) if (h.type == Element.Type.BEE && h.anchor >= 0) thFrom = Math.min(thFrom, h.anchor - 3);
         thFrom = Math.max(0, thFrom);
         float[] threatBefore = new float[Math.max(0, n0 - 1 - thFrom)];
-        if (T.hard == 0) for (int i = thFrom; i < n0 - 1; i++) threatBefore[i - thFrom] = EncounterModel.threat(c, T, i);
+        if (P.threatBudget) for (int i = thFrom; i < n0 - 1; i++) threatBefore[i - thFrom] = EncounterModel.threat(c, T, i);
         boolean[] heldBefore = new boolean[Math.max(0, n0 - 1 - from)];
         for (int i = from; i < n0 - 1; i++) {
             boolean cannonOnLanding = false; for (Element h : hz) if (h.type == Element.Type.CANNON && h.anchor == i + 1) cannonOnLanding = true;
@@ -1272,10 +1270,10 @@ public final class CourseGenerator {
         // can really reach a link's take-off or landing - crabs that follow, skulls and blobs from the next platform, bees within their seeking range - stay
         // within a budget that grows with the level, smaller from a cramped take-off. A module is refused only where it pushes a link over the budget;
         // the generator then tries another arrangement, so the creatures still come, just not all at once this early.
-        if (T.hard == 0) for (int i = thFrom; ok && i < c.size() - 1; i++) {
+        if (P.threatBudget) for (int i = thFrom; ok && i < c.size() - 1; i++) {
             if (i >= c.routeSize() - 1) break;
             float th = EncounterModel.threat(c, T, i);
-            if (th <= EncounterModel.threatBudget(Math.min(1f, level(c.get(i).y)), EncounterModel.cramped(c, i))) continue;
+            if (th <= P.threatBudget(Math.min(1f, level(c.get(i).y)), EncounterModel.cramped(c, i))) continue;
             if (i < n0 - 1 && th <= threatBefore[i - thFrom] + 1e-4f) continue;          // over before this module, and no worse with it
             ok = false; failThreat++;
         }
@@ -1347,7 +1345,7 @@ public final class CourseGenerator {
             if (lagging && !vert) w[k.ordinal()] *= 0.12f;
             if (rushing && vert) w[k.ordinal()] *= 0.2f;
         }
-        // (PUNISHER no longer multiplies these weights: it reads the curve PUNISHER_SHIFT metres higher; owner directive 2026-10-24)
+        // (PUNISHER no longer multiplies these weights: it reads the curve DifficultyProfile.curveShift metres higher; owner directive 2026-10-24)
         if (prev != null) { w[prev.ordinal()] *= 0.35f; if (prev == prev2) w[prev.ordinal()] = 0f; }
         float sum = 0; for (float f : w) sum += f;
         float x = rnd.nextFloat() * sum;
@@ -1648,7 +1646,7 @@ public final class CourseGenerator {
                 lastDip = false;
                 float dy = tier(last.y) == 0 ? r(0f, 0.8f) : r(0f, 1.4f);
                 float frac = lerp(0.45f, 0.92f, d) * r(0.9f, 1.1f);
-                if (y0 - wideHopY > (T.hard > 0 ? 18f : 36f)) { frac = Math.max(frac, r(0.66f, 0.74f)); wideHopY = y0; }          // now and then a wide hop (about 2.5 m): the open air a fork drops through (owner directive 2026-10-24, sections 15-16)
+                if (y0 - wideHopY > P.wideHopEvery) { frac = Math.max(frac, r(0.66f, 0.74f)); wideHopY = y0; }          // now and then a wide hop (about 2.5 m): the open air a fork drops through (owner directive 2026-10-24, sections 15-16)
                 float w = 2 + rnd.nextInt(3);
                 if (tier(last.y) == 3 && rnd.nextBoolean()) w = 1 + rnd.nextInt(2);
                 l.add(plat(S, eR + reach(dy) * frac + w / 2, y0 + dy, w, z));

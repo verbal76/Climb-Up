@@ -30,7 +30,13 @@
 - Crab: Sim follows `Sim.CRAB_FOLLOW = 3` decks; `CourseGenerator.roamReach` 3; `EncounterModel.reaches` 3. Matches the owner (3 platforms).
 - Skull and blob: Sim reaches the platforms before and after (Build 79, rules 6); generator and EncounterModel use 1. Skull matches the owner. Blob history: Build 70 "wobble, high leap off screen, shadow, land on player (squash + bounce off)"; Build 79 "blob + skull reach neighbour platforms, faster attacks"; "blob squash should knock you away"; Build 79 "no blob wobble". Still to finish: confirm the full blob requirement from tests and git log.
 - **Bee: three different models (discrepancy).** Sim (`beeAt`, Sim.java ~595-613) is post- and distance-based: seeks when you are within `BEE_SEEK` 7 m of its post and dy in (-4, 3), drifting at `BEE_DRIFT` 2.2 m/s (x `react()`) up to `BEE_REACH` 2.4 m; it does not pursue platform-to-platform. `CourseGenerator.roamReach` returns -1 for bees (excluded from `creatureReaches`). `EncounterModel.roamReach` returns 0, while `EncounterModel.reaches` uses the 7 m distance. The owner wants bees to pursue across platforms like skulls: this is a behaviour change and needs owner confirmation first.
-- Not yet checked: what the solver (`Autopilot.plan`) models for each creature's reach.
+- Solver (audit finished after compaction): `Autopilot` plays the real `Sim`, so it has no separate reach model; creature behaviour in the solver equals gameplay by construction. `Reflex` hops a dashing skull, hops a crab that followed you off its deck, and steps out of a blob shadow; there is no bee reflex (a bee shove is handled by `recover`, which steers back toward the planned platform `es1[a]`: step 4 bookkeeping).
+- Generator `roamReach` and `EncounterModel.reaches` count skull/blob +-1 and crab +-3 platforms unconditionally; Sim only moves onto `roamDeck` platforms (fixed, flat, not ramp/seesaw, present; skull/blob not crumbling) and crabs only hop gaps <= `CRAB_HOP_GAP` 3.2 m / `CRAB_HOP_DY` 1.8 m. So the threat budget over-counts reach the Sim can never use: a likely cause of rejected crab combinations (step 2). Blob requirement recovered (DECISIONS Build 71 + Build 79): no wobble, leaps after 0.3 s notice, lands on whichever of its own and the two neighbour decks you stand on, rest 1.0 s, squash knocks 9/7 m/s, home after 1.5 s, neighbour decks fixed and flat "within 3 m height"; the 3 m height check was not found in `roamDeck`/`stepBlob` (to confirm).
+- Bee: `CourseGenerator.roamReach` -1 vs `EncounterModel.roamReach` 0 is an inconsistency without gameplay effect (bees are kept off saws by a separate rule; proofs run the real Sim).
+
+### Owner clarification: Not Gonna Happen (2026-10-25)
+- NGH is not cancelled. Original design stays: starts at about Normal Level 8, progresses organically through all ten castles, substantially harder than Punisher, physically valid and human-achievable; challenge from precision, timing, route complexity and meaningful combinations, never impossible jumps or unavoidable damage.
+- Do not redesign it or reduce its difficulty to pass. After the shared corrections, run targeted NGH validation, especially beyond Castle 4, separating solver completion from human traversability, then recommend whether it is ready for owner playtesting. It stays unavailable to players until the owner approves activation.
 
 ### Planned step 1 (not implemented)
 - `placeKey()`: seeded choice among main-route candidates near `keyY` only, preferring `EncounterModel.threatAt == 0`, falling back to any valid route candidate; drop chain and pad-perch branches (`keyBranch`). Finite towers: same rule in `addKeyRooms` (between `pc[0]` and the gate) instead of `tryKeyRoom`. Remove the dead room and branch code and the `quietKeyRooms` field.
@@ -58,7 +64,7 @@
 - No APK/Windows/Linux packages, no Steam/OTA/release changes, no parallel agents or full test campaigns. Do not cancel running diagnostics to answer routine questions. Cancel only CI runs started by my own pushes.
 
 ### Next action after recovery
-Finish the pursuit audit (solver reach model, blob history), report the discrepancies above to the owner, then implement step 1 with targeted validation.
+Pursuit audit finished and reported (bee behaviour change and reach-model alignment await the owner). Next: step 1 (route-only `placeKey`) with targeted validation once the owner confirms.
 
 ## Current state (2026-10-22, Build 72 playtest hold)
 

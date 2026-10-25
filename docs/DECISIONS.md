@@ -750,3 +750,16 @@ No approved rule was changed to suit the solver, and no test or tolerance was re
   score's pursuit term uses the same predicate. Bees keep their 7 m seek range. The budget values are unchanged.
 - **Blob height (decision C):** already in the simulation: `Sim.stepBlob` (and `stepSkull`) refuse a neighbour deck more than `Element.ROAM_DY`
   (3.0 m) above or below the deck they are on. No simulation change.
+- **Bee pursuit (decision B, approved with boundaries):** a bee's post never moves and it notices you only within `BEE_SEEK` 7 m of it, as
+  before. While it notices you, its drift (still `BEE_DRIFT` 2.2 m/s, times the difficulty's reaction factor) may now carry it out to the far
+  edges of the platforms either side of it (`EncounterModel.beeEnvelope`): for a bee over a gap, the two platforms the gap joins; for a bee over a
+  platform (spike-drop rows), that platform and the ones before and after it. At least the old 2.4 m along and 1.2 m up or down; never past 7 m;
+  fixed route platforms only. The envelope is computed once from the course, so it does not chain as you move on. Not noticed, it drifts back
+  toward its post at the same speed. The visit length, the leaving and the dive (2.4 m from where it actually is) are unchanged: if a visit
+  ends before it gets to you, it leaves. Its drift resets only while it is away (not drawn), so it never visibly jumps.
+- **One reach definition:** `CourseGenerator.roamReach` now delegates to `EncounterModel.roamReach` (bees: one platform either side, for the
+  links the generator re-proves and for keeping saws clear). `EncounterModel.beeReaches` counts a platform only if it is noticed (7 m, 4 m below
+  to 3 m above the post), overlaps the envelope as far as the bee can drift in one visit (`BEE_VISIT` x period x speed), plus its dive and body.
+- **Build 81 = rules 8:** builds take their number from the workflows' `build_number` input (`android/build.gradle`), Build 80 shipped as
+  versionCode 80, and `rulesOfBuild` is only a fallback for saves from before Build 64 that carry no rules stamp (newer saves store
+  `climbRules`), so the mapping cannot mislabel a real save.

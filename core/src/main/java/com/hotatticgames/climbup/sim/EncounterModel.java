@@ -68,7 +68,7 @@ public final class EncounterModel {
         for (Element h : c.hazards) {
             if (h.anchor < 0) continue;
             if (roamReach(h) >= 0) {
-                if (reaches(c, h, i) || reaches(c, h, j)) { pursueRaw += weight(h.type); n++; }
+                if (reaches(c, t, h, i) || reaches(c, t, h, j)) { pursueRaw += weight(h.type); n++; }
                 continue;
             }
             if (h.anchor != i && h.anchor != j) continue;
@@ -107,17 +107,17 @@ public final class EncounterModel {
     static final float THREAT_BASE = 5.0f, THREAT_PER_LEVEL = 6.0f, THREAT_CRAMPED = 0.75f;
 
     /**
-     * True if roaming creature {@code h} can reach route platform {@code p}: a crab follows the climber up to {@link Sim#CRAB_FOLLOW} platforms, a
-     * skull or green blob reaches the platforms either side of its own, and a bee seeks a climber within {@link Element#BEE_SEEK} of its post (4 m below
-     * to 3 m above it). Anything else does not roam.
+     * True if roaming creature {@code h} can reach route platform {@code p} under the simulation's own movement rules: a crab follows the climber forward
+     * up to {@link Sim#CRAB_FOLLOW} platforms ({@link #crabReaches}), a skull or green blob reaches the platforms either side of its own
+     * ({@link #neighbourReaches}), and a bee drifts within its envelope ({@link #beeReaches}). Anything else does not roam.
      */
-    static boolean reaches(Course c, Element h, int p) {
+    static boolean reaches(Course c, Tuning t, Element h, int p) {
         if (h.anchor < 0 || p < 0 || p >= c.routeSize()) return false;
         Element e = c.get(p);
         switch (h.type) {
             case CRAB: return crabReaches(c, h.anchor, p);
             case SKULL: case BLOB: return neighbourReaches(c, h.anchor, p);
-            case BEE: { float d = Math.abs(c.dsWrap(e.s, h.s)) - e.halfW(), dy = e.y - h.y; return h.anchor == p || (d <= Element.BEE_SEEK && dy > -4f && dy < 3f); }
+            case BEE: return beeReaches(c, t, h, p);
             default: return false;
         }
     }
@@ -129,7 +129,7 @@ public final class EncounterModel {
     static boolean roamDeck(Course c, int j, boolean crab) {
         if (j < 0 || j >= c.routeSize()) return false;
         Element d = c.get(j);
-        if (!d.isPlatform() || d.isMoving() || d.type == Element.Type.RAMP || d.type == Element.Type.SEESAW) return false;
+        if (!d.isPlatform() || d.isMoving() || d.type == Element.Type.RAMP || d.type == Element.Type.SEESAW || d.anchor >= 0) return false;
         return crab || !d.crumbles();
     }
     /** Sim.canHop: a crab hops from deck j to deck k across at most CRAB_HOP_GAP and up or down at most CRAB_HOP_DY. */
@@ -154,10 +154,45 @@ public final class EncounterModel {
         return roamDeck(c, q, false) && Math.abs(c.get(q).y - c.get(home).y) <= Element.ROAM_DY && Math.abs(c.get(p).y - c.get(q).y) <= Element.ROAM_DY;
     }
 
+    /**
+     * Owner decision B (2026-10-25): bee {@code h}'s pursuit envelope, as offsets from its post that never moves: {lo, hi} along the tower and {yLo, yHi}
+     * for its height, written to {@code out}. At least the Build 71 drift (BEE_REACH along, 1.2 m up or down), widened to cover the platforms either side
+     * of it: a bee over a gap, the two platforms the gap joins; a bee over a platform, that platform and the one before and after it. Only fixed platforms
+     * count, never further than BEE_SEEK (it notices nobody beyond). Computed from the course alone, the same for the simulation and the evaluator.
+     */
+    public static void beeEnvelope(Course c, Element h, float[] out) {
+        float lo = -Element.BEE_REACH, hi = Element.BEE_REACH, yLo = -1.2f, yHi = 1.2f;
+        int a = h.anchor;
+        if (a >= 0 && a < c.routeSize()) {
+            Element A = c.get(a);
+            boolean overDeck = A.isPlatform() && Math.abs(c.dsWrap(h.s, A.s)) <= A.halfW();
+            for (int n = overDeck ? a - 1 : a; n <= a + 1; n++) {
+                if (n < 0 || n >= c.routeSize()) continue;
+                Element d = c.get(n);
+                if (!d.isPlatform() || d.isMoving() || d.anchor >= 0) continue;          // route platforms only (a streaming world keeps branch platforms among the route indices)
+                float off = c.dsWrap(d.s, h.s);
+                lo = Math.min(lo, off - d.halfW()); hi = Math.max(hi, off + d.halfW());
+                yLo = Math.min(yLo, d.y + 0.9f - h.y); yHi = Math.max(yHi, d.y + 0.9f - h.y);
+            }
+        }
+        out[0] = Math.max(lo, -Element.BEE_SEEK); out[1] = Math.min(hi, Element.BEE_SEEK); out[2] = yLo; out[3] = yHi;
+    }
+    /** Bee {@code h} can reach route platform p: p is noticed (within BEE_SEEK of the post, 4 m below to 3 m above it) and lies within the envelope, as far as the bee drifts in one visit, plus its dive and body. */
+    static boolean beeReaches(Course c, Tuning t, Element h, int p) {
+        if (h.anchor == p) return true;
+        Element e = c.get(p);
+        float off = c.dsWrap(e.s, h.s), dy = e.y - h.y;
+        if (Math.abs(off) - e.halfW() > Element.BEE_SEEK || dy <= -4f || dy >= 3f) return false;
+        float[] env = new float[4]; beeEnvelope(c, h, env);
+        float drift = Element.BEE_DRIFT * t.react() * Element.BEE_VISIT * h.period, extra = Element.BEE_SWOOP * Element.BEE_REACH + Element.BEE_R;
+        float d1 = Math.max(env[0], -drift) - extra, d2 = Math.min(env[1], drift) + extra;
+        return off + e.halfW() >= d1 && off - e.halfW() <= d2;
+    }
+
     /** Weighted pursuit that can reach route platform {@code p}, with the same overlap growth as {@link #link}. */
     public static float threatAt(Course c, Tuning t, int p) {
         float raw = 0f; int n = 0;
-        for (Element h : c.hazards) if (roamReach(h) >= 0 && reaches(c, h, p)) { raw += weight(h.type); n++; }
+        for (Element h : c.hazards) if (roamReach(h) >= 0 && reaches(c, t, h, p)) { raw += weight(h.type); n++; }
         return n == 0 ? 0f : raw * (1f + OVERLAP * (n - 1));
     }
 
@@ -165,7 +200,7 @@ public final class EncounterModel {
     public static float threat(Course c, Tuning t, int i) {
         int j = c.nextRoute(i);
         float raw = 0f; int n = 0;
-        for (Element h : c.hazards) if (roamReach(h) >= 0 && (reaches(c, h, i) || reaches(c, h, j))) { raw += weight(h.type); n++; }
+        for (Element h : c.hazards) if (roamReach(h) >= 0 && (reaches(c, t, h, i) || reaches(c, t, h, j))) { raw += weight(h.type); n++; }
         return n == 0 ? 0f : raw * (1f + OVERLAP * (n - 1));
     }
 
@@ -178,7 +213,7 @@ public final class EncounterModel {
     }
 
     static int roamReach(Element h) {
-        switch (h.type) { case CRAB: return Sim.CRAB_FOLLOW; case SKULL: case BLOB: return 1; case BEE: return 0; default: return -1; }
+        switch (h.type) { case CRAB: return Sim.CRAB_FOLLOW; case SKULL: case BLOB: case BEE: return 1; default: return -1; }
     }
     static float weight(Element.Type k) {
         switch (k) { case CRAB: return W_CRAB; case SKULL: return W_SKULL; case BLOB: return W_BLOB; case BEE: return W_BEE; default: return 0f; }

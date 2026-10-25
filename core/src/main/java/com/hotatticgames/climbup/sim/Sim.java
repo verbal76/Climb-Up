@@ -586,10 +586,11 @@ public final class Sim {
             vx = side * Element.BEE_PUSH_X; vy = Math.max(vy, Element.BEE_PUSH_Y); mode = Mode.AIR; onElem = -1; lockout = 0.25f; jumpedUp = false; shoveCd = 1.0f; events |= EV_SHOVE;
         }
     }
-    private final float[] beeTmp = new float[2];
+    private final float[] beeTmp = new float[2], beeEnv = new float[4];
     /**
      * Where bee {@code e} (hazard index idx) is: its flight path (Element.beeS / beeY) plus a drift toward you (Build 71). While it visits and you are within
-     * BEE_SEEK of its post, its buzzing centre drifts toward you at BEE_DRIFT m/s up to BEE_REACH away, and its dive swoops most of the way to your chest.
+     * BEE_SEEK of its post, its buzzing centre drifts toward you at BEE_DRIFT m/s within its envelope (EncounterModel.beeEnvelope: at least BEE_REACH,
+     * out to the platforms either side of it), back toward its post when you are not noticed, and its dive swoops most of the way to your chest.
      * {@code advance} moves the drift on one step (the simulation); false only reads it (the renderer). Driven by sim state alone: deterministic.
      */
     public float[] beeAt(int idx, Element e, boolean advance) {
@@ -598,8 +599,9 @@ public final class Sim {
         if (advance) {
             float dPost = course.dsWrap(s, e.s), dyPost = y - e.y;
             boolean seek = Math.abs(dPost) < Element.BEE_SEEK && dyPost > -4f && dyPost < 3f && (mode == Mode.GROUND || mode == Mode.AIR);
-            float tx = seek ? Math.max(-Element.BEE_REACH, Math.min(Element.BEE_REACH, dPost)) : 0f;
-            float ty = seek ? Math.max(-1.2f, Math.min(1.2f, (y + 0.9f) - e.y)) : 0f;
+            EncounterModel.beeEnvelope(course, e, beeEnv);          // owner decision B (2026-10-25): it may follow you onto the platforms either side, at the same drift speed; its post stays put
+            float tx = seek ? Math.max(beeEnv[0], Math.min(beeEnv[1], dPost)) : 0f;
+            float ty = seek ? Math.max(beeEnv[2], Math.min(beeEnv[3], (y + 0.9f) - e.y)) : 0f;
             float st = (Element.BEE_DRIFT * T.react()) * DT;
             mobS[idx] = approach(mobS[idx], tx, st); mobY[idx] = approach(mobY[idx], ty, st);
         }

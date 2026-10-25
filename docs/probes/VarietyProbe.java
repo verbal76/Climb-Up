@@ -37,11 +37,14 @@ public class VarietyProbe {
     public static void main(String[] a) throws Exception {
         int hard = Integer.parseInt(a[0]); float top = Float.parseFloat(a[1]); boolean solve = a[2].equals("1");
         Tuning t = hard == 0 ? TestUtil.tuning() : TestUtil.tuning().hardCopy(hard);
+        java.lang.reflect.Method realThreat = null, realCramped = null, profileOf = null;
+        try { realThreat = EncounterModel.class.getMethod("threat", Course.class, Tuning.class, int.class); realCramped = EncounterModel.class.getMethod("cramped", Course.class, int.class);
+              profileOf = Class.forName("com.hotatticgames.climbup.sim.DifficultyProfile").getMethod("of", Tuning.class); } catch (Exception e) { realThreat = null; }
         String[] counters = {"rejected", "failConflict", "failThreat", "failPlan", "failLayer", "failHaz", "failWindow", "roomFailed", "roomOk"};
         for (int si = 3; si < a.length; si++) {
             long seed = Long.parseLong(a[si]);
             TreeMap<String, Integer> mech = new TreeMap<>(); int[] bandThreat = new int[4]; // threat buckets: 0, (0,2.5], (2.5,5], >5
-            int overBudget = 0, links = 0, forks = 0, slices = 0, solved = 0; long genMs = 0; long[] cnt = new long[counters.length];
+            int overBudget = 0, overReal = 0, links = 0, forks = 0, slices = 0, solved = 0; long genMs = 0; long[] cnt = new long[counters.length];
             Set<Integer> roomModes = new TreeSet<>(); List<String> fails = new ArrayList<>(); float maxThreat = 0f; String maxAt = "";
             Course prev = null;
             while (prev == null || prev.get(prev.routeSize() - 1).y < top) {
@@ -58,6 +61,11 @@ public class VarietyProbe {
                     if (i < c.routeSize() - 1) {
                         float th = threat(c, i), lv = Math.min(1f, e.y / 5000f), b = (5f + 6f * lv) * (cramped(c, i) ? 0.75f : 1f);
                         links++; if (th > b) overBudget++;
+                        if (realThreat != null) {          // the generator's own evaluator and budget (rules 8 on), when this build has them
+                            float rt = (Float) realThreat.invoke(null, c, t, i); Object prof = profileOf.invoke(null, t);
+                            float rb = (Float) prof.getClass().getMethod("threatBudget", float.class, boolean.class).invoke(prof, lv, (Boolean) realCramped.invoke(null, c, i));
+                            if (rt > rb) overReal++;
+                        }
                         bandThreat[th == 0f ? 0 : th <= 2.5f ? 1 : th <= 5f ? 2 : 3]++;
                         if (th > maxThreat) { maxThreat = th; maxAt = String.format(Locale.ROOT, "%.1f m", e.y); }
                     }
@@ -77,7 +85,7 @@ public class VarietyProbe {
             }
             StringBuilder cs = new StringBuilder(); for (int q = 0; q < counters.length; q++) cs.append(counters[q]).append('=').append(cnt[q]).append(' ');
             System.out.printf(Locale.ROOT, "SEED %d hard %d to %.0f m: slices %d gen %.1f s (%.2f s/slice) | %s| forks %d | key-room modes %s%n", seed, hard, top, slices, genMs / 1000f, genMs / 1000f / slices, cs, forks, roomModes);
-            System.out.printf(Locale.ROOT, "  links %d threat 0:%d (0,2.5]:%d (2.5,5]:%d >5:%d, max %.2f at %s, over the NORMAL budget %d%n", links, bandThreat[0], bandThreat[1], bandThreat[2], bandThreat[3], maxThreat, maxAt, overBudget);
+            System.out.printf(Locale.ROOT, "  links %d threat 0:%d (0,2.5]:%d (2.5,5]:%d >5:%d, max %.2f at %s, over the old-model NORMAL budget %d, over the generator's own budget %s%n", links, bandThreat[0], bandThreat[1], bandThreat[2], bandThreat[3], maxThreat, maxAt, overBudget, realThreat == null ? "n/a" : String.valueOf(overReal));
             if (solve) System.out.printf(Locale.ROOT, "  solver completed %d of %d slices%n", solved, slices);
             for (String f : fails) System.out.println("  FAIL " + f);
             StringBuilder ms = new StringBuilder(); for (Map.Entry<String, Integer> m : mech.entrySet()) if (!m.getKey().contains("p:STATIC") ) ms.append(m.getKey()).append('=').append(m.getValue()).append(", ");

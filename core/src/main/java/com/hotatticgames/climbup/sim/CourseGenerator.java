@@ -1140,10 +1140,8 @@ public final class CourseGenerator {
 
     private float windowNeeded(float y) { return T.minTimingWindow - 0.06f * intensity(y); }
 
-    /** Build 79: how many decks either side of its own a creature can reach (skulls and blobs a neighbour, crabs follow up to CRAB_FOLLOW); -1 for anything else. */
-    private static int roamReach(Element h) {
-        return h.type == Element.Type.CRAB ? Sim.CRAB_FOLLOW : h.type == Element.Type.SKULL || h.type == Element.Type.BLOB ? 1 : -1;
-    }
+    /** How many decks either side of its own a creature can reach (skulls, blobs and, since rules 8, bees a neighbour; crabs follow up to CRAB_FOLLOW); -1 for anything else. One definition, EncounterModel.roamReach. */
+    private static int roamReach(Element h) { return EncounterModel.roamReach(h); }
     /** True if a creature already on the course can roam onto the link from deck a (onto a or a + 1). */
     private boolean creatureReaches(int a) {
         for (Element o : c.hazards) { int r = roamReach(o); if (r >= 0 && a >= o.anchor - r - 1 && a <= o.anchor + r) return true; }
@@ -1174,8 +1172,11 @@ public final class CourseGenerator {
     private void setLinkNeed(int i, float m) { while (linkNeeds.size() <= i) linkNeeds.add(null); linkNeeds.set(i, m); }
 
     /** Adds elements (and their hazards) if every link (prefix last -> e1 -> ... -> eN) is solvable with the required margin and timing window. */
+    /** Diagnostics: modules carrying crabs {tried, refused for layer, hazard placement, plan, window, conflict, threat, accepted}. */
+    public static final int[] CRABWHY = new int[8];
     private boolean commit(List<Element> es, List<Element> hz, float minMargin) {
         int n0 = c.size(), h0 = c.hazards.size();
+        final int[] w0 = {failLayer, failHaz, failPlan, failWindow, failConflict, failThreat};
         int from = n0 - 1;
         // Every link a new hazard can touch is proven with it there: a hazard on the platform the previous link lands on touches that link too (a cannon
         // fires across it; a saw on it sweeps the landing: seed 3 slice 16, a saw from the next module cut a saw link to 0.36), and a creature also the
@@ -1251,6 +1252,11 @@ public final class CourseGenerator {
         if (!ok) { while (c.size() > n0) c.elements.remove(c.size() - 1); while (c.hazards.size() > h0) c.hazards.remove(c.hazards.size() - 1); }
         else { for (int i = Math.max(0, n0 - 1); i < c.size() - 1; i++) setLinkNeed(i, minMargin); if (!hz.isEmpty()) hazardsPlaced += hz.size(); }
         hazardTried += hz.isEmpty() ? 0 : 1;
+        boolean crabs = false; for (Element h : hz) if (h.type == Element.Type.CRAB) crabs = true;
+        if (crabs) {          // diagnostics only: why modules carrying crabs are refused
+            CRABWHY[0]++;
+            CRABWHY[ok ? 7 : failLayer != w0[0] ? 1 : failHaz != w0[1] ? 2 : failPlan != w0[2] ? 3 : failWindow != w0[3] ? 4 : failConflict != w0[4] ? 5 : failThreat != w0[5] ? 6 : 0]++;
+        }
         return ok;
     }
 

@@ -56,19 +56,21 @@ public final class DifficultyScore {
     private static boolean route(Course c, int i) { return i >= 0 && i < c.routeSize() && c.get(i).anchor < 0; }
 
     /** Adds one generated slice. Elements a slice shares with the previous one (its context) are counted once. */
-    public void add(Course c) {
+    public void add(Course c) { add(c, 0f); }
+    /** Adds a slice generated in its own frame ({@link CourseGenerator#chunkFramed}): absolute height = yOff + local y. */
+    public void add(Course c, float yOff) {
         int rs = c.routeSize();
         for (int hi = 0; hi < c.hazards.size(); hi++) {
             Element h = c.hazards.get(hi); Element.Type k = h.type;
             if (!enemy(k) && k != Element.Type.CLUB && !unscoredHazard(k)) continue;
             if (h.anchor < 0 || h.anchor >= c.size()) continue;
             float s = h.s % c.circumference; if (s < 0) s += c.circumference;
-            if (!seen.add(k + ":" + Math.round(s * 100f) + ":" + Math.round(h.y * 100f))) continue;
-            Element home = c.get(h.anchor); Window w = win(home.y);
+            if (!seen.add(k + ":" + Math.round(s * 100f) + ":" + Math.round((h.y + yOff) * 100f))) continue;
+            Element home = c.get(h.anchor); Window w = win(home.y + yOff);
             if (enemy(k)) {
                 boolean any = false; Set<Integer> exposed = new TreeSet<>();
                 for (int p = Math.max(0, h.anchor - 4); p <= Math.min(rs - 1, h.anchor + 4); p++)
-                    if (route(c, p) && EncounterModel.reaches(c, t, h, p)) { any = true; exposed.add((int) Math.floor(c.get(p).y / WINDOW)); }
+                    if (route(c, p) && EncounterModel.reaches(c, t, h, p)) { any = true; exposed.add((int) Math.floor((c.get(p).y + yOff) / WINDOW)); }
                 if (!any) { w.unreachable++; continue; }
                 w.counts.merge(k, 1, Integer::sum); w.pos += points(k);
                 for (int wi : exposed) windows.computeIfAbsent(wi, Window::new).exposure++;
@@ -83,9 +85,9 @@ public final class DifficultyScore {
             EnumSet<Element.Type> fam = EnumSet.noneOf(Element.Type.class);
             for (Element h : c.hazards) if (enemy(h.type) && h.anchor >= 0 && Math.abs(h.anchor - i) <= 4 && (EncounterModel.reaches(c, t, h, i) || EncounterModel.reaches(c, t, h, j))) fam.add(h.type);
             if (fam.size() < 2) continue;
-            String key = "L:" + Math.round(c.get(i).y * 100f) + ":" + Math.round((c.get(i).s % c.circumference) * 100f);
+            String key = "L:" + Math.round((c.get(i).y + yOff) * 100f) + ":" + Math.round((c.get(i).s % c.circumference) * 100f);
             if (!seen.add(key)) continue;
-            Window w = win(c.get(i).y); w.interaction = Math.min(INTERACTION_CAP, w.interaction + INTERACTION);
+            Window w = win(c.get(i).y + yOff); w.interaction = Math.min(INTERACTION_CAP, w.interaction + INTERACTION);
         }
         for (Window w : windows.values()) { float a = 0f; for (Map.Entry<Element.Type, Integer> e : w.counts.entrySet()) if (enemy(e.getKey())) a += repeated(e.getValue(), points(e.getKey())); w.adjusted = a; }
     }

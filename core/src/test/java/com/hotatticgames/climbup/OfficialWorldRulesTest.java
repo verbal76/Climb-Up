@@ -52,35 +52,29 @@ public class OfficialWorldRulesTest {
     }
 
     @Test public void everyKeyIsReachableAndEveryCastleCompletableAfterCollectingIt() throws Exception {
-        Tuning t = TestUtil.tuning(); int keys = 0, branches = 0;
+        Tuning t = TestUtil.tuning(); int keys = 0;
         for (long seed : SEEDS) {
             for (Course c : TestUtil.slices(seed, 1100f)) {
-                Autopilot.Report r = Autopilot.run(c, t, 4000f);       // fetches every key in the slice (detours included) and opens the slice's gate with the key carried from before
-                assertTrue("slice solvable incl. key detours and gate (seed " + seed + ", link " + r.failedLink + ": " + r.failInfo + ")", r.completed);
-                for (int[] kr : c.keyRooms) {
-                    keys++;
-                    if (kr[3] == 2) continue;                                   // the key lies on a route platform: reachable by walking
-                    branches++;
-                    assertTrue("out link exists", Autopilot.linkExists(c, t, kr[0], kr[1]));
-                    assertTrue("a branch platform is never route", c.get(kr[1]).anchor >= 0);
-                }
+                Autopilot.Report r = Autopilot.run(c, t, 4000f);       // walks to every key in the slice and opens the slice's gate with the key carried from before
+                assertTrue("slice solvable incl. keys and gate (seed " + seed + ", link " + r.failedLink + ": " + r.failInfo + ")", r.completed);
+                keys += c.keyRooms.size();
             }
         }
-        assertTrue("keys were exercised (" + keys + ", " + branches + " on branches)", keys >= 12 && branches >= 6);
+        assertTrue("keys were exercised (" + keys + ")", keys >= 12);
     }
 
-    @Test public void keyPlacementIsVariedNoFixedSideRoomNoRoutineRestPlatformKey() throws Exception {
-        Set<Integer> modes = new HashSet<>(); Set<String> shapes = new HashSet<>(); int total = 0, onRoute = 0, onRestOfCastle = 0;
+    /** Owner directive 2026-10-25 (rules 8): a key is a seeded collectible lying on a main-route platform before its castle: no room, branch, pad perch or chain. */
+    @Test public void everyKeyLiesOnAMainRoutePlatformNotTheCastleRestPlatform() throws Exception {
+        int total = 0, onRestOfCastle = 0;
         for (long seed : SEEDS) for (Course c : TestUtil.slices(seed, 1100f)) for (int[] kr : c.keyRooms) {
-            total++; modes.add(kr[3]);
+            total++;
             Element key = c.hazards.get(kr[4]), A = c.get(kr[0]);
-            if (kr[3] == 2) onRoute++;
-            else { Element first = c.get(kr[1]), last = c.get(kr[1] + kr[2] - 1); shapes.add(String.format("%d:%d:%.1f:%.1f:%.1f", kr[3], kr[2], last.s - A.s, last.y - A.y, last.w)); }
+            assertEquals("the key lies on the route itself, no detour", 2, kr[3]);
+            assertTrue("its platform is a main-route platform", kr[0] < c.routeSize() && A.anchor < 0 && A.isPlatform());
+            assertTrue("the key sits on its platform", Math.abs(c.dsWrap(key.s, A.s)) <= A.halfW() && key.y > A.y && key.y < A.y + 1.5f);
             if (A.checkpoint && A.w >= 5f && key.y > SP * Math.floor(key.y / SP) + SP - 45f) onRestOfCastle++;
         }
-        assertTrue("different kinds of key place appear (" + modes + ")", modes.contains(0) && modes.contains(3) && modes.contains(2));
-        assertTrue("branch geometry differs from key to key (" + shapes.size() + " shapes)", shapes.size() >= Math.max(5, (total - onRoute) * 3 / 4));
-        assertTrue("most keys are not simply handed over on the route (" + onRoute + " of " + total + ")", onRoute * 2 < total);
+        assertTrue("keys appear (" + total + ")", total >= 12);
         assertEquals("no key on the castle's rest platform", 0, onRestOfCastle);
     }
 

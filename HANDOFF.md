@@ -64,7 +64,11 @@
 - No APK/Windows/Linux packages, no Steam/OTA/release changes, no parallel agents or full test campaigns. Do not cancel running diagnostics to answer routine questions. Cancel only CI runs started by my own pushes.
 
 ### Next action after recovery
-Pursuit audit finished and reported (bee behaviour change and reach-model alignment await the owner). Next: step 1 (route-only `placeKey`) with targeted validation once the owner confirms.
+Owner approved A (evaluator reach = Sim movement rules), B in principle (bee pursuit, with movement safeguards), C (blob 3 m: found already in Sim, `ROAM_DY`).
+- **Step 1 done (`3e0f8d3`, rules 8):** `placeKey` puts every key on a main-route platform (seeded from the 3 nearest quiet, uncovered plain platforms). VarietyProbe NORMAL seeds 1-3 to 1,100 m: solver 18/18, 18/18, 17/17 (53/53, as before), 0 links over budget, key-room modes [2] only, generation 15-26 s per slice. Raw: scratchpad `key_step1.txt`.
+- **A implemented (`3e0f8d3`), validation running:** `EncounterModel.reaches` uses `roamDeck`/`crabHop`/`ROAM_DY` copies of the Sim rules; crabs forward only (Sim never takes a crab below home). Same probe, output scratchpad `reachA.txt`.
+- **B waiting for the owner:** the 2.4 m drift cap and the post-based 7 m seek cannot reach the next platform (8-12 m from the post). Proposal sent: keep seek 7 m, drift speed and visit cycle; leash = far edge of the platform before/after its gap, only while the climber stands there; post never moves; dive cap unchanged.
+- Still to do in step 1/2: refresh the generation fingerprint, replays and obsolete tests for rules 8; then restore crab/club variety.
 
 ## Current state (2026-10-22, Build 72 playtest hold)
 

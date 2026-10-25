@@ -18,6 +18,19 @@
   - Possible real defects: three solver failures (PUNISHER seed 2 slice 2 link 31; crab seed 34 slice 8 link 3; key detour seed 6 link 38), a layer clash, no conveyor ramps, no crab decks at difficulty 0, and less key-place variety.
   - The rest are old-generator expectations.
 
+## Recovery point (2026-10-25): NORMAL threat-budget repair on top of the Build 80 base
+
+- **What it is:** commit `0ed7c64` on `build-74-determinism` (`base/build-80` untouched). NORMAL only: `EncounterModel.threat`/`threatAt`/`cramped`/`threatBudget`, the commit check (`failThreat`) and the key-room take-off preference in `CourseGenerator`.
+- **Targeted validation (2026-10-25):**
+  - Seed 34, slices 0-9: all completed by the solver. The 512 m area now holds 2 crabs (threat 2.5 vs budget 4.21) instead of 4 crabs, 2 bees and a spiked take-off.
+  - Seed 6 to 1,152 m: all slices completed by the solver. Key rooms at 266.9 m and 848.6 m now have unthreatened take-offs; the one at 1,141.9 m fell back to a threatened take-off (threat 1.2).
+  - No link over budget in either seed.
+  - PUNISHER seed 2 slices 0-2: byte-identical to Build 80 (sha256 7da9bdb6...).
+- **Not yet done:**
+  - creature-density check across more seeds (the repair may thin early creatures);
+  - generation-time check;
+  - the other open CI failures (conveyor ramps, crab decks at difficulty 0, layer-clash rule, PUNISHER seed 2, obsolete expectations).
+
 ## Recovery point (2026-10-24, generator redesign: playtest candidate pending packaging)
 
 - **Where things are:** branch `build-74-determinism` (PR #9). Generator rules 7 (`rulesOfBuild(80) = 7`).

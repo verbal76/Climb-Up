@@ -32,6 +32,9 @@ public final class GenTrace {
     public boolean relaxed;
     /** extract(): generator hazard index -> slice hazard index (-1 = dropped as context). */
     public int[] hazardMap = new int[0];
+    /** Wall time per generation phase over all slice attempts (nanos): extend (route modules + structures), structures, decoys (dead ends and fork branches), rooms. */
+    public final java.util.TreeMap<String, Long> phaseNanos = new java.util.TreeMap<>();
+    public void phase(String name, long nanos) { phaseNanos.merge(name, nanos, Long::sum); }
 
     /** Solver trace: every time the solver starts on a new route link (its own loop variable), with the clock and the setback count. */
     public static final class Solve {

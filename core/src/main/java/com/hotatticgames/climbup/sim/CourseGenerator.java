@@ -234,13 +234,18 @@ public final class CourseGenerator {
             }
         }
         float top = keyN > 0 ? Math.max(startY + T.chunkHeight, keyY + 6f) : startY + T.chunkHeight;
+        GenTrace tr = GenTrace.GEN.get(); long p0 = System.nanoTime();      // (observe-only phase timing for reports)
         extend(beltSawY > 0f ? Math.max(top, beltSawY + 12f) : top);
+        long p1 = System.nanoTime();
         addRest(theme(c.get(c.size() - 1).y));
         c.get(c.size() - 1).checkpoint = true;
         thinCheckpoints();
         checkNoExactStructureSkipped(startY);
+        long p2 = System.nanoTime();
         addDecoys(Math.max(3, ctx + 2), c.size() - 11);
+        long p3 = System.nanoTime();
         finalizeRooms();
+        if (tr != null) { tr.phase("extend", p1 - p0); tr.phase("closing_rest", p2 - p1); tr.phase("decoys_forks", p3 - p2); tr.phase("rooms", System.nanoTime() - p3); }
     }
 
     /**
@@ -305,10 +310,10 @@ public final class CourseGenerator {
             float d = diff(last.y);
             int zone = tier(last.y), th = theme(last.y);
             boolean castlePending = castleTarget > 0f && !castleDone;
-            if (castlePending && exactCastle && last.y >= castleTarget - 6f) { int n0 = c.size(), h0 = c.hazards.size(); buildExactCastle(th); traceStructure("CASTLE", n0, h0, last.y); castleDone = true; lastRestY = c.get(c.size() - 1).y; continue; }
-            if (castlePending && !exactCastle && last.y >= castleTarget - GEM_LEAD) { int n0 = c.size(), h0 = c.hazards.size(); chooseGem(th); traceStructure("GEM", n0, h0, last.y); castleDone = true; lastRestY = c.get(c.size() - 1).y; continue; }
+            if (castlePending && exactCastle && last.y >= castleTarget - 6f) { int n0 = c.size(), h0 = c.hazards.size(); long s0 = System.nanoTime(); buildExactCastle(th); traceStructure("CASTLE", n0, h0, last.y, s0); castleDone = true; lastRestY = c.get(c.size() - 1).y; continue; }
+            if (castlePending && !exactCastle && last.y >= castleTarget - GEM_LEAD) { int n0 = c.size(), h0 = c.hazards.size(); long s0 = System.nanoTime(); chooseGem(th); traceStructure("GEM", n0, h0, last.y, s0); castleDone = true; lastRestY = c.get(c.size() - 1).y; continue; }
             if (last.y - lastRestY >= nextGap && targetY - last.y > 0.4f * T.gemSpacing && !(castlePending && last.y > castleTarget - 14f)) {      // (not right before the slice's own closing rest)
-                { int n0 = c.size(), h0 = c.hazards.size(); addRest(th); traceStructure("REST", n0, h0, last.y); } sinceRest = 0; lastRestY = c.get(c.size() - 1).y; nextGap = T.gemSpacing * r(0.85f, 1.15f); maybeCastle(th); continue;
+                { int n0 = c.size(), h0 = c.hazards.size(); long s0 = System.nanoTime(); addRest(th); traceStructure("REST", n0, h0, last.y, s0); } sinceRest = 0; lastRestY = c.get(c.size() - 1).y; nextGap = T.gemSpacing * r(0.85f, 1.15f); maybeCastle(th); continue;
             }
             float forkEvery = P.forkEvery;          // PUNISHER splits about twice as often, and its splits are longer
             if (Float.isNaN(lastForkY)) lastForkY = last.y - forkEvery * 0.5f;
@@ -386,9 +391,9 @@ public final class CourseGenerator {
         m.ok = ok; m.e1 = c.size(); m.h1 = c.hazards.size(); tr.modules.add(m);
         return ok;
     }
-    private void traceStructure(String kind, int n0, int h0, float y) {
+    private void traceStructure(String kind, int n0, int h0, float y, long s0) {
         GenTrace tr = GenTrace.GEN.get(); if (tr == null) return;
-        GenTrace.Module m = new GenTrace.Module();
+        GenTrace.Module m = new GenTrace.Module(); m.nanos = System.nanoTime() - s0;
         m.attempt = tr.attempt; m.kind = kind; m.role = "STRUCTURE"; m.y = (float) (base + y); m.ok = c.size() > n0 || c.hazards.size() > h0;
         m.e0 = n0; m.e1 = c.size(); m.h0 = h0; m.h1 = c.hazards.size(); tr.modules.add(m);
     }
@@ -1163,6 +1168,18 @@ public final class CourseGenerator {
     /** A hazard must not touch standing room on its own spiral layer (except the platform a trap sits in) and must keep clear of other layers. */
     private boolean hazardOk(Element h, int ownerIdx) {
         float hs = hzS(h), hh = hzHalf(h), lo = hzLo(h), hi = hzHi(h);
+        if (h.type != Element.Type.KEY && h.type != Element.Type.GATE && h.type != Element.Type.CLUB) {
+            // 2026-10-26 (campaign 40270745200, NORMAL seed 1 at 79.5 m): a pad or spring launch climbs ~8.5 m (padBounceHeld^2 / 2g), up into the layer above,
+            // and a later module put a spike block right in that column: the pad link had been proven before the block existed and is never re-proven.
+            // No hazard or creature goes in the launch column above a pad or spring.
+            float apex = T.padBounceHeld * T.padBounceHeld / (2f * T.gravity);
+            for (int i = 0; i < c.size(); i++) {
+                Element e = c.get(i);
+                if (i == ownerIdx || (e.type != Element.Type.PAD && e.type != Element.Type.SPRING)) continue;
+                float side = e.w / 2f + hh + (e.type == Element.Type.SPRING ? 2.5f : 1.2f);
+                if (Math.abs(c.dsWrap(hs, e.s)) < side && lo < e.y + apex + 1.8f && hi > e.y + 0.3f) return false;
+            }
+        }
         for (int pass = 0; pass < 2; pass++) {
             int n = pass == 0 ? c.size() : ghostElems.size();
             for (int i = 0; i < n; i++) {

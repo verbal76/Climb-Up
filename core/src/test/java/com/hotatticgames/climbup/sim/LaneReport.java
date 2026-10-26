@@ -93,7 +93,8 @@ public final class LaneReport {
                   long acc = 0, rej = 0, fb = 0; int na = 0, nr = 0; for (GenTrace.Module m : tr.modules) { if (m.ok && m.attempt == tr.finalAttempt) { acc += m.nanos; na++; } else { rej += m.nanos; nr++; } if ("FALLBACK".equals(m.role)) fb += m.nanos; }
                   Runtime rt = Runtime.getRuntime();
                   chunks.add(new String[]{"" + k, f3(f.yBase + f.c.get(0).y), f3(f.yBase + f.c.get(f.c.routeSize() - 1).y), "" + castleOf(f.yBase + f.c.get(0).y), f3(gs), "" + tr.attemptNanos.size(), "" + bad,
-                    f3(okN / 1e9), f3(badN / 1e9), "" + na, f3(acc / 1e9), "" + nr, f3(rej / 1e9), f3(fb / 1e9), "" + tr.relaxed, gal < 0 ? "" : "" + gal, f3(secs), sal < 0 ? "" : "" + sal, "" + (rt.totalMemory() - rt.freeMemory())}); }
+                    f3(okN / 1e9), f3(badN / 1e9), "" + na, f3(acc / 1e9), "" + nr, f3(rej / 1e9), f3(fb / 1e9), "" + tr.relaxed, gal < 0 ? "" : "" + gal, f3(secs), sal < 0 ? "" : "" + sal, "" + (rt.totalMemory() - rt.freeMemory()),
+                    f3(tr.phaseNanos.getOrDefault("extend", 0L) / 1e9), f3(tr.phaseNanos.getOrDefault("closing_rest", 0L) / 1e9), f3(tr.phaseNanos.getOrDefault("decoys_forks", 0L) / 1e9), f3(tr.phaseNanos.getOrDefault("rooms", 0L) / 1e9)}); }
                 v2.add(f.c, (float) f.yBase);
                 reached = (float) (f.yBase + f.c.get(f.c.routeSize() - 1).y); k++;
                 if ((System.nanoTime() - t0) / 1e9 > budget) { stopped = "time budget of " + (int) budget + " s reached (partial results)"; break; }
@@ -114,7 +115,7 @@ public final class LaneReport {
             int e0 = m.e0 - tr.offset, e1 = m.e1 - tr.offset;
             if (fin && m.ok) { ks[1]++; for (int i = Math.max(0, e0); i < Math.min(c.size(), e1); i++) { owner[i] = id; ownerKind[i] = m.kind; } }
             modules.add(new String[]{id, "" + k, "" + m.attempt, "" + fin, m.kind, m.role, m.picked == null ? "" : m.picked, f3(m.d), f3(m.y), "" + m.ok, "" + e0, "" + e1, "" + (m.h1 - m.h0),
-                "" + m.fails[0], "" + m.fails[1], "" + m.fails[2], "" + m.fails[3], "" + m.fails[4], "" + m.fails[5], "STRUCTURE".equals(m.role) ? "" : f3(m.nanos / 1e6)});
+                "" + m.fails[0], "" + m.fails[1], "" + m.fails[2], "" + m.fails[3], "" + m.fails[4], "" + m.fails[5], f3(m.nanos / 1e6)});
             if (!m.ok) { Win w = win(wi(m.y)); w.rejected++; }
             if ("FALLBACK".equals(m.role) && m.ok && fin) win(wi(m.y)).fallbacks++;
         }
@@ -404,7 +405,7 @@ public final class LaneReport {
                 w.println(String.join(",", run, MODE[mode], k[0], q(k[1]), "" + v[0], "" + v[1], "" + v[2], "" + v[3], q(st))); }
         }
         try (PrintWriter w = pw(out, "chunks.csv")) {
-            w.println("run,slice,y0,y1,castle,gen_wall_s,slice_attempts,failed_attempts,final_attempt_s,failed_attempts_s,modules_accepted,accepted_modules_s,modules_refused_or_discarded,refused_or_discarded_s,fallback_s,relaxed,gen_alloc_bytes,solve_wall_s,solve_alloc_bytes,heap_used_bytes");
+            w.println("run,slice,y0,y1,castle,gen_wall_s,slice_attempts,failed_attempts,final_attempt_s,failed_attempts_s,modules_accepted,accepted_modules_s,modules_refused_or_discarded,refused_or_discarded_s,fallback_s,relaxed,gen_alloc_bytes,solve_wall_s,solve_alloc_bytes,heap_used_bytes,phase_extend_s,phase_closing_rest_s,phase_decoys_forks_s,phase_rooms_s");
             for (String[] m : chunks) w.println(run + "," + String.join(",", m));
         }
         try (PrintWriter w = pw(out, "hazards.csv")) {

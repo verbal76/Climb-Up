@@ -1,5 +1,8 @@
 ## RESUME HERE (if the session ran out of credits)
 
+**Latest (batch 2):** campaign 40270745200 reviewed (results in docs/DECISIONS.md "Correction batch 2"; comparison printed by workflow "Compare difficulty runs" run 40277819208 - this environment cannot download artifacts, so compare on GitHub: edit NEW_RUN in .github/workflows/compare-runs.yml and push). Batch 2 adds the pad/spring launch-column clearance (generator) and generation-phase timing. The batch 1 fingerprint is superseded: take the rules-9 fingerprint from the `validate` job of the batch 2 commit. Next: compare the batch 2 campaign (update NEW_RUN), then the remaining solver failures (MOVE_Z plan failed, seesaw knock-back loop, spring/pad not reaching, recover, detour) and the untracked generation time (phase columns).
+
+
 Branch `build-74-determinism`, PR #9. Code state: correction batch 1 at `28d22ec` (rules 9); handoff commits after it are docs only. Nothing is uncommitted.
 Testing policy (owner): everything on GitHub Actions; local only compile/syntax; local fallback only if Actions minutes are exhausted.
 Next steps, in order:

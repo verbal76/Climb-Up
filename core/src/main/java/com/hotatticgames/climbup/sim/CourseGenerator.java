@@ -1599,7 +1599,7 @@ public final class CourseGenerator {
         float lift = 0f;
         for (int k = 0; k < n; k++) {
             float uR = cur.s + cur.w / 2f;
-            if (k > 0 && k < n - 1 && mid > 0f && rnd.nextFloat() < mid) {
+            if (k > 0 && mid > 0f && rnd.nextFloat() < mid && k < n - 1) {          // (the chance is drawn first, as before batch 5: drawing it only when k < n - 1 reshuffled every later row, and NGH seed 1 lost its castle-1 spike-drop rows - ModeProfileTest)
                 n--;          // the row keeps its length: one drop platform fewer (a row made longer by it ran into the spiral layer below: batch 4 probe, every such row refused)
                 // owner structural rule (2026-10-26): a genuine intermediate safe platform between two drop platforms may host a rare enemy (a bee over it
                 // or a pair of crabs); the drop platforms themselves are protected and carry none

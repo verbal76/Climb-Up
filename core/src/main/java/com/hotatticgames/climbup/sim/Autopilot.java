@@ -332,6 +332,14 @@ public final class Autopilot {
         return true;
     }
 
+    /**
+     * The solver re-syncs to route element {@code i} the climber was carried onto. A pad launch further up the route is history by then: the simulation keeps
+     * the last pad launched from only as a marker (it never moves the climber by it), and left set, the next jump from below read as that launch arriving
+     * (succeeded: in the air past a pad beyond the link), so a climber shoved down past a pad "succeeded" at every hop (2026-10-26 GenBench, PUNISHER seed 2
+     * slice 53: off platform 96 onto rope 88, then every move from 88-90 counted as reaching pad 95).
+     */
+    static int resync(Sim real, int i) { if (real.lastPad > i) real.lastPad = -1; return i; }
+
     static int anchorIdx(Course c, int i) { return c.get(i).anchor < 0 ? i : c.get(i).anchor; }
 
     /** Runs a policy on a copy of the state; true if it attaches to a later element without falling. */
@@ -779,7 +787,13 @@ public final class Autopilot {
                 if (!hasMidHazard(c, a)) settle(real, a, in);     // a hazard in the middle (a crab that comes after you): no walking to the centre to settle, size the next move up from where we landed
                 continue;
             }
-            if (real.mode == Sim.Mode.GROUND && real.onElem != a && onRoute(c, real.onElem)) { a = real.onElem; continue; }      // like a person: landed on another route platform (not a fall), so carry on from there
+            if (real.mode == Sim.Mode.GROUND && real.onElem != a && onRoute(c, real.onElem)) { a = resync(real, real.onElem); continue; }      // like a person: landed on another route platform (not a fall), so carry on from there
+            if ((real.mode == Sim.Mode.ROPE || real.mode == Sim.Mode.CABLE) && real.onElem != a && onRoute(c, real.onElem) && c.get(real.onElem).type == (real.mode == Sim.Mode.ROPE ? Element.Type.ROPE : Element.Type.CABLE)) { a = resync(real, real.onElem); continue; }      // or caught a route rope or cable on the way down (2026-10-26 GenBench: PUNISHER seed 2 slice 53, a crab shoved the climber off platform 96 onto rope 88): climb on from there
+            if ((real.mode == Sim.Mode.LEDGE || real.mode == Sim.Mode.PULLUP) && real.onElem != a && onRoute(c, real.onElem)) {          // or caught the ledge of another route platform: pull up, then carry on from there (same course, the next shove)
+                Policy pull = new PullPolicy(); int before = real.setbacks();
+                for (int q = 0; q < 120 && (real.mode == Sim.Mode.LEDGE || real.mode == Sim.Mode.PULLUP) && real.setbacks() == before; q++) { in.clear(); pull.act(real, in); real.step(in); }
+                if (real.mode == Sim.Mode.GROUND && onRoute(c, real.onElem)) { a = resync(real, real.onElem); continue; }
+            }
             Result r = plan(real, a, false, true);
             if (!r.ok) r = plan(real, a, false, false);        // no move leaves a state that suits the next link: take any that works and sort the next link out from there
             rep.links++;
@@ -864,7 +878,7 @@ public final class Autopilot {
                 }
                 if (!r.ok && (real.mode != held || real.onElem != a)) continue;      // bumped off the spot while waiting: recover and size it up again (the loop's own limits still apply)
             }
-            if (!r.ok && real.mode == Sim.Mode.GROUND && real.onElem != a && onRoute(c, real.onElem)) continue;      // carried off the spot (a pad's or spring's bounce with no move to steer for, a bump) onto another route platform: size it up from there (2026-10-26 campaign: PUNISHER seed 2, 581 m, a spring's bounce dropped the climber onto platform 2 and link 12 was planned from there)
+            if (!r.ok && real.mode != Sim.Mode.AIR && real.onElem != a && onRoute(c, real.onElem)) { resync(real, real.onElem); continue; }      // (any hold: a ledge, a rope, a cable as well as a deck - PUNISHER seed 2 slice 53, off pad 95 onto platform 90's ledge) carried off the spot (a pad's or spring's bounce with no move to steer for, a bump) onto another route platform: size it up from there (2026-10-26 campaign: PUNISHER seed 2, 581 m, a spring's bounce dropped the climber onto platform 2 and link 12 was planned from there)
             if (!r.ok) { rep.failedLink = a; rep.simTime = real.time; rep.failInfo = String.format("plan failed: mode=%s on=%d s=%.2f y=%.2f vx=%.2f vy=%.2f", real.mode, real.onElem, real.s, real.y, real.vx, real.vy); return rep; }
             // like a person, who sees the whole screen: the planner tries moves among the nearby elements, so check the chosen one against every hazard (an aimed
             // cannon or a cannonball from links back) and, if one would catch it, hold on a moment and size it up again
@@ -892,7 +906,7 @@ public final class Autopilot {
                 if (back >= 30) break;
                 if (real.setbacks() != fallsBefore) { rep.failedLink = a; rep.simTime = real.time; rep.failInfo = String.format("setback while executing the move: hits=%d falls=%d mode=%s s=%.2f y=%.2f", real.hits, real.falls, real.mode, real.s, real.y) + (real.hitBy != null ? " lastHazard=" + real.hitBy.type + String.format(" s=%.2f y=%.2f anchor=%d", real.hitBy.s, real.hitBy.y, real.hitBy.anchor) : ""); return rep; }
             }
-            if (back >= 30) continue;      // the loop re-syncs to the platform it is on
+            if (back >= 30) { resync(real, real.onElem); continue; }      // the loop re-syncs to the platform it is on
             // like a person: a move that stalls for 20 s with no hit and no fall (NGH seed 2 slice 7, 2d4388a: the plan made on a rope beside a blob deck,
             // with the planner simulating only the nearby window, waited at the rope top while the real course moved on) is sized up again from where the
             // climber is, at most twice per link, before the link counts as failed

@@ -60,6 +60,15 @@ public class SolverRecoveryTest {
         assertTrue("NGH seed 2 slice 7 (2d4388a) completes (link " + r.failedLink + ": " + r.failInfo + ")", r.completed);
     }
 
+    /** A crab shoves the climber off platform 96 (just past pad 95) down onto rope 88: the climb goes on from the rope, the ledges and decks below, and the
+     *  pad launch above is history (2026-10-26 GenBench, PUNISHER seed 2 slice 53 on e097d29: every hop from 88-90 had counted as reaching pad 95). */
+    @Test public void aClimberShovedDownPastAPadClimbsOnFromWhereTheyLanded() throws Exception {
+        Tuning t = tuning().hardCopy(1);
+        Course c = CourseIO.fromJson(new String(Files.readAllBytes(Paths.get("src/test/resources/fixtures/punisher_seed2_slice53_e097d29.json"))));
+        Autopilot.Report r = Autopilot.run(c, t, 4000f);
+        assertTrue("PUNISHER seed 2 slice 53 (e097d29) completes (link " + r.failedLink + ": " + r.failInfo + ")", r.completed);
+    }
+
     @Test public void everyUnsuccessfulSliceHasExactlyOneFailureClass() {
         assertEquals("completed", LaneReport.failClass(true, ""));
         assertEquals("solver_exception", LaneReport.failClass(false, "\"solver threw java.lang.IndexOutOfBoundsException\""));

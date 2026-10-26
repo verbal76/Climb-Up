@@ -159,3 +159,14 @@ if fa:
             for kv in (r.get("reasons") or "").split():
                 k, v = kv.split("="); why[k] += int(v)
         print(m, dict(tot)); print("   reasons", dict(why.most_common(12)))
+
+# ---- generation failures (new run): per run, failed slice attempts, the stop reason, and the last failures with their refusal counters
+gf = rows(sys.argv[2], "generation_failures.csv")
+print("=== generation failures (new): failed slice attempts per run; last 6 per run ===")
+per = defaultdict(list)
+for r in gf: per[r["run"]].append(r)
+for run, rs in sorted(per.items()):
+    print(run, "failed slice attempts", len(rs))
+    for r in rs[-6:]: print("   slice", r["slice"], (r["detail"] or "")[:300])
+for p in sorted(os.listdir(sys.argv[2])) if os.path.isdir(sys.argv[2]) else []:
+    if p.endswith(".json") and "run" in p: pass

@@ -481,7 +481,7 @@ public final class LaneReport {
             for (String[] m : chunks) w.println(run + "," + String.join(",", m));
         }
         try (PrintWriter w = pw(out, "platforms.csv")) {          // observe-only safety classes of main-route platforms, in route order
-            w.println("run,slice,index,y,castle,type,checkpoint,hazards_on,enemies_reaching,threat_families,families,class");
+            w.println("run,slice,index,y,castle,type,checkpoint,hazards_on,enemies_reaching,threat_family_count,threat_families,class");
             for (String[] m : platformRows) w.println(run + "," + String.join(",", m));
         }
         try (PrintWriter w = pw(out, "forks.csv")) {          // observe-only: route-length columns are information, not a requirement (owner 2026-10-26)

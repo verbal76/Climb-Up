@@ -121,7 +121,7 @@ def safety(d):
         m = mode(run); cur = 0; cur_c = None
         for r in rs:
             c = int(r["castle"]); a = agg[m][c]; a[r["class"]] += 1; a["n"] += 1
-            if int(r["families"]) >= 2: a["overlap"] += 1
+            if int(r.get("threat_family_count") or r.get("threat_families") or 0) >= 2: a["overlap"] += 1          # (2d4388a wrote the count under "threat_families")
             if r["class"] == "SAFE" and r["checkpoint"] != "true": a["recovery"] += 1
             if r["class"] in ("HAZARD", "CONTESTED"): cur += 1; cur_c = c
             elif cur: chains[m][cur_c].append(cur); cur = 0

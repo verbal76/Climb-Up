@@ -39,13 +39,15 @@ public final class DifficultyProfile {
     public final float terrainCap;
     /** Owner rule (2026-10-26): absolute height from which enemies may pursue onto protected hazard platforms (NORMAL never; PROVISIONAL heights). */
     public final double pursuitFromY;
+    /** How strongly the late-climb hazard, trap and mortar weights grow with {@code late()} (owner 2026-10-26: PUNISHER/NGH hazards stayed flat over the ten castles; PROVISIONAL). NORMAL 1. */
+    public final float lateHazScale;
     public static final float TERRAIN_FLOOR = 0.1f, TERRAIN_RAMP_Y = 5000f;
 
     private DifficultyProfile(float curveShift, float lateCap, float forkEvery, int forkRisers, float branchHop, boolean narrowFoothold, float wideHopEvery,
                               float forkChance, int forkSpacing, int forkReach, boolean nestedForks,
                               boolean threatBudget, float threatBase, float threatPerLevel, float threatCramped, boolean quietKeyRooms,
-                              int midEnemyFromCastle, float midEnemyChance, float midEnemyGrowth, float terrainCap, double pursuitFromY) {
-        this.terrainCap = terrainCap;
+                              int midEnemyFromCastle, float midEnemyChance, float midEnemyGrowth, float terrainCap, double pursuitFromY, float lateHazScale) {
+        this.terrainCap = terrainCap; this.lateHazScale = lateHazScale;
         this.pursuitFromY = pursuitFromY;
         this.midEnemyFromCastle = midEnemyFromCastle; this.midEnemyChance = midEnemyChance; this.midEnemyGrowth = midEnemyGrowth;
         this.curveShift = curveShift; this.lateCap = lateCap; this.forkEvery = forkEvery; this.forkRisers = forkRisers; this.branchHop = branchHop;
@@ -56,19 +58,19 @@ public final class DifficultyProfile {
 
     /** NORMAL: occasional simple splits, every link within the threat budget, quiet key rooms first. */
     public static final DifficultyProfile NORMAL = new DifficultyProfile(0f, 1f, 70f, 3, 4.4f, false, 36f, 0.5f, 7, 7, false,
-        true, EncounterModel.THREAT_BASE, EncounterModel.THREAT_PER_LEVEL, EncounterModel.THREAT_CRAMPED, true, 8, 0.12f, 0.04f, 1f, Double.POSITIVE_INFINITY);
+        true, EncounterModel.THREAT_BASE, EncounterModel.THREAT_PER_LEVEL, EncounterModel.THREAT_CRAMPED, true, 8, 0.12f, 0.04f, 1f, Double.POSITIVE_INFINITY, 1f);
     /**
      * PUNISHER: the curve read 2,000 m higher (owner target: its castle 1 resembles NORMAL castle 5; was 1,500 m, PROVISIONAL), more and longer
      * splits with a narrow foothold, nested forks. The threat budget and quiet key rooms are not applied (owner decision pending since 2026-10-25).
      */
     public static final DifficultyProfile PUNISHER = new DifficultyProfile(2000f, 1.4f, 34f, 5, 3.4f, true, 18f, 0.9f, 4, 9, true,
-        false, EncounterModel.THREAT_BASE, EncounterModel.THREAT_PER_LEVEL, EncounterModel.THREAT_CRAMPED, false, 4, 0.15f, 0.04f, 1.08f, 3333.0);
+        false, EncounterModel.THREAT_BASE, EncounterModel.THREAT_PER_LEVEL, EncounterModel.THREAT_CRAMPED, false, 4, 0.15f, 0.04f, 1.08f, 3333.0, 2f);
     /**
      * NEVER GONNA HAPPEN (its own profile since 2026-10-26; it shared PUNISHER's): the curve read 3,500 m higher (owner target: castle 1 resembles NORMAL
      * castle 8, PROVISIONAL), a higher late cap, otherwise PUNISHER's structure. Creatures act faster through {@link Tuning#react()} (hard = 2).
      */
     public static final DifficultyProfile NGH = new DifficultyProfile(3500f, 1.7f, 34f, 5, 3.4f, true, 18f, 0.9f, 4, 9, true,
-        false, EncounterModel.THREAT_BASE, EncounterModel.THREAT_PER_LEVEL, EncounterModel.THREAT_CRAMPED, false, 1, 0.18f, 0.04f, 1.15f, 1667.0);
+        false, EncounterModel.THREAT_BASE, EncounterModel.THREAT_PER_LEVEL, EncounterModel.THREAT_CRAMPED, false, 1, 0.18f, 0.04f, 1.15f, 1667.0, 2.5f);
 
     /** The profile a climb at {@code t.hard} generates with. */
     public static DifficultyProfile of(Tuning t) { return t.hard >= 2 ? NGH : t.hard > 0 ? PUNISHER : NORMAL; }

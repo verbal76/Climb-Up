@@ -127,7 +127,11 @@ public final class CourseGenerator {
     private float diff(float y) {
         if (!endless) return Math.min(1f, Math.max(0f, (float) ((y + base) / rampH)));
         float f = DifficultyProfile.TERRAIN_FLOOR;          // endless: the whole 10-castle climb, read with this difficulty's head start (see DifficultyProfile.terrainCap)
-        return Math.min(P.terrainCap, Math.max(0f, f + (1f - f) * (float) ((y + base + modeShift()) / DifficultyProfile.TERRAIN_RAMP_Y)));
+        // each mode starts where NORMAL is at its head start (PUNISHER ~castle 5, NGH ~castle 8) and climbs to its own cap over the whole ten-castle
+        // climb (owner 2026-10-26: read with the head start alone, PUNISHER reached its cap at castle 7 and NGH at castle 1, so their terrain stayed flat).
+        // NORMAL (no head start, cap 1) is unchanged: f + (1 - f) * y / ramp.
+        float start = f + (1f - f) * Math.min(1f, modeShift() / DifficultyProfile.TERRAIN_RAMP_Y);
+        return Math.min(P.terrainCap, Math.max(0f, start + (P.terrainCap - start) * (float) ((y + base) / DifficultyProfile.TERRAIN_RAMP_Y)));
     }
     private int tier(float y) { return Math.min(3, (int) (diff(y) * 4f)); }
     /** Visual theme of the platforms at height y: the four worlds repeat for ever in the endless climb. */
@@ -1004,9 +1008,13 @@ public final class CourseGenerator {
         // ~9 m with the run-up it was reached at, so a branch, dead end or key-room platform there catches the climber (OfficialRunTest seed 7
         // slice 44: a fork branch one revolution up, 7 m over a spring and 8.4 m ahead, outside the 4.5 m layer window; the spring's link was proven
         // before the branch existed)
+        // (the top of the corridor: the held launch's apex plus the standing room a body needs under a deck, 2.8 m as in the layer rules; 9 m let a fork
+        // branch 10.2 m over a pad take the climber's head on the way up: NORMAL seed 2 slice 77, castle 10, beyond the planner's element window so the
+        // proof never saw it)
+        float top = T.padBounceHeld * T.padBounceHeld / (2f * T.gravity) + 2.8f;
         for (int j = 0; j < rs; j++) {
             Element e = c.get(j);
-            if ((e.type == Element.Type.PAD || e.type == Element.Type.SPRING) && e.anchor < 0 && Math.abs(c.dsWrap(d.s, e.s)) < 10f + d.w / 2f && d.y > e.y - 1.5f && d.y < e.y + 9f) { decoyWhy = 5; return false; }
+            if ((e.type == Element.Type.PAD || e.type == Element.Type.SPRING) && e.anchor < 0 && Math.abs(c.dsWrap(d.s, e.s)) < 10f + d.w / 2f && d.y > e.y - 1.5f && d.y < e.y + top) { decoyWhy = 5; return false; }
         }
         if (!fork) for (int j = a + 2; j < rs; j++) {                 // never a stepping stone toward later route
             Element e = c.get(j);
@@ -1441,12 +1449,12 @@ public final class CourseGenerator {
         w[Kind.RAMP.ordinal()] = zone == 0 ? 1.5f : 3f;
         w[Kind.LONG.ordinal()] = 0f;            // long walkable corridors deferred: at any non-zero weight they lengthen the local climb enough to push the streaming-vs-whole float determinism past its 2 mm tolerance (TowerStreamingTest). Re-enable with a test-stable design (shorter corridors / local-origin friendly) once reviewed. The Kind + piece case stay ready.
         float lt = late(last.y);
-        if (zone >= 1 && inten > 0f) w[Kind.MORTAR.ordinal()] = 1f + 3f * inten + LATE_MORTAR * lt;          // a mortar row: any stage after the first world
+        if (zone >= 1 && inten > 0f) w[Kind.MORTAR.ordinal()] = 1f + 3f * inten + LATE_MORTAR * P.lateHazScale * lt;          // a mortar row: any stage after the first world
         for (Kind k : new Kind[]{Kind.GRAB, Kind.SWING, Kind.CRUMBLE, Kind.MOVER_Z, Kind.SLIDE_FALL}) if (w[k.ordinal()] > 0f) w[k.ordinal()] += LATE_COMPLEX * lt;
         w[Kind.HOP.ordinal()] *= 1f - LATE_HOP_CUT * Math.min(1f, lt);
         if (zone >= 1) { w[Kind.SEESAW.ordinal()] = 4f; w[Kind.BRIDGE.ordinal()] = 4f; }
         else w[Kind.BRIDGE.ordinal()] = 2f;
-        if (inten > 0f || (!endless && last.y > T.courseHeight * 0.18f)) { w[Kind.HAZ.ordinal()] = 3f + 9f * inten + LATE_HAZ * lt; if (zone >= 1) w[Kind.SPRING.ordinal()] = 2f + 2f * inten; w[Kind.TRAP.ordinal()] = 2f + 5f * inten + LATE_TRAP * lt; }
+        if (inten > 0f || (!endless && last.y > T.courseHeight * 0.18f)) { w[Kind.HAZ.ordinal()] = 3f + 9f * inten + LATE_HAZ * P.lateHazScale * lt; if (zone >= 1) w[Kind.SPRING.ordinal()] = 2f + 2f * inten; w[Kind.TRAP.ordinal()] = 2f + 5f * inten + LATE_TRAP * P.lateHazScale * lt; }
         // keep the spiral pitch healthy: if climbing lags the arc travelled, prefer vertical modules
         // spiral pitch controller: track y = pitch * (arc travelled / circumference) so successive revolutions stay a fixed distance apart
         float guide = T.spiralPitch * (last.s - 4f) / c.circumference;

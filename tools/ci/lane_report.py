@@ -420,6 +420,23 @@ with PdfPages(os.path.join(OUT, "detailed_report.pdf")) as pdf:
             ax.set_title(f"{mode} {lane}: seed-to-seed", fontsize=7); ax.set_xticks(range(1, 11)); ax.tick_params(labelsize=6); ax.legend(fontsize=6)
     fig.tight_layout(); pdf.savefig(fig); plt.close(fig)
 
+    # owner review 2026-10-26: castle 1-10 means (over seeds) of all nine mode/lane combinations, one shared scale per lane (same scoring for every
+    # mode), NORMAL drawn faintly in the other modes for reference
+    fig, axs = plt.subplots(3, 3, figsize=(11.69, 8.27))
+    for j, lane in enumerate(LANES):
+        vals = [x for m in MODES for x in progression.get(f"{m}/{lane}", {}).get("means", []) if isinstance(x, (int, float))]
+        top = (max(vals) if vals else 1.0) * 1.1
+        for i, mode in enumerate(MODES):
+            ax = axs[i, j]; xs = list(range(1, 11))
+            pg = progression.get(f"{mode}/{lane}", {}); ys = pg.get("means", []); cx = pg.get("castles", [])
+            if mode != "NORMAL":
+                ng = progression.get(f"NORMAL/{lane}", {})
+                ax.plot(ng.get("castles", []), ng.get("means", []), color="#bbbbbb", lw=1, label="NORMAL")
+            ax.plot(cx, ys, marker="o", lw=1.6, label=mode)
+            ax.set_ylim(0, top); ax.set_xticks(xs); ax.tick_params(labelsize=6); ax.grid(alpha=0.3)
+            ax.set_title(f"{mode} {lane} (castle means, shared {lane.lower()} scale)", fontsize=7); ax.legend(fontsize=6, loc="lower right")
+    fig.tight_layout(); pdf.savefig(fig); plt.close(fig)
+
     lines = []
     for k, v in progression.items():
         lines.append(f"{k}: means {v['means']}")

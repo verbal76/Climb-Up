@@ -1,8 +1,11 @@
 name: Compare difficulty runs
 # Prints a compact baseline-vs-new comparison of two finished "Difficulty report" runs into the job log (their consolidated artifacts are
-# downloaded here on GitHub). Edit BASE_RUN / NEW_RUN and push this file (or tools/ci/compare_runs.py) to compare another pair. Publishes nothing.
+# downloaded here on GitHub). Dispatch with base_run / new_run (or edit the defaults and push this file or tools/ci/compare_runs.py) to compare another pair. Publishes nothing.
 on:
   workflow_dispatch:
+    inputs:
+      base_run: { description: 'Baseline Difficulty report run id', required: false, default: '' }
+      new_run: { description: 'New Difficulty report run id', required: false, default: '' }
   push:
     branches: [build-74-determinism]
     paths:
@@ -12,8 +15,8 @@ permissions:
   contents: read
   actions: read
 env:
-  BASE_RUN: '40322260139'
-  NEW_RUN: '40333816843'
+  BASE_RUN: ${{ inputs.base_run || '40322260139' }}
+  NEW_RUN: ${{ inputs.new_run || '40333816843' }}
 jobs:
   compare:
     runs-on: ubuntu-latest

@@ -5,7 +5,7 @@
 - Local evidence before the policy: ModeProfileTest 2/2 and LaneReportTest 4/4 (earlier revision), fixtures seed 1 to 1,000 m in all modes (skulls in every mode, drops accepted, 0 rule violations, solver N 15/16 P 16/16 NGH 16/16).
 - New fingerprint: read it from the `validate` job's DeterminismTest message on this commit and update DeterminismTest (expected value) in the next commit.
 - Remaining: Phase 4 solver failures (pad/spring launch execution; report-derived reasons now filled), Phase 5 generation time (PUNISHER/NGH slower with the new rules: profile the commit()/planner cost), hazard/enemy progression review on the campaign results, PENDULUM/LONG owner decisions.
-- Comparison campaign: workflow "Difficulty report" triggered by this push (paths now include CourseGenerator/Autopilot/DifficultyProfile); compare with baseline 40262073313.
+- Comparison campaign: workflow "Difficulty report" run 40270745200 (https://github.com/verbal76/Climb-Up/actions/runs/40270745200) on 28d22ec2cce277092bbbd1df1c44c0efec9f1c15; artifact `difficulty-baseline-3lane`; compare with frozen baseline 40262073313.
 
 ## RECOVERY CHECKPOINT (2026-10-26, latest): reporting EXPANSION pushed; expanded six-run simulation on GitHub Actions
 

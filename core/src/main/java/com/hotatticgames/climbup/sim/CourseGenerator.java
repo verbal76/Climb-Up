@@ -335,18 +335,21 @@ public final class CourseGenerator {
                 lastForkY = last.y - forkEvery + 8f;          // no room here: try again a little higher
             }
             Kind k = pick(zone, last);
+            if (deferredHaz != null && !last.wet()) { k = deferredHaz; deferredHaz = null; }          // a hazard the Frost world's rain displaced comes on the next dry platform instead of being lost
             boolean clubTarget = false;
             if (clubBoost > 0) { clubBoost--; k = rnd.nextBoolean() ? Kind.TRAP : Kind.HAZ; clubTarget = true; }      // Build 71 (owner): a club was just placed - the next few modules give it crabs and bees to hit
             wantCreature = clubTarget;
-            if (th == 1 && last.type == Element.Type.STATIC && rnd.nextFloat() < 0.2f) { GenTrace.tally("wet_replaced_" + k); k = Kind.WET; }          // the Frost world: some platforms are under a rain cloud (slippery)
+            if (th == 1 && last.type == Element.Type.STATIC && rnd.nextFloat() < 0.2f) { GenTrace.tally("wet_replaced_" + k); if (hazardKind(k)) deferredHaz = k; k = Kind.WET; }          // the Frost world: some platforms are under a rain cloud (slippery)
             float lv = Math.min(1f, level(last.y));
             boolean hazOk = !endless || intensity(last.y) > 0f;          // the first hazardStartY metres stay free of hazards and creatures (EndlessTest: a spike-drop row at 7.5 m, seed 3), as for every other hazard module
             if (hazOk && k != Kind.WET && prev != Kind.CREATURE && !last.wet() && rnd.nextFloat() < 0.025f + 0.045f * lv + 0.05f * late(last.y)) k = Kind.CREATURE;      // owner directive 2026-10-24: creature decks from Level 1 on, more as the levels rise (was world 2 on)
             else if (prev == Kind.CREATURE && !last.wet() && rnd.nextFloat() < 0.35f * late(last.y)) k = rnd.nextBoolean() ? Kind.HAZ : Kind.TRAP;      // Build 71: higher up, a creature deck runs straight into a trap      // Build 71: a skull's deck (world 2 on), or a green blob's (world 3 on)
             boolean secondHalf = endless && th == 0 && ((last.y + base) % T.zoneHeight) >= 0.5f * T.zoneHeight - 15f;      // castle 1 to castle 2: the Meadow's second, harder half (owner, Build 71)
             if (hazOk && k != Kind.WET && k != Kind.CREATURE && !last.wet() && prev != Kind.DROPS && (secondHalf ? rnd.nextFloat() < 0.10f : rnd.nextFloat() < 0.015f + 0.025f * lv)) k = Kind.DROPS;      // (spike-drop rows anywhere, more higher up; was world 2 on)
-            else if (secondHalf && (k == Kind.HOP || k == Kind.STAIRS) && rnd.nextFloat() < 0.3f) k = Kind.HAZ;          // a little rougher than the first half
-            if (last.wet() && (k == Kind.HAZ || k == Kind.TRAP || k == Kind.MORTAR || k == Kind.CREATURE || k == Kind.DROPS)) { GenTrace.tally("wet_stairs_" + k); k = Kind.STAIRS; }          // after a slippery platform give a walk-up (not a hazard you must time, nor a jump you must push off a slippery surface for): its timing windows assume a normal run-up (SawFairnessTest) and the plain climb stays walkable
+            // a little rougher than the first half, and (Phase 1, 2026-10-26) from then on: it applied to castle 2 alone, so castle 2 stood out as a hazard
+            // spike and castle 3 fell back to the first half's mix (the chained spike drops above stay castle 2's own)
+            else if ((secondHalf || (endless && last.y + base >= T.zoneHeight)) && (k == Kind.HOP || k == Kind.STAIRS) && rnd.nextFloat() < 0.3f) k = Kind.HAZ;
+            if (last.wet() && (k == Kind.HAZ || k == Kind.TRAP || k == Kind.MORTAR || k == Kind.CREATURE || k == Kind.DROPS)) { GenTrace.tally("wet_stairs_" + k); deferredHaz = k; k = Kind.STAIRS; }          // after a slippery platform give a walk-up (not a hazard you must time, nor a jump you must push off a slippery surface for): its timing windows assume a normal run-up (SawFairnessTest) and the plain climb stays walkable
             if (beltSawY > 0f && !beltSawDone && last.y >= beltSawY && !last.wet() && !(castlePending && last.y > castleTarget - 14f)) {      // Build 77: this section's balance conveyor (tried again on the next module if it cannot be proven here)
                 beltSawNow = true; traceRole = "BELT"; boolean ok = tryModuleBelow(Kind.SEESAW, d, th); traceRole = "PICK"; beltSawNow = false;
                 if (ok) { beltSawDone = true; prev2 = prev; prev = Kind.SEESAW; sinceRest++; continue; }
@@ -1493,6 +1496,15 @@ public final class CourseGenerator {
         for (Kind k : Kind.values()) { x -= w[k.ordinal()]; if (x <= 0 && w[k.ordinal()] > 0) return k; }
         return Kind.HOP;
     }
+
+    /**
+     * Phase 1 (2026-10-26): the Frost world's rain cloud (a WET pick on 20% of plain platforms) and the walk-up after a wet platform used to discard the
+     * hazard, trap, mortar, creature or spike-drop module they displaced: in NORMAL seed 1 castles 3-4 about as many such picks were lost as were
+     * placed (the castle 3-4 hazard dip in every mode). The displaced kind is now kept and built on the next module that does not follow a wet
+     * platform; the rain and the walk-up stay as they were.
+     */
+    private Kind deferredHaz;
+    private static boolean hazardKind(Kind k) { return k == Kind.HAZ || k == Kind.TRAP || k == Kind.MORTAR || k == Kind.CREATURE || k == Kind.DROPS; }
 
     public static volatile int wetTried, wetOk;          // diagnostics: wet-platform modules attempted / proven
 

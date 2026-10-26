@@ -814,11 +814,18 @@ public final class Autopilot {
             real.act = null;
             int guard = (int) (20f / Sim.DT);
             if (DBG) System.out.printf("  policy %s from mode=%s s=%.2f y=%.2f t=%.2f%n", p.getClass().getSimpleName(), real.mode, real.s, real.y, real.time);
+            int back = 0;
             while (guard-- > 0 && !succeeded(real, a)) {
                 in.clear(); p.act(real, in); real.step(in);
+                // like a person: shoved back down onto an earlier route platform mid-move (a crab's shove is no hit and no fall), so stop playing the
+                // move from the wrong place and size it up again from there (2026-10-26 campaign: NORMAL seed 2 slice 50 stood 20 s on platform 8 while
+                // executing link 18). Half a second on that platform: a move never routes back through an earlier platform on purpose
+                back = real.mode == Sim.Mode.GROUND && real.onElem >= 0 && real.onElem < a && onRoute(c, real.onElem) ? back + 1 : 0;
+                if (back >= 30) break;
                 if (real.setbacks() != fallsBefore) { rep.failedLink = a; rep.simTime = real.time; rep.failInfo = String.format("setback while executing the move: hits=%d falls=%d mode=%s s=%.2f y=%.2f", real.hits, real.falls, real.mode, real.s, real.y) + (real.hitBy != null ? " lastHazard=" + real.hitBy.type + String.format(" s=%.2f y=%.2f anchor=%d", real.hitBy.s, real.hitBy.y, real.hitBy.anchor) : ""); return rep; }
             }
-            if (!succeeded(real, a)) { rep.failedLink = a; rep.simTime = real.time; return rep; }
+            if (back >= 30) continue;      // the loop re-syncs to the platform it is on
+            if (!succeeded(real, a)) { rep.failedLink = a; rep.simTime = real.time; rep.failInfo = String.format("move did not reach the next link within 20 s: mode=%s on=%d s=%.2f y=%.2f vx=%.2f vy=%.2f", real.mode, real.onElem, real.s, real.y, real.vx, real.vy); return rep; }
             // settle: finish pull-ups and keep going from the attached element
             if (real.mode == Sim.Mode.LEDGE || real.mode == Sim.Mode.PULLUP) {
                 Policy pull = new PullPolicy();

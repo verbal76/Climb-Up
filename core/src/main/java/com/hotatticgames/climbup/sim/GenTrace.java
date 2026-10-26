@@ -22,10 +22,12 @@ public final class GenTrace {
         public boolean ok;
         public int e0, e1, h0, h1;     // elements [e0, e1) and hazards [h0, h1) it added (when ok)
         public int[] fails = new int[6];   // refusal counters it raised: layer, hazard placement, plan (solver proof), timing window, conflict, threat budget
+        public long nanos;             // wall time inside the attempt (planning proofs, placement, rollback included)
     }
 
     public final ArrayList<Module> modules = new ArrayList<>();
     public final ArrayList<String> sliceFailures = new ArrayList<>();
+    public final ArrayList<long[]> attemptNanos = new ArrayList<>();     // {slice attempt, wall nanos, 1 = produced the slice}
     public int attempt, finalAttempt = -1, offset;
     public boolean relaxed;
     /** extract(): generator hazard index -> slice hazard index (-1 = dropped as context). */
@@ -35,7 +37,8 @@ public final class GenTrace {
     public static final class Solve {
         public final ArrayList<float[]> arrivals = new ArrayList<>();     // {link, sim time, setbacks}
         public final ArrayList<int[]> planFails = new ArrayList<>();      // {link, count}
-        public void arrive(int link, float time, int setbacks) { arrivals.add(new float[]{link, time, setbacks}); }
+        public final ArrayList<Long> wall = new ArrayList<>();            // wall clock (nanos) at each arrival
+        public void arrive(int link, float time, int setbacks) { arrivals.add(new float[]{link, time, setbacks}); wall.add(System.nanoTime()); }
         public void planFail(int link) {
             if (!planFails.isEmpty() && planFails.get(planFails.size() - 1)[0] == link) planFails.get(planFails.size() - 1)[1]++; else planFails.add(new int[]{link, 1});
         }

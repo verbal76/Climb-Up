@@ -1,3 +1,10 @@
+## RECOVERY CHECKPOINT (2026-10-26, latest): reporting EXPANSION pushed; expanded six-run simulation on GitHub Actions
+
+- Owner "REPORTING EXPANSION ONLY": reporting additions only (no generator, solver, gameplay or balance changes). New observe-only timing in GenTrace (module attempt and slice attempt wall time; solver arrival wall clock), recorded only when a report installs a trace. LaneReport adds chunks.csv (generation/solver wall time, slice retries, accepted/refused/fallback module time, allocated bytes, heap), hazards.csv (every hazard/enemy/club: parameters, hit radius, route exposure, threats sharing the platform, enemy reach), modules.csv wall_ms, links.csv solver wall time and visits, windows.csv route mechanics / recovery platforms / solver wall time. lane_report.py adds components.csv, pacing.csv, timing.csv, module_timing.csv, exposure.csv, coverage.csv, unmeasured_fields.csv and components_report.pdf. All earlier outputs unchanged.
+- Validation: LaneReportTest 4/4 (tracing changes no course and no solver result; ledgers reconcile; coverage); fixture NORMAL seed 1 to 80 m: validation PASS. The fingerprint is not re-run: the new hooks only read the clock inside trace-on branches, and the invariance test covers them.
+- Unavailable (documented in coverage.csv): validation/rollback time inside one attempt, per-type hazard/enemy placement attempts, swept danger areas and timing windows, actual enemy contacts.
+- Previous baseline run 40254414759 stays the comparison baseline. The expanded run ID is recorded in the next commit.
+
 ## RECOVERY CHECKPOINT (2026-10-26): three-lane reporting built; six-run baseline running on GitHub Actions
 
 **Read this first.** Owner directive (reporting + baseline simulations) and its MANDATORY CLASSIFICATION AMENDMENT: build the measurement/graphing system, run the CURRENT generator and solver, publish artifacts, then STOP for owner + ChatGPT review. No generator, solver, gameplay or spawn changes in this phase (Phase 3 needs explicit owner authorization).

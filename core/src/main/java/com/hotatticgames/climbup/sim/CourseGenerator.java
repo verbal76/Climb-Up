@@ -88,9 +88,9 @@ public final class CourseGenerator {
             g.endless = true; g.rampH = t.rampHeight; g.base = base;
             g.relaxed = attempt >= 12;       // the previous slice can occasionally leave no room that keeps clear of every older spiral layer: after twelve normal tries, build above it without that clearance rather than ever failing
             lastForDebug = g;
-            GenTrace tr = GenTrace.GEN.get(); if (tr != null) { tr.attempt = attempt; tr.relaxed = g.relaxed; }      // observe-only (reports)
-            try { g.buildChunk(prev); Course out = g.extract(); if (tr != null) tr.finalAttempt = attempt; return out; }
-            catch (IllegalStateException e) { last = e; if (tr != null) tr.sliceFailures.add("attempt " + attempt + ": " + e.getMessage()); }
+            GenTrace tr = GenTrace.GEN.get(); long a0 = tr != null ? System.nanoTime() : 0L; if (tr != null) { tr.attempt = attempt; tr.relaxed = g.relaxed; }      // observe-only (reports)
+            try { g.buildChunk(prev); Course out = g.extract(); if (tr != null) { tr.finalAttempt = attempt; tr.attemptNanos.add(new long[]{attempt, System.nanoTime() - a0, 1}); } return out; }
+            catch (IllegalStateException e) { last = e; if (tr != null) { tr.sliceFailures.add("attempt " + attempt + ": " + e.getMessage()); tr.attemptNanos.add(new long[]{attempt, System.nanoTime() - a0, 0}); } }
         }
         throw last;
     }
@@ -374,7 +374,9 @@ public final class CourseGenerator {
         m.attempt = tr.attempt; m.kind = k.name(); m.role = traceRole; m.picked = tracePicked; m.d = d; m.y = (float) (base + c.get(c.size() - 1).y);
         m.e0 = c.size(); m.h0 = c.hazards.size();
         int[] f0 = {failLayer, failHaz, failPlan, failWindow, failConflict, failThreat};
+        long t0 = System.nanoTime();
         boolean ok = tryModuleBelow0(k, d, zone);
+        m.nanos = System.nanoTime() - t0;
         int[] f1 = {failLayer, failHaz, failPlan, failWindow, failConflict, failThreat};
         for (int i = 0; i < 6; i++) m.fails[i] = f1[i] - f0[i];
         m.ok = ok; m.e1 = c.size(); m.h1 = c.hazards.size(); tr.modules.add(m);

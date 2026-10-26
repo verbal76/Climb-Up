@@ -23,7 +23,7 @@ LANE_COL = {"TERRAIN": "terrain_adj", "HAZARDS": "hazard_adj", "ENEMIES": "enemy
 COLORS = {"TERRAIN": "#3b7dd8", "HAZARDS": "#d8743b", "ENEMIES": "#8e44ad", "INTERACTION": "#7f8c8d"}
 MODE_COL = {"NORMAL": "#2e86c1", "PUNISHER": "#cb4335", "NGH": "#17202a"}
 FILES = ["windows.csv", "ledger.csv", "elements.csv", "links.csv", "modules.csv", "solver.csv", "solver_failures.csv", "generation_failures.csv",
-         "rule_checks.csv", "inventory.csv", "module_inventory.csv", "castles.csv", "windows_v2_reference.csv"]
+         "rule_checks.csv", "inventory.csv", "module_inventory.csv", "castles.csv", "windows_v2_reference.csv", "chunks.csv", "hazards.csv"]
 FUTURE_INTRO = {"NORMAL": 8, "PUNISHER": 4, "NGH": 1}           # owner's approximate intermediate-platform enemy introduction castle (future rule)
 PURSUIT_FROM = {"NORMAL": None, "PUNISHER": 3333.0, "NGH": 1667.0}  # owner's future pursuit-into-hazard-section permission heights
 
@@ -462,6 +462,128 @@ for run in RUNS:
             fig.text(0.04, 0.50, "\n".join(lines), va="top", family="monospace", fontsize=5)
             pdf.savefig(fig); plt.close(fig)
 
+# ------------------------------------------------------------------ expansion (2026-10-26): components, pacing, timing, memory, exposure, coverage
+def wcsv(name, header, rows):
+    with open(os.path.join(OUT, name), "w", newline="") as fh:
+        w = csv.writer(fh); w.writerow(header); w.writerows(rows)
+
+run_mode = {r: r.split("-s")[0] for r in RUNS}
+comp = defaultdict(float)                                  # (mode, run, castle, lane, rule) -> value
+for row in tables["ledger.csv"]:
+    comp[(run_mode.get(row["run"], "?"), row["run"], int(row["castle"]), row["lane"], row["rule"])] += float(row["value"])
+wcsv("components.csv", ["mode", "run", "castle", "lane", "rule", "value"], [list(k) + [round(v, 3)] for k, v in sorted(comp.items())])
+
+pacing = []
+for run in RUNS:
+    for c in range(1, 11):
+        ws = sorted([w for w in by_run[run] if int(w["castle"]) == c], key=lambda w: int(w["window"]))
+        if not ws:
+            continue
+        tot = [num(w["total_reference"]) or 0 for w in ws]
+        q1, q3 = np.percentile(tot, 25), np.percentile(tot, 75)
+        spikes = [int(w["window"]) for w, v in zip(ws, tot) if v > q3 + 1.5 * (q3 - q1)]
+        run_len = best = 0
+        for v in tot:
+            run_len = run_len + 1 if v <= q1 else 0; best = max(best, run_len)
+        lanes_zero = {lane: sum(1 for w in ws if (num(w[LANE_COL[lane]]) or 0) == 0) for lane in LANES}
+        pacing.append([run, run_mode[run], c, len(ws), round(float(np.mean(tot)), 3), round(float(np.std(tot)), 3), round(float(q1), 3), round(float(q3), 3), len(spikes), " ".join(map(str, spikes)), best * 25,
+                       lanes_zero["TERRAIN"], lanes_zero["HAZARDS"], lanes_zero["ENEMIES"]])
+wcsv("pacing.csv", ["run", "mode", "castle", "windows", "mean_total", "sd_total", "q1", "q3", "spike_windows", "spike_window_ids", "longest_valley_m", "zero_terrain_windows", "zero_hazard_windows", "zero_enemy_windows"], pacing)
+
+CH = tables["chunks.csv"]
+timing = defaultdict(lambda: [0.0, 0.0, 0, 0, 0.0, 0.0, 0.0])        # (run, castle) -> gen s, solve s, slices, failed attempts, failed s, alloc gen MB, alloc solve MB
+for r in CH:
+    t = timing[(r["run"], int(r["castle"]))]
+    t[0] += num(r["gen_wall_s"]) or 0; t[1] += num(r["solve_wall_s"]) or 0; t[2] += 1; t[3] += int(r["failed_attempts"]); t[4] += num(r["failed_attempts_s"]) or 0
+    t[5] += (num(r["gen_alloc_bytes"]) or 0) / 1e6; t[6] += (num(r["solve_alloc_bytes"]) or 0) / 1e6
+wcsv("timing.csv", ["run", "castle", "gen_wall_s", "solve_wall_s", "slices", "failed_slice_attempts", "failed_slice_attempts_s", "gen_alloc_mb", "solve_alloc_mb"],
+     [[k[0], k[1]] + [round(x, 3) if isinstance(x, float) else x for x in v] for k, v in sorted(timing.items())])
+mt = defaultdict(lambda: [0, 0, 0.0, 0.0])                          # (run, kind, role) -> tried, accepted, accepted ms, refused ms
+for m in tables["modules.csv"]:
+    if m.get("wall_ms", "") == "":
+        continue
+    t = mt[(m["run"], m["kind"], m["role"])]; t[0] += 1
+    if m["accepted"] == "true" and m["final_attempt"] == "true":
+        t[1] += 1; t[2] += float(m["wall_ms"])
+    else:
+        t[3] += float(m["wall_ms"])
+wcsv("module_timing.csv", ["run", "kind", "role", "tried", "accepted", "acceptance_rate", "accepted_ms", "refused_or_discarded_ms", "mean_ms_per_try"],
+     [[k[0], k[1], k[2], v[0], v[1], round(v[1] / v[0], 3) if v[0] else "", round(v[2], 1), round(v[3], 1), round((v[2] + v[3]) / v[0], 2) if v[0] else ""] for k, v in sorted(mt.items())])
+
+HZ = tables["hazards.csv"]
+expo = defaultdict(lambda: [0, 0, 0, 0])                             # (mode, type) -> placed, scored, sharing a platform, route links exposed
+for h in HZ:
+    e = expo[(run_mode.get(h["run"], "?"), h["type"])]; e[0] += 1; e[1] += h["status"] in ("SCORED", "MITIGATION")
+    e[2] += h["same_platform_threats"] not in ("[]", ""); e[3] += int(h["route_links_exposed"] or 0)
+wcsv("exposure.csv", ["mode", "type", "placed", "scored_or_active", "sharing_platform_with_other_threats", "route_links_exposed_total"], [list(k) + v for k, v in sorted(expo.items())])
+
+COVERAGE = [
+    ("generation time per run / castle / chunk", "available", "chunks.csv, timing.csv, run.json"),
+    ("generation time per module attempt and slice attempt", "available", "modules.csv wall_ms, chunks.csv"),
+    ("time in accepted / refused / fallback candidates and slice retries", "available", "chunks.csv, module_timing.csv"),
+    ("time in validation, solver proof and rollback inside one attempt", "unavailable", "they run inside one generator call; separating them needs new hooks deep in commit()/rollbackTo"),
+    ("module selection attempts, refusal reasons, acceptance rates", "available", "modules.csv, module_timing.csv, module_inventory.csv"),
+    ("per-type hazard/enemy selection attempts and refusals", "unavailable", "placement draws happen inside module builders; only module-level attempts and refusal counters are observable"),
+    ("missing hazard/enemy types", "available", "inventory.csv, report_full.json"),
+    ("memory: allocated bytes per slice (generation, solver), heap used", "available", "chunks.csv (HotSpot ThreadMXBean)"),
+    ("terrain geometry, gap ratio, landing width, route mechanics, recovery platforms", "available", "links.csv, windows.csv route_mechanics / recovery_platforms"),
+    ("hazard parameters, hit radius, route exposure, overlapping threats", "partial", "hazards.csv, exposure.csv; swept danger areas and timing windows of aimed cannons and spikes are not computed"),
+    ("enemy aggression parameters, placement, reach/pursuit", "available", "run.json mode_parameters, hazards.csv enemy_reach_*"),
+    ("actual enemy encounters (contacts) during solving", "unavailable", "the solver reports setbacks per link, not which object caused them; links.csv setbacks next to its enemies/hazards is the closest evidence"),
+    ("terrain/hazard/enemy interactions", "available", "ledger.csv INTERACTION rows"),
+    ("solver planning, wall time, sim time, refused plans, revisits, failures and locations", "available", "links.csv, solver.csv, solver_failures.csv"),
+    ("spikes, valleys, pacing, castle progression", "available", "pacing.csv, report_full.json progression"),
+    ("component contributions per mode", "available", "components.csv, components_report.pdf"),
+    ("placement-rule checks", "available", "rule_checks.csv, report_full.json owner_rule_checks"),
+]
+blank = []
+for f in FILES:
+    rows = tables[f]
+    if not rows:
+        blank.append([f, "", "NO ROWS (file absent or empty)", ""]); continue
+    for col in rows[0].keys():
+        n = sum(1 for r in rows if r.get(col, "") in ("", None))
+        if n:
+            blank.append([f, col, n, len(rows)])
+wcsv("coverage.csv", ["measurement", "status", "where / why"], COVERAGE)
+wcsv("unmeasured_fields.csv", ["file", "column", "blank_values", "rows"], blank)
+
+with PdfPages(os.path.join(OUT, "components_report.pdf")) as pdf:
+    for mode in MODES:
+        runs_m = [r for r in RUNS if run_mode[r] == mode]
+        if not runs_m:
+            continue
+        fig, axs = plt.subplots(3, 1, figsize=(11.69, 8.27), sharex=True)
+        for ax, lane in zip(axs, LANES):
+            rules_ = sorted({k[4] for k in comp if k[0] == mode and k[3] == lane})
+            bottom = np.zeros(10)
+            for rule in rules_:
+                vals = np.array([sum(comp.get((mode, r, c, lane, rule), 0) for r in runs_m) / len(runs_m) for c in range(1, 11)])
+                ax.bar(range(1, 11), vals, bottom=bottom, label=rule); bottom += vals
+            ax.set_ylabel(lane, fontsize=8); ax.legend(fontsize=5, ncol=4, loc="upper left")
+        axs[0].set_title(f"{mode}: lane totals per castle by component (mean over seeds)"); axs[2].set_xticks(range(1, 11)); axs[2].set_xlabel("castle")
+        fig.tight_layout(); pdf.savefig(fig); plt.close(fig)
+    fig, axs = plt.subplots(2, 2, figsize=(11.69, 8.27))
+    for mode in MODES:
+        for ax, idx_, title in [(axs[0, 0], 0, "generation wall time per castle (s)"), (axs[0, 1], 1, "solver wall time per castle (s)"), (axs[1, 0], 5, "generation allocation per castle (MB)")]:
+            xs = list(range(1, 11)); ys = [np.mean([timing[(r, c)][idx_] for r in RUNS if run_mode[r] == mode and (r, c) in timing] or [np.nan]) for c in xs]
+            ax.plot(xs, ys, marker="o", color=MODE_COL[mode], label=mode); ax.set_title(title, fontsize=8); ax.legend(fontsize=6)
+    for mode in MODES:
+        acc = sum(v[2] for k, v in mt.items() if run_mode.get(k[0]) == mode) / 1000; rej = sum(v[3] for k, v in mt.items() if run_mode.get(k[0]) == mode) / 1000
+        axs[1, 1].bar([f"{mode}\naccepted", f"{mode}\nrefused"], [acc, rej], color=MODE_COL[mode])
+    axs[1, 1].set_title("module time: accepted vs refused/discarded (s, all seeds)", fontsize=8); axs[1, 1].tick_params(labelsize=6)
+    fig.tight_layout(); pdf.savefig(fig); plt.close(fig)
+    fig, axs = plt.subplots(1, 2, figsize=(11.69, 5))
+    for mode in MODES:
+        xs = list(range(1, 11))
+        axs[0].plot(xs, [np.mean([p[8] for p in pacing if p[1] == mode and p[2] == c] or [np.nan]) for c in xs], marker="o", color=MODE_COL[mode], label=mode)
+        axs[1].plot(xs, [np.mean([p[10] for p in pacing if p[1] == mode and p[2] == c] or [np.nan]) for c in xs], marker="o", color=MODE_COL[mode], label=mode)
+    axs[0].set_title("difficulty spikes per castle (windows above Q3 + 1.5 IQR)", fontsize=8); axs[1].set_title("longest valley per castle (m at or below Q1)", fontsize=8)
+    for ax in axs:
+        ax.legend(fontsize=6); ax.set_xticks(range(1, 11))
+    fig.tight_layout(); pdf.savefig(fig); plt.close(fig)
+    text_page(pdf, "Measurement coverage (expansion)", [f"{m:75s} {st:12s} {why}" for m, st, why in COVERAGE] + ["", "Blank (unmeasured) fields per file: unmeasured_fields.csv"], 5.5)
+
 # ------------------------------------------------------------------ index
 idx = ["# Upwardly three-lane difficulty baseline - report index", "",
        f"Scoring model: `{full['scoring_model']}` (reference: v2 DifficultyScore, separate column). Generator rules: v{runs[0]['generator_rules_version'] if runs else '?'}.",
@@ -482,7 +604,12 @@ idx = ["# Upwardly three-lane difficulty baseline - report index", "",
        "| rule_checks.csv | owner future-rule discrepancies (reported, not enforced) |",
        "| windows_v2_reference.csv | the earlier single-score model, for reference only |",
        "| report_full.json | all runs, totals, castles, progression, mode comparison, rule checks, validation, notes |",
-       "| validation.json | coverage, ledger reconciliation and CSV/JSON agreement per run |", "",
+       "| validation.json | coverage, ledger reconciliation and CSV/JSON agreement per run |",
+       "| components_report.pdf | per-mode lane components by castle, generation/solver timing and allocation, module time accepted vs refused, spikes and valleys, coverage |",
+       "| chunks.csv / timing.csv / module_timing.csv | generation and solver wall time, slice retries, accepted/refused module time, allocation and heap per slice/castle/kind |",
+       "| hazards.csv / exposure.csv | every hazard/enemy/club: parameters, hit radius, route exposure, threats sharing its platform, enemy reach |",
+       "| components.csv / pacing.csv | every rule's contribution per mode, run, castle and lane / spikes, valleys and zero-lane windows per castle |",
+       "| coverage.csv / unmeasured_fields.csv | what is measured, partial or unavailable (and why) / blank values per column |", "",
        "Incomplete datasets: " + ("; ".join(notes) if notes else "none")]
 open(os.path.join(OUT, "INDEX.md"), "w").write("\n".join(idx) + "\n")
 print(f"runs {len(runs)}, windows {len(W)}, ledger {len(tables['ledger.csv'])}; validation: " + ", ".join(f"{k} {'PASS' if v['passed'] else 'FAIL'}" for k, v in validation.items()) + f"; notes {notes}")

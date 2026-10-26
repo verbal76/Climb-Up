@@ -32,14 +32,15 @@ public final class LaneReport {
     }
     public static final class Link {
         int slice, from, to; String fromId, toId, fromType, toType; double y0, y1, gap = Double.NaN, dy, reach = Double.NaN, ratio = Double.NaN, landW = Double.NaN, terrain;
-        String status = "NOT_SOLVED"; double solveTime = Double.NaN; int setbacks = -1, planFails; float emJump, emPosition, emWait, emCommit, emRecover, emPursue, emScore;
+        String status = "NOT_SOLVED"; double solveTime = Double.NaN, solveWall = Double.NaN; int setbacks = -1, planFails, visits; float emJump, emPosition, emWait, emCommit, emRecover, emPursue, emScore;
         double[] fractions; int[] windows; Set<Element.Type> hazards = EnumSet.noneOf(Element.Type.class), enemies = EnumSet.noneOf(Element.Type.class);
     }
     public static final class Win {
         int index; double[] raw = new double[3], adj = new double[3]; double mitigation, interaction; boolean geometry;
         EnumMap<Element.Type, Double> counts = new EnumMap<>(Element.Type.class); TreeMap<String, Integer> modules = new TreeMap<>();
         int linksTotal, linksTraversed, linksFailed, linksUnreached, setbacks, planFails, rejected, fallbacks, demandingLinks, offRouteHazards, unreachableEnemies, decoys;
-        double solveTime, maxRatio = Double.NaN, minLandW = Double.NaN; TreeSet<String> flags = new TreeSet<>(); float v2 = Float.NaN;
+        double solveTime, solveWall, maxRatio = Double.NaN, minLandW = Double.NaN; TreeSet<String> flags = new TreeSet<>(); float v2 = Float.NaN;
+        TreeMap<String, Integer> mech = new TreeMap<>(); int recovery;
         double total() { return adj[0] + adj[1] + adj[2] + interaction - mitigation; }
     }
 
@@ -54,6 +55,7 @@ public final class LaneReport {
     public final EnumMap<Element.Type, int[]> inventory = new EnumMap<>(Element.Type.class);   // {placed (in course), on route / reaching route (active), scored}
     public final TreeMap<String, int[]> kindStats = new TreeMap<>();   // kind -> {tried, accepted (final course), refused, fallback picks}
     public final List<String[]> ruleChecks = new ArrayList<>();
+    public final List<String[]> chunks = new ArrayList<>(), hazardRows = new ArrayList<>();
     public float reached; public int slices; public String stopped; public double genSeconds, solveSeconds; public boolean solve;
     final DifficultyScore v2;
     private final Set<String> seenHaz = new HashSet<>();
@@ -75,17 +77,22 @@ public final class LaneReport {
         CourseGenerator.Framed f = null; int k = 0;
         try {
             while (f == null || f.yBase + f.c.get(f.c.routeSize() - 1).y < top) {
-                GenTrace tr = new GenTrace(); GenTrace.GEN.set(tr); long g0 = System.nanoTime();
+                GenTrace tr = new GenTrace(); GenTrace.GEN.set(tr); long g0 = System.nanoTime(), ga = alloc();
                 try { f = CourseGenerator.chunkFramed(seed, k, f, t); } finally { GenTrace.GEN.remove(); }
-                genSeconds += (System.nanoTime() - g0) / 1e9;
-                GenTrace.Solve st = null; Autopilot.Report rep = null;
+                double gs = (System.nanoTime() - g0) / 1e9; long gal = ga < 0 ? -1 : alloc() - ga; genSeconds += gs;
+                GenTrace.Solve st = null; Autopilot.Report rep = null; double secs = Double.NaN; long sal = -1;
                 if (solve) {
-                    st = new GenTrace.Solve(); GenTrace.SOLVE.set(st); long s0 = System.nanoTime();
+                    st = new GenTrace.Solve(); GenTrace.SOLVE.set(st); long s0 = System.nanoTime(), sa = alloc();
                     try { rep = Autopilot.run(f.c, t, 4000f); } catch (RuntimeException e) { rep = new Autopilot.Report(); rep.failInfo = "solver threw " + e; } finally { GenTrace.SOLVE.remove(); }
-                    double secs = (System.nanoTime() - s0) / 1e9; solveSeconds += secs;
+                    secs = (System.nanoTime() - s0) / 1e9; solveSeconds += secs; sal = sa < 0 ? -1 : alloc() - sa;
                     solverSlices.add(new String[]{"" + k, f3(f.yBase + f.c.get(0).y), f3(f.yBase + f.c.get(f.c.routeSize() - 1).y), "" + rep.completed, "" + rep.links, "" + rep.failedLink, f3(rep.simTime), f3(rep.minMargin), "" + rep.worstLink, f3(secs), q(rep.failInfo)});
                 }
                 measure(k, f, tr, rep, st);
+                { long okN = 0, badN = 0; int bad = 0; for (long[] a : tr.attemptNanos) { if (a[2] == 1) okN += a[1]; else { badN += a[1]; bad++; } }
+                  long acc = 0, rej = 0, fb = 0; int na = 0, nr = 0; for (GenTrace.Module m : tr.modules) { if (m.ok && m.attempt == tr.finalAttempt) { acc += m.nanos; na++; } else { rej += m.nanos; nr++; } if ("FALLBACK".equals(m.role)) fb += m.nanos; }
+                  Runtime rt = Runtime.getRuntime();
+                  chunks.add(new String[]{"" + k, f3(f.yBase + f.c.get(0).y), f3(f.yBase + f.c.get(f.c.routeSize() - 1).y), "" + castleOf(f.yBase + f.c.get(0).y), f3(gs), "" + tr.attemptNanos.size(), "" + bad,
+                    f3(okN / 1e9), f3(badN / 1e9), "" + na, f3(acc / 1e9), "" + nr, f3(rej / 1e9), f3(fb / 1e9), "" + tr.relaxed, gal < 0 ? "" : "" + gal, f3(secs), sal < 0 ? "" : "" + sal, "" + (rt.totalMemory() - rt.freeMemory())}); }
                 v2.add(f.c, (float) f.yBase);
                 reached = (float) (f.yBase + f.c.get(f.c.routeSize() - 1).y); k++;
                 if ((System.nanoTime() - t0) / 1e9 > budget) { stopped = "time budget of " + (int) budget + " s reached (partial results)"; break; }
@@ -106,7 +113,7 @@ public final class LaneReport {
             int e0 = m.e0 - tr.offset, e1 = m.e1 - tr.offset;
             if (fin && m.ok) { ks[1]++; for (int i = Math.max(0, e0); i < Math.min(c.size(), e1); i++) { owner[i] = id; ownerKind[i] = m.kind; } }
             modules.add(new String[]{id, "" + k, "" + m.attempt, "" + fin, m.kind, m.role, m.picked == null ? "" : m.picked, f3(m.d), f3(m.y), "" + m.ok, "" + e0, "" + e1, "" + (m.h1 - m.h0),
-                "" + m.fails[0], "" + m.fails[1], "" + m.fails[2], "" + m.fails[3], "" + m.fails[4], "" + m.fails[5]});
+                "" + m.fails[0], "" + m.fails[1], "" + m.fails[2], "" + m.fails[3], "" + m.fails[4], "" + m.fails[5], "STRUCTURE".equals(m.role) ? "" : f3(m.nanos / 1e6)});
             if (!m.ok) { Win w = win(wi(m.y)); w.rejected++; }
             if ("FALLBACK".equals(m.role) && m.ok && fin) win(wi(m.y)).fallbacks++;
         }
@@ -141,7 +148,9 @@ public final class LaneReport {
             for (int a = 0; a < st.arrivals.size(); a++) {
                 float[] x = st.arrivals.get(a), nx = a + 1 < st.arrivals.size() ? st.arrivals.get(a + 1) : null;
                 double dt = nx != null ? nx[1] - x[1] : rep.simTime - x[1]; int sbk = nx != null ? (int) (nx[2] - x[2]) : 0;
-                double[] prev = solved.get((int) x[0]); solved.put((int) x[0], new double[]{(prev == null ? 0 : prev[0]) + dt, (prev == null ? 0 : prev[1]) + sbk});
+                double dw = a + 1 < st.wall.size() ? (st.wall.get(a + 1) - st.wall.get(a)) / 1e9 : Double.NaN;
+                double[] prev = solved.get((int) x[0]);
+                solved.put((int) x[0], new double[]{(prev == null ? 0 : prev[0]) + dt, (prev == null ? 0 : prev[1]) + sbk, (prev == null ? 0 : prev[2]) + (Double.isNaN(dw) ? 0 : dw), (prev == null ? 0 : prev[3]) + 1});
             }
         }
         Map<Integer, Integer> planFails = new HashMap<>(); if (st != null) for (int[] p : st.planFails) planFails.merge(p[0], p[1], Integer::sum);
@@ -158,6 +167,15 @@ public final class LaneReport {
             r.structure = home != null ? home.structure : "";
             boolean onRoute = h.anchor >= 0 && h.anchor < rs && c.get(h.anchor).anchor < 0; r.route = onRoute;
             hazards.add(r); inventory.get(h.type)[0]++;
+            {   // observed hazard/enemy detail: parameters the Sim reads, route exposure, threats sharing the platform, enemy reach
+                int exposed = 0; for (int i = 0; i < rs - 1; i++) if (c.get(i).anchor < 0 && (i == h.anchor || c.nextRoute(i) == h.anchor)) exposed++;
+                Set<Element.Type> share = EnumSet.noneOf(Element.Type.class); for (Element o : c.hazards) if (o != h && o.anchor == h.anchor && Lanes.lane(o.type) != Lanes.Lane.UTILITY) share.add(o.type);
+                int reachN = 0; TreeSet<Integer> reachW = new TreeSet<>();
+                if (ln == Lanes.Lane.ENEMIES) for (int p = Math.max(0, h.anchor - 4); p <= Math.min(rs - 1, h.anchor + 4); p++) if (c.get(p).anchor < 0 && EncounterModel.reaches(c, t, h, p)) { reachN++; reachW.add(wi(yb + c.get(p).y)); }
+                String status = ln == Lanes.Lane.HAZARDS ? (onRoute ? "SCORED" : "OFF_ROUTE") : ln == Lanes.Lane.ENEMIES ? (reachN > 0 ? "SCORED" : "UNREACHABLE") : h.type == Element.Type.CLUB ? (onRoute ? "MITIGATION" : "OFF_ROUTE") : "UTILITY";
+                hazardRows.add(new String[]{r.id, r.type, r.lane, status, "" + onRoute, home == null ? "" : home.id, q(r.structure), r.moduleKind, "" + r.window, "" + castleOf(r.yAbs), f3(r.sAbs), f3(r.yAbs),
+                    f3(h.w), f3(h.amp), f3(h.period), f3(h.phase), f3(h.len), "" + h.dir, f3(radius(h.type)), "" + exposed, q(share.toString()), ln == Lanes.Lane.ENEMIES ? "" + reachN : "", ln == Lanes.Lane.ENEMIES ? q(reachW.toString()) : ""});
+            }
             if (ln == Lanes.Lane.HAZARDS) {
                 if (!onRoute) { win(r.window).offRouteHazards++; continue; }
                 inventory.get(h.type)[1]++; inventory.get(h.type)[2]++;
@@ -228,18 +246,25 @@ public final class LaneReport {
             if (rep != null) {
                 double[] sv = solved.get(i); int pf = planFails.getOrDefault(i, 0); L.planFails = pf;
                 if (rep.failedLink == i) L.status = "FAILED"; else if (sv != null) L.status = "TRAVERSED"; else if (!rep.completed && (rep.failedLink < 0 || i > rep.failedLink)) L.status = "UNREACHED"; else L.status = "TRAVERSED_IN_PASSING";
-                if (sv != null) { L.solveTime = sv[0]; L.setbacks = (int) sv[1]; }
+                if (sv != null) { L.solveTime = sv[0]; L.setbacks = (int) sv[1]; L.solveWall = sv[2]; L.visits = (int) sv[3]; }
                 for (int q = 0; q < L.windows.length; q++) {
                     Win w = win(L.windows[q]);
                     if (L.status.startsWith("TRAVERSED")) w.linksTraversed++; else if ("FAILED".equals(L.status)) w.linksFailed++; else w.linksUnreached++;
                     if (!Double.isNaN(L.solveTime)) w.solveTime += L.solveTime * L.fractions[q];
+                    if (!Double.isNaN(L.solveWall)) w.solveWall += L.solveWall * L.fractions[q];
                     if (L.setbacks > 0 && q == 0) w.setbacks += L.setbacks; if (q == 0) w.planFails += pf;
                 }
                 if ("FAILED".equals(L.status)) solverFailures.add(new String[]{"" + k, L.fromId, L.toId, L.fromType, L.toType, f3(L.y0), f3(L.y1), "" + castleOf(L.y0), q(rep.failInfo)});
             }
             links.add(L);
         }
-        for (El r : byIdx.values()) { Win w = win(r.window); w.modules.merge(r.moduleKind, 1, Integer::sum); }
+        for (El r : byIdx.values()) {
+            Win w = win(r.window); w.modules.merge(r.moduleKind, 1, Integer::sum);
+            if (!r.route) continue;
+            Element e = r.e; String m = e.type.name() + (e.type == Element.Type.RAMP ? "/skin" + e.skin : e.type == Element.Type.STATIC && e.skin == 1 ? (e.holed() ? "/holed-bridge" : "/bridge") : e.wet() ? "/wet" : e.crumbles() && e.type != Element.Type.CRUMBLE ? "/crumbling" : "");
+            w.mech.merge(m, 1, Integer::sum);
+            if (e.checkpoint || r.structure.startsWith("rest") || r.structure.startsWith("castle") || r.structure.startsWith("gem")) w.recovery++;
+        }
     }
 
     private El homeOfContext(double y) { for (int i = elements.size() - 1; i >= 0; i--) if (Math.abs(elements.get(i).yAbs - y) < 1e-3 && elements.get(i).route) return elements.get(i); return null; }
@@ -287,6 +312,13 @@ public final class LaneReport {
         if (stopped != null && !windows.isEmpty()) windows.lastEntry().getValue().flags.add("RUN_STOPPED_HERE");
     }
 
+    static double radius(Element.Type k) {
+        switch (k) { case SAW_H: case SAW_V: return Element.SAW_R; case PENDULUM: return Element.BALL_R; case CANNON: return Element.SHOT_R; case MORTAR: return Element.MORTAR_R; default: return Double.NaN; }
+    }
+    static long alloc() {
+        try { java.lang.management.ThreadMXBean b = java.lang.management.ManagementFactory.getThreadMXBean(); return b instanceof com.sun.management.ThreadMXBean ? ((com.sun.management.ThreadMXBean) b).getCurrentThreadAllocatedBytes() : -1; }
+        catch (Throwable e) { return -1; }
+    }
     static int castleOf(double y) { return Math.min(10, 1 + (int) (y / CASTLE)); }
     static double clamp(double x) { return Math.max(0, Math.min(1, x)); }
     static String f3(double v) { return Double.isNaN(v) ? "" : String.format(Locale.ROOT, "%.3f", v); }
@@ -307,12 +339,12 @@ public final class LaneReport {
         try (PrintWriter w = pw(out, "windows.csv")) {
             w.println("run,mode,seed,castle,window,y0,y1,terrain_raw,terrain_adj,hazard_raw,hazard_adj,enemy_raw,enemy_adj,mitigation,interaction,total_reference,v2_reference_score,"
                 + "links,demanding_links,max_gap_ratio,min_landing_width,decoy_elements,off_route_hazards,unreachable_enemies,solver_links_traversed,solver_links_failed,solver_links_unreached,"
-                + "solver_time_s,solver_setbacks,solver_plan_failures,gen_rejected_attempts,gen_fallbacks,modules,counts,flags");
+                + "solver_time_s,solver_setbacks,solver_plan_failures,gen_rejected_attempts,gen_fallbacks,modules,counts,flags,route_mechanics,recovery_platforms,solver_wall_s");
             for (Win x : windows.values()) w.println(String.join(",", run, MODE[mode], "" + seed, "" + castleOf(x.index * WINDOW), "" + x.index, f3(x.index * WINDOW), f3((x.index + 1) * WINDOW),
                 x.geometry ? f3(x.raw[0]) : "", x.geometry ? f3(x.adj[0]) : "", f3(x.raw[1]), f3(x.adj[1]), f3(x.raw[2]), f3(x.adj[2]), f3(x.mitigation), f3(x.interaction), f3(x.total()), f3(x.v2),
                 "" + x.linksTotal, "" + x.demandingLinks, f3(x.maxRatio), f3(x.minLandW), "" + x.decoys, "" + x.offRouteHazards, "" + x.unreachableEnemies,
                 solve ? "" + x.linksTraversed : "", solve ? "" + x.linksFailed : "", solve ? "" + x.linksUnreached : "", solve ? f3(x.solveTime) : "", solve ? "" + x.setbacks : "", solve ? "" + x.planFails : "",
-                "" + x.rejected, "" + x.fallbacks, q(x.modules.toString()), q(counts(x)), q(String.join(";", x.flags))));
+                "" + x.rejected, "" + x.fallbacks, q(x.modules.toString()), q(counts(x)), q(String.join(";", x.flags)), q(x.mech.toString()), "" + x.recovery, solve ? f3(x.solveWall) : ""));
         }
         try (PrintWriter w = pw(out, "ledger.csv")) {
             w.println("run,window,castle,lane,rule,source,property,raw,weight,fraction,repetition,value,note");
@@ -325,12 +357,12 @@ public final class LaneReport {
                     "" + r.window, "" + castleOf(r.yAbs), r.module, r.moduleKind, q(r.structure))); }
         }
         try (PrintWriter w = pw(out, "links.csv")) {
-            w.println("run,slice,from,to,from_type,to_type,y0,y1,dy,gap,reach,gap_ratio,landing_width,terrain,em_jump,em_position,em_wait,em_commit,em_recover,em_pursue,em_score,hazards,enemies,solver_status,solver_time_s,setbacks,plan_failures,windows");
+            w.println("run,slice,from,to,from_type,to_type,y0,y1,dy,gap,reach,gap_ratio,landing_width,terrain,em_jump,em_position,em_wait,em_commit,em_recover,em_pursue,em_score,hazards,enemies,solver_status,solver_time_s,setbacks,plan_failures,windows,solver_wall_s,solver_visits");
             for (Link L : links) w.println(String.join(",", run, "" + L.slice, L.fromId, L.toId, L.fromType, L.toType, f3(L.y0), f3(L.y1), f3(L.dy), f3(L.gap), f3(L.reach), f3(L.ratio), f3(L.landW), f3(L.terrain),
-                f3(L.emJump), f3(L.emPosition), f3(L.emWait), f3(L.emCommit), f3(L.emRecover), f3(L.emPursue), f3(L.emScore), q(L.hazards.toString()), q(L.enemies.toString()), L.status, f3(L.solveTime), L.setbacks < 0 ? "" : "" + L.setbacks, "" + L.planFails, q(Arrays.toString(L.windows))));
+                f3(L.emJump), f3(L.emPosition), f3(L.emWait), f3(L.emCommit), f3(L.emRecover), f3(L.emPursue), f3(L.emScore), q(L.hazards.toString()), q(L.enemies.toString()), L.status, f3(L.solveTime), L.setbacks < 0 ? "" : "" + L.setbacks, "" + L.planFails, q(Arrays.toString(L.windows)), f3(L.solveWall), "" + L.visits));
         }
         try (PrintWriter w = pw(out, "modules.csv")) {
-            w.println("run,id,slice,attempt,final_attempt,kind,role,picked_first,difficulty,y,accepted,e0,e1,hazards_added,refused_layer,refused_hazard,refused_plan,refused_window,refused_conflict,refused_threat");
+            w.println("run,id,slice,attempt,final_attempt,kind,role,picked_first,difficulty,y,accepted,e0,e1,hazards_added,refused_layer,refused_hazard,refused_plan,refused_window,refused_conflict,refused_threat,wall_ms");
             for (String[] m : modules) w.println(run + "," + String.join(",", m));
         }
         try (PrintWriter w = pw(out, "solver.csv")) {
@@ -359,6 +391,14 @@ public final class LaneReport {
             for (String[] k : all) { int[] v = kindStats.get(k[0]);
                 String st = v[0] == 0 ? "NEVER SELECTED (no attempt observed)" : v[1] == 0 ? "SELECTED, NEVER ACCEPTED" : "ACCEPTED";
                 w.println(String.join(",", run, MODE[mode], k[0], q(k[1]), "" + v[0], "" + v[1], "" + v[2], "" + v[3], q(st))); }
+        }
+        try (PrintWriter w = pw(out, "chunks.csv")) {
+            w.println("run,slice,y0,y1,castle,gen_wall_s,slice_attempts,failed_attempts,final_attempt_s,failed_attempts_s,modules_accepted,accepted_modules_s,modules_refused_or_discarded,refused_or_discarded_s,fallback_s,relaxed,gen_alloc_bytes,solve_wall_s,solve_alloc_bytes,heap_used_bytes");
+            for (String[] m : chunks) w.println(run + "," + String.join(",", m));
+        }
+        try (PrintWriter w = pw(out, "hazards.csv")) {
+            w.println("run,id,type,lane,status,on_route,platform,structure,module_kind,window,castle,s,y,w,amp,period,phase,len,dir,hit_radius,route_links_exposed,same_platform_threats,enemy_reach_platforms,enemy_reach_windows");
+            for (String[] m : hazardRows) w.println(run + "," + String.join(",", m));
         }
         List<String[]> castles = castleRows(run);
         try (PrintWriter w = pw(out, "castles.csv")) {
@@ -406,11 +446,14 @@ public final class LaneReport {
         j.append(",\"castles\":["); first = true;
         for (String[] r : castles) { j.append(first ? "" : ",").append("{\"castle\":").append(r[3]).append(",\"lane\":").append(js(r[4])).append(",\"windows\":").append(r[5]).append(",\"mean\":").append(num(r[6])).append(",\"median\":").append(num(r[7]))
             .append(",\"min\":").append(num(r[8])).append(",\"max\":").append(num(r[9])).append(",\"sd\":").append(num(r[10])).append(",\"q1\":").append(num(r[11])).append(",\"q3\":").append(num(r[12])).append(",\"adj_sum\":").append(num(r[14])).append('}'); first = false; }
-        j.append("],\"files\":[\"windows.csv\",\"ledger.csv\",\"elements.csv\",\"links.csv\",\"modules.csv\",\"solver.csv\",\"solver_failures.csv\",\"generation_failures.csv\",\"rule_checks.csv\",\"inventory.csv\",\"module_inventory.csv\",\"castles.csv\",\"windows_v2_reference.csv\"]");
+        j.append("],\"files\":[\"windows.csv\",\"ledger.csv\",\"elements.csv\",\"links.csv\",\"modules.csv\",\"solver.csv\",\"solver_failures.csv\",\"generation_failures.csv\",\"rule_checks.csv\",\"inventory.csv\",\"module_inventory.csv\",\"castles.csv\",\"windows_v2_reference.csv\",\"chunks.csv\",\"hazards.csv\"]");
         j.append(",\"measurement_limits\":[\"cannon pillars and mortar emplacements are render-only (no traversal geometry in the simulation); they contribute no terrain\","
             + "\"hazard attack envelopes are reported as the element parameters the Sim interprets (amp, period, len, phase, dir), not swept volumes\","
             + "\"per-type hazard and enemy placement attempts are not observable; module attempts and refusal counters are\","
-            + "\"solver time per link is the gap between the solver's arrivals at successive links (supporting evidence, never a score)\"]}");
+            + "\"solver time per link is the gap between the solver's arrivals at successive links (supporting evidence, never a score)\","
+            + "\"generation time is per module attempt and per slice attempt (wall clock); validation, rollback and solver-proof time inside an attempt are not separated\","
+            + "\"allocation is the generating thread's allocated bytes (HotSpot ThreadMXBean); blank when the JVM does not provide it\","
+            + "\"aimed-cannon and spike timing envelopes, actual enemy contacts and per-type placement attempts need Sim/generator internals and are not measured\"]}");
         return j.toString();
     }
     String modeParams() {

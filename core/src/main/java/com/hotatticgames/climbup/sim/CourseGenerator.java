@@ -335,7 +335,11 @@ public final class CourseGenerator {
                 lastForkY = last.y - forkEvery + 8f;          // no room here: try again a little higher
             }
             Kind k = pick(zone, last);
-            if (deferredHaz != null && !last.wet()) { k = deferredHaz; deferredHaz = null; }          // a hazard the Frost world's rain displaced comes on the next dry platform instead of being lost
+            // the spiral pitch controller (pick): while the route lags the climb a revolution needs, vertical modules come first; a lagging route brings the
+            // next revolution down onto this one, after which every module fails the layer rule (NGH 2d4388a: "cannot extend course"). The safety-pressure
+            // rules below (deferred Frost hazards, plain-pick pressure, threat fallback) therefore wait while it lags.
+            boolean lagging = last.y - T.spiralPitch * (last.s - 4f) / c.circumference < -2f;
+            if (deferredHaz != null && !last.wet() && !lagging) { k = deferredHaz; deferredHaz = null; }          // a hazard the Frost world's rain displaced comes on the next dry platform instead of being lost
             boolean clubTarget = false;
             if (clubBoost > 0) { clubBoost--; k = rnd.nextBoolean() ? Kind.TRAP : Kind.HAZ; clubTarget = true; }      // Build 71 (owner): a club was just placed - the next few modules give it crabs and bees to hit
             wantCreature = clubTarget;
@@ -348,7 +352,7 @@ public final class CourseGenerator {
             if (hazOk && k != Kind.WET && k != Kind.CREATURE && !last.wet() && prev != Kind.DROPS && (secondHalf ? rnd.nextFloat() < 0.10f : rnd.nextFloat() < 0.015f + 0.025f * lv)) k = Kind.DROPS;      // (spike-drop rows anywhere, more higher up; was world 2 on)
             // a little rougher than the first half, and (Phase 1, 2026-10-26) from then on: it applied to castle 2 alone, so castle 2 stood out as a hazard
             // spike and castle 3 fell back to the first half's mix (the chained spike drops above stay castle 2's own)
-            else if (hazOk && (k == Kind.HOP || k == Kind.STAIRS) && rnd.nextFloat() < Math.max((secondHalf || (endless && last.y + base >= T.zoneHeight)) ? 0.3f : 0f, endless ? P.pressure(level(last.y)) : 0f))
+            else if (hazOk && (k == Kind.HOP || (k == Kind.STAIRS && !lagging)) && rnd.nextFloat() < Math.max((secondHalf || (endless && last.y + base >= T.zoneHeight)) ? 0.3f : 0f, endless ? P.pressure(level(last.y)) : 0f))
                 k = rnd.nextFloat() < 0.6f ? Kind.HAZ : Kind.TRAP;          // owner 2026-10-26: plain platforms grow rarer with the climb and the mode (DifficultyProfile.pressure)
             if (last.wet() && (k == Kind.HAZ || k == Kind.TRAP || k == Kind.MORTAR || k == Kind.CREATURE || k == Kind.DROPS)) { GenTrace.tally("wet_stairs_" + k); deferredHaz = k; k = Kind.STAIRS; }          // after a slippery platform give a walk-up (not a hazard you must time, nor a jump you must push off a slippery surface for): its timing windows assume a normal run-up (SawFairnessTest) and the plain climb stays walkable
             if (beltSawY > 0f && !beltSawDone && last.y >= beltSawY && !last.wet() && !(castlePending && last.y > castleTarget - 14f)) {      // Build 77: this section's balance conveyor (tried again on the next module if it cannot be proven here)
@@ -359,9 +363,9 @@ public final class CourseGenerator {
                 rejected++;
                 boolean ok = false;
                 tracePicked = k.name(); traceRole = "FALLBACK";
-                if (endless && hazOk && !last.wet() && hazardKind(k) && rnd.nextFloat() < P.threatFallback(level(last.y))) {          // owner 2026-10-26: a refused hazard tries another hazard before a safe platform
-                    for (Kind fb : new Kind[]{Kind.HAZ, Kind.TRAP, Kind.CREATURE}) { if (fb != k && tryModuleBelow(fb, d, th)) { k = fb; ok = true; GenTrace.tally("threat_fallback_ok"); break; } }
-                    if (!ok) GenTrace.tally("threat_fallback_failed");
+                if (endless && hazOk && !last.wet() && !lagging && hazardKind(k) && rnd.nextFloat() < P.threatFallback(level(last.y))) {          // owner 2026-10-26: a refused hazard tries one other hazard before a safe platform
+                    Kind fb = k == Kind.HAZ ? Kind.TRAP : Kind.HAZ;          // one alternative only: trying three, each with its full set of placement attempts, made NGH generation 3-4x slower (2d4388a)
+                    if (tryModuleBelow(fb, d, th)) { k = fb; ok = true; GenTrace.tally("threat_fallback_ok"); } else GenTrace.tally("threat_fallback_failed");
                 }
                 if (!ok) for (Kind fb : new Kind[]{Kind.PAD, Kind.ROPE, Kind.MOVER_V, Kind.STAIRS, Kind.HOP}) { if (fb != k && tryModuleBelow(fb, 0.15f, th)) { k = fb; ok = true; break; } }
                 traceRole = "PICK"; tracePicked = null;

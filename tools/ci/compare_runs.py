@@ -160,6 +160,27 @@ if fa:
                 k, v = kv.split("="); why[k] += int(v)
         print(m, dict(tot)); print("   reasons", dict(why.most_common(12)))
 
+# ---- traversal variety (owner 2026-10-26): ropes and ordinary traversal per castle, both runs (traversal.csv; absent in older runs)
+for name, d in (("new", sys.argv[2]), ("base", sys.argv[1])):
+    tv = rows(d, "traversal.csv")
+    if not tv: print("=== traversal variety (" + name + "): not in this run ==="); continue
+    print("=== traversal variety (" + name + "): challenge density | fallbacks (rope share) | ropes pick/fallback | max ropes in a row | max ordinary links in a row | longest unchallenged climb m | rope climb m | unchallenged horizontal m ===")
+    for m in MODES:
+        agg = defaultdict(lambda: Counter()); mx = defaultdict(lambda: Counter())
+        for r in tv:
+            if mode(r["run"]) != m: continue
+            c = int(r["castle"]); a = agg[c]
+            for k in ("route_links", "challenge_links", "fallbacks_accepted", "rope_picks", "rope_fallbacks"): a[k] += int(r[k])
+            for k in ("rope_climb_m", "unchallenged_horizontal_m"): a[k] += float(r[k])
+            for k in ("max_consecutive_rope_modules", "max_consecutive_ordinary_links"): mx[c][k] = max(mx[c][k], int(r[k]))
+            mx[c]["longest"] = max(mx[c]["longest"], float(r["longest_unchallenged_climb_m"]))
+        if not agg: continue
+        print(m)
+        for c in sorted(agg):
+            a = agg[c]; fb = max(1, a["fallbacks_accepted"])
+            print("   C%d %.2f | %d (%.0f%%) | %d/%d | %d | %d | %.1f | %.0f | %.0f" % (c, a["challenge_links"] / max(1, a["route_links"]), a["fallbacks_accepted"], 100 * a["rope_fallbacks"] / fb,
+                  a["rope_picks"], a["rope_fallbacks"], mx[c]["max_consecutive_rope_modules"], mx[c]["max_consecutive_ordinary_links"], mx[c]["longest"], a["rope_climb_m"], a["unchallenged_horizontal_m"]))
+
 # ---- generation failures (new run): per run, failed slice attempts, the stop reason, and the last failures with their refusal counters
 gf = rows(sys.argv[2], "generation_failures.csv")
 print("=== generation failures (new): failed slice attempts per run; last 6 per run ===")

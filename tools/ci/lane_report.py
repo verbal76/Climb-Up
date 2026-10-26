@@ -24,7 +24,7 @@ COLORS = {"TERRAIN": "#3b7dd8", "HAZARDS": "#d8743b", "ENEMIES": "#8e44ad", "INT
 MODE_COL = {"NORMAL": "#2e86c1", "PUNISHER": "#cb4335", "NGH": "#17202a"}
 FILES = ["windows.csv", "ledger.csv", "elements.csv", "links.csv", "modules.csv", "solver.csv", "solver_failures.csv", "generation_failures.csv",
          "rule_checks.csv", "inventory.csv", "module_inventory.csv", "castles.csv", "windows_v2_reference.csv", "chunks.csv", "hazards.csv",
-         "forks.csv", "fork_attempts.csv", "platforms.csv"]
+         "forks.csv", "fork_attempts.csv", "platforms.csv", "traversal.csv"]
 FUTURE_INTRO = {"NORMAL": 8, "PUNISHER": 4, "NGH": 1}           # owner's approximate intermediate-platform enemy introduction castle (future rule)
 PURSUIT_FROM = {"NORMAL": None, "PUNISHER": 3333.0, "NGH": 1667.0}  # owner's future pursuit-into-hazard-section permission heights
 

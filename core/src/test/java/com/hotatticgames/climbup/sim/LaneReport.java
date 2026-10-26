@@ -56,6 +56,8 @@ public final class LaneReport {
     public final TreeMap<String, int[]> kindStats = new TreeMap<>();   // kind -> {tried, accepted (final course), refused, fallback picks}
     public final List<String[]> ruleChecks = new ArrayList<>();
     public final List<String[]> chunks = new ArrayList<>(), hazardRows = new ArrayList<>(), forkRows = new ArrayList<>(), forkCountRows = new ArrayList<>(), platformRows = new ArrayList<>();
+    /** Traversal variety (owner 2026-10-26, release requirement): route links in climbing order {castle, y0, y1, arc m, rope rise m, challenge 0/1, rope link 0/1}, and the accepted modules {castle, kind, role}. */
+    final List<double[]> travLinks = new ArrayList<>(); final List<String[]> travMods = new ArrayList<>();
     static final String[] FORK_COUNTS = {"fork_try", "fork_ok", "padfork_try", "padfork_ok", "subfork_eligible", "subfork_try", "subfork_ok", "subfork_refused"};
 
     static boolean enemy(Element h) { return h.type == Element.Type.CRAB || h.type == Element.Type.BEE || h.type == Element.Type.SKULL || h.type == Element.Type.BLOB; }
@@ -168,7 +170,7 @@ public final class LaneReport {
             String id = k + ":m" + (mi++); boolean fin = m.attempt == tr.finalAttempt;
             int[] ks = kindStats.computeIfAbsent(m.kind, x -> new int[4]); ks[0]++; if (!m.ok) ks[2]++; if ("FALLBACK".equals(m.role) && m.ok) ks[3]++;
             int e0 = m.e0 - tr.offset, e1 = m.e1 - tr.offset;
-            if (fin && m.ok) { ks[1]++; for (int i = Math.max(0, e0); i < Math.min(c.size(), e1); i++) { owner[i] = id; ownerKind[i] = m.kind; } }
+            if (fin && m.ok) { ks[1]++; travMods.add(new String[]{"" + castleOf(m.y), m.kind, m.role}); for (int i = Math.max(0, e0); i < Math.min(c.size(), e1); i++) { owner[i] = id; ownerKind[i] = m.kind; } }
             modules.add(new String[]{id, "" + k, "" + m.attempt, "" + fin, m.kind, m.role, m.picked == null ? "" : m.picked, f3(m.d), f3(m.y), "" + m.ok, "" + e0, "" + e1, "" + (m.h1 - m.h0),
                 "" + m.fails[0], "" + m.fails[1], "" + m.fails[2], "" + m.fails[3], "" + m.fails[4], "" + m.fails[5], f3(m.nanos / 1e6)});
             if (!m.ok) { Win w = win(wi(m.y)); w.rejected++; }
@@ -293,6 +295,10 @@ public final class LaneReport {
             if (!L.hazards.isEmpty() && !L.enemies.isEmpty()) X.add("X-HAZARD-ENEMY");
             if (L.hazards.size() >= 2) X.add("X-HAZARD-HAZARD");
             if (L.enemies.size() >= 2) X.add("X-ENEMY-ENEMY");
+            {   // a meaningful challenge: demanding terrain, a hazard or an enemy on the link (a rope climb or a plain hop is ordinary traversal)
+                boolean challenge = L.terrain >= TERRAIN_DEMANDING || !L.hazards.isEmpty() || !L.enemies.isEmpty();
+                travLinks.add(new double[]{castleOf(L.y0), L.y0, L.y1, Math.abs(c.dsWrap(b.s, a.s)), a.type == Element.Type.ROPE ? Math.max(0, a.y - (a.y - a.len)) : 0, challenge ? 1 : 0, a.type == Element.Type.ROPE || b.type == Element.Type.ROPE ? 1 : 0});
+            }
             for (String x : X) for (int q = 0; q < L.windows.length; q++)
                 addRow(L.windows[q], "INTERACTION", x, L.fromId + ">" + L.toId, "hazards " + L.hazards + " enemies " + L.enemies + " terrain " + f3(L.terrain), 1, X_BONUS, L.fractions[q], 1, null);
             for (int q = 0; q < L.windows.length; q++) {
@@ -386,6 +392,32 @@ public final class LaneReport {
         try { java.lang.management.ThreadMXBean b = java.lang.management.ManagementFactory.getThreadMXBean(); return b instanceof com.sun.management.ThreadMXBean ? ((com.sun.management.ThreadMXBean) b).getCurrentThreadAllocatedBytes() : -1; }
         catch (Throwable e) { return -1; }
     }
+    /** Per castle: see traversal.csv's header. Runs (consecutive ropes, ordinary links, unchallenged climb) are counted in climbing order and credited to the castle where they end. */
+    List<String[]> traversalRows() {
+        int n = 11; int[] links = new int[n], chall = new int[n], mods = new int[n], fbs = new int[n], ropes = new int[n], ropePick = new int[n], ropeFb = new int[n], maxRope = new int[n], maxOrd = new int[n];
+        double[] longest = new double[n], ropeM = new double[n], horiz = new double[n];
+        int runRope = 0;
+        for (String[] m : travMods) {
+            int cs = Integer.parseInt(m[0]); mods[cs]++; boolean fb = "FALLBACK".equals(m[2]); if (fb) fbs[cs]++;
+            if ("ROPE".equals(m[1])) { ropes[cs]++; if (fb) ropeFb[cs]++; else ropePick[cs]++; runRope++; maxRope[cs] = Math.max(maxRope[cs], runRope); } else runRope = 0;
+        }
+        int runOrd = 0; double runFrom = Double.NaN;
+        for (double[] l : travLinks) {
+            int cs = (int) l[0]; links[cs]++; ropeM[cs] += l[4];
+            if (l[5] > 0) { chall[cs]++; runOrd = 0; runFrom = Double.NaN; continue; }
+            if (l[6] == 0) horiz[cs] += l[3];
+            if (runOrd == 0) runFrom = l[1];
+            runOrd++; maxOrd[cs] = Math.max(maxOrd[cs], runOrd); longest[cs] = Math.max(longest[cs], l[2] - runFrom);
+        }
+        List<String[]> out = new ArrayList<>();
+        for (int cs = 1; cs < n; cs++) {
+            if (links[cs] == 0 && mods[cs] == 0) continue;
+            out.add(new String[]{"" + cs, "" + links[cs], "" + chall[cs], "" + (links[cs] - chall[cs]), f3(links[cs] == 0 ? 0 : chall[cs] / (double) links[cs]), "" + mods[cs], "" + fbs[cs], "" + ropes[cs], "" + ropePick[cs], "" + ropeFb[cs],
+                f3(fbs[cs] == 0 ? 0 : ropeFb[cs] / (double) fbs[cs]), "" + maxRope[cs], "" + maxOrd[cs], f3(longest[cs]), f3(ropeM[cs]), f3(horiz[cs])});
+        }
+        return out;
+    }
+
     static int castleOf(double y) { return Math.min(10, 1 + (int) (y / CASTLE)); }
     static double clamp(double x) { return Math.max(0, Math.min(1, x)); }
     static String f3(double v) { return Double.isNaN(v) ? "" : String.format(Locale.ROOT, "%.3f", v); }
@@ -484,6 +516,10 @@ public final class LaneReport {
             w.println("run,slice,index,y,castle,type,checkpoint,hazards_on,enemies_reaching,threat_family_count,threat_families,class");
             for (String[] m : platformRows) w.println(run + "," + String.join(",", m));
         }
+        try (PrintWriter w = pw(out, "traversal.csv")) {          // owner 2026-10-26: ropes and ordinary traversal per castle (observe-only)
+            w.println("run,castle,route_links,challenge_links,ordinary_links,challenge_density,modules_accepted,fallbacks_accepted,rope_modules,rope_picks,rope_fallbacks,rope_share_of_fallbacks,max_consecutive_rope_modules,max_consecutive_ordinary_links,longest_unchallenged_climb_m,rope_climb_m,unchallenged_horizontal_m");
+            for (String[] row : traversalRows()) w.println(run + "," + String.join(",", row));
+        }
         try (PrintWriter w = pw(out, "forks.csv")) {          // observe-only: route-length columns are information, not a requirement (owner 2026-10-26)
             w.println("run,slice,fork,parent_fork,depth,takeoff_on,takeoff_index,rejoin_on,rejoin_index,branch_platforms,branch_mechanics,y,castle,branch_length_m,bypassed_route_length_m");
             for (String[] m : forkRows) w.println(run + "," + String.join(",", m));
@@ -542,7 +578,7 @@ public final class LaneReport {
         j.append(",\"castles\":["); first = true;
         for (String[] r : castles) { j.append(first ? "" : ",").append("{\"castle\":").append(r[3]).append(",\"lane\":").append(js(r[4])).append(",\"windows\":").append(r[5]).append(",\"mean\":").append(num(r[6])).append(",\"median\":").append(num(r[7]))
             .append(",\"min\":").append(num(r[8])).append(",\"max\":").append(num(r[9])).append(",\"sd\":").append(num(r[10])).append(",\"q1\":").append(num(r[11])).append(",\"q3\":").append(num(r[12])).append(",\"adj_sum\":").append(num(r[14])).append('}'); first = false; }
-        j.append("],\"files\":[\"windows.csv\",\"ledger.csv\",\"elements.csv\",\"links.csv\",\"modules.csv\",\"solver.csv\",\"solver_failures.csv\",\"generation_failures.csv\",\"rule_checks.csv\",\"inventory.csv\",\"module_inventory.csv\",\"castles.csv\",\"windows_v2_reference.csv\",\"chunks.csv\",\"hazards.csv\",\"forks.csv\",\"fork_attempts.csv\",\"platforms.csv\"]");
+        j.append("],\"files\":[\"windows.csv\",\"ledger.csv\",\"elements.csv\",\"links.csv\",\"modules.csv\",\"solver.csv\",\"solver_failures.csv\",\"generation_failures.csv\",\"rule_checks.csv\",\"inventory.csv\",\"module_inventory.csv\",\"castles.csv\",\"windows_v2_reference.csv\",\"chunks.csv\",\"hazards.csv\",\"forks.csv\",\"fork_attempts.csv\",\"platforms.csv\",\"traversal.csv\"]");
         j.append(",\"measurement_limits\":[\"cannon pillars and mortar emplacements are render-only (no traversal geometry in the simulation); they contribute no terrain\","
             + "\"hazard attack envelopes are reported as the element parameters the Sim interprets (amp, period, len, phase, dir), not swept volumes\","
             + "\"per-type hazard and enemy placement attempts are not observable; module attempts and refusal counters are\","

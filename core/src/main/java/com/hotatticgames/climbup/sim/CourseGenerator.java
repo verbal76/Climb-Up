@@ -89,7 +89,7 @@ public final class CourseGenerator {
             g.relaxed = attempt >= 12;       // the previous slice can occasionally leave no room that keeps clear of every older spiral layer: after twelve normal tries, build above it without the shortcut spacing to it (never without body clearance: ghostClash) rather than ever failing
             lastForDebug = g;
             GenTrace tr = GenTrace.GEN.get(); long a0 = tr != null ? GenTrace.now() : 0L; if (tr != null) { tr.attempt = attempt; tr.relaxed = g.relaxed; }      // observe-only (reports)
-            try { g.buildChunk(prev); Course out = g.extract(); if (tr != null) { tr.finalAttempt = attempt; tr.attemptNanos.add(new long[]{attempt, GenTrace.now() - a0, 1}); } return out; }
+            try { g.buildChunk(prev); g.checkIntegrity(); Course out = g.extract(); if (tr != null) { tr.finalAttempt = attempt; tr.attemptNanos.add(new long[]{attempt, GenTrace.now() - a0, 1}); } return out; }
             catch (IllegalStateException e) { last = e; SLICE_FAILURES.incrementAndGet(); if (tr != null) { tr.sliceFailures.add("attempt " + attempt + ": " + e.getMessage()); tr.attemptNanos.add(new long[]{attempt, GenTrace.now() - a0, 0}); } }
         }
         throw last;
@@ -281,6 +281,18 @@ public final class CourseGenerator {
         }
     }
 
+    /**
+     * Owner release requirement (2026-10-26): no accepted slice holds unintended overlapping geometry. Every element and hazard this slice added is
+     * checked against everything in it, the previous slice's tail it builds on, and the previous slice itself (ghosts), with GeometryIntegrity; a
+     * violation fails this attempt like any other dead end, so the slice is built again - never accepted with it.
+     */
+    private void checkIntegrity() {
+        List<String> v = GeometryIntegrity.check(c, ctx, ghostElems, ghostHaz, 1);
+        if (!v.isEmpty()) { INTEGRITY_REFUSED.incrementAndGet(); GenTrace.tally("integrity_refused"); throw new IllegalStateException("geometry integrity: " + v.get(0)); }
+    }
+    /** Diagnostics: slice attempts refused by the geometry integrity check. */
+    public static final java.util.concurrent.atomic.AtomicInteger INTEGRITY_REFUSED = new java.util.concurrent.atomic.AtomicInteger();
+
     /** Plain first steps of the next slice: {gap after the closing rest, rise}. */
     private static final float[][] CONT_PROBES = {{2.0f, 0f}, {3.0f, 0f}, {2.0f, 1.2f}, {3.0f, 1.2f}, {2.0f, 2.4f}, {3.0f, 2.4f}};
     /** The first of {@link #CONT_PROBES} after the last element that keeps clear of every other spiral layer here as the next slice will check it, or null. */
@@ -428,7 +440,20 @@ public final class CourseGenerator {
                     Kind fb = k == Kind.HAZ ? Kind.TRAP : Kind.HAZ;          // one alternative only: trying three, each with its full set of placement attempts, made NGH generation 3-4x slower (2d4388a)
                     if (tryModuleBelow(fb, d, th)) { k = fb; ok = true; GenTrace.tally("threat_fallback_ok"); } else GenTrace.tally("threat_fallback_failed");
                 }
-                if (!ok) for (Kind fb : new Kind[]{Kind.PAD, Kind.ROPE, Kind.MOVER_V, Kind.STAIRS, Kind.HOP}) { if (fb != k && tryModuleBelow(fb, 0.15f, th)) { k = fb; ok = true; break; } }
+                // owner 2026-10-26 (release requirement): a refused challenge is not replaced by a rope or plain travel first. Up to two other
+                // challenges are drawn from this spot's own mix (the pick weights: tier, height, pitch controller, repetition), at the same
+                // difficulty, without ordinary traversal; refused geometry costs little (commit's geometry check comes before the proofs).
+                if (!ok) {
+                    float[] alt = weights(zone, last); alt[k.ordinal()] = 0f;
+                    for (Kind o : Kind.values()) if (ordinary(o) || (last.wet() && hazardKind(o)) || (!hazOk && hazardKind(o))) alt[o.ordinal()] = 0f;
+                    for (int tries = 0; tries < 4 && !ok; tries++) {
+                        Kind a2 = draw(alt); if (a2 == null) break; alt[a2.ordinal()] = 0f;
+                        if (tryModuleBelow(a2, d, th)) { k = a2; ok = true; GenTrace.tally("challenge_fallback_ok"); } else GenTrace.tally("challenge_fallback_failed");
+                    }
+                }
+                // then the continuation the climb needs, easiest proofs first: vertical moves with timing before stairs, and ropes and plain hops
+                // last (rope first when the spiral lags its pitch: a hop flattens it), so a section always goes on
+                if (!ok) for (Kind fb : continuation(zone, lagging, ordinaryUsed)) { if (fb != k && tryModuleBelow(fb, 0.15f, th)) { k = fb; ok = true; if (ordinary(fb)) ordinaryUsed[fb.ordinal()] = ++ordinaryClock; break; } }
                 traceRole = "PICK"; tracePicked = null;
                 if (!ok && !undo.isEmpty() && undoneHere < 2 && backtracks < 6) {
                     int[] u = undo.pop(); rollbackTo(u[0], u[1]); backtracks++; undoneHere++; BACKTRACKS.incrementAndGet(); prev = null; prev2 = null; GenTrace.tally("backtrack");
@@ -1172,7 +1197,7 @@ public final class CourseGenerator {
             }
             // no room at this height: climb first, then try to rest
             boolean climbed = false;
-            for (Kind k : new Kind[]{Kind.PAD, Kind.STAIRS, Kind.ROPE, Kind.MOVER_V}) if (tryModule(k, 0.1f, zone)) { climbed = true; break; }
+            for (Kind k : new Kind[]{Kind.PAD, Kind.MOVER_V, Kind.STAIRS, Kind.ROPE}) if (tryModule(k, 0.1f, zone)) { climbed = true; break; }
             if (!climbed) break;
         }
         throw new IllegalStateException("cannot place rest at " + c.size());
@@ -1185,7 +1210,7 @@ public final class CourseGenerator {
     }
 
     // ---- spiral-layer clearance: one revolution above/below must never intersect the current layer
-    private static float arcHalf(Element e) {
+    static float arcHalf(Element e) {
         switch (e.type) {
             case MOVE_H: return e.w / 2f + e.amp;
             case SWING: return e.w / 2f + e.len * (float) StrictMath.sin(e.amp);
@@ -1193,10 +1218,10 @@ public final class CourseGenerator {
             default: return e.w / 2f;
         }
     }
-    private static float vLo(Element e) {
+    static float vLo(Element e) {
         switch (e.type) { case ROPE: return e.y - e.len; case CABLE: return e.y - 2.4f; case SEESAW: return e.y - 2.8f; case RAMP: return e.y - e.amp * e.halfW() - 3.4f; default: return e.y - 0.8f; }
     }
-    private static float vHi(Element e) {
+    static float vHi(Element e) {
         switch (e.type) {
             case ROPE: return e.y + 0.6f; case CABLE: return e.y + 0.4f; case SWING: return e.y + e.len + 0.4f;
             case MOVE_V: return e.y + e.amp + 2.8f; case RAMP: return e.y + e.amp * e.halfW() + 2.8f; default: return e.y + 2.8f;
@@ -1265,8 +1290,8 @@ public final class CourseGenerator {
     public static final int[] CRABCLASH = new int[8];
 
     // ---- hazard geometry: lethal-region bounding box (centre arc, half extent, low, high)
-    private static float hzS(Element h) { return h.type == Element.Type.CANNON ? h.s + h.dir * h.len * 0.5f : h.s; }
-    private static float hzHalf(Element h) {
+    static float hzS(Element h) { return h.type == Element.Type.CANNON ? h.s + h.dir * h.len * 0.5f : h.s; }
+    static float hzHalf(Element h) {
         switch (h.type) {
             case SAW_H: return h.amp + Element.SAW_R;
             case CRAB: return h.amp + 0.6f;
@@ -1279,10 +1304,10 @@ public final class CourseGenerator {
             default: return h.w * 0.5f;
         }
     }
-    private static float hzLo(Element h) {
+    static float hzLo(Element h) {
         switch (h.type) { case SAW_H: case SAW_V: return h.y - Element.SAW_R; case PENDULUM: return h.y - Element.BALL_R; case CANNON: return h.y - Element.SHOT_R; case AIMED: return h.y - 0.4f; case BEE: return h.y - h.len - 1.4f; default: return h.y; }
     }
-    private static float hzHi(Element h) {
+    static float hzHi(Element h) {
         switch (h.type) {
             case SAW_H: return h.y + Element.SAW_R;
             case SAW_V: return h.y + h.amp + Element.SAW_R;
@@ -1571,6 +1596,44 @@ public final class CourseGenerator {
      */
     static final float LATE_COMPLEX = 0.8f, LATE_HOP_CUT = 0.35f;
     private Kind pick(int zone, Element last) {
+        float[] w = weights(zone, last);
+        float sum = 0; for (float f : w) sum += f;
+        float x = rnd.nextFloat() * sum;
+        for (Kind k : Kind.values()) { x -= w[k.ordinal()]; if (x <= 0 && w[k.ordinal()] > 0) return k; }
+        return Kind.HOP;
+    }
+
+    /** One draw from weights {@code w} (nothing left: null); consumes one random number when anything is left. */
+    private Kind draw(float[] w) {
+        float sum = 0; for (float f : w) sum += f;
+        if (sum <= 0f) return null;
+        float x = rnd.nextFloat() * sum;
+        for (Kind k : Kind.values()) { x -= w[k.ordinal()]; if (x <= 0 && w[k.ordinal()] > 0) return k; }
+        for (int i = w.length - 1; i >= 0; i--) if (w[i] > 0f) return Kind.values()[i];
+        return null;
+    }
+
+    /** When each ordinary continuation was last used (a clock of uses): the one used longest ago is tried first, so none of them takes over. */
+    private final int[] ordinaryUsed = new int[Kind.values().length]; private int ordinaryClock;
+    /**
+     * The guaranteed continuation of a refused pick, in order (see extend): vertical moves that carry timing first, then the ordinary ones (stairs, a
+     * hop, a rope), least recently used first; a hop flattens a lagging spiral, so then it comes last.
+     */
+    private static Kind[] continuation(int zone, boolean lagging, int[] used) {
+        List<Kind> l = new ArrayList<>();
+        l.add(Kind.MOVER_V); l.add(Kind.PAD); if (zone >= 1) l.add(Kind.ELEV_FALL);
+        List<Kind> ord = new ArrayList<>(List.of(Kind.STAIRS, Kind.HOP, Kind.ROPE));
+        ord.sort((a, b) -> Integer.compare(used[a.ordinal()], used[b.ordinal()]));       // stable: ties keep stairs, hop, rope
+        if (lagging) { ord.remove(Kind.HOP); ord.add(Kind.HOP); }
+        l.addAll(ord);
+        return l.toArray(new Kind[0]);
+    }
+
+    /** Ordinary traversal: moving the climber on, not a challenge in itself (owner 2026-10-26: a refused challenge is not replaced by more of these first). */
+    static boolean ordinary(Kind k) { return k == Kind.ROPE || k == Kind.HOP || k == Kind.STAIRS; }
+
+    /** The module weights {@link #pick} draws from: the mix of this tier and height, the spiral pitch controller and the repetition damping. */
+    private float[] weights(int zone, Element last) {
         float[] w = new float[Kind.values().length];
         switch (zone) {
             case 0: w[Kind.HOP.ordinal()] = 3; w[Kind.STAIRS.ordinal()] = 2; w[Kind.CRUMBLE.ordinal()] = 1; w[Kind.PAD.ordinal()] = 1.5f; w[Kind.ROPE.ordinal()] = 1.5f;
@@ -1607,10 +1670,7 @@ public final class CourseGenerator {
         }
         // (PUNISHER no longer multiplies these weights: it reads the curve DifficultyProfile.curveShift metres higher; owner directive 2026-10-24)
         if (prev != null) { w[prev.ordinal()] *= 0.35f; if (prev == prev2) w[prev.ordinal()] = 0f; }
-        float sum = 0; for (float f : w) sum += f;
-        float x = rnd.nextFloat() * sum;
-        for (Kind k : Kind.values()) { x -= w[k.ordinal()]; if (x <= 0 && w[k.ordinal()] > 0) return k; }
-        return Kind.HOP;
+        return w;
     }
 
     /**

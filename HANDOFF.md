@@ -1,3 +1,14 @@
+## RESUME HERE (if the session ran out of credits)
+
+Branch `build-74-determinism`, PR #9. Code state: correction batch 1 at `28d22ec` (rules 9); handoff commits after it are docs only. Nothing is uncommitted.
+Testing policy (owner): everything on GitHub Actions; local only compile/syntax; local fallback only if Actions minutes are exhausted.
+Next steps, in order:
+1. Read the campaign run 40270745200 (workflow "Difficulty report", artifact `difficulty-baseline-3lane`): executive_report.pdf, components_report.pdf, validation.json, report_full.json (progression, mode_comparison, owner_rule_checks). Compare with frozen baseline 40262073313. If a job failed, read only that job's log tail.
+2. Read the `validate` job of ci.yml on 28d22ec: DeterminismTest message "expected:<b5fe0da7...> but was:<NEW>" gives the rules-9 fingerprint; put NEW into core/src/test/java/com/hotatticgames/climbup/DeterminismTest.java and record it in docs/DECISIONS.md. Confirm ModeProfileTest and LaneReportTest passed in the campaign's validation-gate step.
+3. Correct real failures only (no seed picking, no score changes). Then Phase 4: solver failures after pad/spring launches (solver_failures.csv now has report-derived reasons; reconcile 454/463 vs 454/462 from solver.csv row counts per run). Phase 5: generation time per chunk (chunks.csv, module_timing.csv), worst PUNISHER/NGH chunks.
+4. Push each validated unit; a push touching CourseGenerator/Autopilot/DifficultyProfile/LaneReport/lane_report.py re-runs the full campaign (use [skip ci] for docs-only commits).
+Owner decisions still open: PENDULUM (never generated), LONG (off for determinism), final numeric targets (all new values are provisional).
+
 ## RECOVERY CHECKPOINT (2026-10-26, latest): correction batch 1 pushed (rules 9); comparison campaign on GitHub
 
 - Owner correction directive + GITHUB-FIRST TESTING policy (all tests, fixtures, fingerprints and campaigns run on GitHub Actions; local only compile/syntax; fall back to local only if Actions minutes are exhausted, never to bypass a failure).

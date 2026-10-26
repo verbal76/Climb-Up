@@ -24,13 +24,13 @@ COLORS = {"TERRAIN": "#3b7dd8", "HAZARDS": "#d8743b", "ENEMIES": "#8e44ad", "INT
 MODE_COL = {"NORMAL": "#2e86c1", "PUNISHER": "#cb4335", "NGH": "#17202a"}
 FILES = ["windows.csv", "ledger.csv", "elements.csv", "links.csv", "modules.csv", "solver.csv", "solver_failures.csv", "generation_failures.csv",
          "rule_checks.csv", "inventory.csv", "module_inventory.csv", "castles.csv", "windows_v2_reference.csv", "chunks.csv", "hazards.csv",
-         "forks.csv", "fork_attempts.csv", "platforms.csv", "traversal.csv"]
+         "forks.csv", "fork_attempts.csv", "platforms.csv", "traversal.csv", "integrity.csv"]
 FUTURE_INTRO = {"NORMAL": 8, "PUNISHER": 4, "NGH": 1}           # owner's approximate intermediate-platform enemy introduction castle (future rule)
 PURSUIT_FROM = {"NORMAL": None, "PUNISHER": 3333.0, "NGH": 1667.0}  # owner's future pursuit-into-hazard-section permission heights
 
 # ------------------------------------------------------------------ load
 tables = {f: [] for f in FILES}
-runs, notes = [], []
+runs, notes, gates = [], [], []
 for job in sorted(os.listdir(SRC)):
     d = os.path.join(SRC, job)
     if not os.path.isdir(d):
@@ -40,6 +40,12 @@ for job in sorted(os.listdir(SRC)):
         if os.path.exists(p):
             with open(p, newline="") as fh:
                 tables[f].extend(csv.DictReader(fh))
+    p = os.path.join(d, "gate.json")          # the job's validation gate: generation, solver and integrity verdicts, each on its own
+    if os.path.exists(p):
+        try:
+            gates.append(json.load(open(p)))
+        except Exception as e:
+            notes.append(f"{job}: gate.json unreadable ({e})")
     p = os.path.join(d, "run.json")
     if os.path.exists(p):
         try:
@@ -628,6 +634,9 @@ idx = ["# Upwardly three-lane difficulty baseline - report index", "",
        "| hazards.csv / exposure.csv | every hazard/enemy/club: parameters, hit radius, route exposure, threats sharing its platform, enemy reach |",
        "| components.csv / pacing.csv | every rule's contribution per mode, run, castle and lane / spikes, valleys and zero-lane windows per castle |",
        "| coverage.csv / unmeasured_fields.csv | what is measured, partial or unavailable (and why) / blank values per column |", "",
-       "Incomplete datasets: " + ("; ".join(notes) if notes else "none")]
+       "Incomplete datasets: " + ("; ".join(notes) if notes else "none"), "",
+       "## Validation gate (per course; an incomplete course fails)", "",
+       "| run | passes | generation | solver | geometric integrity | performance |", "|---|---|---|---|---|---|"] + [
+       f"| {g.get('run')} | {'PASS' if g.get('passes') else 'FAIL'} | {g.get('generation')} | {g.get('solver')} | {g.get('geometric_integrity')} | {g.get('performance')} |" for g in gates]
 open(os.path.join(OUT, "INDEX.md"), "w").write("\n".join(idx) + "\n")
 print(f"runs {len(runs)}, windows {len(W)}, ledger {len(tables['ledger.csv'])}; validation: " + ", ".join(f"{k} {'PASS' if v['passed'] else 'FAIL'}" for k, v in validation.items()) + f"; notes {notes}")

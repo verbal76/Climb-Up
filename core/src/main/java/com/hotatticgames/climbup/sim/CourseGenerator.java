@@ -55,7 +55,7 @@ public final class CourseGenerator {
      * generator (the crab rules of Build 63 changed what a seed produced, so runs from earlier builds carry version 0, "old rules", and are not compared).
      * {@code GeneratorFingerprintTest} fails when generation changes without a bump.
      */
-    public static final int RULES_VERSION = 10;     // 10 = Build 82 (owner release requirements 2026-10-26): spiral pitch measured above the revolution below, slice endings that leave the next slice room, relaxed attempts keep body clearance, geometry integrity enforced on every slice, challenges before ropes in the fallbacks; 9 = (unreleased) Build 82 draft (owner correction directive 2026-10-26): terrain difficulty rises over the whole climb with each mode's head start, NGH has its own profile, no enemies on spike-drop platforms (rare ones on intermediate safe platforms instead), the solver hops a skull at its real dash speed; 8 = Build 81 (owner decisions 2026-10-25): keys lie on a main-route platform (no rooms, branches or perches); 7 = Build 80 (owner directive 2026-10-24): no level gates, PUNISHER on its own curve, encounter-conflict rule, splits with reconnecting branches instead of dead ends; 6 = Build 79: skulls, blobs and crabs reach the platforms either side (crabs follow up to three, fall with crumbling decks), faster skull, no blob wobble, two to four crabs a deck, bee pairs, creatures on spike-drop rows, bridges that drop planks, flat-turning aimed cannons, an always-running balance conveyor, decoys kept off ropes, a slightly harder first world; 5 = Build 77: faster skull with loop+swoop, key detours proved with the skull at either end, one balance conveyor per section from Castle 6 to 10; 4 = Build 76: faster plank conveyor bridges; 3 = Build 72: flush ramps, faster crumbling, a wilder shaking ramp, the spinning ramp; 2 = Build 71: the bee homes in, skulls and green blobs, mortars out of step at random
+    public static final int RULES_VERSION = 11;     // 11 = Build 82 (owner directive 2026-10-27, NORMAL seed 2 stopped at 881 m): while the spiral lags its pitch a refused pick falls back only to challenges that climb, and a slice ending must leave the next slice two ordinary steps (rises a hop or stair makes), climbing out first when it does not; 10 = (unreleased) Build 82 draft (owner release requirements 2026-10-26): spiral pitch measured above the revolution below, slice endings that leave the next slice room, relaxed attempts keep body clearance, geometry integrity enforced on every slice, challenges before ropes in the fallbacks; 9 = (unreleased) Build 82 draft (owner correction directive 2026-10-26): terrain difficulty rises over the whole climb with each mode's head start, NGH has its own profile, no enemies on spike-drop platforms (rare ones on intermediate safe platforms instead), the solver hops a skull at its real dash speed; 8 = Build 81 (owner decisions 2026-10-25): keys lie on a main-route platform (no rooms, branches or perches); 7 = Build 80 (owner directive 2026-10-24): no level gates, PUNISHER on its own curve, encounter-conflict rule, splits with reconnecting branches instead of dead ends; 6 = Build 79: skulls, blobs and crabs reach the platforms either side (crabs follow up to three, fall with crumbling decks), faster skull, no blob wobble, two to four crabs a deck, bee pairs, creatures on spike-drop rows, bridges that drop planks, flat-turning aimed cannons, an always-running balance conveyor, decoys kept off ropes, a slightly harder first world; 5 = Build 77: faster skull with loop+swoop, key detours proved with the skull at either end, one balance conveyor per section from Castle 6 to 10; 4 = Build 76: faster plank conveyor bridges; 3 = Build 72: flush ramps, faster crumbling, a wilder shaking ramp, the spinning ramp; 2 = Build 71: the bee homes in, skulls and green blobs, mortars out of step at random
     /** The rules version a climb started on a given build used (0 = unknown or before the stamps: not comparable). */
     public static int rulesOfBuild(int build) { return build >= 82 ? 9 : build >= 81 ? 8 : build >= 80 ? 7 : build >= 79 ? 6 : build >= 77 ? 5 : build >= 76 ? 4 : build >= 72 ? 3 : build >= 71 ? 2 : build >= 63 ? 1 : 0; }
 
@@ -270,14 +270,16 @@ public final class CourseGenerator {
     private void closeSlice(float targetY) {
         for (int tries = 0; ; tries++) {
             int n0 = c.size(), h0 = c.hazards.size(), r0 = rests;
+            // rules 11 recovery (NORMAL seed 2 slice 13): an end that is boxed in by the revolution below is climbed out of first - one vertical
+            // module (the rest's own climb-first list), then the rest - before modules are undone; bounded like everything here
+            if (tries >= 2) { int th = theme(c.get(c.size() - 1).y); for (Kind k : new Kind[]{Kind.PAD, Kind.MOVER_V, Kind.STAIRS, Kind.ROPE}) if (tryModuleBelow(k, 0.1f, th)) { GenTrace.tally("continuation_climb_" + k); break; } }
             addRest(theme(c.get(c.size() - 1).y));
-            Element probe = continuationProbe();
+            List<Element> probe = continuationProbe();
             if (probe != null) { contReserve = probe; return; }
             CONTINUATION_REFUSED.incrementAndGet(); GenTrace.tally("continuation_refused");
             rollbackTo(n0, h0); rests = r0;
-            if (tries >= 3) throw new IllegalStateException("slice end leaves the next slice no clear first step at " + c.size());
-            if (tries >= 1 && !undo.isEmpty()) { int[] u = undo.pop(); rollbackTo(u[0], u[1]); prev = null; prev2 = null; GenTrace.tally("continuation_backtrack"); }
-            extend(targetY);
+            if (tries >= 5) throw new IllegalStateException("slice end leaves the next slice no clear first steps at " + c.size());
+            if (tries >= 3 && !undo.isEmpty()) { int[] u = undo.pop(); rollbackTo(u[0], u[1]); prev = null; prev2 = null; GenTrace.tally("continuation_backtrack"); extend(targetY); }
         }
     }
 
@@ -293,22 +295,43 @@ public final class CourseGenerator {
     /** Diagnostics: slice attempts refused by the geometry integrity check. */
     public static final java.util.concurrent.atomic.AtomicInteger INTEGRITY_REFUSED = new java.util.concurrent.atomic.AtomicInteger();
 
-    /** Plain first steps of the next slice: {gap after the closing rest, rise}. */
-    private static final float[][] CONT_PROBES = {{2.0f, 0f}, {3.0f, 0f}, {2.0f, 1.2f}, {3.0f, 1.2f}, {2.0f, 2.4f}, {3.0f, 2.4f}};
-    /** The first of {@link #CONT_PROBES} after the last element that keeps clear of every other spiral layer here as the next slice will check it, or null. */
-    private Element continuationProbe() {
-        Element r = c.get(c.size() - 1);
-        int idx = c.size();
-        for (float[] pr : CONT_PROBES) {
-            Element p = new Element(Element.Type.STATIC, r.s + r.w / 2f + pr[0] + 1.5f, r.y + pr[1], 3f);
-            boolean clear = true;
-            for (int i = Math.max(0, ctx - 1); i < idx - 3 && clear; i++) if (layersClash(c, p, c.get(i))) clear = false;   // this slice as the next one receives it (extract): the tail copied from the slice before, and the ghosts, it never sees
-            if (clear) return p;
+    /**
+     * Plain steps the next slice can take from the closing rest: {gap, rise}. Rules 11: only rises its ordinary modules make without launching or hanging
+     * anything below them (a hop rises at most 1.4 m, a stair 0.9-1.3 m, a fork's entry 0.4 m). Rules 10 also accepted a 2.4 m rise, which no such module
+     * makes: NORMAL seed 2 slice 13 closed 3.7 m above a deck of the revolution below and 2 cm clear of it, the 2.4 m probe passed, and every first
+     * module of slice 14 (hops, stairs and hazard rows 0.3-1.3 m up, pads and elevators needing 9.5 m, ropes hanging into it) was refused.
+     */
+    private static final float[][] CONT_STEPS = {{2.0f, 0f}, {3.0f, 0f}, {2.0f, 0.6f}, {3.0f, 0.6f}, {2.0f, 1.2f}, {3.0f, 1.2f}};
+    /**
+     * Two plain steps after the closing rest (each of {@link #CONT_STEPS}) that keep clear of every other spiral layer here as the next slice will check
+     * them, or null: the next slice must be able to climb away from the boundary with ordinary geometry, not merely set one foot down (a first step with
+     * nowhere to go from it boxed in the next slice the same way). Draws no random numbers.
+     */
+    private List<Element> continuationProbe() { return continuationSteps(c, Math.max(0, ctx - 1), c.size(), c.size()); }
+    /**
+     * The two steps of {@link #continuationProbe} for a slice whose route is {@code c[from, routeEnd)} (closing rest last) and whose side structures are
+     * {@code c[sideFrom, size)}, or null: each step against this slice as the next one receives it (extract: from ctx-1 on; the older ghosts it never
+     * sees), with the layer rule the next slice applies (all route elements but the three before it). Public for the slice-boundary tests.
+     */
+    public static List<Element> continuationSteps(Course c, int from, int routeEnd, int sideFrom) {
+        Element r = c.get(routeEnd - 1);
+        for (float[] a : CONT_STEPS) {
+            Element p = new Element(Element.Type.STATIC, r.s + r.w / 2f + a[0] + 1.5f, r.y + a[1], 3f);
+            if (!stepClear(c, p, from, routeEnd - 3, sideFrom)) continue;
+            for (float[] b : CONT_STEPS) {
+                Element q = new Element(Element.Type.STATIC, p.s + p.w / 2f + b[0] + 1.5f, p.y + b[1], 3f);
+                if (stepClear(c, q, from, routeEnd - 2, sideFrom)) return List.of(p, q);
+            }
         }
         return null;
     }
-    /** The first step closeSlice found clear: the side structures placed after it (dead ends, forks' key rooms) keep it clear (decoyOk). */
-    private Element contReserve;
+    private static boolean stepClear(Course c, Element p, int from, int to, int sideFrom) {
+        for (int i = from; i < to; i++) if (layersClash(c, p, c.get(i))) return false;
+        for (int i = sideFrom; i < c.size(); i++) if (layersClash(c, p, c.get(i))) return false;
+        return true;
+    }
+    /** The first steps closeSlice found clear: the side structures placed after them (dead ends, forks' key rooms) keep them clear (decoyOk). */
+    private List<Element> contReserve;
     /** Diagnostics: closing rests refused because the next slice would have had no clear first step. */
     public static final java.util.concurrent.atomic.AtomicInteger CONTINUATION_REFUSED = new java.util.concurrent.atomic.AtomicInteger();
 
@@ -443,9 +466,13 @@ public final class CourseGenerator {
                 // owner 2026-10-26 (release requirement): a refused challenge is not replaced by a rope or plain travel first. Up to two other
                 // challenges are drawn from this spot's own mix (the pick weights: tier, height, pitch controller, repetition), at the same
                 // difficulty, without ordinary traversal; refused geometry costs little (commit's geometry check comes before the proofs).
+                // While the spiral lags its pitch only challenges that climb are drawn (rules 11): in rules 10 a refused pad or elevator was
+                // replaced by a level hazard row from the same weights (the lagging controller only scales them down, and a draw renormalises),
+                // so the route could wind on below its pitch for a whole slice (NORMAL seed 2 slice 13: 8.4 m a revolution, layer gaps of 3-10 m)
+                // and leave the next slice no room above it (slice 14 failed all 24 attempts at its first module, 881 m).
                 if (!ok) {
                     float[] alt = weights(zone, last); alt[k.ordinal()] = 0f;
-                    for (Kind o : Kind.values()) if (ordinary(o) || (last.wet() && hazardKind(o)) || (!hazOk && hazardKind(o))) alt[o.ordinal()] = 0f;
+                    for (Kind o : Kind.values()) if (ordinary(o) || (last.wet() && hazardKind(o)) || (!hazOk && hazardKind(o)) || (lagging && !climbs(o))) alt[o.ordinal()] = 0f;
                     for (int tries = 0; tries < 4 && !ok; tries++) {
                         Kind a2 = draw(alt); if (a2 == null) break; alt[a2.ordinal()] = 0f;
                         if (tryModuleBelow(a2, d, th)) { k = a2; ok = true; GenTrace.tally("challenge_fallback_ok"); } else GenTrace.tally("challenge_fallback_failed");
@@ -1123,7 +1150,7 @@ public final class CourseGenerator {
             } else if (fork ? forkLayersClash(d, e) : layersClash(c, d, e)) { decoyWhy = 2; return false; }
         }
         for (Element g : ghostElems) if (ghostClash(d, g)) { decoyWhy = 3; return false; }
-        if (contReserve != null && layersClash(c, contReserve, d)) { decoyWhy = 6; return false; }      // the next slice's first step stays clear (closeSlice)
+        if (contReserve != null) for (Element p : contReserve) if (layersClash(c, p, d)) { decoyWhy = 6; return false; }      // the next slice's first step stays clear (closeSlice)
         // never in the flight corridor of any route pad or spring, in this revolution or another: a launch rises up to ~8.5 m and drifts up to
         // ~9 m with the run-up it was reached at, so a branch, dead end or key-room platform there catches the climber (OfficialRunTest seed 7
         // slice 44: a fork branch one revolution up, 7 m over a spring and 8.4 m ahead, outside the 4.5 m layer window; the spring's link was proven
@@ -1533,6 +1560,8 @@ public final class CourseGenerator {
         int clashAt = -1;
         for (int i = n0; i < c.size() && ok; i++) { ok = clearOfOtherLayers(i); if (!ok) clashAt = i; }
         if (!ok) failLayer++;
+        if (!ok && GenTrace.GEN.get() != null) { Element e = c.get(clashAt), f = lastClash;          // (observe-only: what a layer refusal ran into, for reports)
+            GenTrace.tally("clash_" + (lastClashGhost ? "ghost_" : "slice_") + (layersBodiesClash(c, e, f) ? "body_" : "spacing_") + f.type + (f.anchor >= 0 ? "_side" : "")); }
         if (!ok) { boolean cr = false; for (Element h : hz) if (h.type == Element.Type.CRAB) cr = true;
             if (cr) { Element e = c.get(clashAt), f = lastClash; boolean body = vLo(e) - 1.5f < vHi(f) && vHi(e) + 1.5f > vLo(f);
                 CRABCLASH[(f.anchor >= 0 ? 2 : 0) + (body ? 0 : 1) + (lastClashGhost ? 4 : 0)]++; } }
@@ -1631,6 +1660,8 @@ public final class CourseGenerator {
 
     /** Ordinary traversal: moving the climber on, not a challenge in itself (owner 2026-10-26: a refused challenge is not replaced by more of these first). */
     static boolean ordinary(Kind k) { return k == Kind.ROPE || k == Kind.HOP || k == Kind.STAIRS; }
+    /** The vertical modules the spiral pitch controller favours while the route lags (see weights). */
+    static boolean climbs(Kind k) { return k == Kind.PAD || k == Kind.ROPE || k == Kind.MOVER_V || k == Kind.STAIRS || k == Kind.ELEV_FALL; }
 
     /** The module weights {@link #pick} draws from: the mix of this tier and height, the spiral pitch controller and the repetition damping. */
     private float[] weights(int zone, Element last) {
@@ -1664,7 +1695,7 @@ public final class CourseGenerator {
         float gap = layerGap(last);
         boolean lagging = gap < T.layerGapMin, rushing = gap > T.layerGapMax;
         for (Kind k : Kind.values()) {
-            boolean vert = k == Kind.PAD || k == Kind.ROPE || k == Kind.MOVER_V || k == Kind.STAIRS || k == Kind.ELEV_FALL;
+            boolean vert = climbs(k);
             if (lagging && !vert) w[k.ordinal()] *= 0.12f;
             if (rushing && vert) w[k.ordinal()] *= 0.2f;
         }

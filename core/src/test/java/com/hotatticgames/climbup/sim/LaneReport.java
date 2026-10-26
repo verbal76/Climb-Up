@@ -107,6 +107,39 @@ public final class LaneReport {
         String[] r2 = java.util.Arrays.copyOf(row, row.length + 1); r2[row.length] = q(why.toString()); forkCountRows.add(r2);
     }
     public float reached; public int slices; public String stopped; public double genSeconds, solveSeconds; public boolean solve;
+    public int failedSlice = -1;
+    /** Independent geometry check of every generated slice in the absolute frame (GeometryIntegrity, against the previous slice too): {slice, violation}. */
+    public final List<String[]> integrityViolations = new ArrayList<>();
+    void integrity(int k, CourseGenerator.Framed pf, CourseGenerator.Framed f) {
+        Course frame = new Course(f.c.seed, f.c.circumference);
+        for (int i = 1; i < f.c.size(); i++) frame.add(abs(f.c.get(i), f));          // (element 0 is the previous slice's closing rest, checked with it)
+        for (Element h : f.c.hazards) frame.hazards.add(abs(h, f));
+        List<Element> pe = new ArrayList<>(), ph = new ArrayList<>();
+        if (pf != null) { for (int i = 0; i < pf.c.size(); i++) pe.add(abs(pf.c.get(i), pf)); for (Element h : pf.c.hazards) ph.add(abs(h, pf)); }
+        for (String v : GeometryIntegrity.check(frame, 0, pe, ph, 20)) integrityViolations.add(new String[]{"" + k, q(v)});
+    }
+    static Element abs(Element e, CourseGenerator.Framed f) {
+        Element a = new Element(e.type, (float) (f.sBase + e.s), (float) (f.yBase + e.y), e.w);
+        a.len = e.len; a.amp = e.amp; a.period = e.period; a.phase = e.phase; a.skin = e.skin; a.color = e.color; a.anchor = -1; a.dir = e.dir; a.zone = e.zone;
+        return a;
+    }
+    /** The validation gate's verdicts, each on its own: report execution, generation, solver, geometric integrity (performance is reported, not gated). */
+    public Map<String, String> verdicts() {
+        Map<String, String> v = new LinkedHashMap<>();
+        v.put("report_execution", "COMPLETED");
+        v.put("generation", stopped == null && reached >= top ? "COMPLETE" : "INCOMPLETE: reached " + Math.round(reached) + " of " + Math.round(top) + " m" + (failedSlice >= 0 ? " (slice " + failedSlice + ")" : "") + (stopped == null ? "" : " - " + stopped));
+        int failed = 0, unreached = 0, notDone = 0; for (String[] s : solverSlices) if (!"true".equals(s[3])) notDone++;
+        for (Win w : windows.values()) { failed += w.linksFailed; unreached += w.linksUnreached; }
+        v.put("solver", !solve ? "NOT_RUN" : notDone == 0 && failed == 0 && unreached == 0 ? "COMPLETE (" + solverSlices.size() + " slices)" : "FAILED: " + notDone + " slices not completed, " + failed + " links failed, " + unreached + " unreached");
+        v.put("geometric_integrity", integrityViolations.isEmpty() ? "CLEAN (" + slices + " slices)" : "VIOLATIONS: " + integrityViolations.size());
+        v.put("performance", String.format(Locale.ROOT, "generation %.0f s (%.2f s per slice), solver %.0f s", genSeconds, genSeconds / Math.max(1, slices), solveSeconds));
+        return v;
+    }
+    /** Whether the course passes the validation gate (an incomplete course fails it, whatever its partial results look like). */
+    public boolean passes() {
+        Map<String, String> v = verdicts();
+        return v.get("generation").equals("COMPLETE") && !v.get("solver").startsWith("FAILED") && v.get("geometric_integrity").startsWith("CLEAN");
+    }
     final DifficultyScore v2;
     private final Set<String> seenHaz = new HashSet<>();
 
@@ -129,7 +162,11 @@ public final class LaneReport {
         try {
             while (f == null || f.yBase + f.c.get(f.c.routeSize() - 1).y < top) {
                 GenTrace tr = new GenTrace(); GenTrace.GEN.set(tr); long g0 = System.nanoTime(), ga = alloc();
-                try { f = CourseGenerator.chunkFramed(seed, k, f, t); } finally { GenTrace.GEN.remove(); }
+                CourseGenerator.Framed pf = f;
+                try { f = CourseGenerator.chunkFramed(seed, k, f, t); }
+                catch (RuntimeException e) { for (String s : tr.sliceFailures) sliceFailures.add(new String[]{"" + k, q(s)}); genSeconds += (System.nanoTime() - g0) / 1e9; failedSlice = k; throw e; }          // the slice that stopped generation keeps its attempts' reasons
+                finally { GenTrace.GEN.remove(); }
+                integrity(k, pf, f);
                 double gs = (System.nanoTime() - g0) / 1e9; long gal = ga < 0 ? -1 : alloc() - ga; genSeconds += gs;
                 GenTrace.Solve st = null; Autopilot.Report rep = null; double secs = Double.NaN; long sal = -1;
                 if (solve) {
@@ -492,6 +529,14 @@ public final class LaneReport {
         try (PrintWriter w = pw(out, "generation_failures.csv")) {
             w.println("run,slice,detail"); for (String[] m : sliceFailures) w.println(run + "," + String.join(",", m));
         }
+        try (PrintWriter w = pw(out, "integrity.csv")) {
+            w.println("run,slice,violation"); for (String[] m : integrityViolations) w.println(run + "," + String.join(",", m));
+        }
+        try (PrintWriter w = pw(out, "gate.json")) {
+            StringBuilder j = new StringBuilder("{\"run\":").append(js(run)).append(",\"passes\":").append(passes());
+            for (Map.Entry<String, String> e : verdicts().entrySet()) j.append(',').append(js(e.getKey())).append(':').append(js(e.getValue()));
+            w.println(j.append('}'));
+        }
         try (PrintWriter w = pw(out, "rule_checks.csv")) {
             w.println("run,mode,rule,source,type,y,castle,detail"); for (String[] m : ruleChecks) w.println(run + "," + MODE[mode] + "," + String.join(",", m));
         }
@@ -578,7 +623,7 @@ public final class LaneReport {
         j.append(",\"castles\":["); first = true;
         for (String[] r : castles) { j.append(first ? "" : ",").append("{\"castle\":").append(r[3]).append(",\"lane\":").append(js(r[4])).append(",\"windows\":").append(r[5]).append(",\"mean\":").append(num(r[6])).append(",\"median\":").append(num(r[7]))
             .append(",\"min\":").append(num(r[8])).append(",\"max\":").append(num(r[9])).append(",\"sd\":").append(num(r[10])).append(",\"q1\":").append(num(r[11])).append(",\"q3\":").append(num(r[12])).append(",\"adj_sum\":").append(num(r[14])).append('}'); first = false; }
-        j.append("],\"files\":[\"windows.csv\",\"ledger.csv\",\"elements.csv\",\"links.csv\",\"modules.csv\",\"solver.csv\",\"solver_failures.csv\",\"generation_failures.csv\",\"rule_checks.csv\",\"inventory.csv\",\"module_inventory.csv\",\"castles.csv\",\"windows_v2_reference.csv\",\"chunks.csv\",\"hazards.csv\",\"forks.csv\",\"fork_attempts.csv\",\"platforms.csv\",\"traversal.csv\"]");
+        j.append("],\"files\":[\"windows.csv\",\"ledger.csv\",\"elements.csv\",\"links.csv\",\"modules.csv\",\"solver.csv\",\"solver_failures.csv\",\"generation_failures.csv\",\"rule_checks.csv\",\"inventory.csv\",\"module_inventory.csv\",\"castles.csv\",\"windows_v2_reference.csv\",\"chunks.csv\",\"hazards.csv\",\"forks.csv\",\"fork_attempts.csv\",\"platforms.csv\",\"traversal.csv\",\"integrity.csv\",\"gate.json\"]");
         j.append(",\"measurement_limits\":[\"cannon pillars and mortar emplacements are render-only (no traversal geometry in the simulation); they contribute no terrain\","
             + "\"hazard attack envelopes are reported as the element parameters the Sim interprets (amp, period, len, phase, dir), not swept volumes\","
             + "\"per-type hazard and enemy placement attempts are not observable; module attempts and refusal counters are\","
@@ -623,5 +668,9 @@ public final class LaneReport {
         meta.put("solver_version", "Autopilot.run at commit " + meta.get("commit"));
         r.write(out, meta); r.writeV2(out);
         System.out.printf(Locale.ROOT, "%s seed %d: reached %.0f m, %d slices, %d windows, %d ledger rows, gen %.0f s, solve %.0f s%s%n", MODE[mode], seed, r.reached, r.slices, r.windows.size(), r.ledger.size(), r.genSeconds, r.solveSeconds, r.stopped == null ? "" : " - " + r.stopped);
+        for (Map.Entry<String, String> e : r.verdicts().entrySet()) System.out.println("  " + e.getKey() + ": " + e.getValue());
+        // validation gate (owner directive 2026-10-27): the artifacts above are written first; an incomplete course, a solver failure or a geometry
+        // violation then fails the job, so a partial course never shows green
+        if (!r.passes()) { System.out.println("VALIDATION GATE FAILED"); System.exit(1); }
     }
 }

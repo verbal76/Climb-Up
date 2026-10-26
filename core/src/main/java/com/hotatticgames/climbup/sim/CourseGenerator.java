@@ -342,13 +342,14 @@ public final class CourseGenerator {
             if (th == 1 && last.type == Element.Type.STATIC && rnd.nextFloat() < 0.2f) { GenTrace.tally("wet_replaced_" + k); if (hazardKind(k)) deferredHaz = k; k = Kind.WET; }          // the Frost world: some platforms are under a rain cloud (slippery)
             float lv = Math.min(1f, level(last.y));
             boolean hazOk = !endless || intensity(last.y) > 0f;          // the first hazardStartY metres stay free of hazards and creatures (EndlessTest: a spike-drop row at 7.5 m, seed 3), as for every other hazard module
-            if (hazOk && k != Kind.WET && prev != Kind.CREATURE && !last.wet() && rnd.nextFloat() < 0.025f + 0.045f * lv + 0.05f * late(last.y)) k = Kind.CREATURE;      // owner directive 2026-10-24: creature decks from Level 1 on, more as the levels rise (was world 2 on)
+            if (hazOk && k != Kind.WET && prev != Kind.CREATURE && !last.wet() && rnd.nextFloat() < (0.025f + 0.045f * lv + 0.05f * late(last.y)) * P.creatureScale) k = Kind.CREATURE;      // owner directive 2026-10-24: creature decks from Level 1 on, more as the levels rise (was world 2 on)
             else if (prev == Kind.CREATURE && !last.wet() && rnd.nextFloat() < 0.35f * late(last.y)) k = rnd.nextBoolean() ? Kind.HAZ : Kind.TRAP;      // Build 71: higher up, a creature deck runs straight into a trap      // Build 71: a skull's deck (world 2 on), or a green blob's (world 3 on)
             boolean secondHalf = endless && th == 0 && ((last.y + base) % T.zoneHeight) >= 0.5f * T.zoneHeight - 15f;      // castle 1 to castle 2: the Meadow's second, harder half (owner, Build 71)
             if (hazOk && k != Kind.WET && k != Kind.CREATURE && !last.wet() && prev != Kind.DROPS && (secondHalf ? rnd.nextFloat() < 0.10f : rnd.nextFloat() < 0.015f + 0.025f * lv)) k = Kind.DROPS;      // (spike-drop rows anywhere, more higher up; was world 2 on)
             // a little rougher than the first half, and (Phase 1, 2026-10-26) from then on: it applied to castle 2 alone, so castle 2 stood out as a hazard
             // spike and castle 3 fell back to the first half's mix (the chained spike drops above stay castle 2's own)
-            else if ((secondHalf || (endless && last.y + base >= T.zoneHeight)) && (k == Kind.HOP || k == Kind.STAIRS) && rnd.nextFloat() < 0.3f) k = Kind.HAZ;
+            else if (hazOk && (k == Kind.HOP || k == Kind.STAIRS) && rnd.nextFloat() < Math.max((secondHalf || (endless && last.y + base >= T.zoneHeight)) ? 0.3f : 0f, endless ? P.pressure(level(last.y)) : 0f))
+                k = rnd.nextFloat() < 0.6f ? Kind.HAZ : Kind.TRAP;          // owner 2026-10-26: plain platforms grow rarer with the climb and the mode (DifficultyProfile.pressure)
             if (last.wet() && (k == Kind.HAZ || k == Kind.TRAP || k == Kind.MORTAR || k == Kind.CREATURE || k == Kind.DROPS)) { GenTrace.tally("wet_stairs_" + k); deferredHaz = k; k = Kind.STAIRS; }          // after a slippery platform give a walk-up (not a hazard you must time, nor a jump you must push off a slippery surface for): its timing windows assume a normal run-up (SawFairnessTest) and the plain climb stays walkable
             if (beltSawY > 0f && !beltSawDone && last.y >= beltSawY && !last.wet() && !(castlePending && last.y > castleTarget - 14f)) {      // Build 77: this section's balance conveyor (tried again on the next module if it cannot be proven here)
                 beltSawNow = true; traceRole = "BELT"; boolean ok = tryModuleBelow(Kind.SEESAW, d, th); traceRole = "PICK"; beltSawNow = false;
@@ -358,7 +359,11 @@ public final class CourseGenerator {
                 rejected++;
                 boolean ok = false;
                 tracePicked = k.name(); traceRole = "FALLBACK";
-                for (Kind fb : new Kind[]{Kind.PAD, Kind.ROPE, Kind.MOVER_V, Kind.STAIRS, Kind.HOP}) { if (fb != k && tryModuleBelow(fb, 0.15f, th)) { k = fb; ok = true; break; } }
+                if (endless && hazOk && !last.wet() && hazardKind(k) && rnd.nextFloat() < P.threatFallback(level(last.y))) {          // owner 2026-10-26: a refused hazard tries another hazard before a safe platform
+                    for (Kind fb : new Kind[]{Kind.HAZ, Kind.TRAP, Kind.CREATURE}) { if (fb != k && tryModuleBelow(fb, d, th)) { k = fb; ok = true; GenTrace.tally("threat_fallback_ok"); break; } }
+                    if (!ok) GenTrace.tally("threat_fallback_failed");
+                }
+                if (!ok) for (Kind fb : new Kind[]{Kind.PAD, Kind.ROPE, Kind.MOVER_V, Kind.STAIRS, Kind.HOP}) { if (fb != k && tryModuleBelow(fb, 0.15f, th)) { k = fb; ok = true; break; } }
                 traceRole = "PICK"; tracePicked = null;
                 if (!ok) throw new IllegalStateException("cannot extend course (layer=" + failLayer + " haz=" + failHaz + " plan=" + failPlan + " window=" + failWindow + ") at " + c.size() + " last=" + last.type + " s=" + last.s + " y=" + last.y + " below=" + below(last));
             }

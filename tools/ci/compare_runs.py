@@ -108,3 +108,54 @@ for r in rows(sys.argv[2], "solver.csv"):
     if r["completed"] != "true": tot[m][1] += 1; tally[m][cls(r)] += 1
 for m in MODES:
     print(m, "slices", tot[m][0], "unsuccessful", tot[m][1], dict(tally[m]), "reconciled" if sum(tally[m].values()) == tot[m][1] else "MISMATCH")
+
+# ---- safety and route-network telemetry (observe-only; owner 2026-10-26). Printed for the new run, and the baseline when it has the files.
+def safety(d):
+    """Per mode and castle: share of SAFE / TERRAIN / HAZARD / CONTESTED main-route platforms, threat chains (consecutive HAZARD or CONTESTED
+    platforms, checkpoints break nothing), longest chain, overlapping-threat share (2+ families) and uncontested recovery (SAFE non-checkpoint)."""
+    by = defaultdict(list)
+    for r in rows(d, "platforms.csv"): by[r["run"]].append(r)
+    agg = defaultdict(lambda: defaultdict(lambda: Counter()))
+    chains = defaultdict(lambda: defaultdict(list))
+    for run, rs in by.items():
+        m = mode(run); cur = 0; cur_c = None
+        for r in rs:
+            c = int(r["castle"]); a = agg[m][c]; a[r["class"]] += 1; a["n"] += 1
+            if int(r["families"]) >= 2: a["overlap"] += 1
+            if r["class"] == "SAFE" and r["checkpoint"] != "true": a["recovery"] += 1
+            if r["class"] in ("HAZARD", "CONTESTED"): cur += 1; cur_c = c
+            elif cur: chains[m][cur_c].append(cur); cur = 0
+        if cur: chains[m][cur_c].append(cur)
+    return agg, chains
+for name, d in (("new", sys.argv[2]), ("base", sys.argv[1])):
+    agg, chains = safety(d)
+    if not agg: print("=== safety telemetry (" + name + "): not in this run ==="); continue
+    print("=== safety per castle (" + name + "): safe% terrain% hazard% contested% overlap% recovery% | threat chains mean/max ===")
+    for m in MODES:
+        line = []
+        for c in range(1, 11):
+            a = agg[m][c]; n = max(1, a["n"]); ch = chains[m][c]
+            line.append("C%d %2.0f/%2.0f/%2.0f/%2.0f ov%2.0f rec%2.0f ch%.1f/%d" % (c, 100*a["SAFE"]/n, 100*a["TERRAIN"]/n, 100*a["HAZARD"]/n, 100*a["CONTESTED"]/n,
+                        100*a["overlap"]/n, 100*a["recovery"]/n, (sum(ch)/len(ch)) if ch else 0, max(ch) if ch else 0))
+        print(m); [print("   " + x) for x in line]
+fk = rows(sys.argv[2], "forks.csv")
+if fk:
+    print("=== forks per mode/castle (new): forks / sub-forks / max depth / rejoin on branch / branch longer than route (information) ===")
+    t = defaultdict(lambda: defaultdict(lambda: [0, 0, 0, 0, 0, 0]))
+    for r in fk:
+        v = t[mode(r["run"])][int(r["castle"])]; v[0] += 1
+        if r["takeoff_on"] == "branch": v[1] += 1
+        v[2] = max(v[2], int(r["depth"])); v[3] += r["rejoin_on"] == "branch"
+        if r["bypassed_route_length_m"]: v[5] += 1; v[4] += float(r["branch_length_m"]) > float(r["bypassed_route_length_m"])
+    for m in MODES: print(m, " ".join("C%d %d/%d/d%d/%d/%d-of-%d" % (c, *t[m][c][:4], t[m][c][4], t[m][c][5]) for c in range(1, 11)))
+fa = rows(sys.argv[2], "fork_attempts.csv")
+if fa:
+    print("=== fork attempts (new): fork tries/ok, pad-fork tries/ok, sub-fork eligible/tries/ok/refused; refusal reasons ===")
+    for m in MODES:
+        tot = Counter(); why = Counter()
+        for r in fa:
+            if mode(r["run"]) != m: continue
+            for k in ("fork_try", "fork_ok", "padfork_try", "padfork_ok", "subfork_eligible", "subfork_try", "subfork_ok", "subfork_refused"): tot[k] += int(r[k] or 0)
+            for kv in (r.get("reasons") or "").split():
+                k, v = kv.split("="); why[k] += int(v)
+        print(m, dict(tot)); print("   reasons", dict(why.most_common(12)))

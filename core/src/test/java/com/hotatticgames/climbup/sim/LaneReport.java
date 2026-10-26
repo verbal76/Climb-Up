@@ -55,8 +55,32 @@ public final class LaneReport {
     public final EnumMap<Element.Type, int[]> inventory = new EnumMap<>(Element.Type.class);   // {placed (in course), on route / reaching route (active), scored}
     public final TreeMap<String, int[]> kindStats = new TreeMap<>();   // kind -> {tried, accepted (final course), refused, fallback picks}
     public final List<String[]> ruleChecks = new ArrayList<>();
-    public final List<String[]> chunks = new ArrayList<>(), hazardRows = new ArrayList<>(), forkRows = new ArrayList<>(), forkCountRows = new ArrayList<>();
+    public final List<String[]> chunks = new ArrayList<>(), hazardRows = new ArrayList<>(), forkRows = new ArrayList<>(), forkCountRows = new ArrayList<>(), platformRows = new ArrayList<>();
     static final String[] FORK_COUNTS = {"fork_try", "fork_ok", "padfork_try", "padfork_ok", "subfork_eligible", "subfork_try", "subfork_ok", "subfork_refused"};
+
+    static boolean enemy(Element h) { return h.type == Element.Type.CRAB || h.type == Element.Type.BEE || h.type == Element.Type.SKULL || h.type == Element.Type.BLOB; }
+    static boolean terrainDemand(Element e) { return e.crumbles() || e.isMoving() || e.type == Element.Type.RAMP || e.type == Element.Type.SEESAW || e.type == Element.Type.SWING || e.wet(); }
+
+    /**
+     * Observe-only safety telemetry (owner difficulty clarification 2026-10-26): every main-route platform of the slice, classed as SAFE (no hazard on
+     * it, no enemy that reaches it, plain footing), TERRAIN (demanding footing only: crumbling, moving, ramp, seesaw, swing, wet), HAZARD (a static hazard
+     * anchored on it) or CONTESTED (an enemy reaches it; may also carry hazards), with its distinct threat families and whether it is a checkpoint.
+     * Chain lengths and recovery opportunities are derived from consecutive rows (tools/ci).
+     */
+    void safetyTelemetry(int k, CourseGenerator.Framed f, Tuning t) {
+        Course c = f.c; int rs = c.routeSize();
+        for (int i = 0; i < rs; i++) {
+            Element p = c.get(i); if (!p.isPlatform() || p.anchor >= 0 || p.type == Element.Type.GOAL) continue;
+            int haz = 0, en = 0; java.util.TreeSet<String> fam = new java.util.TreeSet<>();
+            for (Element h : c.hazards) {
+                if (h.isHazard() && h.anchor == i) { haz++; fam.add(h.type.name()); }
+                else if (enemy(h) && h.anchor >= 0 && Math.abs(h.anchor - i) <= 4 && EncounterModel.reaches(c, t, h, i)) { en++; fam.add(h.type.name()); }
+            }
+            String cls = en > 0 ? "CONTESTED" : haz > 0 ? "HAZARD" : terrainDemand(p) ? "TERRAIN" : "SAFE";
+            double y = f.yBase + p.y;
+            platformRows.add(new String[]{"" + k, "" + i, f3(y), "" + castleOf(y), p.type.name(), "" + p.checkpoint, "" + haz, "" + en, "" + fam.size(), q(String.join(" ", fam)), cls});
+        }
+    }
 
     /** Observe-only fork telemetry for one slice: every fork with its parent, depth, take-off and rejoin, mechanics and (information only) lengths. */
     void forkTelemetry(int k, CourseGenerator.Framed f, GenTrace tr) {
@@ -125,6 +149,7 @@ public final class LaneReport {
                     f3(tr.phaseNanos.getOrDefault("extend", 0L) / 1e9), f3(tr.phaseNanos.getOrDefault("closing_rest", 0L) / 1e9), f3(tr.phaseNanos.getOrDefault("decoys_forks", 0L) / 1e9), f3(tr.phaseNanos.getOrDefault("rooms", 0L) / 1e9),
                     f3(tr.phaseNanos.getOrDefault("forks_reserved", 0L) / 1e9), f3(tr.phaseNanos.getOrDefault("forks_open", 0L) / 1e9), f3(tr.phaseNanos.getOrDefault("key_rooms", 0L) / 1e9)}); }
                 forkTelemetry(k, f, tr);
+                safetyTelemetry(k, f, t);
                 v2.add(f.c, (float) f.yBase);
                 reached = (float) (f.yBase + f.c.get(f.c.routeSize() - 1).y); k++;
                 if ((System.nanoTime() - t0) / 1e9 > budget) { stopped = "time budget of " + (int) budget + " s reached (partial results)"; break; }
@@ -455,6 +480,10 @@ public final class LaneReport {
             w.println("run,slice,y0,y1,castle,gen_wall_s,slice_attempts,failed_attempts,final_attempt_s,failed_attempts_s,modules_accepted,accepted_modules_s,modules_refused_or_discarded,refused_or_discarded_s,fallback_s,relaxed,gen_alloc_bytes,solve_wall_s,solve_alloc_bytes,heap_used_bytes,phase_extend_s,phase_closing_rest_s,phase_decoys_forks_s,phase_rooms_s,phase_forks_reserved_s,phase_forks_open_s,phase_key_rooms_s");
             for (String[] m : chunks) w.println(run + "," + String.join(",", m));
         }
+        try (PrintWriter w = pw(out, "platforms.csv")) {          // observe-only safety classes of main-route platforms, in route order
+            w.println("run,slice,index,y,castle,type,checkpoint,hazards_on,enemies_reaching,threat_families,families,class");
+            for (String[] m : platformRows) w.println(run + "," + String.join(",", m));
+        }
         try (PrintWriter w = pw(out, "forks.csv")) {          // observe-only: route-length columns are information, not a requirement (owner 2026-10-26)
             w.println("run,slice,fork,parent_fork,depth,takeoff_on,takeoff_index,rejoin_on,rejoin_index,branch_platforms,branch_mechanics,y,castle,branch_length_m,bypassed_route_length_m");
             for (String[] m : forkRows) w.println(run + "," + String.join(",", m));
@@ -513,7 +542,7 @@ public final class LaneReport {
         j.append(",\"castles\":["); first = true;
         for (String[] r : castles) { j.append(first ? "" : ",").append("{\"castle\":").append(r[3]).append(",\"lane\":").append(js(r[4])).append(",\"windows\":").append(r[5]).append(",\"mean\":").append(num(r[6])).append(",\"median\":").append(num(r[7]))
             .append(",\"min\":").append(num(r[8])).append(",\"max\":").append(num(r[9])).append(",\"sd\":").append(num(r[10])).append(",\"q1\":").append(num(r[11])).append(",\"q3\":").append(num(r[12])).append(",\"adj_sum\":").append(num(r[14])).append('}'); first = false; }
-        j.append("],\"files\":[\"windows.csv\",\"ledger.csv\",\"elements.csv\",\"links.csv\",\"modules.csv\",\"solver.csv\",\"solver_failures.csv\",\"generation_failures.csv\",\"rule_checks.csv\",\"inventory.csv\",\"module_inventory.csv\",\"castles.csv\",\"windows_v2_reference.csv\",\"chunks.csv\",\"hazards.csv\",\"forks.csv\",\"fork_attempts.csv\"]");
+        j.append("],\"files\":[\"windows.csv\",\"ledger.csv\",\"elements.csv\",\"links.csv\",\"modules.csv\",\"solver.csv\",\"solver_failures.csv\",\"generation_failures.csv\",\"rule_checks.csv\",\"inventory.csv\",\"module_inventory.csv\",\"castles.csv\",\"windows_v2_reference.csv\",\"chunks.csv\",\"hazards.csv\",\"forks.csv\",\"fork_attempts.csv\",\"platforms.csv\"]");
         j.append(",\"measurement_limits\":[\"cannon pillars and mortar emplacements are render-only (no traversal geometry in the simulation); they contribute no terrain\","
             + "\"hazard attack envelopes are reported as the element parameters the Sim interprets (amp, period, len, phase, dir), not swept volumes\","
             + "\"per-type hazard and enemy placement attempts are not observable; module attempts and refusal counters are\","

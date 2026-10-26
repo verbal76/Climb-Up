@@ -774,9 +774,9 @@ public final class CourseGenerator {
         for (Element b : es) { c.add(b); if (!decoyOk(b, e, true)) { ok = false; FORKWHY[2 + decoyWhy]++; break; } }
         if (ok) {
             c.indexDecoys();
-            ok = pairOk(e, n0); if (!ok) FORKWHY[10]++;
+            ok = pairOkAir(c.size() - 1, j); if (!ok) FORKWHY[12]++;          // (order changes no result; the bounce is refused most)
+            if (ok) { ok = pairOk(e, n0); if (!ok) FORKWHY[10]++; }
             for (int k = n0; ok && k < c.size() - 1; k++) { ok = pairOk(k, k + 1); if (!ok) FORKWHY[11]++; }
-            if (ok) { ok = pairOkAir(c.size() - 1, j); if (!ok) FORKWHY[12]++; }
             for (int q = Math.max(0, e - 3); ok && q <= Math.min(rs - 2, j + 2); q++) { ok = Autopilot.plan(Sim.startOn(c, T, q), q, false).ok; if (!ok) FORKWHY[9]++; }
         }
         if (!ok) { rollbackTo(n0, h0); c.indexDecoys(); return -1; }
@@ -806,8 +806,8 @@ public final class CourseGenerator {
             if (!ok) FORKWHY[2 + decoyWhy]++;
             if (ok) {
                 c.indexDecoys();
-                ok = pairOk(a, n0); if (!ok) FORKWHY[10]++;
-                if (ok) { ok = pairOkAir(n0, t); if (!ok) FORKWHY[12]++; }
+                ok = pairOkAir(n0, t); if (!ok) FORKWHY[12]++;          // (order changes no result; the bounce is refused most)
+                if (ok) { ok = pairOk(a, n0); if (!ok) FORKWHY[10]++; }
                 for (int q = Math.max(0, a - 3); ok && q <= Math.min(rs - 2, t + 2); q++) { ok = Autopilot.plan(Sim.startOn(c, T, q), q, false).ok; if (!ok) FORKWHY[9]++; }
             }
             if (!ok) { rollbackTo(n0, h0); c.indexDecoys(); continue; }
@@ -882,10 +882,14 @@ public final class CourseGenerator {
             for (Element e : es) { c.add(e); if (!decoyOk(e, a, true)) { ok = false; FORKWHY[2 + decoyWhy]++; break; } }
             if (ok) {
                 c.indexDecoys();
-                ok = pairOk(from, n0); if (!ok) { FORKWHY[10]++; }
+                GenTrace tr = GenTrace.GEN.get(); long q0 = GenTrace.now();      // (observe-only timing for reports)
+                // the proofs only read the course, so their order changes no result: the bounce up onto the rejoin platform is refused most, so it goes first
+                ok = pairOkAir(c.size() - 1, t); if (!ok) FORKWHY[12]++;
+                if (ok) { ok = pairOk(from, n0); if (!ok) { FORKWHY[10]++; } }
                 for (int k = n0; ok && k < c.size() - 1; k++) { ok = pairOk(k, k + 1); if (!ok) { FORKWHY[11]++; } }
-                if (ok) { ok = pairOkAir(c.size() - 1, t); if (!ok) FORKWHY[12]++; }
+                long q1 = GenTrace.now();
                 for (int q = Math.max(0, a - 3); ok && q <= Math.min(rs - 2, t + 2); q++) { ok = Autopilot.plan(Sim.startOn(c, T, q), q, false).ok; if (!ok) { FORKWHY[9]++; } }
+                if (tr != null) { tr.phase("fork_branch_proofs", q1 - q0); tr.phase("fork_route_reproofs", GenTrace.now() - q1); }
             }
             if (!ok) { rollbackTo(n0, h0); c.indexDecoys(); continue; }
             c.forks.add(new int[]{from, n0, es.size(), t});
@@ -1581,21 +1585,23 @@ public final class CourseGenerator {
         float mid = castle < P.midEnemyFromCastle ? 0f : P.midEnemyChance + P.midEnemyGrowth * (castle - P.midEnemyFromCastle);
         boolean pursuitOk = base + last.y >= P.pursuitFromY;
         // below the pursuit height a crab may not follow off its platform: a crab hops gaps up to CRAB_HOP_GAP (3.2 m) but only CRAB_HOP_DY (1.8 m) up
-        // or down (Sim.canHop), and a 3.45 m gap is past a fair jump (reach about 3.3 m), so the crabs' platform is sunk below its neighbours instead:
-        // drop into the dip, climb out with a jump and a ledge grab
-        float sunk = 0f;
+        // or down (Sim.canHop), and a 3.45 m gap is past a fair jump (reach about 3.3 m), so the crabs' platform is raised just past the crabs' hop
+        // above its neighbours instead (1.86-1.94 m: a jump lifts the feet 1.95 m, so it is a just-made-it hop up, and EncounterModel does not read it
+        // as a long jump next to two pursuers and a timed drop, which its conflict rule refuses); drop off it onto the next drop platform
+        float lift = 0f;
         for (int k = 0; k < n; k++) {
             float uR = cur.s + cur.w / 2f;
-            if (k > 0 && mid > 0f && rnd.nextFloat() < mid) {
+            if (k > 0 && k < n - 1 && mid > 0f && rnd.nextFloat() < mid) {
+                n--;          // the row keeps its length: one drop platform fewer (a row made longer by it ran into the spiral layer below: batch 4 probe, every such row refused)
                 // owner structural rule (2026-10-26): a genuine intermediate safe platform between two drop platforms may host a rare enemy (a bee over it
                 // or a pair of crabs); the drop platforms themselves are protected and carry none
-                float iw = r(3.6f, 4.2f);
+                float iw = r(4.0f, 4.4f);          // 4 m or more: not a narrow take-off with crabs on it (EncounterModel conflict rule)
                 boolean crabs = !pursuitOk || rnd.nextBoolean();          // below the pursuit height only crabs (a bee's envelope always covers its neighbours)
-                float dy = crabs && !pursuitOk ? -(Sim.CRAB_HOP_DY + r(0.25f, 0.45f)) : r(-0.2f, 0.3f);
+                float dy = crabs && !pursuitOk ? Sim.CRAB_HOP_DY + r(0.06f, 0.14f) : r(-0.2f, 0.3f);
                 Element ip = plat(Element.Type.STATIC, uR + r(1.1f, 1.6f) * (1f - 0.03f * attempt) + iw / 2f, cur.y + dy, iw, z);
                 es.add(ip); int ia = base0 + es.size() - 1;
                 if (crabs) {
-                    float span = iw - 1.6f; if (!pursuitOk) sunk = -dy;
+                    float span = iw - 1.6f; if (!pursuitOk) lift = dy;
                     for (int q = 0; q < 2; q++) {
                         Element m = hz(Element.Type.CRAB, ip.s - span / 2f + q * span, ip.y, 0f, z);
                         m.amp = Math.max(0.3f, Math.min(0.9f, span * 0.5f - 0.3f)); m.period = r(3.0f, 4.0f) - 0.4f * inten; m.phase = r(0f, 6.28f); m.anchor = ia;
@@ -1610,8 +1616,8 @@ public final class CourseGenerator {
             }
             float g = k == 0 ? reach(0.2f) * lerp(0.45f, 0.75f, d) * (1f - 0.03f * attempt) : r(1.1f, 1.7f) * (1f - 0.03f * attempt);
             float w = r(5.0f, 5.8f);
-            float py = sunk > 0f ? cur.y + sunk + r(-0.1f, 0.1f) : cur.y + (k == 0 ? r(0f, 0.4f) : r(-0.2f, 0.3f));          // out of a dip: back up past the crabs' hop
-            sunk = 0f;
+            float py = lift > 0f ? cur.y - lift + r(-0.04f, 0.04f) : cur.y + (k == 0 ? r(0f, 0.4f) : r(-0.2f, 0.3f));          // off a raised one: back down past the crabs' hop
+            lift = 0f;
             Element p = plat(Element.Type.STATIC, uR + g + w / 2f, py, w, z);
             es.add(p);
             // the slab hangs forward of the middle: you land on clear deck at the back, time your run under it, and take off from the lip in front

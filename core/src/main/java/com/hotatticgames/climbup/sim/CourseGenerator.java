@@ -730,14 +730,23 @@ public final class CourseGenerator {
             Element p = c.get(a);
             if (!p.isPlatform() || p.isMoving() || p.crumbles() || p.w < 2f || p.anchor >= 0 || !forkable(a)) continue;
             if (dr.nextFloat() > chance) continue;
+            GenTrace.tally("fork_try"); int[] w0 = GenTrace.GEN.get() != null ? FORKWHY.clone() : null;          // (observe-only counts for reports)
             int built = tryFork(a, a, dr, P.forkReach);
-            if (built < 0) built = tryPadFork(a, dr);          // no room for a branch under the route here: the short fork, a bounce pad down in the gap
+            if (built < 0) { GenTrace.tally("padfork_try"); built = tryPadFork(a, dr); if (built >= 0) GenTrace.tally("padfork_ok"); }          // no room for a branch under the route here: the short fork, a bounce pad down in the gap
+            else GenTrace.tally("fork_ok");
+            if (w0 != null) GenTrace.tallyDiff(built < 0 ? "fork_refused_why_" : "fork_retried_why_", w0, FORKWHY);
             if (built < 0) continue;
             last = a;
-            if (P.nestedForks && c.forks.get(c.forks.size() - 1)[2] > 2 && dr.nextFloat() < 0.35f) {          // a second branch off a long one, rejoining the route further on
-                int[] f = c.forks.get(c.forks.size() - 1);
-                int from = f[1] + Math.max(0, f[2] / 2 - 1);
-                tryFork(a, from, dr, 10);
+            if (P.nestedForks && c.forks.get(c.forks.size() - 1)[2] > 2) {          // a second branch off a long one, rejoining the route further on
+                GenTrace.tally("subfork_eligible");
+                if (dr.nextFloat() < 0.35f) {
+                    int[] f = c.forks.get(c.forks.size() - 1);
+                    int from = f[1] + Math.max(0, f[2] / 2 - 1);
+                    GenTrace.tally("subfork_try"); int[] s0 = GenTrace.GEN.get() != null ? FORKWHY.clone() : null;
+                    boolean subOk = tryFork(a, from, dr, 10) >= 0;
+                    GenTrace.tally(subOk ? "subfork_ok" : "subfork_refused");
+                    if (s0 != null) GenTrace.tallyDiff(subOk ? "subfork_retried_why_" : "subfork_refused_why_", s0, FORKWHY);
+                }
             }
         }
         long q2 = GenTrace.now();

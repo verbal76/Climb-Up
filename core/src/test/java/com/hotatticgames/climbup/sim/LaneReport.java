@@ -55,7 +55,31 @@ public final class LaneReport {
     public final EnumMap<Element.Type, int[]> inventory = new EnumMap<>(Element.Type.class);   // {placed (in course), on route / reaching route (active), scored}
     public final TreeMap<String, int[]> kindStats = new TreeMap<>();   // kind -> {tried, accepted (final course), refused, fallback picks}
     public final List<String[]> ruleChecks = new ArrayList<>();
-    public final List<String[]> chunks = new ArrayList<>(), hazardRows = new ArrayList<>();
+    public final List<String[]> chunks = new ArrayList<>(), hazardRows = new ArrayList<>(), forkRows = new ArrayList<>(), forkCountRows = new ArrayList<>();
+    static final String[] FORK_COUNTS = {"fork_try", "fork_ok", "padfork_try", "padfork_ok", "subfork_eligible", "subfork_try", "subfork_ok", "subfork_refused"};
+
+    /** Observe-only fork telemetry for one slice: every fork with its parent, depth, take-off and rejoin, mechanics and (information only) lengths. */
+    void forkTelemetry(int k, CourseGenerator.Framed f, GenTrace tr) {
+        Course c = f.c; int rs = c.routeSize();
+        for (int n = 0; n < c.forks.size(); n++) {
+            int[] fk = c.forks.get(n);
+            int parent = -1; for (int m = 0; m < c.forks.size(); m++) { int[] g = c.forks.get(m); if (m != n && fk[0] >= g[1] && fk[0] < g[1] + g[2]) parent = m; }
+            int depth = 1; for (int p = parent, guard = 0; p >= 0 && guard < 16; guard++) { depth++; int[] g = c.forks.get(p); int pp = -1; for (int m = 0; m < c.forks.size(); m++) { int[] h = c.forks.get(m); if (m != p && g[0] >= h[1] && g[0] < h[1] + h[2]) pp = m; } p = pp; }
+            String rejoin = fk[3] < rs ? "main_route" : "branch";
+            java.util.TreeMap<String, Integer> types = new java.util.TreeMap<>(); for (int i = fk[1]; i < fk[1] + fk[2]; i++) types.merge(c.get(i).type.name(), 1, Integer::sum);
+            StringBuilder ty = new StringBuilder(); for (Map.Entry<String, Integer> e : types.entrySet()) ty.append(ty.length() > 0 ? " " : "").append(e.getKey()).append('x').append(e.getValue());
+            double branch = 0, route = 0; Element p = c.get(fk[0]);
+            for (int i = fk[1]; i < fk[1] + fk[2]; i++) { branch += Math.hypot(c.dsWrap(p.s, c.get(i).s), c.get(i).y - p.y); p = c.get(i); }
+            branch += Math.hypot(c.dsWrap(p.s, c.get(fk[3]).s), c.get(fk[3]).y - p.y);
+            if (fk[0] < rs && fk[3] < rs) for (int i = fk[0]; i < fk[3]; i++) { Element u = c.get(i), v = c.get(c.nextRoute(i)); route += Math.hypot(c.dsWrap(u.s, v.s), v.y - u.y); }
+            double y = f.yBase + c.get(fk[0]).y;
+            forkRows.add(new String[]{"" + k, "" + n, "" + parent, "" + depth, fk[0] < rs ? "main_route" : "branch", "" + fk[0], rejoin, "" + fk[3], "" + fk[2], q(ty.toString()), f3(y), "" + castleOf(y), f3(branch), fk[0] < rs && fk[3] < rs ? f3(route) : ""});
+        }
+        String[] row = new String[FORK_COUNTS.length + 2]; row[0] = "" + k; row[1] = "" + castleOf(f.yBase + c.get(0).y);
+        for (int i = 0; i < FORK_COUNTS.length; i++) row[i + 2] = "" + tr.counts.getOrDefault(FORK_COUNTS[i], 0);
+        StringBuilder why = new StringBuilder(); for (Map.Entry<String, Integer> e : tr.counts.entrySet()) if (e.getKey().contains("_why_")) why.append(why.length() > 0 ? " " : "").append(e.getKey()).append('=').append(e.getValue());
+        String[] r2 = java.util.Arrays.copyOf(row, row.length + 1); r2[row.length] = q(why.toString()); forkCountRows.add(r2);
+    }
     public float reached; public int slices; public String stopped; public double genSeconds, solveSeconds; public boolean solve;
     final DifficultyScore v2;
     private final Set<String> seenHaz = new HashSet<>();
@@ -100,6 +124,7 @@ public final class LaneReport {
                     f3(okN / 1e9), f3(badN / 1e9), "" + na, f3(acc / 1e9), "" + nr, f3(rej / 1e9), f3(fb / 1e9), "" + tr.relaxed, gal < 0 ? "" : "" + gal, f3(secs), sal < 0 ? "" : "" + sal, "" + (rt.totalMemory() - rt.freeMemory()),
                     f3(tr.phaseNanos.getOrDefault("extend", 0L) / 1e9), f3(tr.phaseNanos.getOrDefault("closing_rest", 0L) / 1e9), f3(tr.phaseNanos.getOrDefault("decoys_forks", 0L) / 1e9), f3(tr.phaseNanos.getOrDefault("rooms", 0L) / 1e9),
                     f3(tr.phaseNanos.getOrDefault("forks_reserved", 0L) / 1e9), f3(tr.phaseNanos.getOrDefault("forks_open", 0L) / 1e9), f3(tr.phaseNanos.getOrDefault("key_rooms", 0L) / 1e9)}); }
+                forkTelemetry(k, f, tr);
                 v2.add(f.c, (float) f.yBase);
                 reached = (float) (f.yBase + f.c.get(f.c.routeSize() - 1).y); k++;
                 if ((System.nanoTime() - t0) / 1e9 > budget) { stopped = "time budget of " + (int) budget + " s reached (partial results)"; break; }
@@ -430,6 +455,14 @@ public final class LaneReport {
             w.println("run,slice,y0,y1,castle,gen_wall_s,slice_attempts,failed_attempts,final_attempt_s,failed_attempts_s,modules_accepted,accepted_modules_s,modules_refused_or_discarded,refused_or_discarded_s,fallback_s,relaxed,gen_alloc_bytes,solve_wall_s,solve_alloc_bytes,heap_used_bytes,phase_extend_s,phase_closing_rest_s,phase_decoys_forks_s,phase_rooms_s,phase_forks_reserved_s,phase_forks_open_s,phase_key_rooms_s");
             for (String[] m : chunks) w.println(run + "," + String.join(",", m));
         }
+        try (PrintWriter w = pw(out, "forks.csv")) {          // observe-only: route-length columns are information, not a requirement (owner 2026-10-26)
+            w.println("run,slice,fork,parent_fork,depth,takeoff_on,takeoff_index,rejoin_on,rejoin_index,branch_platforms,branch_mechanics,y,castle,branch_length_m,bypassed_route_length_m");
+            for (String[] m : forkRows) w.println(run + "," + String.join(",", m));
+        }
+        try (PrintWriter w = pw(out, "fork_attempts.csv")) {          // FORKWHY reasons: 0 rejoin/take-off unsuitable, 1 shape, 2+decoyWhy placement (3 overlap, 4 other layer, 5 ghost layer, 6 stepping stone, 7 launch corridor), 9 route re-proof, 10 drop onto branch, 11 branch hop, 12 bounce onto rejoin
+            w.println("run,slice,castle," + String.join(",", FORK_COUNTS) + ",reasons");
+            for (String[] m : forkCountRows) w.println(run + "," + String.join(",", m));
+        }
         try (PrintWriter w = pw(out, "hazards.csv")) {
             w.println("run,id,type,lane,status,on_route,platform,structure,module_kind,window,castle,s,y,w,amp,period,phase,len,dir,hit_radius,route_links_exposed,same_platform_threats,enemy_reach_platforms,enemy_reach_windows");
             for (String[] m : hazardRows) w.println(run + "," + String.join(",", m));
@@ -480,7 +513,7 @@ public final class LaneReport {
         j.append(",\"castles\":["); first = true;
         for (String[] r : castles) { j.append(first ? "" : ",").append("{\"castle\":").append(r[3]).append(",\"lane\":").append(js(r[4])).append(",\"windows\":").append(r[5]).append(",\"mean\":").append(num(r[6])).append(",\"median\":").append(num(r[7]))
             .append(",\"min\":").append(num(r[8])).append(",\"max\":").append(num(r[9])).append(",\"sd\":").append(num(r[10])).append(",\"q1\":").append(num(r[11])).append(",\"q3\":").append(num(r[12])).append(",\"adj_sum\":").append(num(r[14])).append('}'); first = false; }
-        j.append("],\"files\":[\"windows.csv\",\"ledger.csv\",\"elements.csv\",\"links.csv\",\"modules.csv\",\"solver.csv\",\"solver_failures.csv\",\"generation_failures.csv\",\"rule_checks.csv\",\"inventory.csv\",\"module_inventory.csv\",\"castles.csv\",\"windows_v2_reference.csv\",\"chunks.csv\",\"hazards.csv\"]");
+        j.append("],\"files\":[\"windows.csv\",\"ledger.csv\",\"elements.csv\",\"links.csv\",\"modules.csv\",\"solver.csv\",\"solver_failures.csv\",\"generation_failures.csv\",\"rule_checks.csv\",\"inventory.csv\",\"module_inventory.csv\",\"castles.csv\",\"windows_v2_reference.csv\",\"chunks.csv\",\"hazards.csv\",\"forks.csv\",\"fork_attempts.csv\"]");
         j.append(",\"measurement_limits\":[\"cannon pillars and mortar emplacements are render-only (no traversal geometry in the simulation); they contribute no terrain\","
             + "\"hazard attack envelopes are reported as the element parameters the Sim interprets (amp, period, len, phase, dir), not swept volumes\","
             + "\"per-type hazard and enemy placement attempts are not observable; module attempts and refusal counters are\","

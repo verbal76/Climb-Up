@@ -41,6 +41,12 @@ public final class GenTrace {
     /** Wall time per generation phase over all slice attempts (nanos): extend (route modules + structures), structures, decoys (dead ends and fork branches), rooms. */
     public final java.util.TreeMap<String, Long> phaseNanos = new java.util.TreeMap<>();
     public void phase(String name, long nanos) { phaseNanos.merge(name, nanos, Long::sum); }
+    /** Observe-only event counts (fork and sub-fork opportunities, attempts, results, refusal reasons), per slice. */
+    public final java.util.TreeMap<String, Integer> counts = new java.util.TreeMap<>();
+    /** Counts one event on the installed trace; does nothing (and decides nothing) without one. */
+    public static void tally(String name) { GenTrace tr = GEN.get(); if (tr != null) tr.counts.merge(name, 1, Integer::sum); }
+    /** Tallies the refusal reasons a generator diagnostic array gained since {@code before} under {@code prefix} (observe-only). */
+    public static void tallyDiff(String prefix, int[] before, int[] now) { GenTrace tr = GEN.get(); if (tr == null) return; for (int i = 0; i < now.length; i++) if (now[i] > before[i]) tr.counts.merge(prefix + i, now[i] - before[i], Integer::sum); }
 
     /** Solver trace: every time the solver starts on a new route link (its own loop variable), with the clock and the setback count. */
     public static final class Solve {

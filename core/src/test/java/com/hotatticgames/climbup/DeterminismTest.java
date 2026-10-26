@@ -75,7 +75,7 @@ public class DeterminismTest {
     }
 
     @Test public void theRulesVersionIsStampedAndOlderBuildsAreNotComparable() {
-        assertEquals(9, CourseGenerator.RULES_VERSION);           // Build 82: owner correction directive 2026-10-26 (terrain curve over the whole climb, NGH profile, protected spike-drop platforms, skull hop timing)
+        assertEquals(10, CourseGenerator.RULES_VERSION);          // Build 82: owner release requirements 2026-10-26 (pitch controller, slice endings, integrity, challenge-first fallbacks); 9 was never released           // Build 82: owner correction directive 2026-10-26 (terrain curve over the whole climb, NGH profile, protected spike-drop platforms, skull hop timing)
         assertEquals(9, CourseGenerator.rulesOfBuild(82));           // Build 81: owner decisions 2026-10-25 (keys on the main route, the threat evaluator uses the simulation's reach rules)
         assertEquals(8, CourseGenerator.rulesOfBuild(81));
         assertEquals(7, CourseGenerator.rulesOfBuild(80));        // Build 80: the owner's generator directive (no level gates, PUNISHER's own curve, conflicts, splits with reconnecting branches)

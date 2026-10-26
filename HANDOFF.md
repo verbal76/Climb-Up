@@ -5,7 +5,7 @@
 - Local fixture (NORMAL + PUNISHER seed 1 to 130 m): reports built, validation PASS for both.
 - Behaviour unchanged: generation fingerprint with the hooks is `d4d3ae970d37406b926ca51f`, identical to CI before them (DeterminismTest still expects the pre-rules-8 value `b5fe0da7...`: the known rules-8 refresh backlog, not caused by this work).
 - Workflow `.github/workflows/difficulty-report.yml` (push-triggered on this branch): 6 jobs (modes 0-2 x seeds 1-2, 5,000 m), artifacts `lanes-mode-M-seed-S`, consolidated artifact `difficulty-baseline-3lane`.
-- BASELINE RUN: see the line below (recorded after the push).
+- BASELINE RUN: workflow "Difficulty report", run 40254414759 (https://github.com/verbal76/Climb-Up/actions/runs/40254414759), source commit e32b980a8cc9f87abd146193061b72bd75fd6372, started 2026-10-26 01:28 UTC. When it finishes: artifact `difficulty-baseline-3lane` (executive_report.pdf, detailed_report.pdf, segments_<run>.pdf, merged CSVs, report_full.json, validation.json, INDEX.md) and per-job `lanes-mode-M-seed-S`. Then STOP for owner + ChatGPT review; Phase 3 (generator/solver changes) needs explicit owner authorization.
 - Earlier difficulty reports (runs 40230546947, 40232917095) used the single-score v2 model: reference only.
 
 ## RECOVERY CHECKPOINT (2026-10-25, latest): consolidated owner directive, step 1-2 audits in progress

@@ -12,8 +12,8 @@ permissions:
   contents: read
   actions: read
 env:
-  BASE_RUN: '40303676032'
-  NEW_RUN: '40322260139'
+  BASE_RUN: '40322260139'
+  NEW_RUN: '40333816843'
 jobs:
   compare:
     runs-on: ubuntu-latest

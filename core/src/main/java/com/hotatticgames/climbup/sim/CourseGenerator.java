@@ -1618,9 +1618,10 @@ public final class CourseGenerator {
                 es.add(ip); int ia = base0 + es.size() - 1;
                 if (crabs) {
                     float span = iw - 1.6f; if (!pursuitOk) lift = dy;
-                    for (int q = 0; q < 2; q++) {
-                        Element m = hz(Element.Type.CRAB, ip.s - span / 2f + q * span, ip.y, 0f, z);
-                        m.amp = Math.max(0.3f, Math.min(0.9f, span * 0.5f - 0.3f)); m.period = r(3.0f, 4.0f) - 0.4f * inten; m.phase = r(0f, 6.28f); m.anchor = ia;
+                    int nc = 2 + T.hard;          // a crab deck carries two crabs plus one per difficulty level (Build 79 owner rule; DifficultyTest)
+                    for (int q = 0; q < nc; q++) {
+                        Element m = hz(Element.Type.CRAB, ip.s - span / 2f + q * span / (nc - 1), ip.y, 0f, z);
+                        m.amp = Math.max(0.3f, Math.min(0.9f, span / (2f * (nc - 1)) - 0.3f)); m.period = r(3.0f, 4.0f) - 0.4f * inten; m.phase = r(0f, 6.28f); m.anchor = ia;
                         hzOut.add(m);
                     }
                 } else {

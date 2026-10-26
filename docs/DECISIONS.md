@@ -963,3 +963,32 @@ Evidence: local runs on this branch, baseline = e88e80b classes, new = working t
 - **Open:** longest unchallenged climb is mixed in NORMAL (castle 3 13.7 -> 16.7 m) and unchallenged horizontal travel rose in NORMAL castle 1 (976 -> 1,180 m; stairs and hops took part of the ropes' place): input for the difficulty tuning. A few more slice attempts fail and are retried (NORMAL 2, PUNISHER 6 in 30 slices; layer dead ends, castle/rest placement, one ending refused) - none from the integrity check, none relaxed.
 - **Rules identity.** These change generated courses, so RULES_VERSION goes to 10 (rules 9 was never released: Build 81 = rules 8, no build since; per-seed records are stamped with the rules version, so no record of an older layout is compared with a rules-10 course). The DeterminismTest fingerprint is refreshed.
 - **Fingerprint (rules 10):** DeterminismTest 6a71174602775d7fdb2a5100 (rules 9: 01009205b6548c964ad51f22); the other five DeterminismTest cases pass locally.
+
+## Generator failure investigation: NORMAL seed 2 stopped at 881 m (owner directive 2026-10-27; evidence: Difficulty report 40408779926 on 350328f)
+
+**Reproduced exactly** (NORMAL, seed 2, rules 10, production tuning, framed slices): slice 14 (frame yBase 500, sBase 4649.56; first module after an 8-element context, closing rest of slice 13 at s 55.43 / y 381.23 local, 881.2 m) failed all 24 attempts at its first module: `cannot extend course (layer=80..88 haz=0 plan=0 window=0) at 8`. Every refusal was the spiral-layer rule against slice 13 (ghosts; `below=` searched only the slice itself, hence empty): 1,353 body clashes with STATIC decks, 124 with ropes, 539 shortcut-spacing only. 400 of the logged clashes hit one deck (slice 13 r71, y 377.54, w 3), the rest its rope r70 and deck r69. Relaxed attempts (12-23) failed identically: they waive only the shortcut spacing, and the failure was physical. Fixture: `core/src/test/resources/fixtures/normal_seed2_slice13_350328f.json` (frame 500 / 4649.557).
+
+**Root cause** (two faults, both general):
+1. *Spiral pitch* - slice 13 climbed 8.4 m a revolution; its layer gaps were 3-10 m for almost the whole slice (controller minimum 10 m). The pitch controller only scales flat modules down (x0.12) while lagging; rules 10's challenge fallback drew a replacement for a refused pad or elevator from the same weights with the vertical kinds removed, and a draw renormalises, so flat hazard rows replaced the climb (slice 13: HAZ for PAD x4, HOP/STAIRS/HAZ for MOVER_V, TRAP/RAMP for ELEV_FALL). This was introduced by rules 10 (before it, a lagging refusal went to the vertical continuation).
+2. *Slice ending* - the closing rest landed 3.7 m above r71 and 2 cm clear of it (arc 6.02 m vs 6.00 m). The rules 10 continuation check accepted it with ONE probe step 2.4 m up; no ordinary first module rises that far (hop < 1.4 m, stair 0.9-1.3 m, fork entry 0.4 m), pads/elevators need 9.5 m over a plain deck, and a rope hangs into r71's standing room. Every rise 0-1.4 m at gaps 1.5-3 m from that rest clashes (SliceBoundaryTest). The check ran in the right frame and against what the next slice checks (slice elements from ctx-1, all but the three route elements before the step) - its probe geometry was the fault.
+
+**Correction (rules 11, fingerprint 44abd13449ca6ba1468c4811):**
+- While the spiral lags (`layerGap < layerGapMin`), a refused pick's challenge fallback draws only from modules that climb (`climbs()`: pad, elevator, falling elevator; rope/stairs stay in the continuation). Not lagging: unchanged.
+- The slice ending must leave TWO ordinary steps (gap 2-3 m, rise 0/0.6/1.2 m, 3 m wide) clear of the slice as the next one receives it (`continuationSteps`, public for tests); both are reserved against decoys.
+- Bounded recovery in closeSlice: try 0 rest; try 1 rest again; tries 2+ one climbing module (pad, elevator, stairs, rope) then the rest; tries 3-4 also undo a plain module and extend; after 6 the slice attempt fails. No unlimited retries, no recursion.
+- No clearance rule relaxed. Classification: body clearance (deck slab, standing room 2.8 m, mover travel, swing arc, rope length, ramp extents, +1.5 m, arc +2.5 m) and I1-I4 are physical/necessary; the 4 m / 9.5 m shortcut spacing is route integrity (no layer-skipping), kept; relaxed attempts still waive only the spacing to the previous slice.
+
+**Pitch controller across boundaries:** layerGap reads this slice (with its 8 context elements) and the previous slice's route (ghosts) in one frame (sBase whole laps, yBase multiples of 500 applied to both), nearest route element within 8 m of s - C; checked by PitchProbe across slices 12/13 (gaps continuous over the boundary). layerGapMin 10, layerGapMax 16 (tuning.json).
+
+**Reporting:** LaneReport records the stopping slice's failed attempts, re-checks geometry independently in the absolute frame (GeometryIntegrity against the previous slice), writes `gate.json` / `integrity.csv` with separate verdicts (report execution, generation, solver, geometric integrity, performance), and exits 1 when generation is incomplete, the solver failed or integrity is violated - after the artifacts are written (uploaded with `if: always()`). Verified: the rules 10 code on NORMAL s2 now gives `generation: INCOMPLETE: reached 881 of 1000 m (slice 14)` and exit 1. The consolidated INDEX.md lists the gate per course.
+
+**Results (local, 90 slices each, untraced, 4 JVMs in parallel on 4 cores):**
+
+| course | rules 10 | rules 11: reached | failed slice attempts | relaxed slices | backtracks | end refusals | mean / max s per slice |
+|---|---|---|---|---|---|---|---|
+| NORMAL s1 | 5,045 m | 5,791 m | 3 | 0 | 41 | 10 | 4.7 / 17.3 |
+| NORMAL s2 | **stopped 881 m** | 5,972 m | 2 | 0 | 35 | 9 | 4.8 / 48.0 (slice 4) |
+| PUNISHER s1 | 5,027 m | 5,776 m | 3 | 0 | 61 | 2 | 5.0 / 16.6 |
+| PUNISHER s2 | 5,028 m | 5,782 m | 3 | 0 | 40 | 5 | 5.4 / 29.6 |
+
+Every slice was built in attempt 0 or 1. Times are on a loaded machine and not comparable with the GenBench baselines; the CI Difficulty report on this commit gives solver completion, integrity, traversal variety (rope share) and comparable timing. Tests: SliceBoundaryTest `aSliceEndBoxedInByTheRevolutionBelowIsRefused` (fixture: the rules 10 2.4 m probe passes it, every ordinary first step is boxed in, the rules 11 check refuses it), `normalSeed2ClimbsPastTheOld881mStop` (slices 0-16), and every slice of the existing boundary test must leave two steps.

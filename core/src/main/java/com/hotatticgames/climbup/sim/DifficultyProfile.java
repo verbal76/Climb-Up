@@ -25,10 +25,29 @@ public final class DifficultyProfile {
     public final boolean threatBudget; public final float threatBase, threatPerLevel, threatCramped;
     /** Key rooms try take-offs no roaming creature reaches before threatened ones. */
     public final boolean quietKeyRooms;
+    /**
+     * Owner structural rules (2026-10-26, PROVISIONAL values): rare enemies on genuine intermediate safe platforms inside integrated hazard rows, from
+     * castle {@code midEnemyFromCastle} on, with chance {@code midEnemyChance} per gap at that castle, growing by {@code midEnemyGrowth} per castle above it.
+     * The dedicated hazard platforms themselves never carry enemies (protected).
+     */
+    public final int midEnemyFromCastle; public final float midEnemyChance, midEnemyGrowth;
+    /**
+     * Terrain difficulty of the endless climb (2026-10-26, PROVISIONAL): it rises from {@link #TERRAIN_FLOOR} over {@link #TERRAIN_RAMP_Y} metres of the
+     * curve (this profile's {@link #curveShift} included) up to {@code terrainCap}. Before, it reached 1 at 520 m and stayed there for the other 4,480 m in
+     * every mode (flat terrain progression, identical in all three modes). Every jump it asks for is still proven by the planner.
+     */
+    public final float terrainCap;
+    /** Owner rule (2026-10-26): absolute height from which enemies may pursue onto protected hazard platforms (NORMAL never; PROVISIONAL heights). */
+    public final double pursuitFromY;
+    public static final float TERRAIN_FLOOR = 0.1f, TERRAIN_RAMP_Y = 5000f;
 
     private DifficultyProfile(float curveShift, float lateCap, float forkEvery, int forkRisers, float branchHop, boolean narrowFoothold, float wideHopEvery,
                               float forkChance, int forkSpacing, int forkReach, boolean nestedForks,
-                              boolean threatBudget, float threatBase, float threatPerLevel, float threatCramped, boolean quietKeyRooms) {
+                              boolean threatBudget, float threatBase, float threatPerLevel, float threatCramped, boolean quietKeyRooms,
+                              int midEnemyFromCastle, float midEnemyChance, float midEnemyGrowth, float terrainCap, double pursuitFromY) {
+        this.terrainCap = terrainCap;
+        this.pursuitFromY = pursuitFromY;
+        this.midEnemyFromCastle = midEnemyFromCastle; this.midEnemyChance = midEnemyChance; this.midEnemyGrowth = midEnemyGrowth;
         this.curveShift = curveShift; this.lateCap = lateCap; this.forkEvery = forkEvery; this.forkRisers = forkRisers; this.branchHop = branchHop;
         this.narrowFoothold = narrowFoothold; this.wideHopEvery = wideHopEvery; this.forkChance = forkChance; this.forkSpacing = forkSpacing;
         this.forkReach = forkReach; this.nestedForks = nestedForks; this.threatBudget = threatBudget; this.threatBase = threatBase;
@@ -37,16 +56,22 @@ public final class DifficultyProfile {
 
     /** NORMAL: occasional simple splits, every link within the threat budget, quiet key rooms first. */
     public static final DifficultyProfile NORMAL = new DifficultyProfile(0f, 1f, 70f, 3, 4.4f, false, 36f, 0.5f, 7, 7, false,
-        true, EncounterModel.THREAT_BASE, EncounterModel.THREAT_PER_LEVEL, EncounterModel.THREAT_CRAMPED, true);
+        true, EncounterModel.THREAT_BASE, EncounterModel.THREAT_PER_LEVEL, EncounterModel.THREAT_CRAMPED, true, 8, 0.12f, 0.04f, 1f, Double.POSITIVE_INFINITY);
     /**
-     * PUNISHER (and NEVER GONNA HAPPEN, whose code is kept): the curve read 1,500 m higher, more and longer splits with a narrow foothold, nested
-     * forks. The threat budget and quiet key rooms are not applied yet: that is a new difficulty rule awaiting the owner's decision (2026-10-25).
+     * PUNISHER: the curve read 2,000 m higher (owner target: its castle 1 resembles NORMAL castle 5; was 1,500 m, PROVISIONAL), more and longer
+     * splits with a narrow foothold, nested forks. The threat budget and quiet key rooms are not applied (owner decision pending since 2026-10-25).
      */
-    public static final DifficultyProfile PUNISHER = new DifficultyProfile(1500f, 1.4f, 34f, 5, 3.4f, true, 18f, 0.9f, 4, 9, true,
-        false, EncounterModel.THREAT_BASE, EncounterModel.THREAT_PER_LEVEL, EncounterModel.THREAT_CRAMPED, false);
+    public static final DifficultyProfile PUNISHER = new DifficultyProfile(2000f, 1.4f, 34f, 5, 3.4f, true, 18f, 0.9f, 4, 9, true,
+        false, EncounterModel.THREAT_BASE, EncounterModel.THREAT_PER_LEVEL, EncounterModel.THREAT_CRAMPED, false, 4, 0.15f, 0.04f, 1.08f, 3333.0);
+    /**
+     * NEVER GONNA HAPPEN (its own profile since 2026-10-26; it shared PUNISHER's): the curve read 3,500 m higher (owner target: castle 1 resembles NORMAL
+     * castle 8, PROVISIONAL), a higher late cap, otherwise PUNISHER's structure. Creatures act faster through {@link Tuning#react()} (hard = 2).
+     */
+    public static final DifficultyProfile NGH = new DifficultyProfile(3500f, 1.7f, 34f, 5, 3.4f, true, 18f, 0.9f, 4, 9, true,
+        false, EncounterModel.THREAT_BASE, EncounterModel.THREAT_PER_LEVEL, EncounterModel.THREAT_CRAMPED, false, 1, 0.18f, 0.04f, 1.15f, 1667.0);
 
     /** The profile a climb at {@code t.hard} generates with. */
-    public static DifficultyProfile of(Tuning t) { return t.hard > 0 ? PUNISHER : NORMAL; }
+    public static DifficultyProfile of(Tuning t) { return t.hard >= 2 ? NGH : t.hard > 0 ? PUNISHER : NORMAL; }
 
     /** The most weighted pursuit one link may carry at level {@code lv} (0..1). */
     public float threatBudget(float lv, boolean cramped) {

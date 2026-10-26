@@ -55,9 +55,9 @@ public final class CourseGenerator {
      * generator (the crab rules of Build 63 changed what a seed produced, so runs from earlier builds carry version 0, "old rules", and are not compared).
      * {@code GeneratorFingerprintTest} fails when generation changes without a bump.
      */
-    public static final int RULES_VERSION = 8;      // 8 = Build 81 (owner decisions 2026-10-25): keys lie on a main-route platform (no rooms, branches or perches); 7 = Build 80 (owner directive 2026-10-24): no level gates, PUNISHER on its own curve, encounter-conflict rule, splits with reconnecting branches instead of dead ends; 6 = Build 79: skulls, blobs and crabs reach the platforms either side (crabs follow up to three, fall with crumbling decks), faster skull, no blob wobble, two to four crabs a deck, bee pairs, creatures on spike-drop rows, bridges that drop planks, flat-turning aimed cannons, an always-running balance conveyor, decoys kept off ropes, a slightly harder first world; 5 = Build 77: faster skull with loop+swoop, key detours proved with the skull at either end, one balance conveyor per section from Castle 6 to 10; 4 = Build 76: faster plank conveyor bridges; 3 = Build 72: flush ramps, faster crumbling, a wilder shaking ramp, the spinning ramp; 2 = Build 71: the bee homes in, skulls and green blobs, mortars out of step at random
+    public static final int RULES_VERSION = 9;      // 9 = Build 82 (owner correction directive 2026-10-26): terrain difficulty rises over the whole climb with each mode's head start, NGH has its own profile, no enemies on spike-drop platforms (rare ones on intermediate safe platforms instead), the solver hops a skull at its real dash speed; 8 = Build 81 (owner decisions 2026-10-25): keys lie on a main-route platform (no rooms, branches or perches); 7 = Build 80 (owner directive 2026-10-24): no level gates, PUNISHER on its own curve, encounter-conflict rule, splits with reconnecting branches instead of dead ends; 6 = Build 79: skulls, blobs and crabs reach the platforms either side (crabs follow up to three, fall with crumbling decks), faster skull, no blob wobble, two to four crabs a deck, bee pairs, creatures on spike-drop rows, bridges that drop planks, flat-turning aimed cannons, an always-running balance conveyor, decoys kept off ropes, a slightly harder first world; 5 = Build 77: faster skull with loop+swoop, key detours proved with the skull at either end, one balance conveyor per section from Castle 6 to 10; 4 = Build 76: faster plank conveyor bridges; 3 = Build 72: flush ramps, faster crumbling, a wilder shaking ramp, the spinning ramp; 2 = Build 71: the bee homes in, skulls and green blobs, mortars out of step at random
     /** The rules version a climb started on a given build used (0 = unknown or before the stamps: not comparable). */
-    public static int rulesOfBuild(int build) { return build >= 81 ? 8 : build >= 80 ? 7 : build >= 79 ? 6 : build >= 77 ? 5 : build >= 76 ? 4 : build >= 72 ? 3 : build >= 71 ? 2 : build >= 63 ? 1 : 0; }
+    public static int rulesOfBuild(int build) { return build >= 82 ? 9 : build >= 81 ? 8 : build >= 80 ? 7 : build >= 79 ? 6 : build >= 77 ? 5 : build >= 76 ? 4 : build >= 72 ? 3 : build >= 71 ? 2 : build >= 63 ? 1 : 0; }
 
     private CourseGenerator(long seed, Tuning t, long salt) {
         T = t; P = DifficultyProfile.of(t); this.salt = salt; rnd = new Random(seed * 0x9E3779B97F4A7C15L + 12345 + salt * 0x632BE59BD9B4E019L); c = new Course(seed, t.circumference());
@@ -124,7 +124,11 @@ public final class CourseGenerator {
     }
 
     // ---- difficulty as a function of height (all numbers live in tuning.json)
-    private float diff(float y) { return Math.min(1f, Math.max(0f, (float) ((y + base) / rampH))); }
+    private float diff(float y) {
+        if (!endless) return Math.min(1f, Math.max(0f, (float) ((y + base) / rampH)));
+        float f = DifficultyProfile.TERRAIN_FLOOR;          // endless: the whole 10-castle climb, read with this difficulty's head start (see DifficultyProfile.terrainCap)
+        return Math.min(P.terrainCap, Math.max(0f, f + (1f - f) * (float) ((y + base + modeShift()) / DifficultyProfile.TERRAIN_RAMP_Y)));
+    }
     private int tier(float y) { return Math.min(3, (int) (diff(y) * 4f)); }
     /** Visual theme of the platforms at height y: the four worlds repeat for ever in the endless climb. */
     private int theme(float y) { return endless ? ((int) ((y + base) / T.zoneHeight)) % T.zoneCount : tier(y); }
@@ -1210,6 +1214,31 @@ public final class CourseGenerator {
 
     private boolean commit(List<Element> es, float minMargin) { return commit(es, new ArrayList<Element>(), minMargin); }
 
+    /** Platforms that carry a dedicated hazard structure (spike drop, mortar, cannon, aimed cannon): protected by the owner's structural rules. */
+    private boolean protectedDeck(int p) {
+        for (Element h : c.hazards) if (h.anchor == p && (h.type == Element.Type.SPIKE_DROP || h.type == Element.Type.MORTAR || h.type == Element.Type.CANNON || h.type == Element.Type.AIMED)) return true;
+        return false;
+    }
+    /**
+     * Owner structural rules (2026-10-26): no enemy sits on a protected hazard platform, and none can pursue onto one (EncounterModel.reaches, the
+     * Sim's own reach rules) below this difficulty's {@link DifficultyProfile#pursuitFromY} - never in NORMAL, the top third in PUNISHER, the top two-thirds in
+     * NGH. Checked for every protected platform within reach of the newly added elements (enemies and protected decks can arrive in either order).
+     */
+    private boolean protectedRowsOk(int n0) {
+        int from = Math.max(0, n0 - 5);
+        for (int p = from; p < c.size(); p++) {
+            if (!protectedDeck(p)) continue;
+            boolean pursuitAllowed = base + c.get(p).y >= P.pursuitFromY;
+            for (Element h : c.hazards) {
+                if (h.anchor < 0 || Math.abs(h.anchor - p) > 4) continue;
+                if (h.type != Element.Type.CRAB && h.type != Element.Type.BEE && h.type != Element.Type.SKULL && h.type != Element.Type.BLOB) continue;
+                if (h.anchor == p) return false;
+                if (!pursuitAllowed && EncounterModel.reaches(c, T, h, p)) return false;
+            }
+        }
+        return true;
+    }
+
     public int failConflict;      // diagnostics: modules refused for incompatible demands (EncounterModel)
     public int failThreat;        // diagnostics: NORMAL modules refused for putting more pursuit within reach of a link than its level allows
     /** The margin each committed link was proven with (route index of its start). */
@@ -1259,6 +1288,7 @@ public final class CourseGenerator {
                 CRABCLASH[(f.anchor >= 0 ? 2 : 0) + (body ? 0 : 1) + (lastClashGhost ? 4 : 0)]++; } }
         for (Element h : hz) { if (!ok) break; if (h.type == Element.Type.CLUB) continue; ok = hazardOk(h, ownerOf(h)); if (!ok) failHaz++; }
         if (ok && !sawsClearOfCreatures(hz)) { ok = false; failHaz++; }
+        if (ok && !protectedRowsOk(n0)) { ok = false; failHaz++; }
         Sim prevStart = null; Autopilot.Result prevRes = null;
         for (int i = from; i < c.size() - 1 && ok; i++) {
             if (i < n0 - 1 && !heldBefore[i - from]) { prevStart = null; prevRes = null; continue; }
@@ -1342,6 +1372,11 @@ public final class CourseGenerator {
         return true;
     }
 
+    /**
+     * Owner correction directive 2026-10-26 (PROVISIONAL): hazard modules keep gaining weight with the late-climb ramp. Before, their weights stopped at
+     * intensity 1 (about 1,000 m; PUNISHER and NGH from the start) while other modules kept gaining share, so hazard scores were flat or fell.
+     */
+    static final float LATE_HAZ = 6f, LATE_TRAP = 3f, LATE_MORTAR = 2f;
     private Kind pick(int zone, Element last) {
         float[] w = new float[Kind.values().length];
         switch (zone) {
@@ -1358,10 +1393,11 @@ public final class CourseGenerator {
         float inten = intensity(last.y);
         w[Kind.RAMP.ordinal()] = zone == 0 ? 1.5f : 3f;
         w[Kind.LONG.ordinal()] = 0f;            // long walkable corridors deferred: at any non-zero weight they lengthen the local climb enough to push the streaming-vs-whole float determinism past its 2 mm tolerance (TowerStreamingTest). Re-enable with a test-stable design (shorter corridors / local-origin friendly) once reviewed. The Kind + piece case stay ready.
-        if (zone >= 1 && inten > 0f) w[Kind.MORTAR.ordinal()] = 1f + 3f * inten;          // a mortar row: any stage after the first world
+        float lt = late(last.y);
+        if (zone >= 1 && inten > 0f) w[Kind.MORTAR.ordinal()] = 1f + 3f * inten + LATE_MORTAR * lt;          // a mortar row: any stage after the first world
         if (zone >= 1) { w[Kind.SEESAW.ordinal()] = 4f; w[Kind.BRIDGE.ordinal()] = 4f; }
         else w[Kind.BRIDGE.ordinal()] = 2f;
-        if (inten > 0f || (!endless && last.y > T.courseHeight * 0.18f)) { w[Kind.HAZ.ordinal()] = 3f + 9f * inten; if (zone >= 1) w[Kind.SPRING.ordinal()] = 2f + 2f * inten; w[Kind.TRAP.ordinal()] = 2f + 5f * inten; }
+        if (inten > 0f || (!endless && last.y > T.courseHeight * 0.18f)) { w[Kind.HAZ.ordinal()] = 3f + 9f * inten + LATE_HAZ * lt; if (zone >= 1) w[Kind.SPRING.ordinal()] = 2f + 2f * inten; w[Kind.TRAP.ordinal()] = 2f + 5f * inten + LATE_TRAP * lt; }
         // keep the spiral pitch healthy: if climbing lags the arc travelled, prefer vertical modules
         // spiral pitch controller: track y = pitch * (arc travelled / circumference) so successive revolutions stay a fixed distance apart
         float guide = T.spiralPitch * (last.s - 4f) / c.circumference;
@@ -1512,8 +1548,30 @@ public final class CourseGenerator {
         int n = 3 + (rnd.nextFloat() < 0.35f + 0.4f * inten ? 1 : 0) + (rnd.nextFloat() < late(last.y) ? 1 : 0);
         List<Element> es = new ArrayList<>();
         Element cur = last; int base0 = c.size();
+        int castle = 1 + (int) ((base + last.y) / 500.0);
+        float mid = castle < P.midEnemyFromCastle ? 0f : P.midEnemyChance + P.midEnemyGrowth * (castle - P.midEnemyFromCastle);
         for (int k = 0; k < n; k++) {
             float uR = cur.s + cur.w / 2f;
+            if (k > 0 && mid > 0f && rnd.nextFloat() < mid) {
+                // owner structural rule (2026-10-26): a genuine intermediate safe platform between two drop platforms may host a rare enemy (a bee over it
+                // or a pair of crabs); the drop platforms themselves are protected and carry none
+                float iw = r(3.6f, 4.2f);
+                Element ip = plat(Element.Type.STATIC, uR + r(1.1f, 1.6f) * (1f - 0.03f * attempt) + iw / 2f, cur.y + r(-0.2f, 0.3f), iw, z);
+                es.add(ip); int ia = base0 + es.size() - 1;
+                if (rnd.nextBoolean()) {
+                    float span = iw - 1.6f;
+                    for (int q = 0; q < 2; q++) {
+                        Element m = hz(Element.Type.CRAB, ip.s - span / 2f + q * span, ip.y, 0f, z);
+                        m.amp = Math.max(0.3f, Math.min(0.9f, span * 0.5f - 0.3f)); m.period = r(3.0f, 4.0f) - 0.4f * inten; m.phase = r(0f, 6.28f); m.anchor = ia;
+                        hzOut.add(m);
+                    }
+                } else {
+                    Element m = hz(Element.Type.BEE, ip.s, ip.y + 2.2f, 0f, z); m.amp = 0.6f; m.len = 0.8f; m.period = r(7.0f, 9.5f) - 1.5f * inten; m.dir = rnd.nextBoolean() ? 1 : -1;
+                    m.phase = r(0f, 6.28f); m.anchor = ia;
+                    hzOut.add(m);
+                }
+                cur = ip; uR = cur.s + cur.w / 2f;
+            }
             float g = k == 0 ? reach(0.2f) * lerp(0.45f, 0.75f, d) * (1f - 0.03f * attempt) : r(1.1f, 1.7f) * (1f - 0.03f * attempt);
             float w = r(5.0f, 5.8f);
             Element p = plat(Element.Type.STATIC, uR + g + w / 2f, cur.y + (k == 0 ? r(0f, 0.4f) : r(-0.2f, 0.3f)), w, z);
@@ -1522,22 +1580,10 @@ public final class CourseGenerator {
             // (centred, it hung right where the hop lands, and a climber who stopped there had no safe way on - EndlessTest, seed 4 slice 9)
             Element h = hz(Element.Type.SPIKE_DROP, p.s + 0.2f * w, p.y, 1.6f, z);
             h.amp = r(DROP_MIN_TOP, DROP_MAX_TOP); h.period = r(2.7f, 4.3f) - 0.3f * inten; h.phase = r(0f, 6.28f);
-            h.anchor = base0 + k;
+            h.anchor = base0 + es.size() - 1;
             hzOut.add(h);
-            if (k > 0 && rnd.nextFloat() < 0.2f + 0.3f * inten + 0.3f * T.hard) {             // Build 79 (owner: waiting out a drop is too easy): sometimes a crab on the deck or a bee over it as well
-                if (rnd.nextBoolean()) {                                    // crabs: never fewer than two on a deck (owner), one more per difficulty level
-                    int nc = 2 + T.hard; float span = w - 1.6f, step = span / (nc - 1);
-                    for (int q = 0; q < nc; q++) {
-                        Element m = hz(Element.Type.CRAB, p.s - span / 2f + q * step, p.y, 0f, z);
-                        m.amp = Math.max(0.3f, Math.min(0.9f, step * 0.5f - 0.3f)); m.period = r(3.0f, 4.0f) - 0.4f * inten; m.phase = r(0f, 6.28f); m.anchor = base0 + k;
-                        hzOut.add(m);
-                    }
-                } else {
-                    Element m = hz(Element.Type.BEE, p.s, p.y + 2.2f, 0f, z); m.amp = 0.6f; m.len = 0.8f; m.period = r(7.0f, 9.5f) - 1.5f * inten; m.dir = rnd.nextBoolean() ? 1 : -1;
-                    m.phase = r(0f, 6.28f); m.anchor = base0 + k;
-                    hzOut.add(m);
-                }
-            }
+            // (2026-10-26, owner protected-structure rule: the Build 79 crab/bee on the drop platform itself is gone; with NGH's +0.6 chance and four crabs
+            //  it filled nearly every drop deck, and no NGH spike-drop row could be proven - 146 tries, 0 kept. Enemies now come on intermediate platforms.)
             cur = p;
         }
         // a clear landing after the chain: a breather, and the next module starts from safe footing instead of under a drop (proving the jump

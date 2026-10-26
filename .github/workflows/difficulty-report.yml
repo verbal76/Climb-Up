@@ -15,6 +15,9 @@ on:
       - 'core/src/test/java/com/hotatticgames/climbup/sim/DifficultyScore.java'
       - 'core/src/test/resources/difficulty_weights.properties'
       - 'tools/ci/lane_report.py'
+      - 'core/src/main/java/com/hotatticgames/climbup/sim/CourseGenerator.java'
+      - 'core/src/main/java/com/hotatticgames/climbup/sim/Autopilot.java'
+      - 'core/src/main/java/com/hotatticgames/climbup/sim/DifficultyProfile.java'
 permissions:
   contents: read
 jobs:
@@ -32,7 +35,7 @@ jobs:
         with: { distribution: temurin, java-version: '17' }
       - uses: gradle/actions/setup-gradle@v4
       - name: Reporting validation gate (classification, invariance, ledgers, coverage)
-        run: ./gradlew :core:test --tests 'com.hotatticgames.climbup.sim.LaneReportTest' --tests 'com.hotatticgames.climbup.sim.DifficultyScoreTest' --no-daemon -q
+        run: ./gradlew :core:test --tests 'com.hotatticgames.climbup.sim.LaneReportTest' --tests 'com.hotatticgames.climbup.sim.DifficultyScoreTest' --tests 'com.hotatticgames.climbup.sim.ModeProfileTest' --no-daemon -q
       - name: Generate, solve and measure ten castles
         timeout-minutes: 270
         env:

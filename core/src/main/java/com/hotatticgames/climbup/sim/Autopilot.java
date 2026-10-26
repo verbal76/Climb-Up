@@ -260,7 +260,8 @@ public final class Autopilot {
                     int dj = s.mobDeckIdx(hi, h);                       // Build 79: the deck it hunts on now
                     if (dj < 0 || Math.abs(s.y - s.deckY(dj)) > 0.6f) continue;
                     float ahead = c.dsWrap(s.s, s.mobS[hi]) * s.mobDir[hi], gap = ahead - (Element.SKULL_R + hw);
-                    if (ahead > 0f && gap / Element.SKULL_SPEED < 0.15f) { in.jumpPressed = true; in.jumpHeld = true; busy = 1; return true; }
+                    // 2026-10-26: the dash runs at SKULL_SPEED x react() in the Sim; timing the hop on the base speed jumped too late in PUNISHER and always in NGH (0 NGH skulls)
+                    if (ahead > 0f && gap / (Element.SKULL_SPEED * s.T.react()) < 0.15f) { in.jumpPressed = true; in.jumpHeld = true; busy = 1; return true; }
                 } else if (h.type == Element.Type.CRAB && s.crabChasing(hi) && !(hi < s.featDone.length && s.featDone[hi]) && !s.crabFalling(hi)
                         && s.crabJump[hi] < 0f && hi < s.deckOff.length && Math.round(s.deckOff[hi]) != 0 && s.mobDeckIdx(hi, h) == s.onElem) {   // Build 79: a crab that followed you off its own deck runs at you: hop it as it comes (on its own deck the plan's crab hop handles it)
                     float d = c.dsWrap(s.crabAt(hi, h), s.s);

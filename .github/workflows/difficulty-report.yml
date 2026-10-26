@@ -1,18 +1,20 @@
 name: Difficulty report
-# DIAGNOSTIC ONLY (owner directive 2026-10-25, Priority 1): generates ten castles of seeded NORMAL, PUNISHER and NEVER GONNA HAPPEN climbs the way the
-# game streams them, runs the existing slice solver on each slice, and scores every 25 m window with core/src/test/java/.../sim/DifficultyScore
-# (never used by the generator). Publishes nothing; one job per mode and seed, each uploading its partial results even if it fails or runs out of
-# time; a final job merges them into difficulty_report.pdf plus CSV and JSON.
+# DIAGNOSTIC ONLY (owner reporting directive + classification amendment, 2026-10-26): generates ten castles of seeded NORMAL, PUNISHER and NEVER
+# GONNA HAPPEN climbs with the CURRENT generator, runs the CURRENT slice solver, and measures every 25 m window in three lanes (terrain, hazards,
+# enemies) with separate interaction and mitigation ledgers (core/src/test/java/.../sim/LaneReport, scoring model 3lane-1; the earlier v2 score is
+# kept as a reference column). Publishes nothing; one job per mode and seed, each uploading its partial results even if it fails or runs out of
+# time; a final job builds the executive and detailed PDFs, per-run 25 m segment PDFs, merged CSV/JSON, validation and an index.
 on:
   workflow_dispatch:
   push:
     branches: [build-74-determinism]
     paths:
       - '.github/workflows/difficulty-report.yml'
+      - 'core/src/test/java/com/hotatticgames/climbup/sim/LaneReport.java'
+      - 'core/src/test/java/com/hotatticgames/climbup/sim/Lanes.java'
       - 'core/src/test/java/com/hotatticgames/climbup/sim/DifficultyScore.java'
-      - 'core/src/test/java/com/hotatticgames/climbup/sim/DifficultyReport.java'
-      - 'tools/ci/difficulty_pdf.py'
       - 'core/src/test/resources/difficulty_weights.properties'
+      - 'tools/ci/lane_report.py'
 permissions:
   contents: read
 jobs:
@@ -29,23 +31,20 @@ jobs:
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: '17' }
       - uses: gradle/actions/setup-gradle@v4
-      - name: Scoring unit test
-        run: ./gradlew :core:test --tests 'com.hotatticgames.climbup.sim.DifficultyScoreTest' --no-daemon -q
-      - name: Generate, solve and score ten castles
+      - name: Reporting validation gate (classification, invariance, ledgers, coverage)
+        run: ./gradlew :core:test --tests 'com.hotatticgames.climbup.sim.LaneReportTest' --tests 'com.hotatticgames.climbup.sim.DifficultyScoreTest' --no-daemon -q
+      - name: Generate, solve and measure ten castles
         timeout-minutes: 270
         env:
           RUN_BUDGET: '15000'
         run: |
           set -e
           GDX=$(find ~/.gradle -name 'gdx-1.14.2.jar' | head -1)
-          cd core && java -Xmx3g -cp "build/classes/java/main:build/classes/java/test:$GDX" com.hotatticgames.climbup.sim.DifficultyReport ../assets/data/tuning.json 5000 ${{ matrix.mode }} ${{ matrix.seed }} ../report
-      - name: Summary
-        if: always()
-        run: cat report/summary.md >> "$GITHUB_STEP_SUMMARY" || true
+          cd core && java -Xmx3g -cp "build/classes/java/main:build/classes/java/test:$GDX" com.hotatticgames.climbup.sim.LaneReport ../assets/data/tuning.json 5000 ${{ matrix.mode }} ${{ matrix.seed }} ../report
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: difficulty-report-mode-${{ matrix.mode }}-seed-${{ matrix.seed }}
+          name: lanes-mode-${{ matrix.mode }}-seed-${{ matrix.seed }}
           path: report/
   consolidate:
     needs: report
@@ -55,15 +54,15 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
-          pattern: difficulty-report-mode-*
+          pattern: lanes-mode-*
           path: parts
-      - name: Merge into PDF, CSV and JSON
+      - name: Build PDFs, merged CSV/JSON, validation and index
         run: |
           pip install --quiet matplotlib
-          python3 tools/ci/difficulty_pdf.py parts consolidated
-          cp parts/*/summary.md consolidated/ 2>/dev/null || true
+          python3 tools/ci/lane_report.py parts baseline
+          cat baseline/INDEX.md >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: difficulty-report-consolidated
-          path: consolidated/
+          name: difficulty-baseline-3lane
+          path: baseline/

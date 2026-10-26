@@ -1,0 +1,452 @@
+package com.hotatticgames.climbup.sim;
+
+import java.io.*;
+import java.lang.reflect.Field;
+import java.nio.file.*;
+import java.util.*;
+
+/**
+ * Three-lane difficulty measurement (owner reporting directive 2026-10-26 and its classification amendment). Diagnostic only: it generates and solves
+ * courses exactly as the game and the existing solver do (observe-only {@link GenTrace} hooks) and never feeds anything back.
+ *
+ * Scoring model {@value #SCORING}: TERRAIN from link geometry (rules T-*), HAZARDS from the nine environmental hazards on route platforms (H-*),
+ * ENEMIES from the four enemy families that can reach the route (E-*), with clubs as separate MITIGATION (M-CLUB) and cross-system challenges in a
+ * separate INTERACTION ledger (X-*). Every contribution is a ledger row: source id, measured property, raw measurement, rule, weight, window
+ * fraction, repetition factor, final value. Window totals are sums of their rows (pinned by LaneReportTest). The earlier single-score model
+ * (DifficultyScore, "v2") is still computed alongside for reference; the two are different models and are never mixed.
+ *
+ *   LaneReport <tuning.json> <top metres> <mode 0|1|2> <seed> <out dir>      env: SOLVE=0 skips the solver, RUN_BUDGET=seconds stops early (partial)
+ */
+public final class LaneReport {
+    public static final String SCORING = "3lane-1";
+    public static final float WINDOW = 25f, CASTLE = 500f;
+    static final String[] MODE = {"NORMAL", "PUNISHER", "NGH"};
+    static final float X_BONUS = 0.5f, X_CAP = 2f, TERRAIN_DEMANDING = 1f;
+
+    // ------------------------------------------------------------------ records
+    public static final class El {
+        String id, type, lane, module = "", moduleKind = "UNATTRIBUTED", structure = "ordinary"; int slice, idx, window; boolean route; Element e; double sAbs, yAbs;
+    }
+    public static final class Row {
+        int window; String lane, rule, source, property, note = ""; double raw, weight, fraction, repetition = 1, value;
+    }
+    public static final class Link {
+        int slice, from, to; String fromId, toId, fromType, toType; double y0, y1, gap = Double.NaN, dy, reach = Double.NaN, ratio = Double.NaN, landW = Double.NaN, terrain;
+        String status = "NOT_SOLVED"; double solveTime = Double.NaN; int setbacks = -1, planFails; float emJump, emPosition, emWait, emCommit, emRecover, emPursue, emScore;
+        double[] fractions; int[] windows; Set<Element.Type> hazards = EnumSet.noneOf(Element.Type.class), enemies = EnumSet.noneOf(Element.Type.class);
+    }
+    public static final class Win {
+        int index; double[] raw = new double[3], adj = new double[3]; double mitigation, interaction; boolean geometry;
+        EnumMap<Element.Type, Double> counts = new EnumMap<>(Element.Type.class); TreeMap<String, Integer> modules = new TreeMap<>();
+        int linksTotal, linksTraversed, linksFailed, linksUnreached, setbacks, planFails, rejected, fallbacks, demandingLinks, offRouteHazards, unreachableEnemies, decoys;
+        double solveTime, maxRatio = Double.NaN, minLandW = Double.NaN; TreeSet<String> flags = new TreeSet<>(); float v2 = Float.NaN;
+        double total() { return adj[0] + adj[1] + adj[2] + interaction - mitigation; }
+    }
+
+    public final Tuning t; public final int mode; public final long seed; public final float top;
+    public final List<El> elements = new ArrayList<>();
+    public final List<Element> hazardEls = new ArrayList<>(); public final List<El> hazards = new ArrayList<>();
+    public final List<Link> links = new ArrayList<>();
+    public final List<Row> ledger = new ArrayList<>();
+    public final List<String[]> modules = new ArrayList<>();          // every module attempt
+    public final List<String[]> solverSlices = new ArrayList<>(), solverFailures = new ArrayList<>(), sliceFailures = new ArrayList<>();
+    public final TreeMap<Integer, Win> windows = new TreeMap<>();
+    public final EnumMap<Element.Type, int[]> inventory = new EnumMap<>(Element.Type.class);   // {placed (in course), on route / reaching route (active), scored}
+    public final TreeMap<String, int[]> kindStats = new TreeMap<>();   // kind -> {tried, accepted (final course), refused, fallback picks}
+    public final List<String[]> ruleChecks = new ArrayList<>();
+    public float reached; public int slices; public String stopped; public double genSeconds, solveSeconds; public boolean solve;
+    final DifficultyScore v2;
+    private final Set<String> seenHaz = new HashSet<>();
+
+    public LaneReport(Tuning t, int mode, long seed, float top) {
+        this.t = t; this.mode = mode; this.seed = seed; this.top = top; v2 = new DifficultyScore(t);
+        for (Element.Type k : Element.Type.values()) { Lanes.lane(k); inventory.put(k, new int[3]); }
+        for (String[] k : Lanes.KINDS) kindStats.put(k[0], new int[4]);
+        for (String[] k : Lanes.STRUCTURES) kindStats.put(k[0], new int[4]);
+    }
+
+    static Win win(TreeMap<Integer, Win> m, int i) { return m.computeIfAbsent(i, j -> { Win w = new Win(); w.index = j; return w; }); }
+    Win win(int i) { return win(windows, i); }
+    static int wi(double y) { return Math.max(0, (int) Math.floor(y / WINDOW)); }      // (anything below the start platform, e.g. a mortar in the ground, belongs to window 0)
+
+    // ------------------------------------------------------------------ run
+    public void run(boolean solve, double budget) {
+        this.solve = solve; long t0 = System.nanoTime();
+        CourseGenerator.Framed f = null; int k = 0;
+        try {
+            while (f == null || f.yBase + f.c.get(f.c.routeSize() - 1).y < top) {
+                GenTrace tr = new GenTrace(); GenTrace.GEN.set(tr); long g0 = System.nanoTime();
+                try { f = CourseGenerator.chunkFramed(seed, k, f, t); } finally { GenTrace.GEN.remove(); }
+                genSeconds += (System.nanoTime() - g0) / 1e9;
+                GenTrace.Solve st = null; Autopilot.Report rep = null;
+                if (solve) {
+                    st = new GenTrace.Solve(); GenTrace.SOLVE.set(st); long s0 = System.nanoTime();
+                    try { rep = Autopilot.run(f.c, t, 4000f); } catch (RuntimeException e) { rep = new Autopilot.Report(); rep.failInfo = "solver threw " + e; } finally { GenTrace.SOLVE.remove(); }
+                    double secs = (System.nanoTime() - s0) / 1e9; solveSeconds += secs;
+                    solverSlices.add(new String[]{"" + k, f3(f.yBase + f.c.get(0).y), f3(f.yBase + f.c.get(f.c.routeSize() - 1).y), "" + rep.completed, "" + rep.links, "" + rep.failedLink, f3(rep.simTime), f3(rep.minMargin), "" + rep.worstLink, f3(secs), q(rep.failInfo)});
+                }
+                measure(k, f, tr, rep, st);
+                v2.add(f.c, (float) f.yBase);
+                reached = (float) (f.yBase + f.c.get(f.c.routeSize() - 1).y); k++;
+                if ((System.nanoTime() - t0) / 1e9 > budget) { stopped = "time budget of " + (int) budget + " s reached (partial results)"; break; }
+            }
+        } catch (RuntimeException e) { stopped = "GENERATION STOPPED: " + e; }
+        slices = k;
+        finish();
+    }
+
+    void measure(int k, CourseGenerator.Framed f, GenTrace tr, Autopilot.Report rep, GenTrace.Solve st) {
+        Course c = f.c; double yb = f.yBase, sb = f.sBase; int rs = c.routeSize();
+        for (String s : tr.sliceFailures) sliceFailures.add(new String[]{"" + k, q(s)});
+        // modules: every attempt is a diagnostic row; the final attempt's accepted ones own elements (a later module wins an index re-used after a rollback)
+        String[] owner = new String[c.size()], ownerKind = new String[c.size()]; int mi = 0;
+        for (GenTrace.Module m : tr.modules) {
+            String id = k + ":m" + (mi++); boolean fin = m.attempt == tr.finalAttempt;
+            int[] ks = kindStats.computeIfAbsent(m.kind, x -> new int[4]); ks[0]++; if (!m.ok) ks[2]++; if ("FALLBACK".equals(m.role) && m.ok) ks[3]++;
+            int e0 = m.e0 - tr.offset, e1 = m.e1 - tr.offset;
+            if (fin && m.ok) { ks[1]++; for (int i = Math.max(0, e0); i < Math.min(c.size(), e1); i++) { owner[i] = id; ownerKind[i] = m.kind; } }
+            modules.add(new String[]{id, "" + k, "" + m.attempt, "" + fin, m.kind, m.role, m.picked == null ? "" : m.picked, f3(m.d), f3(m.y), "" + m.ok, "" + e0, "" + e1, "" + (m.h1 - m.h0),
+                "" + m.fails[0], "" + m.fails[1], "" + m.fails[2], "" + m.fails[3], "" + m.fails[4], "" + m.fails[5]});
+            if (!m.ok) { Win w = win(wi(m.y)); w.rejected++; }
+            if ("FALLBACK".equals(m.role) && m.ok && fin) win(wi(m.y)).fallbacks++;
+        }
+        // elements (index 0 of a later slice is the previous slice's last platform: counted once)
+        Map<Integer, El> byIdx = new HashMap<>();
+        for (int i = (k == 0 ? 0 : 1); i < c.size(); i++) {
+            Element e = c.get(i); El r = new El(); r.e = e; r.slice = k; r.idx = i; r.id = k + ":" + i; r.type = e.type.name(); r.lane = Lanes.lane(e.type).name();
+            r.route = i < rs && e.anchor < 0; r.sAbs = sb + e.s; r.yAbs = yb + e.y; r.window = wi(r.yAbs);
+            if (owner[i] != null) { r.module = owner[i]; r.moduleKind = ownerKind[i]; } else if (!r.route) r.moduleKind = "DECOY"; else if (k == 0 && i == 0) { r.moduleKind = "START"; r.structure = "start platform"; }
+            if (!r.route) win(r.window).decoys++;
+            elements.add(r); byIdx.put(i, r); inventory.get(e.type)[0]++; if (r.route) inventory.get(e.type)[1]++;
+        }
+        for (int i = 0; i < c.size(); i++) if (owner[i] == null && byIdx.containsKey(i) && byIdx.get(i).route && !(k == 0 && i == 0)) win(byIdx.get(i).window).flags.add("MODULE_UNATTRIBUTED");
+        // structural classification (derived from module kind and what sits on each platform; the cannon pillar is render-only)
+        Map<Integer, Set<Element.Type>> on = new HashMap<>();
+        for (Element h : c.hazards) if (h.anchor >= 0) on.computeIfAbsent(h.anchor, x -> EnumSet.noneOf(Element.Type.class)).add(h.type);
+        for (El r : byIdx.values()) {
+            Set<Element.Type> s = on.getOrDefault(r.idx, Collections.emptySet());
+            boolean dedicated = s.contains(Element.Type.SPIKE_DROP) || s.contains(Element.Type.MORTAR) || s.contains(Element.Type.CANNON) || s.contains(Element.Type.AIMED);
+            if ("DROPS".equals(r.moduleKind)) r.structure = s.contains(Element.Type.SPIKE_DROP) ? "spike-drop row platform" : "spike-drop row intermediate platform";
+            else if ("MORTAR".equals(r.moduleKind)) r.structure = s.contains(Element.Type.MORTAR) ? "mortar-row firing platform" : "mortar-row island/intermediate platform";
+            else if (s.contains(Element.Type.SPIKE_DROP)) r.structure = "individual spike-drop platform";
+            else if (s.contains(Element.Type.CANNON) || s.contains(Element.Type.AIMED)) r.structure = "cannon platform (pillar render-only)";
+            else if ("START".equals(r.moduleKind)) r.structure = "start platform";
+            else if ("REST".equals(r.moduleKind) || "CASTLE".equals(r.moduleKind) || "GEM".equals(r.moduleKind)) r.structure = r.moduleKind.toLowerCase(Locale.ROOT) + " structure";
+            else if (!r.route) r.structure = "decoy / branch";
+            else if (dedicated) r.structure = "hazard-carrying platform";
+        }
+        // solver per link: time between the solver's arrivals at successive route links, setbacks and refused plans in between
+        Map<Integer, double[]> solved = new HashMap<>();
+        if (st != null) {
+            for (int a = 0; a < st.arrivals.size(); a++) {
+                float[] x = st.arrivals.get(a), nx = a + 1 < st.arrivals.size() ? st.arrivals.get(a + 1) : null;
+                double dt = nx != null ? nx[1] - x[1] : rep.simTime - x[1]; int sbk = nx != null ? (int) (nx[2] - x[2]) : 0;
+                double[] prev = solved.get((int) x[0]); solved.put((int) x[0], new double[]{(prev == null ? 0 : prev[0]) + dt, (prev == null ? 0 : prev[1]) + sbk});
+            }
+        }
+        Map<Integer, Integer> planFails = new HashMap<>(); if (st != null) for (int[] p : st.planFails) planFails.merge(p[0], p[1], Integer::sum);
+        // hazards, enemies, clubs and utility
+        Course bare = new Course(c.seed, c.circumference); for (int i = 0; i < c.size(); i++) bare.add(c.get(i)); bare.routeCount = c.routeCount; bare.indexDecoys();
+        Map<Integer, Set<Element.Type>> hazOn = new HashMap<>(), enemyAt = new HashMap<>();
+        for (int hi = 0; hi < c.hazards.size(); hi++) {
+            Element h = c.hazards.get(hi); Lanes.Lane ln = Lanes.lane(h.type);
+            double sa = ((sb + h.s) % c.circumference + c.circumference) % c.circumference;
+            if (!seenHaz.add(h.type + ":" + Math.round(sa * 100) + ":" + Math.round((yb + h.y) * 100))) continue;
+            El r = new El(); r.e = h; r.slice = k; r.idx = hi; r.id = k + ":h" + hi; r.type = h.type.name(); r.lane = ln.name(); r.sAbs = sb + h.s; r.yAbs = yb + h.y;
+            El home = byIdx.get(h.anchor); if (home == null && h.anchor == 0 && k > 0) home = homeOfContext(yb + c.get(0).y);
+            r.window = home != null ? home.window : wi(r.yAbs); r.module = home != null ? home.module : ""; r.moduleKind = home != null ? home.moduleKind : "";
+            r.structure = home != null ? home.structure : "";
+            boolean onRoute = h.anchor >= 0 && h.anchor < rs && c.get(h.anchor).anchor < 0; r.route = onRoute;
+            hazards.add(r); inventory.get(h.type)[0]++;
+            if (ln == Lanes.Lane.HAZARDS) {
+                if (!onRoute) { win(r.window).offRouteHazards++; continue; }
+                inventory.get(h.type)[1]++; inventory.get(h.type)[2]++;
+                hazOn.computeIfAbsent(h.anchor, x -> EnumSet.noneOf(Element.Type.class)).add(h.type);
+                add(r.window, "HAZARDS", "H-" + h.type, r.id, "hazard on route platform " + (home == null ? h.anchor : home.id), 1, DifficultyScore.points(h.type), 1, h.type);
+            } else if (ln == Lanes.Lane.ENEMIES) {
+                List<Integer> reach = new ArrayList<>();
+                for (int p = Math.max(0, h.anchor - 4); p <= Math.min(rs - 1, h.anchor + 4); p++) if (c.get(p).anchor < 0 && EncounterModel.reaches(c, t, h, p)) reach.add(p);
+                if (reach.isEmpty()) { win(r.window).unreachableEnemies++; continue; }
+                inventory.get(h.type)[1]++; inventory.get(h.type)[2]++;
+                for (int p : reach) enemyAt.computeIfAbsent(p, x -> EnumSet.noneOf(Element.Type.class)).add(h.type);
+                Map<Integer, Integer> per = new TreeMap<>(); for (int p : reach) per.merge(wi(yb + c.get(p).y), 1, Integer::sum);
+                for (Map.Entry<Integer, Integer> e : per.entrySet())
+                    add(e.getKey(), "ENEMIES", "E-" + h.type, r.id, "reaches " + reach.size() + " route platform(s), " + e.getValue() + " in this window", reach.size(), DifficultyScore.points(h.type), e.getValue() / (double) reach.size(), h.type);
+                // owner future-rule checks (report only)
+                boolean homeDedicated = home != null && (home.structure.startsWith("spike-drop") || home.structure.startsWith("mortar") || home.structure.startsWith("cannon") || home.structure.startsWith("individual spike"));
+                boolean pursuitIntoHazard = false; for (int p : reach) { El pr = byIdx.get(p); if (p != h.anchor && pr != null && (pr.structure.startsWith("spike-drop row platform") || pr.structure.startsWith("mortar-row firing") || pr.structure.startsWith("individual spike") || pr.structure.startsWith("cannon"))) pursuitIntoHazard = true; }
+                if (home != null && (home.structure.contains("intermediate") || home.structure.contains("island"))) ruleChecks.add(new String[]{"R1-intermediate-enemy", r.id, h.type.name(), f3(r.yAbs), "" + castleOf(r.yAbs), "enemy on an intermediate platform of a hazard row"});
+                if (homeDedicated && !home.structure.contains("intermediate") && !home.structure.contains("island")) ruleChecks.add(new String[]{"R3-protected-structure", r.id, h.type.name(), f3(r.yAbs), "" + castleOf(r.yAbs), "enemy directly on a dedicated hazard structure: " + home.structure});
+                if (pursuitIntoHazard) ruleChecks.add(new String[]{"R2-pursuit-into-hazard", r.id, h.type.name(), f3(r.yAbs), "" + castleOf(r.yAbs), "reach includes a dedicated hazard platform"});
+            } else if (h.type == Element.Type.CLUB) {
+                if (onRoute) { inventory.get(h.type)[1]++; add(r.window, "MITIGATION", "M-CLUB", r.id, "club on route platform", 1, 1, 1, h.type); }
+            } else add(r.window, "UTILITY", "U-" + h.type, r.id, "progression element (no difficulty points)", 1, 0, 1, h.type);
+        }
+        // route links: terrain (game's own EncounterModel rules plus v3 precision rules), interactions, solver outcome
+        for (int i = 0; i < rs - 1; i++) {
+            if (c.get(i).anchor >= 0) continue;
+            int j = c.nextRoute(i); if (j < 0 || j >= rs) continue;
+            Element a = c.get(i), b = c.get(j); Link L = new Link();
+            L.slice = k; L.from = i; L.to = j; L.fromId = k + ":" + i; L.toId = k + ":" + j; L.fromType = a.type.name(); L.toType = b.type.name();
+            L.y0 = yb + a.y; L.y1 = yb + b.y; L.dy = b.y - a.y;
+            apportion(L);
+            EncounterModel.Link em = EncounterModel.link(c, t, i), eb = EncounterModel.link(bare, t, i);
+            L.emJump = eb.jump; L.emPosition = eb.position; L.emWait = eb.wait; L.emCommit = eb.commit; L.emRecover = em.recover; L.emPursue = em.pursue; L.emScore = em.score;
+            List<Object[]> T = new ArrayList<>();       // {rule, property, raw, weight}
+            if (a.isPlatform() && b.isPlatform()) {
+                L.gap = Math.max(0f, Math.abs(c.dsWrap(b.s, a.s)) - a.halfW() - b.halfW()); L.reach = EncounterModel.reach(t, b.y - a.y);
+                L.ratio = L.reach > 0 ? Math.min(1.2, L.gap / L.reach) : 1.2; L.landW = b.w;
+                T.add(new Object[]{"T-GAP", "gap / longest jump at this rise", L.ratio, 2.0 * clamp((L.ratio - 0.4) / 0.6)});
+                if (L.ratio > 0.85) T.add(new Object[]{"T-LONG", "long jump / grab beyond 85% of reach (EncounterModel)", L.ratio, 3.0 * (L.ratio - 0.85)});
+                T.add(new Object[]{"T-LAND", "usable landing width (m)", (double) b.w, 1.5 * clamp((3.0 - b.w) / 2.0)});
+            } else T.add(new Object[]{"T-TRAVERSE", "rope/cable link (owner-approved 0)", 0.0, 0.0});
+            if (a.type == Element.Type.PAD || a.type == Element.Type.SPRING) T.add(new Object[]{"T-LAUNCH", "pad/spring used to travel (owner-approved 0)", 0.0, 0.0});
+            if (a.isMoving()) T.add(new Object[]{"T-MOVE-TAKEOFF", "moving take-off (EncounterModel)", (double) a.amp, 0.5});
+            if (a.type == Element.Type.SEESAW || a.type == Element.Type.RAMP) T.add(new Object[]{"T-TILT-TAKEOFF", a.type + " take-off (EncounterModel)", (double) a.skin, 0.6});
+            if (a.type == Element.Type.RAMP && a.skin >= 2) T.add(new Object[]{"T-RAMP-VARIANT", "ramp skin " + a.skin + " (shaking/spinning/conveyor)", (double) a.skin, 0.4});
+            if (b.isMoving() || b.type == Element.Type.SWING) T.add(new Object[]{"T-MOVE-TARGET", "moving/swinging target, period " + b.period + " s (EncounterModel)", (double) b.period, 0.8});
+            if (a.crumbles() || a.holed()) T.add(new Object[]{"T-CRUMBLE", "crumbling or holed footing (EncounterModel)", 1.0, 0.7});
+            if (a.wet()) T.add(new Object[]{"T-WET", "slippery footing (EncounterModel)", 1.0, 0.4});
+            double tsum = 0; for (Object[] x : T) tsum += (double) x[3]; L.terrain = tsum;
+            for (Object[] x : T) for (int q = 0; q < L.windows.length; q++)
+                addRow(L.windows[q], "TERRAIN", (String) x[0], L.fromId + ">" + L.toId, (String) x[1], (double) x[2], (double) x[3], L.fractions[q], 1, null);
+            L.hazards.addAll(hazOn.getOrDefault(i, Collections.emptySet())); L.hazards.addAll(hazOn.getOrDefault(j, Collections.emptySet()));
+            L.enemies.addAll(enemyAt.getOrDefault(i, Collections.emptySet())); L.enemies.addAll(enemyAt.getOrDefault(j, Collections.emptySet()));
+            List<String> X = new ArrayList<>();
+            if (L.terrain >= TERRAIN_DEMANDING && !L.hazards.isEmpty()) X.add("X-TERRAIN-HAZARD");
+            if (L.terrain >= TERRAIN_DEMANDING && !L.enemies.isEmpty()) X.add("X-TERRAIN-ENEMY");
+            if (!L.hazards.isEmpty() && !L.enemies.isEmpty()) X.add("X-HAZARD-ENEMY");
+            if (L.hazards.size() >= 2) X.add("X-HAZARD-HAZARD");
+            if (L.enemies.size() >= 2) X.add("X-ENEMY-ENEMY");
+            for (String x : X) for (int q = 0; q < L.windows.length; q++)
+                addRow(L.windows[q], "INTERACTION", x, L.fromId + ">" + L.toId, "hazards " + L.hazards + " enemies " + L.enemies + " terrain " + f3(L.terrain), 1, X_BONUS, L.fractions[q], 1, null);
+            for (int q = 0; q < L.windows.length; q++) {
+                Win w = win(L.windows[q]); w.geometry = true; w.linksTotal++; if (L.terrain >= TERRAIN_DEMANDING) w.demandingLinks++;
+                if (!Double.isNaN(L.ratio)) w.maxRatio = Double.isNaN(w.maxRatio) ? L.ratio : Math.max(w.maxRatio, L.ratio);
+                if (!Double.isNaN(L.landW)) w.minLandW = Double.isNaN(w.minLandW) ? L.landW : Math.min(w.minLandW, L.landW);
+            }
+            if (rep != null) {
+                double[] sv = solved.get(i); int pf = planFails.getOrDefault(i, 0); L.planFails = pf;
+                if (rep.failedLink == i) L.status = "FAILED"; else if (sv != null) L.status = "TRAVERSED"; else if (!rep.completed && (rep.failedLink < 0 || i > rep.failedLink)) L.status = "UNREACHED"; else L.status = "TRAVERSED_IN_PASSING";
+                if (sv != null) { L.solveTime = sv[0]; L.setbacks = (int) sv[1]; }
+                for (int q = 0; q < L.windows.length; q++) {
+                    Win w = win(L.windows[q]);
+                    if (L.status.startsWith("TRAVERSED")) w.linksTraversed++; else if ("FAILED".equals(L.status)) w.linksFailed++; else w.linksUnreached++;
+                    if (!Double.isNaN(L.solveTime)) w.solveTime += L.solveTime * L.fractions[q];
+                    if (L.setbacks > 0 && q == 0) w.setbacks += L.setbacks; if (q == 0) w.planFails += pf;
+                }
+                if ("FAILED".equals(L.status)) solverFailures.add(new String[]{"" + k, L.fromId, L.toId, L.fromType, L.toType, f3(L.y0), f3(L.y1), "" + castleOf(L.y0), q(rep.failInfo)});
+            }
+            links.add(L);
+        }
+        for (El r : byIdx.values()) { Win w = win(r.window); w.modules.merge(r.moduleKind, 1, Integer::sum); }
+    }
+
+    private El homeOfContext(double y) { for (int i = elements.size() - 1; i >= 0; i--) if (Math.abs(elements.get(i).yAbs - y) < 1e-3 && elements.get(i).route) return elements.get(i); return null; }
+
+    void apportion(Link L) {
+        double lo = Math.min(L.y0, L.y1), hi = Math.max(L.y0, L.y1);
+        if (hi - lo < 1e-3 || wi(lo) == wi(hi)) { L.windows = new int[]{wi(lo)}; L.fractions = new double[]{1}; return; }
+        int a = wi(lo), b = wi(hi); L.windows = new int[b - a + 1]; L.fractions = new double[b - a + 1]; double span = hi - lo, sum = 0;
+        for (int w = a; w <= b; w++) { double o = Math.min(hi, (w + 1) * WINDOW) - Math.max(lo, w * WINDOW); L.windows[w - a] = w; L.fractions[w - a] = Math.max(0, o) / span; sum += L.fractions[w - a]; }
+        for (int q = 0; q < L.fractions.length; q++) L.fractions[q] /= sum;
+    }
+
+    void add(int window, String lane, String rule, String source, String property, double raw, double weight, double fraction, Element.Type countType) {
+        addRow(window, lane, rule, source, property, raw, weight, fraction, 1, countType);
+    }
+    void addRow(int window, String lane, String rule, String source, String property, double raw, double weight, double fraction, double rep, Element.Type countType) {
+        Row r = new Row(); r.window = window; r.lane = lane; r.rule = rule; r.source = source; r.property = property; r.raw = raw; r.weight = weight; r.fraction = fraction; r.repetition = rep;
+        ledger.add(r); if (countType != null) win(window).counts.merge(countType, fraction, Double::sum);
+    }
+
+    /** Repetition (HAZARDS and ENEMIES: first 3 identical per window full, then a quarter), interaction cap, window totals from their rows. */
+    void finish() {
+        float limit = Math.min(top, reached);
+        for (int i = 0; i < Math.ceil(limit / WINDOW); i++) win(i);
+        windows.keySet().removeIf(i -> i * WINDOW >= limit);
+        ledger.removeIf(r -> r.window * WINDOW >= limit);
+        Map<String, Double> n = new HashMap<>();
+        for (Row r : ledger) if (r.lane.equals("HAZARDS") || r.lane.equals("ENEMIES")) n.merge(r.window + ":" + r.rule, r.fraction, Double::sum);
+        Map<Integer, Double> xs = new HashMap<>();
+        for (Row r : ledger) if (r.lane.equals("INTERACTION")) xs.merge(r.window, r.weight * r.fraction, Double::sum);
+        for (Row r : ledger) {
+            if (r.lane.equals("HAZARDS") || r.lane.equals("ENEMIES")) { double c = n.get(r.window + ":" + r.rule); r.repetition = c > 0 ? (Math.min(c, DifficultyScore.FULL) + DifficultyScore.TAIL * Math.max(0, c - DifficultyScore.FULL)) / c : 1; }
+            if (r.lane.equals("INTERACTION")) { double s = xs.get(r.window); r.repetition = s > X_CAP ? X_CAP / s : 1; r.note = s > X_CAP ? "window interaction cap " + X_CAP : ""; }
+            r.value = r.weight * r.fraction * r.repetition;
+            Win w = windows.get(r.window); if (w == null) continue;
+            int li = r.lane.equals("TERRAIN") ? 0 : r.lane.equals("HAZARDS") ? 1 : r.lane.equals("ENEMIES") ? 2 : -1;
+            if (li >= 0) { w.raw[li] += r.weight * r.fraction; w.adj[li] += r.value; }
+            else if (r.lane.equals("MITIGATION")) w.mitigation += r.value; else if (r.lane.equals("INTERACTION")) w.interaction += r.value;
+        }
+        for (DifficultyScore.Window v : v2.windows()) { Win w = windows.get(v.index); if (w != null) w.v2 = v.adjustedNet(); }
+        for (Win w : windows.values()) {
+            if (!w.geometry) w.flags.add("NO_ROUTE_GEOMETRY");
+            if (!solve) w.flags.add("SOLVER_OFF"); else if (w.linksFailed > 0) w.flags.add("SOLVER_FAILED"); else if (w.linksUnreached > 0) w.flags.add("SOLVER_UNREACHED");
+        }
+        if (stopped != null && !windows.isEmpty()) windows.lastEntry().getValue().flags.add("RUN_STOPPED_HERE");
+    }
+
+    static int castleOf(double y) { return Math.min(10, 1 + (int) (y / CASTLE)); }
+    static double clamp(double x) { return Math.max(0, Math.min(1, x)); }
+    static String f3(double v) { return Double.isNaN(v) ? "" : String.format(Locale.ROOT, "%.3f", v); }
+    static String q(String s) { return "\"" + (s == null ? "" : s.replace('"', '\'').replace('\n', ' ')) + "\""; }
+
+    // ------------------------------------------------------------------ castle statistics
+    static double[] stats(List<Double> v) {     // n, mean, median, min, max, sd, q1, q3
+        if (v.isEmpty()) return new double[]{0, Double.NaN, Double.NaN, Double.NaN, Double.NaN, Double.NaN, Double.NaN, Double.NaN};
+        List<Double> s = new ArrayList<>(v); Collections.sort(s); double sum = 0; for (double x : s) sum += x; double m = sum / s.size(), var = 0; for (double x : s) var += (x - m) * (x - m);
+        return new double[]{s.size(), m, pct(s, 0.5), s.get(0), s.get(s.size() - 1), Math.sqrt(var / s.size()), pct(s, 0.25), pct(s, 0.75)};
+    }
+    static double pct(List<Double> s, double p) { double i = p * (s.size() - 1); int lo = (int) Math.floor(i), hi = (int) Math.ceil(i); return s.get(lo) + (s.get(hi) - s.get(lo)) * (i - lo); }
+
+    // ------------------------------------------------------------------ output
+    public void write(Path out, Map<String, String> meta) throws IOException {
+        Files.createDirectories(out);
+        String run = MODE[mode] + "-s" + seed;
+        try (PrintWriter w = pw(out, "windows.csv")) {
+            w.println("run,mode,seed,castle,window,y0,y1,terrain_raw,terrain_adj,hazard_raw,hazard_adj,enemy_raw,enemy_adj,mitigation,interaction,total_reference,v2_reference_score,"
+                + "links,demanding_links,max_gap_ratio,min_landing_width,decoy_elements,off_route_hazards,unreachable_enemies,solver_links_traversed,solver_links_failed,solver_links_unreached,"
+                + "solver_time_s,solver_setbacks,solver_plan_failures,gen_rejected_attempts,gen_fallbacks,modules,counts,flags");
+            for (Win x : windows.values()) w.println(String.join(",", run, MODE[mode], "" + seed, "" + castleOf(x.index * WINDOW), "" + x.index, f3(x.index * WINDOW), f3((x.index + 1) * WINDOW),
+                x.geometry ? f3(x.raw[0]) : "", x.geometry ? f3(x.adj[0]) : "", f3(x.raw[1]), f3(x.adj[1]), f3(x.raw[2]), f3(x.adj[2]), f3(x.mitigation), f3(x.interaction), f3(x.total()), f3(x.v2),
+                "" + x.linksTotal, "" + x.demandingLinks, f3(x.maxRatio), f3(x.minLandW), "" + x.decoys, "" + x.offRouteHazards, "" + x.unreachableEnemies,
+                solve ? "" + x.linksTraversed : "", solve ? "" + x.linksFailed : "", solve ? "" + x.linksUnreached : "", solve ? f3(x.solveTime) : "", solve ? "" + x.setbacks : "", solve ? "" + x.planFails : "",
+                "" + x.rejected, "" + x.fallbacks, q(x.modules.toString()), q(counts(x)), q(String.join(";", x.flags))));
+        }
+        try (PrintWriter w = pw(out, "ledger.csv")) {
+            w.println("run,window,castle,lane,rule,source,property,raw,weight,fraction,repetition,value,note");
+            for (Row r : ledger) w.println(String.join(",", run, "" + r.window, "" + castleOf(r.window * WINDOW), r.lane, r.rule, r.source, q(r.property), f3(r.raw), f3(r.weight), f3(r.fraction), f3(r.repetition), f3(r.value), q(r.note)));
+        }
+        try (PrintWriter w = pw(out, "elements.csv")) {
+            w.println("run,id,slice,index,type,lane,route,s,y,w,amp,period,phase,len,skin,color,dir,anchor,window,castle,module,module_kind,structure");
+            for (List<El> l : Arrays.asList(elements, hazards)) for (El r : l) { Element e = r.e;
+                w.println(String.join(",", run, r.id, "" + r.slice, "" + r.idx, r.type, r.lane, "" + r.route, f3(r.sAbs), f3(r.yAbs), f3(e.w), f3(e.amp), f3(e.period), f3(e.phase), f3(e.len), "" + e.skin, "" + e.color, "" + e.dir, "" + e.anchor,
+                    "" + r.window, "" + castleOf(r.yAbs), r.module, r.moduleKind, q(r.structure))); }
+        }
+        try (PrintWriter w = pw(out, "links.csv")) {
+            w.println("run,slice,from,to,from_type,to_type,y0,y1,dy,gap,reach,gap_ratio,landing_width,terrain,em_jump,em_position,em_wait,em_commit,em_recover,em_pursue,em_score,hazards,enemies,solver_status,solver_time_s,setbacks,plan_failures,windows");
+            for (Link L : links) w.println(String.join(",", run, "" + L.slice, L.fromId, L.toId, L.fromType, L.toType, f3(L.y0), f3(L.y1), f3(L.dy), f3(L.gap), f3(L.reach), f3(L.ratio), f3(L.landW), f3(L.terrain),
+                f3(L.emJump), f3(L.emPosition), f3(L.emWait), f3(L.emCommit), f3(L.emRecover), f3(L.emPursue), f3(L.emScore), q(L.hazards.toString()), q(L.enemies.toString()), L.status, f3(L.solveTime), L.setbacks < 0 ? "" : "" + L.setbacks, "" + L.planFails, q(Arrays.toString(L.windows))));
+        }
+        try (PrintWriter w = pw(out, "modules.csv")) {
+            w.println("run,id,slice,attempt,final_attempt,kind,role,picked_first,difficulty,y,accepted,e0,e1,hazards_added,refused_layer,refused_hazard,refused_plan,refused_window,refused_conflict,refused_threat");
+            for (String[] m : modules) w.println(run + "," + String.join(",", m));
+        }
+        try (PrintWriter w = pw(out, "solver.csv")) {
+            w.println("run,slice,y0,y1,completed,plans,failed_link,sim_time_s,min_margin,worst_link,wall_seconds,fail_info");
+            for (String[] m : solverSlices) w.println(run + "," + String.join(",", m));
+        }
+        try (PrintWriter w = pw(out, "solver_failures.csv")) {
+            w.println("run,slice,from,to,from_type,to_type,y0,y1,castle,fail_info");
+            for (String[] m : solverFailures) w.println(run + "," + String.join(",", m));
+        }
+        try (PrintWriter w = pw(out, "generation_failures.csv")) {
+            w.println("run,slice,detail"); for (String[] m : sliceFailures) w.println(run + "," + String.join(",", m));
+        }
+        try (PrintWriter w = pw(out, "rule_checks.csv")) {
+            w.println("run,mode,rule,source,type,y,castle,detail"); for (String[] m : ruleChecks) w.println(run + "," + MODE[mode] + "," + String.join(",", m));
+        }
+        try (PrintWriter w = pw(out, "inventory.csv")) {
+            w.println("run,mode,kind,element_type,lane,defined,placed,on_or_reaching_route,scored,status,description");
+            for (Element.Type k : Element.Type.values()) { int[] v = inventory.get(k);
+                String st = v[0] == 0 ? "DEFINED, NOT PLACED (measured zero)" : v[2] > 0 ? "PLACED AND ACTIVE" : v[1] > 0 ? "PLACED ON ROUTE" : "PLACED, NOT ON ROUTE";
+                w.println(String.join(",", run, MODE[mode], "element", k.name(), Lanes.lane(k).name(), "true", "" + v[0], "" + v[1], "" + v[2], q(st), q(Lanes.describe(k)))); }
+        }
+        try (PrintWriter w = pw(out, "module_inventory.csv")) {
+            w.println("run,mode,kind,purpose,tried,accepted_in_course,refused,accepted_as_fallback,status");
+            List<String[]> all = new ArrayList<>(Arrays.asList(Lanes.KINDS)); all.addAll(Arrays.asList(Lanes.STRUCTURES));
+            for (String[] k : all) { int[] v = kindStats.get(k[0]);
+                String st = v[0] == 0 ? "NEVER SELECTED (no attempt observed)" : v[1] == 0 ? "SELECTED, NEVER ACCEPTED" : "ACCEPTED";
+                w.println(String.join(",", run, MODE[mode], k[0], q(k[1]), "" + v[0], "" + v[1], "" + v[2], "" + v[3], q(st))); }
+        }
+        List<String[]> castles = castleRows(run);
+        try (PrintWriter w = pw(out, "castles.csv")) {
+            w.println("run,mode,seed,castle,lane,windows,mean,median,min,max,sd,q1,q3,raw_sum,adj_sum,high_spike_windows,low_gap_windows,solver_links_failed,solver_links_unreached,solver_time_s,flags");
+            for (String[] r : castles) w.println(String.join(",", r));
+        }
+        try (PrintWriter w = pw(out, "run.json")) { w.print(json(run, meta, castles)); }
+    }
+
+    List<String[]> castleRows(String run) {
+        List<String[]> rows = new ArrayList<>(); String[] lanes = {"TERRAIN", "HAZARDS", "ENEMIES", "INTERACTION", "MITIGATION", "TOTAL_REFERENCE"};
+        for (int castle = 1; castle <= 10; castle++) {
+            List<Win> ws = new ArrayList<>(); for (Win x : windows.values()) if (castleOf(x.index * WINDOW) == castle) ws.add(x);
+            if (ws.isEmpty()) continue;
+            int failed = 0, unreached = 0; double st = 0; TreeSet<String> fl = new TreeSet<>(); for (Win x : ws) { failed += x.linksFailed; unreached += x.linksUnreached; st += x.solveTime; fl.addAll(x.flags); }
+            for (int li = 0; li < lanes.length; li++) {
+                List<Double> v = new ArrayList<>(); double rawSum = 0, adjSum = 0;
+                for (Win x : ws) {
+                    double a = li < 3 ? x.adj[li] : li == 3 ? x.interaction : li == 4 ? x.mitigation : x.total(); double r = li < 3 ? x.raw[li] : a;
+                    if (li == 0 && !x.geometry) continue;
+                    v.add(a); rawSum += r; adjSum += a;
+                }
+                double[] s = stats(v); int hi = 0, lo = 0; for (double a : v) { if (a > s[7] + 1.5 * (s[7] - s[6])) hi++; if (li < 3 && a == 0) lo++; }
+                rows.add(new String[]{run, MODE[mode], "" + seed, "" + castle, lanes[li], "" + (int) s[0], f3(s[1]), f3(s[2]), f3(s[3]), f3(s[4]), f3(s[5]), f3(s[6]), f3(s[7]), f3(rawSum), f3(adjSum), "" + hi, "" + lo,
+                    solve ? "" + failed : "", solve ? "" + unreached : "", solve ? f3(st) : "", q(String.join(";", fl))});
+            }
+        }
+        return rows;
+    }
+
+    String counts(Win x) { StringBuilder b = new StringBuilder(); for (Map.Entry<Element.Type, Double> e : x.counts.entrySet()) b.append(b.length() == 0 ? "" : ";").append(e.getKey()).append('=').append(f3(e.getValue())); return b.toString(); }
+
+    String json(String run, Map<String, String> meta, List<String[]> castles) {
+        StringBuilder j = new StringBuilder("{");
+        j.append("\"run\":").append(js(run)).append(",\"mode\":").append(js(MODE[mode])).append(",\"seed\":").append(seed).append(",\"derived_seed\":null,\"top_m\":").append(top)
+         .append(",\"reached_m\":").append(reached).append(",\"slices\":").append(slices).append(",\"stopped\":").append(stopped == null ? "null" : js(stopped))
+         .append(",\"generation_seconds\":").append(f3(genSeconds)).append(",\"solver_seconds\":").append(solve ? f3(solveSeconds) : "null").append(",\"solver\":").append(solve)
+         .append(",\"scoring_model\":").append(js(SCORING)).append(",\"reference_model\":\"v2 (DifficultyScore, provisional hazard weights)\",\"generator_rules_version\":").append(CourseGenerator.RULES_VERSION);
+        for (Map.Entry<String, String> e : meta.entrySet()) j.append(',').append(js(e.getKey())).append(':').append(js(e.getValue()));
+        j.append(",\"weights\":{"); boolean first = true; for (Map.Entry<Element.Type, Float> e : DifficultyScore.WEIGHTS.entrySet()) { j.append(first ? "" : ",").append(js(e.getKey().name())).append(':').append(e.getValue()); first = false; }
+        j.append("},\"mode_parameters\":").append(modeParams());
+        double[] tot = new double[6]; for (Win x : windows.values()) { tot[0] += x.adj[0]; tot[1] += x.adj[1]; tot[2] += x.adj[2]; tot[3] += x.interaction; tot[4] += x.mitigation; tot[5] += x.total(); }
+        j.append(",\"totals\":{\"terrain_adj\":").append(f3(tot[0])).append(",\"hazard_adj\":").append(f3(tot[1])).append(",\"enemy_adj\":").append(f3(tot[2])).append(",\"interaction\":").append(f3(tot[3]))
+         .append(",\"mitigation\":").append(f3(tot[4])).append(",\"total_reference\":").append(f3(tot[5])).append(",\"windows\":").append(windows.size()).append(",\"ledger_rows\":").append(ledger.size()).append('}');
+        j.append(",\"castles\":["); first = true;
+        for (String[] r : castles) { j.append(first ? "" : ",").append("{\"castle\":").append(r[3]).append(",\"lane\":").append(js(r[4])).append(",\"windows\":").append(r[5]).append(",\"mean\":").append(num(r[6])).append(",\"median\":").append(num(r[7]))
+            .append(",\"min\":").append(num(r[8])).append(",\"max\":").append(num(r[9])).append(",\"sd\":").append(num(r[10])).append(",\"q1\":").append(num(r[11])).append(",\"q3\":").append(num(r[12])).append(",\"adj_sum\":").append(num(r[14])).append('}'); first = false; }
+        j.append("],\"files\":[\"windows.csv\",\"ledger.csv\",\"elements.csv\",\"links.csv\",\"modules.csv\",\"solver.csv\",\"solver_failures.csv\",\"generation_failures.csv\",\"rule_checks.csv\",\"inventory.csv\",\"module_inventory.csv\",\"castles.csv\",\"windows_v2_reference.csv\"]");
+        j.append(",\"measurement_limits\":[\"cannon pillars and mortar emplacements are render-only (no traversal geometry in the simulation); they contribute no terrain\","
+            + "\"hazard attack envelopes are reported as the element parameters the Sim interprets (amp, period, len, phase, dir), not swept volumes\","
+            + "\"per-type hazard and enemy placement attempts are not observable; module attempts and refusal counters are\","
+            + "\"solver time per link is the gap between the solver's arrivals at successive links (supporting evidence, never a score)\"]}");
+        return j.toString();
+    }
+    String modeParams() {
+        Tuning base = t; StringBuilder b = new StringBuilder("{");
+        boolean first = true;
+        for (Field f : DifficultyProfile.class.getFields()) { if (java.lang.reflect.Modifier.isStatic(f.getModifiers())) continue;
+            try { b.append(first ? "" : ",").append(js("profile." + f.getName())).append(':').append(js(String.valueOf(f.get(DifficultyProfile.of(base))))); first = false; } catch (IllegalAccessException e) { } }
+        for (Field f : Tuning.class.getFields()) { if (java.lang.reflect.Modifier.isStatic(f.getModifiers())) continue; String n = f.getName().toLowerCase(Locale.ROOT);
+            if (!(n.contains("hard") || n.contains("crab") || n.contains("bee") || n.contains("skull") || n.contains("blob") || n.contains("enemy") || n.contains("creature") || n.contains("aggr"))) continue;
+            try { Object v = f.get(base); if (v != null && v.getClass().isArray()) v = arr(v); b.append(",").append(js("tuning." + f.getName())).append(':').append(js(String.valueOf(v))); } catch (IllegalAccessException e) { } }
+        return b.append('}').toString();
+    }
+    static String arr(Object a) { StringBuilder b = new StringBuilder("["); int n = java.lang.reflect.Array.getLength(a); for (int i = 0; i < n; i++) b.append(i == 0 ? "" : " ").append(java.lang.reflect.Array.get(a, i)); return b.append(']').toString(); }
+    static String num(String s) { return s.isEmpty() ? "null" : s; }
+    static String js(String s) { return "\"" + s.replace("\\", "\\\\").replace("\"", "\\\"") + "\""; }
+    static PrintWriter pw(Path out, String name) throws IOException { return new PrintWriter(Files.newBufferedWriter(out.resolve(name))); }
+
+    public void writeV2(Path out) throws IOException {
+        try (PrintWriter w = pw(out, "windows_v2_reference.csv")) {
+            w.println("run,window,y0,v2_threat_pos,v2_protective,v2_adjusted_net,v2_interaction,v2_enemy_families,v2_hazard_families,model");
+            for (DifficultyScore.Window v : v2.windows()) if (v.y0() < Math.min(top, reached))
+                w.println(String.join(",", MODE[mode] + "-s" + seed, "" + v.index, f3(v.y0()), f3(v.pos), f3(v.prot), f3(v.adjustedNet()), f3(v.interaction), "" + v.enemyFamilies(), "" + v.hazardFamilies(), "v2"));
+        }
+    }
+
+    public static void main(String[] a) throws Exception {
+        Tuning base = Tuning.parse(new String(Files.readAllBytes(Paths.get(a[0]))));
+        int mode = Integer.parseInt(a[2]); long seed = Long.parseLong(a[3]); Path out = Paths.get(a[4]);
+        Tuning t = mode == 0 ? base : base.hardCopy(mode);
+        LaneReport r = new LaneReport(t, mode, seed, Float.parseFloat(a[1]));
+        r.run(!"0".equals(System.getenv("SOLVE")), Double.parseDouble(System.getenv().getOrDefault("RUN_BUDGET", "1e9")));
+        Map<String, String> meta = new LinkedHashMap<>();
+        for (String[] kv : new String[][]{{"commit", "GITHUB_SHA"}, {"branch", "GITHUB_REF_NAME"}, {"actions_run_id", "GITHUB_RUN_ID"}, {"actions_run_attempt", "GITHUB_RUN_ATTEMPT"}, {"workflow", "GITHUB_WORKFLOW"}})
+            meta.put(kv[0], System.getenv().getOrDefault(kv[1], "local"));
+        meta.put("solver_version", "Autopilot.run at commit " + meta.get("commit"));
+        r.write(out, meta); r.writeV2(out);
+        System.out.printf(Locale.ROOT, "%s seed %d: reached %.0f m, %d slices, %d windows, %d ledger rows, gen %.0f s, solve %.0f s%s%n", MODE[mode], seed, r.reached, r.slices, r.windows.size(), r.ledger.size(), r.genSeconds, r.solveSeconds, r.stopped == null ? "" : " - " + r.stopped);
+    }
+}

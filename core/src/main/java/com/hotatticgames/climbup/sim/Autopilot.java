@@ -662,7 +662,7 @@ public final class Autopilot {
         boolean endless = c.get(c.goalIndex()).type != Element.Type.GOAL;     // endless slices end on a rest platform, not a goal flag
         int lastA = -1, sameA = 0;
         while (!real.won && real.time < maxSimSeconds) {
-            if (a == lastA) sameA++; else { lastA = a; sameA = 0; }
+            if (a == lastA) sameA++; else { lastA = a; sameA = 0; GenTrace.Solve st = GenTrace.SOLVE.get(); if (st != null) st.arrive(a, real.time, real.setbacks()); }      // (observe-only trace for reports)
             if (DBG) System.out.printf("loop a=%d same=%d mode=%s on=%d s=%.2f y=%.2f vx=%.2f vy=%.2f t=%.2f%n", a, sameA, real.mode, real.onElem, real.s, real.y, real.vx, real.vy, real.time);
             if (sameA > 30) { rep.failedLink = a; rep.simTime = real.time; rep.failInfo = "stuck at one link: knocked back again and again"; return rep; }
             if (endless && a >= c.goalIndex()) { rep.completed = true; rep.simTime = real.time; return rep; }
@@ -692,6 +692,7 @@ public final class Autopilot {
             Result r = plan(real, a, false, true);
             if (!r.ok) r = plan(real, a, false, false);        // no move leaves a state that suits the next link: take any that works and sort the next link out from there
             rep.links++;
+            if (!r.ok) { GenTrace.Solve st = GenTrace.SOLVE.get(); if (st != null) st.planFail(a); }      // (observe-only trace for reports)
             if (!r.ok && Boolean.getBoolean("dbg")) System.out.printf("first plan failed at %d: mode=%s on=%d s=%.2f y=%.2f vx=%.2f vy=%.2f t=%.2f%n", a, real.mode, real.onElem, real.s, real.y, real.vx, real.vy, real.time);
             if (!r.ok && real.mode == Sim.Mode.GROUND && real.onElem == a && !hasMidHazard(c, a)) {      // like a person: arrived still moving, so brake, line up in the middle and size the jump up from a standstill
                 settle(real, a, in);

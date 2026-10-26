@@ -1,3 +1,13 @@
+## RECOVERY CHECKPOINT (2026-10-26): three-lane reporting built; six-run baseline running on GitHub Actions
+
+**Read this first.** Owner directive (reporting + baseline simulations) and its MANDATORY CLASSIFICATION AMENDMENT: build the measurement/graphing system, run the CURRENT generator and solver, publish artifacts, then STOP for owner + ChatGPT review. No generator, solver, gameplay or spawn changes in this phase (Phase 3 needs explicit owner authorization).
+- Code: `core/src/main/java/.../sim/GenTrace.java` (observe-only hooks; CourseGenerator.tryModuleBelow/traceStructure/chunkIn/extract and Autopilot.runInner record only when a trace is installed), `core/src/test/java/.../sim/Lanes.java` (29-type / 25-kind classification), `LaneReport.java` (measurement, ledgers, CSV/JSON), `LaneReportTest.java` (classification gate, tracing invariance, ledger reconciliation, coverage, determinism, apportionment: 4/4 locally), `tools/ci/lane_report.py` (executive + detailed PDFs, per-run segment PDFs, merged CSV/JSON, validation.json, INDEX.md). Decisions: docs/DECISIONS.md "Three-lane difficulty reporting".
+- Local fixture (NORMAL + PUNISHER seed 1 to 130 m): reports built, validation PASS for both.
+- Behaviour unchanged: generation fingerprint with the hooks is `d4d3ae970d37406b926ca51f`, identical to CI before them (DeterminismTest still expects the pre-rules-8 value `b5fe0da7...`: the known rules-8 refresh backlog, not caused by this work).
+- Workflow `.github/workflows/difficulty-report.yml` (push-triggered on this branch): 6 jobs (modes 0-2 x seeds 1-2, 5,000 m), artifacts `lanes-mode-M-seed-S`, consolidated artifact `difficulty-baseline-3lane`.
+- BASELINE RUN: see the line below (recorded after the push).
+- Earlier difficulty reports (runs 40230546947, 40232917095) used the single-score v2 model: reference only.
+
 ## RECOVERY CHECKPOINT (2026-10-25, latest): consolidated owner directive, step 1-2 audits in progress
 
 **Read this section first; it supersedes the sections below wherever they disagree.**

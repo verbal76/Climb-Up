@@ -88,8 +88,9 @@ public final class CourseGenerator {
             g.endless = true; g.rampH = t.rampHeight; g.base = base;
             g.relaxed = attempt >= 12;       // the previous slice can occasionally leave no room that keeps clear of every older spiral layer: after twelve normal tries, build above it without that clearance rather than ever failing
             lastForDebug = g;
-            try { g.buildChunk(prev); return g.extract(); }
-            catch (IllegalStateException e) { last = e; }
+            GenTrace tr = GenTrace.GEN.get(); if (tr != null) { tr.attempt = attempt; tr.relaxed = g.relaxed; }      // observe-only (reports)
+            try { g.buildChunk(prev); Course out = g.extract(); if (tr != null) tr.finalAttempt = attempt; return out; }
+            catch (IllegalStateException e) { last = e; if (tr != null) tr.sliceFailures.add("attempt " + attempt + ": " + e.getMessage()); }
         }
         throw last;
     }
@@ -286,6 +287,7 @@ public final class CourseGenerator {
         for (int[] f : c.forks) if (f[0] >= off) out.forks.add(new int[]{f[0] - off, f[1] - off, f[2], f[3] - off});
         out.routeCount = rs - off;
         out.indexDecoys();
+        GenTrace tr = GenTrace.GEN.get(); if (tr != null) { tr.offset = off; tr.hazardMap = newHz; }      // observe-only (reports)
         return out;
     }
 
@@ -299,17 +301,18 @@ public final class CourseGenerator {
             float d = diff(last.y);
             int zone = tier(last.y), th = theme(last.y);
             boolean castlePending = castleTarget > 0f && !castleDone;
-            if (castlePending && exactCastle && last.y >= castleTarget - 6f) { buildExactCastle(th); castleDone = true; lastRestY = c.get(c.size() - 1).y; continue; }
-            if (castlePending && !exactCastle && last.y >= castleTarget - GEM_LEAD) { chooseGem(th); castleDone = true; lastRestY = c.get(c.size() - 1).y; continue; }
+            if (castlePending && exactCastle && last.y >= castleTarget - 6f) { int n0 = c.size(), h0 = c.hazards.size(); buildExactCastle(th); traceStructure("CASTLE", n0, h0, last.y); castleDone = true; lastRestY = c.get(c.size() - 1).y; continue; }
+            if (castlePending && !exactCastle && last.y >= castleTarget - GEM_LEAD) { int n0 = c.size(), h0 = c.hazards.size(); chooseGem(th); traceStructure("GEM", n0, h0, last.y); castleDone = true; lastRestY = c.get(c.size() - 1).y; continue; }
             if (last.y - lastRestY >= nextGap && targetY - last.y > 0.4f * T.gemSpacing && !(castlePending && last.y > castleTarget - 14f)) {      // (not right before the slice's own closing rest)
-                addRest(th); sinceRest = 0; lastRestY = c.get(c.size() - 1).y; nextGap = T.gemSpacing * r(0.85f, 1.15f); maybeCastle(th); continue;
+                { int n0 = c.size(), h0 = c.hazards.size(); addRest(th); traceStructure("REST", n0, h0, last.y); } sinceRest = 0; lastRestY = c.get(c.size() - 1).y; nextGap = T.gemSpacing * r(0.85f, 1.15f); maybeCastle(th); continue;
             }
             float forkEvery = P.forkEvery;          // PUNISHER splits about twice as often, and its splits are longer
             if (Float.isNaN(lastForkY)) lastForkY = last.y - forkEvery * 0.5f;
             if (last.y - lastForkY >= forkEvery && last.isPlatform() && !last.isMoving() && !last.wet() && !(castlePending && last.y > castleTarget - 24f)) {
                 int e0 = c.size(), n = P.forkRisers;
                 forkRisers = n;
-                if (tryModuleBelow(Kind.FORK, d, th)) { forkEntries.add(new int[]{e0, n}); lastForkY = last.y; prev2 = prev; prev = Kind.FORK; sinceRest++; continue; }
+                traceRole = "FORK"; boolean forked = tryModuleBelow(Kind.FORK, d, th); traceRole = "PICK";
+                if (forked) { forkEntries.add(new int[]{e0, n}); lastForkY = last.y; prev2 = prev; prev = Kind.FORK; sinceRest++; continue; }
                 lastForkY = last.y - forkEvery + 8f;          // no room here: try again a little higher
             }
             Kind k = pick(zone, last);
@@ -325,13 +328,15 @@ public final class CourseGenerator {
             else if (secondHalf && (k == Kind.HOP || k == Kind.STAIRS) && rnd.nextFloat() < 0.3f) k = Kind.HAZ;          // a little rougher than the first half
             if (last.wet() && (k == Kind.HAZ || k == Kind.TRAP || k == Kind.MORTAR || k == Kind.CREATURE || k == Kind.DROPS)) k = Kind.STAIRS;          // after a slippery platform give a walk-up (not a hazard you must time, nor a jump you must push off a slippery surface for): its timing windows assume a normal run-up (SawFairnessTest) and the plain climb stays walkable
             if (beltSawY > 0f && !beltSawDone && last.y >= beltSawY && !last.wet() && !(castlePending && last.y > castleTarget - 14f)) {      // Build 77: this section's balance conveyor (tried again on the next module if it cannot be proven here)
-                beltSawNow = true; boolean ok = tryModuleBelow(Kind.SEESAW, d, th); beltSawNow = false;
+                beltSawNow = true; traceRole = "BELT"; boolean ok = tryModuleBelow(Kind.SEESAW, d, th); traceRole = "PICK"; beltSawNow = false;
                 if (ok) { beltSawDone = true; prev2 = prev; prev = Kind.SEESAW; sinceRest++; continue; }
             }
             if (!tryModuleBelow(k, d, th)) {
                 rejected++;
                 boolean ok = false;
+                tracePicked = k.name(); traceRole = "FALLBACK";
                 for (Kind fb : new Kind[]{Kind.PAD, Kind.ROPE, Kind.MOVER_V, Kind.STAIRS, Kind.HOP}) { if (fb != k && tryModuleBelow(fb, 0.15f, th)) { k = fb; ok = true; break; } }
+                traceRole = "PICK"; tracePicked = null;
                 if (!ok) throw new IllegalStateException("cannot extend course (layer=" + failLayer + " haz=" + failHaz + " plan=" + failPlan + " window=" + failWindow + ") at " + c.size() + " last=" + last.type + " s=" + last.s + " y=" + last.y + " below=" + below(last));
             }
             prev2 = prev; prev = k; sinceRest++;
@@ -360,8 +365,30 @@ public final class CourseGenerator {
 
     private float castleTarget; private boolean castleDone, exactCastle;      // the next exact-height structure of this slice: a castle, or the halfway red-gem platform
 
-    /** A module that must not carry the climb past the castle's approach window (keeps the last platform at least 1.6 m below the castle deck). */
+    // ---- observe-only generation trace (reports, 2026-10-26): reads sizes and refusal counters, never the random stream or any decision
+    private String traceRole = "PICK", tracePicked;
     private boolean tryModuleBelow(Kind k, float d, int zone) {
+        GenTrace tr = GenTrace.GEN.get();
+        if (tr == null) return tryModuleBelow0(k, d, zone);
+        GenTrace.Module m = new GenTrace.Module();
+        m.attempt = tr.attempt; m.kind = k.name(); m.role = traceRole; m.picked = tracePicked; m.d = d; m.y = (float) (base + c.get(c.size() - 1).y);
+        m.e0 = c.size(); m.h0 = c.hazards.size();
+        int[] f0 = {failLayer, failHaz, failPlan, failWindow, failConflict, failThreat};
+        boolean ok = tryModuleBelow0(k, d, zone);
+        int[] f1 = {failLayer, failHaz, failPlan, failWindow, failConflict, failThreat};
+        for (int i = 0; i < 6; i++) m.fails[i] = f1[i] - f0[i];
+        m.ok = ok; m.e1 = c.size(); m.h1 = c.hazards.size(); tr.modules.add(m);
+        return ok;
+    }
+    private void traceStructure(String kind, int n0, int h0, float y) {
+        GenTrace tr = GenTrace.GEN.get(); if (tr == null) return;
+        GenTrace.Module m = new GenTrace.Module();
+        m.attempt = tr.attempt; m.kind = kind; m.role = "STRUCTURE"; m.y = (float) (base + y); m.ok = c.size() > n0 || c.hazards.size() > h0;
+        m.e0 = n0; m.e1 = c.size(); m.h0 = h0; m.h1 = c.hazards.size(); tr.modules.add(m);
+    }
+
+    /** A module that must not carry the climb past the castle's approach window (keeps the last platform at least 1.6 m below the castle deck). */
+    private boolean tryModuleBelow0(Kind k, float d, int zone) {
         if (castleTarget <= 0f || castleDone) return tryModule(k, d, zone);
         int n0 = c.size(), h0 = c.hazards.size();
         if (!tryModule(k, d, zone)) return false;

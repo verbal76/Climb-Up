@@ -668,7 +668,7 @@ public final class CourseGenerator {
         }
         if (ok) {                                                           // the detour must not break any route link nearby
             int rs = c.routeSize();
-            for (int q = Math.max(0, rIdx - 7); q <= Math.min(rs - 2, rIdx + 5) && ok; q++) ok = Autopilot.plan(Sim.startOn(c, T, q), q, false).ok;
+            for (int q = Math.max(0, rIdx - 7); q <= Math.min(rs - 2, rIdx + 5) && ok; q++) ok = routeLinkStillOk(q);
             if (!ok) roomWhy[4]++;
         }
         if (!ok) { while (c.size() > n0) c.elements.remove(c.size() - 1); while (c.hazards.size() > h0) c.hazards.remove(c.hazards.size() - 1); c.indexDecoys(); return false; }
@@ -805,7 +805,7 @@ public final class CourseGenerator {
             ok = pairOkAir(c.size() - 1, j); if (!ok) FORKWHY[12]++;          // (order changes no result; the bounce is refused most)
             if (ok) { ok = pairOk(e, n0); if (!ok) FORKWHY[10]++; }
             for (int k = n0; ok && k < c.size() - 1; k++) { ok = pairOk(k, k + 1); if (!ok) FORKWHY[11]++; }
-            for (int q = Math.max(0, e - 3); ok && q <= Math.min(rs - 2, j + 2); q++) { ok = Autopilot.plan(Sim.startOn(c, T, q), q, false).ok; if (!ok) FORKWHY[9]++; }
+            for (int q = Math.max(0, e - 3); ok && q <= Math.min(rs - 2, j + 2); q++) { ok = routeLinkStillOk(q); if (!ok) FORKWHY[9]++; }
         }
         if (!ok) { rollbackTo(n0, h0); c.indexDecoys(); return -1; }
         c.forks.add(new int[]{e, n0, es.size(), j});
@@ -836,7 +836,7 @@ public final class CourseGenerator {
                 c.indexDecoys();
                 ok = pairOkAir(n0, t); if (!ok) FORKWHY[12]++;          // (order changes no result; the bounce is refused most)
                 if (ok) { ok = pairOk(a, n0); if (!ok) FORKWHY[10]++; }
-                for (int q = Math.max(0, a - 3); ok && q <= Math.min(rs - 2, t + 2); q++) { ok = Autopilot.plan(Sim.startOn(c, T, q), q, false).ok; if (!ok) FORKWHY[9]++; }
+                for (int q = Math.max(0, a - 3); ok && q <= Math.min(rs - 2, t + 2); q++) { ok = routeLinkStillOk(q); if (!ok) FORKWHY[9]++; }
             }
             if (!ok) { rollbackTo(n0, h0); c.indexDecoys(); continue; }
             c.forks.add(new int[]{a, n0, 1, t});
@@ -916,7 +916,7 @@ public final class CourseGenerator {
                 if (ok) { ok = pairOk(from, n0); if (!ok) { FORKWHY[10]++; } }
                 for (int k = n0; ok && k < c.size() - 1; k++) { ok = pairOk(k, k + 1); if (!ok) { FORKWHY[11]++; } }
                 long q1 = GenTrace.now();
-                for (int q = Math.max(0, a - 3); ok && q <= Math.min(rs - 2, t + 2); q++) { ok = Autopilot.plan(Sim.startOn(c, T, q), q, false).ok; if (!ok) { FORKWHY[9]++; } }
+                for (int q = Math.max(0, a - 3); ok && q <= Math.min(rs - 2, t + 2); q++) { ok = routeLinkStillOk(q); if (!ok) { FORKWHY[9]++; } }
                 if (tr != null) { tr.phase("fork_branch_proofs", q1 - q0); tr.phase("fork_route_reproofs", GenTrace.now() - q1); }
             }
             if (!ok) { rollbackTo(n0, h0); c.indexDecoys(); continue; }
@@ -1508,6 +1508,20 @@ public final class CourseGenerator {
      * placed (the castle 3-4 hazard dip in every mode). The displaced kind is now kept and built on the next module that does not follow a wet
      * platform; the rain and the walk-up stay as they were.
      */
+    /**
+     * Re-proof of route link {@code q} after a side structure (fork branch, pad fork, key room) was added near it. Phase 0 (2026-10-26): it used to check
+     * only that the move still works, so a later structure could narrow the timing window of a saw guarding the link (SawFairnessTest on 71eed30: a gap
+     * saw left 18% of its cycle). A link guarded by a gap saw also keeps the window it was built with, measured as the test measures it; any other link
+     * is checked exactly as before.
+     */
+    private boolean routeLinkStillOk(int q) {
+        boolean gapSaw = false;
+        for (Element h : c.hazards) if (h.type == Element.Type.SAW_H && h.anchor == q) { Element p = c.get(q); if (!(p.w >= 7f && Math.abs(h.y - p.y - 0.62f) < 0.01f)) gapSaw = true; }
+        if (!gapSaw) return Autopilot.plan(Sim.startOn(c, T, q), q, false).ok;
+        Autopilot.Result r = Autopilot.plan(Sim.startOn(c, T, q), q, true);
+        return r.ok && r.window >= Math.max(0.5f, windowNeeded(c.get(q).y));
+    }
+
     private Kind deferredHaz;
     private static boolean hazardKind(Kind k) { return k == Kind.HAZ || k == Kind.TRAP || k == Kind.MORTAR || k == Kind.CREATURE || k == Kind.DROPS; }
 

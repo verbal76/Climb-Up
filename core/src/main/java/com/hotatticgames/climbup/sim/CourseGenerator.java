@@ -90,7 +90,7 @@ public final class CourseGenerator {
             lastForDebug = g;
             GenTrace tr = GenTrace.GEN.get(); long a0 = tr != null ? GenTrace.now() : 0L; if (tr != null) { tr.attempt = attempt; tr.relaxed = g.relaxed; }      // observe-only (reports)
             try { g.buildChunk(prev); Course out = g.extract(); if (tr != null) { tr.finalAttempt = attempt; tr.attemptNanos.add(new long[]{attempt, GenTrace.now() - a0, 1}); } return out; }
-            catch (IllegalStateException e) { last = e; if (tr != null) { tr.sliceFailures.add("attempt " + attempt + ": " + e.getMessage()); tr.attemptNanos.add(new long[]{attempt, GenTrace.now() - a0, 0}); } }
+            catch (IllegalStateException e) { last = e; SLICE_FAILURES.incrementAndGet(); if (tr != null) { tr.sliceFailures.add("attempt " + attempt + ": " + e.getMessage()); tr.attemptNanos.add(new long[]{attempt, GenTrace.now() - a0, 0}); } }
         }
         throw last;
     }
@@ -313,17 +313,20 @@ public final class CourseGenerator {
     /** Appends modules until the last platform reaches height {@code targetY}. */
     private void extend(float targetY) {
         if (castleTarget > 0f && !castleDone) targetY = Math.max(targetY, castleTarget + (exactCastle ? 8f : 6f));
-        int sinceRest = 0;
+        int sinceRest = 0, backtracks = 0;
+        // local backtracking (2026-10-26): plain modules placed since the last structure (rest, castle, fork, balance conveyor), as {elements, hazards}
+        // before each; a dead end undoes up to two of them and builds on with fresh choices instead of discarding the whole section
+        java.util.ArrayDeque<int[]> undo = new java.util.ArrayDeque<>(); int undoneHere = 0;
         float lastRestY = c.get(c.size() - 1).y, nextGap = T.gemSpacing * r(0.85f, 1.15f);      // red-gem checkpoints at even stretches of height, each with a little random give
         while (c.get(c.size() - 1).y < targetY || (beltSawY > 0f && !beltSawDone && c.get(c.size() - 1).y < beltSawY + 40f)) {      // (a balance conveyor that could not be proven yet gets up to 40 m more tries)
             Element last = c.get(c.size() - 1);
             float d = diff(last.y);
             int zone = tier(last.y), th = theme(last.y);
             boolean castlePending = castleTarget > 0f && !castleDone;
-            if (castlePending && exactCastle && last.y >= castleTarget - 6f) { int n0 = c.size(), h0 = c.hazards.size(); long s0 = GenTrace.now(); buildExactCastle(th); traceStructure("CASTLE", n0, h0, last.y, s0); castleDone = true; lastRestY = c.get(c.size() - 1).y; continue; }
-            if (castlePending && !exactCastle && last.y >= castleTarget - GEM_LEAD) { int n0 = c.size(), h0 = c.hazards.size(); long s0 = GenTrace.now(); chooseGem(th); traceStructure("GEM", n0, h0, last.y, s0); castleDone = true; lastRestY = c.get(c.size() - 1).y; continue; }
+            if (castlePending && exactCastle && last.y >= castleTarget - 6f) { int n0 = c.size(), h0 = c.hazards.size(); long s0 = GenTrace.now(); buildExactCastle(th); undo.clear(); traceStructure("CASTLE", n0, h0, last.y, s0); castleDone = true; lastRestY = c.get(c.size() - 1).y; continue; }
+            if (castlePending && !exactCastle && last.y >= castleTarget - GEM_LEAD) { int n0 = c.size(), h0 = c.hazards.size(); long s0 = GenTrace.now(); chooseGem(th); undo.clear(); traceStructure("GEM", n0, h0, last.y, s0); castleDone = true; lastRestY = c.get(c.size() - 1).y; continue; }
             if (last.y - lastRestY >= nextGap && targetY - last.y > 0.4f * T.gemSpacing && !(castlePending && last.y > castleTarget - 14f)) {      // (not right before the slice's own closing rest)
-                { int n0 = c.size(), h0 = c.hazards.size(); long s0 = GenTrace.now(); addRest(th); traceStructure("REST", n0, h0, last.y, s0); } sinceRest = 0; lastRestY = c.get(c.size() - 1).y; nextGap = T.gemSpacing * r(0.85f, 1.15f); maybeCastle(th); continue;
+                { int n0 = c.size(), h0 = c.hazards.size(); long s0 = GenTrace.now(); addRest(th); undo.clear(); traceStructure("REST", n0, h0, last.y, s0); } sinceRest = 0; lastRestY = c.get(c.size() - 1).y; nextGap = T.gemSpacing * r(0.85f, 1.15f); maybeCastle(th); continue;
             }
             float forkEvery = P.forkEvery;          // PUNISHER splits about twice as often, and its splits are longer
             if (Float.isNaN(lastForkY)) lastForkY = last.y - forkEvery * 0.5f;
@@ -331,7 +334,7 @@ public final class CourseGenerator {
                 int e0 = c.size(), n = P.forkRisers;
                 forkRisers = n;
                 traceRole = "FORK"; boolean forked = tryModuleBelow(Kind.FORK, d, th); traceRole = "PICK";
-                if (forked) { forkEntries.add(new int[]{e0, n}); lastForkY = last.y; prev2 = prev; prev = Kind.FORK; sinceRest++; continue; }
+                if (forked) { undo.clear(); forkEntries.add(new int[]{e0, n}); lastForkY = last.y; prev2 = prev; prev = Kind.FORK; sinceRest++; continue; }
                 lastForkY = last.y - forkEvery + 8f;          // no room here: try again a little higher
             }
             Kind k = pick(zone, last);
@@ -357,8 +360,9 @@ public final class CourseGenerator {
             if (last.wet() && (k == Kind.HAZ || k == Kind.TRAP || k == Kind.MORTAR || k == Kind.CREATURE || k == Kind.DROPS)) { GenTrace.tally("wet_stairs_" + k); deferredHaz = k; k = Kind.STAIRS; }          // after a slippery platform give a walk-up (not a hazard you must time, nor a jump you must push off a slippery surface for): its timing windows assume a normal run-up (SawFairnessTest) and the plain climb stays walkable
             if (beltSawY > 0f && !beltSawDone && last.y >= beltSawY && !last.wet() && !(castlePending && last.y > castleTarget - 14f)) {      // Build 77: this section's balance conveyor (tried again on the next module if it cannot be proven here)
                 beltSawNow = true; traceRole = "BELT"; boolean ok = tryModuleBelow(Kind.SEESAW, d, th); traceRole = "PICK"; beltSawNow = false;
-                if (ok) { beltSawDone = true; prev2 = prev; prev = Kind.SEESAW; sinceRest++; continue; }
+                if (ok) { undo.clear(); beltSawDone = true; prev2 = prev; prev = Kind.SEESAW; sinceRest++; continue; }
             }
+            int u0 = c.size(), uh0 = c.hazards.size();
             if (!tryModuleBelow(k, d, th)) {
                 rejected++;
                 boolean ok = false;
@@ -369,8 +373,13 @@ public final class CourseGenerator {
                 }
                 if (!ok) for (Kind fb : new Kind[]{Kind.PAD, Kind.ROPE, Kind.MOVER_V, Kind.STAIRS, Kind.HOP}) { if (fb != k && tryModuleBelow(fb, 0.15f, th)) { k = fb; ok = true; break; } }
                 traceRole = "PICK"; tracePicked = null;
+                if (!ok && !undo.isEmpty() && undoneHere < 2 && backtracks < 6) {
+                    int[] u = undo.pop(); rollbackTo(u[0], u[1]); backtracks++; undoneHere++; BACKTRACKS.incrementAndGet(); prev = null; prev2 = null; GenTrace.tally("backtrack");
+                    continue;
+                }
                 if (!ok) throw new IllegalStateException("cannot extend course (layer=" + failLayer + " haz=" + failHaz + " plan=" + failPlan + " window=" + failWindow + ") at " + c.size() + " last=" + last.type + " s=" + last.s + " y=" + last.y + " below=" + below(last));
             }
+            undo.push(new int[]{u0, uh0}); undoneHere = 0;
             prev2 = prev; prev = k; sinceRest++;
         }
     }
@@ -1529,7 +1538,9 @@ public final class CourseGenerator {
     private Kind deferredHaz;
     private static boolean hazardKind(Kind k) { return k == Kind.HAZ || k == Kind.TRAP || k == Kind.MORTAR || k == Kind.CREATURE || k == Kind.DROPS; }
 
-    public static volatile int wetTried, wetOk;          // diagnostics: wet-platform modules attempted / proven
+    public static volatile int wetTried, wetOk;
+    /** Diagnostics only (never read by generation): failed slice attempts and local backtracks since start, for GenBench. */
+    public static final java.util.concurrent.atomic.AtomicInteger SLICE_FAILURES = new java.util.concurrent.atomic.AtomicInteger(), BACKTRACKS = new java.util.concurrent.atomic.AtomicInteger();          // diagnostics: wet-platform modules attempted / proven
 
     private boolean tryModule(Kind k, float d, int zone) {
         Element last = c.get(c.size() - 1);

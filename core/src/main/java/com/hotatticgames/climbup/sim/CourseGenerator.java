@@ -1394,6 +1394,12 @@ public final class CourseGenerator {
      * intensity 1 (about 1,000 m; PUNISHER and NGH from the start) while other modules kept gaining share, so hazard scores were flat or fell.
      */
     static final float LATE_HAZ = 6f, LATE_TRAP = 3f, LATE_MORTAR = 2f;
+    /**
+     * Owner correction directive 2026-10-26 (PROVISIONAL): terrain complexity keeps rising with the late-climb ramp - demanding traversal modules gain weight
+     * and plain hops lose some - because PUNISHER and NGH reach the top of the terrain curve early (their head start) and their terrain stayed flat
+     * (campaign 40270745200: +6 % / +7 % from castle 1 to 10). Vertical modules are untouched: the spiral pitch controller needs them.
+     */
+    static final float LATE_COMPLEX = 0.8f, LATE_HOP_CUT = 0.35f;
     private Kind pick(int zone, Element last) {
         float[] w = new float[Kind.values().length];
         switch (zone) {
@@ -1412,6 +1418,8 @@ public final class CourseGenerator {
         w[Kind.LONG.ordinal()] = 0f;            // long walkable corridors deferred: at any non-zero weight they lengthen the local climb enough to push the streaming-vs-whole float determinism past its 2 mm tolerance (TowerStreamingTest). Re-enable with a test-stable design (shorter corridors / local-origin friendly) once reviewed. The Kind + piece case stay ready.
         float lt = late(last.y);
         if (zone >= 1 && inten > 0f) w[Kind.MORTAR.ordinal()] = 1f + 3f * inten + LATE_MORTAR * lt;          // a mortar row: any stage after the first world
+        for (Kind k : new Kind[]{Kind.GRAB, Kind.SWING, Kind.CRUMBLE, Kind.MOVER_Z, Kind.SLIDE_FALL}) if (w[k.ordinal()] > 0f) w[k.ordinal()] += LATE_COMPLEX * lt;
+        w[Kind.HOP.ordinal()] *= 1f - LATE_HOP_CUT * Math.min(1f, lt);
         if (zone >= 1) { w[Kind.SEESAW.ordinal()] = 4f; w[Kind.BRIDGE.ordinal()] = 4f; }
         else w[Kind.BRIDGE.ordinal()] = 2f;
         if (inten > 0f || (!endless && last.y > T.courseHeight * 0.18f)) { w[Kind.HAZ.ordinal()] = 3f + 9f * inten + LATE_HAZ * lt; if (zone >= 1) w[Kind.SPRING.ordinal()] = 2f + 2f * inten; w[Kind.TRAP.ordinal()] = 2f + 5f * inten + LATE_TRAP * lt; }
@@ -1567,16 +1575,20 @@ public final class CourseGenerator {
         Element cur = last; int base0 = c.size();
         int castle = 1 + (int) ((base + last.y) / 500.0);
         float mid = castle < P.midEnemyFromCastle ? 0f : P.midEnemyChance + P.midEnemyGrowth * (castle - P.midEnemyFromCastle);
+        boolean pursuitOk = base + last.y >= P.pursuitFromY;
+        float wideGap = Sim.CRAB_HOP_GAP + 0.25f;             // past a crab's hop (Sim.canHop), so crabs on an intermediate platform cannot follow onto the next drop platform
+        boolean wideOk = wideGap <= reach(0.2f) * 0.85f;
+        boolean widenNext = false;
         for (int k = 0; k < n; k++) {
             float uR = cur.s + cur.w / 2f;
-            if (k > 0 && mid > 0f && rnd.nextFloat() < mid) {
+            if (k > 0 && mid > 0f && (pursuitOk || wideOk) && rnd.nextFloat() < mid) {
                 // owner structural rule (2026-10-26): a genuine intermediate safe platform between two drop platforms may host a rare enemy (a bee over it
                 // or a pair of crabs); the drop platforms themselves are protected and carry none
                 float iw = r(3.6f, 4.2f);
                 Element ip = plat(Element.Type.STATIC, uR + r(1.1f, 1.6f) * (1f - 0.03f * attempt) + iw / 2f, cur.y + r(-0.2f, 0.3f), iw, z);
                 es.add(ip); int ia = base0 + es.size() - 1;
-                if (rnd.nextBoolean()) {
-                    float span = iw - 1.6f;
+                if (!pursuitOk || rnd.nextBoolean()) {             // below the pursuit height only crabs, with a gap they cannot hop (a bee's envelope always covers its neighbours)
+                    float span = iw - 1.6f; widenNext = !pursuitOk;
                     for (int q = 0; q < 2; q++) {
                         Element m = hz(Element.Type.CRAB, ip.s - span / 2f + q * span, ip.y, 0f, z);
                         m.amp = Math.max(0.3f, Math.min(0.9f, span * 0.5f - 0.3f)); m.period = r(3.0f, 4.0f) - 0.4f * inten; m.phase = r(0f, 6.28f); m.anchor = ia;
@@ -1590,6 +1602,7 @@ public final class CourseGenerator {
                 cur = ip; uR = cur.s + cur.w / 2f;
             }
             float g = k == 0 ? reach(0.2f) * lerp(0.45f, 0.75f, d) * (1f - 0.03f * attempt) : r(1.1f, 1.7f) * (1f - 0.03f * attempt);
+            if (widenNext) { g = Math.max(g, wideGap); widenNext = false; }
             float w = r(5.0f, 5.8f);
             Element p = plat(Element.Type.STATIC, uR + g + w / 2f, cur.y + (k == 0 ? r(0f, 0.4f) : r(-0.2f, 0.3f)), w, z);
             es.add(p);

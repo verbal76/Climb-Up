@@ -703,6 +703,7 @@ public final class CourseGenerator {
         c.finishRoute();
         Random dr = new Random(c.seed * 0x2545F4914F6CDD1DL + 99 + salt * 7919L);
         int rs = c.routeSize();
+        GenTrace tr = GenTrace.GEN.get(); long q0 = GenTrace.now();      // (observe-only sub-phase timing for reports)
         // Owner directive 2026-10-24 (sections 15-16): no dead ends. Now and then the route forks: the route itself is the quick way, and a longer branch drops
         // below it, runs on under it and bounces back up onto a later route platform. Both go forward and meet again. NORMAL forks now and then, one branch
         // at a time; PUNISHER forks more often, with longer branches, and sometimes a second branch off the first.
@@ -710,6 +711,7 @@ public final class CourseGenerator {
             if (fe[0] < lo || fe[0] + fe[1] + 1 > Math.min(rs - 2, hi + 6)) continue;
             if (tryReservedFork(fe[0], fe[1], dr) < 0) tryPadFork(fe[0], dr);
         }
+        long q1 = GenTrace.now();
         float chance = P.forkChance;          // of the take-offs a branch can drop from (open air past the edge: few of them)
         int spacing = P.forkSpacing, last = -100;
         for (int a = lo; a < Math.min(rs - 5, hi + 1); a++) {
@@ -727,7 +729,9 @@ public final class CourseGenerator {
                 tryFork(a, from, dr, 10);
             }
         }
+        long q2 = GenTrace.now();
         addKeyRooms();          // last, so every key-room link is proven against the final geometry
+        if (tr != null) { tr.phase("forks_reserved", q1 - q0); tr.phase("forks_open", q2 - q1); tr.phase("key_rooms", GenTrace.now() - q2); }
     }
 
     /**
@@ -1576,19 +1580,22 @@ public final class CourseGenerator {
         int castle = 1 + (int) ((base + last.y) / 500.0);
         float mid = castle < P.midEnemyFromCastle ? 0f : P.midEnemyChance + P.midEnemyGrowth * (castle - P.midEnemyFromCastle);
         boolean pursuitOk = base + last.y >= P.pursuitFromY;
-        float wideGap = Sim.CRAB_HOP_GAP + 0.25f;             // past a crab's hop (Sim.canHop), so crabs on an intermediate platform cannot follow onto the next drop platform
-        boolean wideOk = wideGap <= reach(0.2f) * 0.85f;
-        boolean widenNext = false;
+        // below the pursuit height a crab may not follow off its platform: a crab hops gaps up to CRAB_HOP_GAP (3.2 m) but only CRAB_HOP_DY (1.8 m) up
+        // or down (Sim.canHop), and a 3.45 m gap is past a fair jump (reach about 3.3 m), so the crabs' platform is sunk below its neighbours instead:
+        // drop into the dip, climb out with a jump and a ledge grab
+        float sunk = 0f;
         for (int k = 0; k < n; k++) {
             float uR = cur.s + cur.w / 2f;
-            if (k > 0 && mid > 0f && (pursuitOk || wideOk) && rnd.nextFloat() < mid) {
+            if (k > 0 && mid > 0f && rnd.nextFloat() < mid) {
                 // owner structural rule (2026-10-26): a genuine intermediate safe platform between two drop platforms may host a rare enemy (a bee over it
                 // or a pair of crabs); the drop platforms themselves are protected and carry none
                 float iw = r(3.6f, 4.2f);
-                Element ip = plat(Element.Type.STATIC, uR + r(1.1f, 1.6f) * (1f - 0.03f * attempt) + iw / 2f, cur.y + r(-0.2f, 0.3f), iw, z);
+                boolean crabs = !pursuitOk || rnd.nextBoolean();          // below the pursuit height only crabs (a bee's envelope always covers its neighbours)
+                float dy = crabs && !pursuitOk ? -(Sim.CRAB_HOP_DY + r(0.25f, 0.45f)) : r(-0.2f, 0.3f);
+                Element ip = plat(Element.Type.STATIC, uR + r(1.1f, 1.6f) * (1f - 0.03f * attempt) + iw / 2f, cur.y + dy, iw, z);
                 es.add(ip); int ia = base0 + es.size() - 1;
-                if (!pursuitOk || rnd.nextBoolean()) {             // below the pursuit height only crabs, with a gap they cannot hop (a bee's envelope always covers its neighbours)
-                    float span = iw - 1.6f; widenNext = !pursuitOk;
+                if (crabs) {
+                    float span = iw - 1.6f; if (!pursuitOk) sunk = -dy;
                     for (int q = 0; q < 2; q++) {
                         Element m = hz(Element.Type.CRAB, ip.s - span / 2f + q * span, ip.y, 0f, z);
                         m.amp = Math.max(0.3f, Math.min(0.9f, span * 0.5f - 0.3f)); m.period = r(3.0f, 4.0f) - 0.4f * inten; m.phase = r(0f, 6.28f); m.anchor = ia;
@@ -1602,9 +1609,10 @@ public final class CourseGenerator {
                 cur = ip; uR = cur.s + cur.w / 2f;
             }
             float g = k == 0 ? reach(0.2f) * lerp(0.45f, 0.75f, d) * (1f - 0.03f * attempt) : r(1.1f, 1.7f) * (1f - 0.03f * attempt);
-            if (widenNext) { g = Math.max(g, wideGap); widenNext = false; }
             float w = r(5.0f, 5.8f);
-            Element p = plat(Element.Type.STATIC, uR + g + w / 2f, cur.y + (k == 0 ? r(0f, 0.4f) : r(-0.2f, 0.3f)), w, z);
+            float py = sunk > 0f ? cur.y + sunk + r(-0.1f, 0.1f) : cur.y + (k == 0 ? r(0f, 0.4f) : r(-0.2f, 0.3f));          // out of a dip: back up past the crabs' hop
+            sunk = 0f;
+            Element p = plat(Element.Type.STATIC, uR + g + w / 2f, py, w, z);
             es.add(p);
             // the slab hangs forward of the middle: you land on clear deck at the back, time your run under it, and take off from the lip in front
             // (centred, it hung right where the hop lands, and a climber who stopped there had no safe way on - EndlessTest, seed 4 slice 9)

@@ -43,7 +43,8 @@ def summary(d):
     for r in rows(d, "chunks.csv"):
         g = float(r["gen_wall_s"] or 0); gen[mode(r["run"])] += g
         worst.append((g, r["run"], r["y0"], r["slice_attempts"], r["failed_attempts"], r["refused_or_discarded_s"], r["accepted_modules_s"],
-                      r.get("phase_extend_s", "-"), r.get("phase_closing_rest_s", "-"), r.get("phase_decoys_forks_s", "-"), r.get("phase_rooms_s", "-")))
+                      r.get("phase_extend_s", "-"), r.get("phase_closing_rest_s", "-"), r.get("phase_decoys_forks_s", "-"), r.get("phase_rooms_s", "-"),
+                      r.get("phase_forks_reserved_s", "-"), r.get("phase_forks_open_s", "-"), r.get("phase_key_rooms_s", "-")))
     out["gen"] = gen; out["worst"] = sorted(worst, reverse=True)[:8]
     rf = os.path.join(d, "report_full.json")
     out["full"] = json.load(open(rf)) if os.path.exists(rf) else {}
@@ -81,7 +82,7 @@ for r in N["fails"]:
 print("=== generation seconds per mode, all seeds (base -> new) ===")
 for m in MODES:
     print(m, round(B["gen"][m]), "->", round(N["gen"][m]))
-print("=== worst new chunks: gen_s run y0 attempts failed_attempts refused_s accepted_s extend_s closing_rest_s decoys_forks_s rooms_s ===")
+print("=== worst new chunks: gen_s run y0 attempts failed_attempts refused_s accepted_s extend_s closing_rest_s decoys_forks_s rooms_s (of decoys_forks: forks_reserved_s forks_open_s key_rooms_s) ===")
 for w in N["worst"]:
     print(w)
 print("=== new progression ===")

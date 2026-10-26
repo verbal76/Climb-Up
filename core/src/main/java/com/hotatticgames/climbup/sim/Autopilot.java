@@ -601,13 +601,15 @@ public final class Autopilot {
     }
     /** Knocked into the air by a bee or a crab (nothing to do with a planned move): steer back towards the platform we meant to stand on until something is under our feet. True if we landed on a route platform without a setback. */
     static boolean recover(Sim real, int a, InputState in) {
-        Course c = real.course; int f0 = real.setbacks();
+        // a fall (back to the checkpoint) ends the recovery; another knock while still in the air does not: like a person, keep steering and land
+        // (2026-10-26 campaign: four solver failures were a second bump during recovery, reported as "plan failed" mid-knock-back at 6.9/6.9)
+        Course c = real.course; int f0 = real.falls;
         for (int q = 0; q < 360 && real.mode != Sim.Mode.GROUND; q++) {
             in.clear();
             if (real.mode == Sim.Mode.LEDGE || real.mode == Sim.Mode.PULLUP) in.moveY = 1f;
             else if (real.mode == Sim.Mode.AIR) in.moveX = Math.max(-1f, Math.min(1f, 1.5f * c.dsWrap(real.es1[a], real.s)));
             real.step(in);
-            if (real.setbacks() != f0) return false;
+            if (real.falls != f0) return false;
         }
         return real.mode == Sim.Mode.GROUND && onRoute(c, real.onElem);
     }
@@ -690,6 +692,7 @@ public final class Autopilot {
                 if (!hasMidHazard(c, a)) settle(real, a, in);     // a hazard in the middle (a crab that comes after you): no walking to the centre to settle, size the next move up from where we landed
                 continue;
             }
+            if (real.mode == Sim.Mode.GROUND && real.onElem != a && onRoute(c, real.onElem)) { a = real.onElem; continue; }      // like a person: landed on another route platform (not a fall), so carry on from there
             Result r = plan(real, a, false, true);
             if (!r.ok) r = plan(real, a, false, false);        // no move leaves a state that suits the next link: take any that works and sort the next link out from there
             rep.links++;
@@ -774,6 +777,7 @@ public final class Autopilot {
                 }
                 if (!r.ok && (real.mode != held || real.onElem != a)) continue;      // bumped off the spot while waiting: recover and size it up again (the loop's own limits still apply)
             }
+            if (!r.ok && real.mode == Sim.Mode.GROUND && real.onElem != a && onRoute(c, real.onElem)) continue;      // carried off the spot (a pad's or spring's bounce with no move to steer for, a bump) onto another route platform: size it up from there (2026-10-26 campaign: PUNISHER seed 2, 581 m, a spring's bounce dropped the climber onto platform 2 and link 12 was planned from there)
             if (!r.ok) { rep.failedLink = a; rep.simTime = real.time; rep.failInfo = String.format("plan failed: mode=%s on=%d s=%.2f y=%.2f vx=%.2f vy=%.2f", real.mode, real.onElem, real.s, real.y, real.vx, real.vy); return rep; }
             // like a person, who sees the whole screen: the planner tries moves among the nearby elements, so check the chosen one against every hazard (an aimed
             // cannon or a cannonball from links back) and, if one would catch it, hold on a moment and size it up again

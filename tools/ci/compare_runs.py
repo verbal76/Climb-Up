@@ -88,3 +88,7 @@ for w in N["worst"]:
 print("=== new progression ===")
 for k, v in N["full"].get("progression", {}).items():
     print(k, "slope", v.get("slope_per_castle"), "first->last %", v.get("first_to_last_pct"), "declining", v.get("declining_steps"))
+print("=== every unsuccessful solver slice (new): run slice y0 y1 links failed_link fail_info ===")
+for r in rows(sys.argv[2], "solver.csv"):
+    if r["completed"] != "true":
+        print(r["run"], r.get("slice"), r.get("y0"), r.get("y1"), r.get("plans"), r.get("failed_link"), (r.get("fail_info") or "")[:220])

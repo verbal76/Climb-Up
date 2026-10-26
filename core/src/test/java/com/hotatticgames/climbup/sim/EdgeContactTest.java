@@ -83,7 +83,11 @@ public class EdgeContactTest {
         }
         System.out.println("edge sweep: " + types.size() + " platform kinds, " + sp.size() + " specimens, " + (trials % 1_000_000_000L) + " trials, " + contacts + " side contacts, " + (trials / 1_000_000_000L) + " fall-throughs " + types);
         assertTrue("these platform kinds are covered: " + types, types.containsAll(Arrays.asList("STATIC/0", "CRUMBLE/0", "MOVE_H/0", "MOVE_V/0", "MOVE_Z/0", "SWING/0", "PAD/0", "SPRING/0", "RAMP/0", "RAMP/1", "RAMP/2", "RAMP/3", "SEESAW/1", "STATIC/1", "STATIC/2", "STATIC/3", "MOVE_H/1", "MOVE_V/1")));
-        assertTrue("the sweep really makes side contact (" + contacts + ")", contacts > 20000);
+        // the sweep really reaches the platforms' sides: about 16% of trials when written (30,000 of 185,000); the trial count follows how many platform
+        // variants the generator produced in its slices, so the bar is the contact rate (and a floor on the trials), not a fixed count (Phase 0, 2026-10-26)
+        long n = trials % 1_000_000_000L;
+        assertTrue("the sweep runs enough trials (" + n + ")", n >= 60_000);
+        assertTrue("the sweep really makes side contact (" + contacts + " of " + n + " trials)", contacts >= 0.12 * n);
         assertEquals("a body slipped into a platform's side and sank through it: " + bad, 0, trials / 1_000_000_000L);
     }
 

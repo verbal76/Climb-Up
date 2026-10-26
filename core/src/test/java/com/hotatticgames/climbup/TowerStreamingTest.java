@@ -48,7 +48,7 @@ public class TowerStreamingTest {
         for (int i = 0; i < 13; i++) { a.extend(); b.extend(); }
         Sim sa = managed(a, t, 0), sb = managed(b, t, 0);
         int[] za = {a.world.size()}, zb = {b.world.size()}; InputState in = new InputState(); int rebuilds = 0;
-        double worst = 0;
+        double worst = 0; int flips = 0, lastFlip = -10;
         for (int f = 0; f < 60 * 40; f++) {
             in.clear(); in.moveX = (float) Math.sin(f / 37.0) * 1.2f; in.jumpPressed = f % 53 == 0; in.jumpHeld = f % 53 < 22; in.moveY = (f / 211) % 3 == 1 ? 1f : 0f;
             frame(a, sa, in, 1, za);
@@ -60,10 +60,12 @@ public class TowerStreamingTest {
             double dy = Math.abs(a.absY(sa.y) - b.absY(sb.y)), ds = Math.abs(a.world.dsWrap(sa.s, sb.s));
             worst = Math.max(worst, Math.max(dy, ds));
             assertTrue("frame " + f + ": same position after " + rebuilds + " rebuilds (dy " + dy + ", ds " + ds + ")", dy < 2e-3 && ds < 2e-3);
-            assertEquals("same state at frame " + f, sa.mode, sb.mode);
+            // owner-approved one-step tolerance (Build 79 hold, DECISIONS "a landing on a rounding knife-edge"): a landing within one ulp of the 0.1 mm
+            // landing band can happen one step apart in the two frames; the state may differ for one step only and must agree again on the next
+            if (sa.mode != sb.mode) { assertTrue("state differs for more than one step at frame " + f + " (" + sa.mode + " vs " + sb.mode + ")", lastFlip != f - 1); lastFlip = f; flips++; }
             assertEquals("same falls", sa.falls, sb.falls);
         }
-        System.out.println("rebuilds " + rebuilds + ", worst divergence " + worst + " m; abs height now " + a.absY(sa.y));
+        System.out.println("rebuilds " + rebuilds + ", worst divergence " + worst + " m, one-step state flips " + flips + "; abs height now " + a.absY(sa.y));
         assertTrue(rebuilds >= 20);
     }
 

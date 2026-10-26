@@ -85,6 +85,7 @@ public final class LaneReport {
                     st = new GenTrace.Solve(); GenTrace.SOLVE.set(st); long s0 = System.nanoTime(), sa = alloc();
                     try { rep = Autopilot.run(f.c, t, 4000f); } catch (RuntimeException e) { rep = new Autopilot.Report(); rep.failInfo = "solver threw " + e; } finally { GenTrace.SOLVE.remove(); }
                     secs = (System.nanoTime() - s0) / 1e9; solveSeconds += secs; sal = sa < 0 ? -1 : alloc() - sa;
+                    if (!rep.completed && (rep.failInfo == null || rep.failInfo.isEmpty())) rep.failInfo = derivedFailInfo(rep, st);
                     solverSlices.add(new String[]{"" + k, f3(f.yBase + f.c.get(0).y), f3(f.yBase + f.c.get(f.c.routeSize() - 1).y), "" + rep.completed, "" + rep.links, "" + rep.failedLink, f3(rep.simTime), f3(rep.minMargin), "" + rep.worstLink, f3(secs), q(rep.failInfo)});
                 }
                 measure(k, f, tr, rep, st);
@@ -312,6 +313,16 @@ public final class LaneReport {
         if (stopped != null && !windows.isEmpty()) windows.lastEntry().getValue().flags.add("RUN_STOPPED_HERE");
     }
 
+    /** The solver leaves failInfo empty on two paths (a planned move that never reaches its target within 20 s, and its sim-time limit): the report
+     *  fills the reason from the solver's own end state (Autopilot.lastReal, read after the run) and marks it as report-derived. */
+    static String derivedFailInfo(Autopilot.Report rep, GenTrace.Solve st) {
+        Sim r = Autopilot.lastReal;
+        String state = r == null ? "end state unavailable" : String.format(Locale.ROOT, "mode=%s on=%d s=%.2f y=%.2f vx=%.2f vy=%.2f t=%.2f hits=%d falls=%d", r.mode, r.onElem, r.s, r.y, r.vx, r.vy, r.time, r.hits, r.falls)
+            + (r != null && r.hitBy != null ? " lastHazard=" + r.hitBy.type : "");
+        int last = st == null || st.arrivals.isEmpty() ? -1 : (int) st.arrivals.get(st.arrivals.size() - 1)[0];
+        if (rep.failedLink >= 0) return "[report-derived] planned move did not reach the next link within 20 s (solver gives no text on this path): " + state;
+        return "[report-derived] solver stopped without completing (sim-time limit or loop end) after link " + last + ": " + state;
+    }
     static double radius(Element.Type k) {
         switch (k) { case SAW_H: case SAW_V: return Element.SAW_R; case PENDULUM: return Element.BALL_R; case CANNON: return Element.SHOT_R; case MORTAR: return Element.MORTAR_R; default: return Double.NaN; }
     }

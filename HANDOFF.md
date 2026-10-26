@@ -1,5 +1,7 @@
 ## RESUME HERE (if the session ran out of credits)
 
+**Overnight autonomy (owner, 2026-10-26):** small engineering decisions allowed; owner approval still needed for PENDULUM/LONG, final numeric targets, physics, removing mechanics, redesigns, mode personalities, relaxing solvability, releases.
+**Batch 3 (e32546c, pushed [skip ci], NOT yet validated):** intermediate-platform enemies below the pursuit height (crabs + widened gap), terrain complexity rising with late(). It is validated by the next campaign (the next normal push of generator code triggers it).
 **Latest (batch 2):** campaign 40270745200 reviewed (results in docs/DECISIONS.md "Correction batch 2"; comparison printed by workflow "Compare difficulty runs" run 40277819208 - this environment cannot download artifacts, so compare on GitHub: edit NEW_RUN in .github/workflows/compare-runs.yml and push). Batch 2 adds the pad/spring launch-column clearance (generator) and generation-phase timing. The batch 1 fingerprint is superseded: take the rules-9 fingerprint from the `validate` job of the batch 2 commit. Batch 2 commit 7bd8b50, campaign "Difficulty report" run 40278130114. Next: compare the batch 2 campaign (set NEW_RUN 40278130114, BASE_RUN 40270745200 or 40262073313), then the remaining solver failures (MOVE_Z plan failed, seesaw knock-back loop, spring/pad not reaching, recover, detour) and the untracked generation time (phase columns).
 
 

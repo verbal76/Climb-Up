@@ -88,9 +88,9 @@ public final class CourseGenerator {
             g.endless = true; g.rampH = t.rampHeight; g.base = base;
             g.relaxed = attempt >= 12;       // the previous slice can occasionally leave no room that keeps clear of every older spiral layer: after twelve normal tries, build above it without that clearance rather than ever failing
             lastForDebug = g;
-            GenTrace tr = GenTrace.GEN.get(); long a0 = tr != null ? System.nanoTime() : 0L; if (tr != null) { tr.attempt = attempt; tr.relaxed = g.relaxed; }      // observe-only (reports)
-            try { g.buildChunk(prev); Course out = g.extract(); if (tr != null) { tr.finalAttempt = attempt; tr.attemptNanos.add(new long[]{attempt, System.nanoTime() - a0, 1}); } return out; }
-            catch (IllegalStateException e) { last = e; if (tr != null) { tr.sliceFailures.add("attempt " + attempt + ": " + e.getMessage()); tr.attemptNanos.add(new long[]{attempt, System.nanoTime() - a0, 0}); } }
+            GenTrace tr = GenTrace.GEN.get(); long a0 = tr != null ? GenTrace.now() : 0L; if (tr != null) { tr.attempt = attempt; tr.relaxed = g.relaxed; }      // observe-only (reports)
+            try { g.buildChunk(prev); Course out = g.extract(); if (tr != null) { tr.finalAttempt = attempt; tr.attemptNanos.add(new long[]{attempt, GenTrace.now() - a0, 1}); } return out; }
+            catch (IllegalStateException e) { last = e; if (tr != null) { tr.sliceFailures.add("attempt " + attempt + ": " + e.getMessage()); tr.attemptNanos.add(new long[]{attempt, GenTrace.now() - a0, 0}); } }
         }
         throw last;
     }
@@ -234,18 +234,18 @@ public final class CourseGenerator {
             }
         }
         float top = keyN > 0 ? Math.max(startY + T.chunkHeight, keyY + 6f) : startY + T.chunkHeight;
-        GenTrace tr = GenTrace.GEN.get(); long p0 = System.nanoTime();      // (observe-only phase timing for reports)
+        GenTrace tr = GenTrace.GEN.get(); long p0 = GenTrace.now();      // (observe-only phase timing for reports)
         extend(beltSawY > 0f ? Math.max(top, beltSawY + 12f) : top);
-        long p1 = System.nanoTime();
+        long p1 = GenTrace.now();
         addRest(theme(c.get(c.size() - 1).y));
         c.get(c.size() - 1).checkpoint = true;
         thinCheckpoints();
         checkNoExactStructureSkipped(startY);
-        long p2 = System.nanoTime();
+        long p2 = GenTrace.now();
         addDecoys(Math.max(3, ctx + 2), c.size() - 11);
-        long p3 = System.nanoTime();
+        long p3 = GenTrace.now();
         finalizeRooms();
-        if (tr != null) { tr.phase("extend", p1 - p0); tr.phase("closing_rest", p2 - p1); tr.phase("decoys_forks", p3 - p2); tr.phase("rooms", System.nanoTime() - p3); }
+        if (tr != null) { tr.phase("extend", p1 - p0); tr.phase("closing_rest", p2 - p1); tr.phase("decoys_forks", p3 - p2); tr.phase("rooms", GenTrace.now() - p3); }
     }
 
     /**
@@ -310,10 +310,10 @@ public final class CourseGenerator {
             float d = diff(last.y);
             int zone = tier(last.y), th = theme(last.y);
             boolean castlePending = castleTarget > 0f && !castleDone;
-            if (castlePending && exactCastle && last.y >= castleTarget - 6f) { int n0 = c.size(), h0 = c.hazards.size(); long s0 = System.nanoTime(); buildExactCastle(th); traceStructure("CASTLE", n0, h0, last.y, s0); castleDone = true; lastRestY = c.get(c.size() - 1).y; continue; }
-            if (castlePending && !exactCastle && last.y >= castleTarget - GEM_LEAD) { int n0 = c.size(), h0 = c.hazards.size(); long s0 = System.nanoTime(); chooseGem(th); traceStructure("GEM", n0, h0, last.y, s0); castleDone = true; lastRestY = c.get(c.size() - 1).y; continue; }
+            if (castlePending && exactCastle && last.y >= castleTarget - 6f) { int n0 = c.size(), h0 = c.hazards.size(); long s0 = GenTrace.now(); buildExactCastle(th); traceStructure("CASTLE", n0, h0, last.y, s0); castleDone = true; lastRestY = c.get(c.size() - 1).y; continue; }
+            if (castlePending && !exactCastle && last.y >= castleTarget - GEM_LEAD) { int n0 = c.size(), h0 = c.hazards.size(); long s0 = GenTrace.now(); chooseGem(th); traceStructure("GEM", n0, h0, last.y, s0); castleDone = true; lastRestY = c.get(c.size() - 1).y; continue; }
             if (last.y - lastRestY >= nextGap && targetY - last.y > 0.4f * T.gemSpacing && !(castlePending && last.y > castleTarget - 14f)) {      // (not right before the slice's own closing rest)
-                { int n0 = c.size(), h0 = c.hazards.size(); long s0 = System.nanoTime(); addRest(th); traceStructure("REST", n0, h0, last.y, s0); } sinceRest = 0; lastRestY = c.get(c.size() - 1).y; nextGap = T.gemSpacing * r(0.85f, 1.15f); maybeCastle(th); continue;
+                { int n0 = c.size(), h0 = c.hazards.size(); long s0 = GenTrace.now(); addRest(th); traceStructure("REST", n0, h0, last.y, s0); } sinceRest = 0; lastRestY = c.get(c.size() - 1).y; nextGap = T.gemSpacing * r(0.85f, 1.15f); maybeCastle(th); continue;
             }
             float forkEvery = P.forkEvery;          // PUNISHER splits about twice as often, and its splits are longer
             if (Float.isNaN(lastForkY)) lastForkY = last.y - forkEvery * 0.5f;
@@ -383,9 +383,9 @@ public final class CourseGenerator {
         m.attempt = tr.attempt; m.kind = k.name(); m.role = traceRole; m.picked = tracePicked; m.d = d; m.y = (float) (base + c.get(c.size() - 1).y);
         m.e0 = c.size(); m.h0 = c.hazards.size();
         int[] f0 = {failLayer, failHaz, failPlan, failWindow, failConflict, failThreat};
-        long t0 = System.nanoTime();
+        long t0 = GenTrace.now();
         boolean ok = tryModuleBelow0(k, d, zone);
-        m.nanos = System.nanoTime() - t0;
+        m.nanos = GenTrace.now() - t0;
         int[] f1 = {failLayer, failHaz, failPlan, failWindow, failConflict, failThreat};
         for (int i = 0; i < 6; i++) m.fails[i] = f1[i] - f0[i];
         m.ok = ok; m.e1 = c.size(); m.h1 = c.hazards.size(); tr.modules.add(m);
@@ -393,7 +393,7 @@ public final class CourseGenerator {
     }
     private void traceStructure(String kind, int n0, int h0, float y, long s0) {
         GenTrace tr = GenTrace.GEN.get(); if (tr == null) return;
-        GenTrace.Module m = new GenTrace.Module(); m.nanos = System.nanoTime() - s0;
+        GenTrace.Module m = new GenTrace.Module(); m.nanos = GenTrace.now() - s0;
         m.attempt = tr.attempt; m.kind = kind; m.role = "STRUCTURE"; m.y = (float) (base + y); m.ok = c.size() > n0 || c.hazards.size() > h0;
         m.e0 = n0; m.e1 = c.size(); m.h0 = h0; m.h1 = c.hazards.size(); tr.modules.add(m);
     }

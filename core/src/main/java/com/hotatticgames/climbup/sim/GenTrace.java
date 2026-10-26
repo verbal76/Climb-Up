@@ -12,6 +12,12 @@ public final class GenTrace {
     public static final ThreadLocal<GenTrace> GEN = new ThreadLocal<>();
     /** The trace of the current thread's solver run ({@link Autopilot#run}), or null. */
     public static final ThreadLocal<Solve> SOLVE = new ThreadLocal<>();
+    /**
+     * The clock reports measure with. The simulation package never reads a wall clock itself (PlayDeterminismTest): a report installs one here
+     * (LaneReport, test code); without it this returns 0, so the game and every normal test never touch a clock.
+     */
+    public static volatile java.util.function.LongSupplier clock = () -> 0L;
+    public static long now() { return clock.getAsLong(); }
 
     /** One module (or structure: REST, CASTLE, GEM) the generator tried. Indices are the generator's own; {@link #offset} maps them to the slice. */
     public static final class Module {
@@ -41,7 +47,7 @@ public final class GenTrace {
         public final ArrayList<float[]> arrivals = new ArrayList<>();     // {link, sim time, setbacks}
         public final ArrayList<int[]> planFails = new ArrayList<>();      // {link, count}
         public final ArrayList<Long> wall = new ArrayList<>();            // wall clock (nanos) at each arrival
-        public void arrive(int link, float time, int setbacks) { arrivals.add(new float[]{link, time, setbacks}); wall.add(System.nanoTime()); }
+        public void arrive(int link, float time, int setbacks) { arrivals.add(new float[]{link, time, setbacks}); wall.add(now()); }
         public void planFail(int link) {
             if (!planFails.isEmpty() && planFails.get(planFails.size() - 1)[0] == link) planFails.get(planFails.size() - 1)[1]++; else planFails.add(new int[]{link, 1});
         }

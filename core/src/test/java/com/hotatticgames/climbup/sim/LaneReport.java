@@ -74,6 +74,7 @@ public final class LaneReport {
     // ------------------------------------------------------------------ run
     public void run(boolean solve, double budget) {
         this.solve = solve; long t0 = System.nanoTime();
+        GenTrace.clock = System::nanoTime;          // the reports measure wall time; the sim package itself never reads a clock
         CourseGenerator.Framed f = null; int k = 0;
         try {
             while (f == null || f.yBase + f.c.get(f.c.routeSize() - 1).y < top) {

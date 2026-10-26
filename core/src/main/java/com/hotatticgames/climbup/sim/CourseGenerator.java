@@ -1000,6 +1000,14 @@ public final class CourseGenerator {
             } else if (fork ? forkLayersClash(d, e) : layersClash(c, d, e)) { decoyWhy = 2; return false; }
         }
         for (Element g : ghostElems) if (layersClash(c, d, g)) { decoyWhy = 3; return false; }
+        // never in the flight corridor of any route pad or spring, in this revolution or another: a launch rises up to ~8.5 m and drifts up to
+        // ~9 m with the run-up it was reached at, so a branch, dead end or key-room platform there catches the climber (OfficialRunTest seed 7
+        // slice 44: a fork branch one revolution up, 7 m over a spring and 8.4 m ahead, outside the 4.5 m layer window; the spring's link was proven
+        // before the branch existed)
+        for (int j = 0; j < rs; j++) {
+            Element e = c.get(j);
+            if ((e.type == Element.Type.PAD || e.type == Element.Type.SPRING) && e.anchor < 0 && Math.abs(c.dsWrap(d.s, e.s)) < 10f + d.w / 2f && d.y > e.y - 1.5f && d.y < e.y + 9f) { decoyWhy = 5; return false; }
+        }
         if (!fork) for (int j = a + 2; j < rs; j++) {                 // never a stepping stone toward later route
             Element e = c.get(j);
             if (!e.isPlatform()) continue;

@@ -672,7 +672,7 @@ public final class Autopilot {
         java.util.HashSet<Integer> visited = new java.util.HashSet<>();
         InputState in = new InputState();
         boolean endless = c.get(c.goalIndex()).type != Element.Type.GOAL;     // endless slices end on a rest platform, not a goal flag
-        int lastA = -1, sameA = 0;
+        int lastA = -1, sameA = 0, stallA = -1, stalls = 0;
         while (!real.won && real.time < maxSimSeconds) {
             if (a == lastA) sameA++; else { lastA = a; sameA = 0; GenTrace.Solve st = GenTrace.SOLVE.get(); if (st != null) st.arrive(a, real.time, real.setbacks()); }      // (observe-only trace for reports)
             if (DBG) System.out.printf("loop a=%d same=%d mode=%s on=%d s=%.2f y=%.2f vx=%.2f vy=%.2f t=%.2f%n", a, sameA, real.mode, real.onElem, real.s, real.y, real.vx, real.vy, real.time);
@@ -825,6 +825,10 @@ public final class Autopilot {
                 if (real.setbacks() != fallsBefore) { rep.failedLink = a; rep.simTime = real.time; rep.failInfo = String.format("setback while executing the move: hits=%d falls=%d mode=%s s=%.2f y=%.2f", real.hits, real.falls, real.mode, real.s, real.y) + (real.hitBy != null ? " lastHazard=" + real.hitBy.type + String.format(" s=%.2f y=%.2f anchor=%d", real.hitBy.s, real.hitBy.y, real.hitBy.anchor) : ""); return rep; }
             }
             if (back >= 30) continue;      // the loop re-syncs to the platform it is on
+            // like a person: a move that stalls for 20 s with no hit and no fall (NGH seed 2 slice 7, 2d4388a: the plan made on a rope beside a blob deck,
+            // with the planner simulating only the nearby window, waited at the rope top while the real course moved on) is sized up again from where the
+            // climber is, at most twice per link, before the link counts as failed
+            if (!succeeded(real, a) && real.setbacks() == fallsBefore) { if (stallA != a) { stallA = a; stalls = 0; } if (stalls++ < 2) continue; }
             if (!succeeded(real, a)) { rep.failedLink = a; rep.simTime = real.time; rep.failInfo = String.format("move did not reach the next link within 20 s: mode=%s on=%d s=%.2f y=%.2f vx=%.2f vy=%.2f", real.mode, real.onElem, real.s, real.y, real.vx, real.vy); return rep; }
             // settle: finish pull-ups and keep going from the attached element
             if (real.mode == Sim.Mode.LEDGE || real.mode == Sim.Mode.PULLUP) {

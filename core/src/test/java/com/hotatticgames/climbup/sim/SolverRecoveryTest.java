@@ -50,6 +50,16 @@ public class SolverRecoveryTest {
         assertEquals(a.completed, b.completed); assertEquals(a.links, b.links); assertEquals(a.simTime, b.simTime, 0f); assertEquals(a.failInfo, b.failInfo);
     }
 
+    /** NGH seed 2 slice 7 as generated on 2d4388a (fixture): the move planned on a rope beside a blob deck stalled 20 s at the rope top (the planner
+     *  simulates only the nearby window). The link is traversable (plans from the rope 10/12, from the deck 120/360); a stalled move is now sized up
+     *  again from where the climber is, at most twice per link. */
+    @Test public void aMoveThatStallsOnARopeIsPlannedAgain() throws Exception {
+        Tuning t = tuning().hardCopy(2);
+        Course c = CourseIO.fromJson(new String(Files.readAllBytes(Paths.get("src/test/resources/fixtures/ngh_seed2_slice7_2d4388a.json"))));
+        Autopilot.Report r = Autopilot.run(c, t, 4000f);
+        assertTrue("NGH seed 2 slice 7 (2d4388a) completes (link " + r.failedLink + ": " + r.failInfo + ")", r.completed);
+    }
+
     @Test public void everyUnsuccessfulSliceHasExactlyOneFailureClass() {
         assertEquals("completed", LaneReport.failClass(true, ""));
         assertEquals("solver_exception", LaneReport.failClass(false, "\"solver threw java.lang.IndexOutOfBoundsException\""));

@@ -84,14 +84,14 @@ public class CourseTest {
         for (int i = 1; i <= 6; i++) {
             Course c = TestUtil.tower(i);
             int decoys = c.size() - c.routeSize();
-            assertTrue("tower " + i + " has dead ends/lures to mislead (" + decoys + ")", decoys >= 15);
+            assertTrue("tower " + i + " has alternate routes off the main route (" + decoys + " side platforms)", decoys >= 15);
             int lastAnchor = -1;
             for (int k = c.routeSize(); k < c.size(); k++) {
                 Element d = c.get(k);
-                boolean plain = d.type == Element.Type.STATIC || d.type == Element.Type.CRUMBLE;
-                // Build 80 (owner directive 2026-10-24): forks replace dead ends, and a trampoline fork's branch climbs back with a pad or spring
-                assertTrue("decoys are plain platforms, or a fork branch's pad or spring (" + d.type + " #" + k + ")", plain
-                    || (CourseGenerator.onForkBranch(c, k) && (d.type == Element.Type.PAD || d.type == Element.Type.SPRING)));
+                // owner (Build 80, binding 2026-10-26): side structures are connected alternate routes (fork branches, any platform type) or a key room
+                // (a collectible detour proven there and back); never a disconnected dead end
+                boolean keyRoom = false; for (Element h : c.hazards) if (h.type == Element.Type.KEY && h.anchor == d.anchor) keyRoom = true;
+                assertTrue("a side platform is on a fork branch or in a key room (" + d.type + " #" + k + ")", CourseGenerator.onForkBranch(c, k) || keyRoom);
                 assertFalse("decoys never carry checkpoints", d.checkpoint);
                 assertTrue("anchored to a route element", d.anchor >= 0 && d.anchor < c.routeSize());
                 lastAnchor = d.anchor;     // key-room decoys come first, so anchors are not globally sorted (decoy windows are supersets, which is safe)

@@ -39,6 +39,14 @@ Owner decisions still open: PENDULUM (never generated), LONG (off for determinis
 - Unavailable (documented in coverage.csv): validation/rollback time inside one attempt, per-type hazard/enemy placement attempts, swept danger areas and timing windows, actual enemy contacts.
 - Previous baseline run 40254414759 stays the comparison baseline. EXPANDED RUN: 40262073313 (https://github.com/verbal76/Climb-Up/actions/runs/40262073313) on fb11998a0387222b089f19742f8096a2b09c3ac7; artifact `difficulty-baseline-3lane` (plus `lanes-mode-M-seed-S`). Then STOP for owner review.
 
+## RECOVERY CHECKPOINT (2026-10-26, Phase 0 validation recovery)
+
+**Read first.** Owner directives in force: CRITICAL VALIDATION AMENDMENT (Phase 0 -> Normal progression -> shared progression -> one campaign -> graphs -> STOP before Build 82) and FINAL CONSOLIDATED ROUTE, FORK, SHORTCUT AND VALIDATION DIRECTIVE (binding; see DECISIONS "Route network, forks and shortcuts"). Build 82 on HOLD; no packaging, distribution or Steam.
+- **Do not reintroduce:** a longer-route / slower-route / completion-time requirement for forks (f7f67b0 mistake, corrected), dead-end decoys, fixed branch direction, "every side platform plain", "every sub-fork rejoins the main route", or a fastest-route rule.
+- Commits: 71eed30 (tier() back on rampHeight; 40 m hazard-free start for spike drops and creature decks; fork layer rule with lower launchers/movers; CourseTest/DeadEndTest on current rules; fingerprint 0c530fbdb725b35552a8526c), f7f67b0 (wrong length assertion), then the correction commit (DeadEndTest connected-network test, CourseTest side platforms = fork branch or key room).
+- Phase 0 ledger: docs/DECISIONS.md "Phase 0 validation recovery". Pending: CI results of 1db99aa (crab fix) and 71eed30; ConveyorTest and OfficialRunTest seed 7 slice 57 re-diagnosis on the new generation; replays re-recorded with ReplayTool record (seeds 12, 21, 7) once the generator is final.
+- Local probes (scratchpad/probe): TowerProbe, DeadProbe, ForkLenProbe, MortarProbe, LowHazProbe (compile against scratchpad/cp.txt).
+
 ## RECOVERY CHECKPOINT (2026-10-26): three-lane reporting built; six-run baseline running on GitHub Actions
 
 **Read this first.** Owner directive (reporting + baseline simulations) and its MANDATORY CLASSIFICATION AMENDMENT: build the measurement/graphing system, run the CURRENT generator and solver, publish artifacts, then STOP for owner + ChatGPT review. No generator, solver, gameplay or spawn changes in this phase (Phase 3 needs explicit owner authorization).

@@ -133,7 +133,13 @@ public final class CourseGenerator {
         float start = f + (1f - f) * Math.min(1f, modeShift() / DifficultyProfile.TERRAIN_RAMP_Y);
         return Math.min(P.terrainCap, Math.max(0f, start + (P.terrainCap - start) * (float) ((y + base) / DifficultyProfile.TERRAIN_RAMP_Y)));
     }
-    private int tier(float y) { return Math.min(3, (int) (diff(y) * 4f)); }
+    /**
+     * The module mix (which kinds pick() may choose, and zone-dependent variants) as before rules 9: it opens over the first {@code rampHeight} metres.
+     * Rules 9 read it off the 5,000 m terrain curve, which held back mortars, springs, seesaws, bridges, cables and the elevator / slide modules until
+     * about 833 m in NORMAL (castle 2) and swings and grabs until 2,222 m: a mechanic unlock (owner directive 2026-10-24: none), the castle 2 hazard
+     * spike, and MortarTest / EdgeContactTest finding none of them in their first slices. Terrain demand still follows {@link #diff}.
+     */
+    private int tier(float y) { return Math.min(3, (int) (Math.min(1f, Math.max(0f, (float) ((y + base) / rampH))) * 4f)); }
     /** Visual theme of the platforms at height y: the four worlds repeat for ever in the endless climb. */
     private int theme(float y) { return endless ? ((int) ((y + base) / T.zoneHeight)) % T.zoneCount : tier(y); }
     /** 0 before the first hazards, ramping to 1 (finite towers ramp over their own height so tests exercise them too). */
@@ -334,10 +340,11 @@ public final class CourseGenerator {
             wantCreature = clubTarget;
             if (th == 1 && last.type == Element.Type.STATIC && rnd.nextFloat() < 0.2f) k = Kind.WET;          // the Frost world: some platforms are under a rain cloud (slippery)
             float lv = Math.min(1f, level(last.y));
-            if (k != Kind.WET && prev != Kind.CREATURE && !last.wet() && rnd.nextFloat() < 0.025f + 0.045f * lv + 0.05f * late(last.y)) k = Kind.CREATURE;      // owner directive 2026-10-24: creature decks from Level 1 on, more as the levels rise (was world 2 on)
+            boolean hazOk = !endless || intensity(last.y) > 0f;          // the first hazardStartY metres stay free of hazards and creatures (EndlessTest: a spike-drop row at 7.5 m, seed 3), as for every other hazard module
+            if (hazOk && k != Kind.WET && prev != Kind.CREATURE && !last.wet() && rnd.nextFloat() < 0.025f + 0.045f * lv + 0.05f * late(last.y)) k = Kind.CREATURE;      // owner directive 2026-10-24: creature decks from Level 1 on, more as the levels rise (was world 2 on)
             else if (prev == Kind.CREATURE && !last.wet() && rnd.nextFloat() < 0.35f * late(last.y)) k = rnd.nextBoolean() ? Kind.HAZ : Kind.TRAP;      // Build 71: higher up, a creature deck runs straight into a trap      // Build 71: a skull's deck (world 2 on), or a green blob's (world 3 on)
             boolean secondHalf = endless && th == 0 && ((last.y + base) % T.zoneHeight) >= 0.5f * T.zoneHeight - 15f;      // castle 1 to castle 2: the Meadow's second, harder half (owner, Build 71)
-            if (k != Kind.WET && k != Kind.CREATURE && !last.wet() && prev != Kind.DROPS && (secondHalf ? rnd.nextFloat() < 0.10f : rnd.nextFloat() < 0.015f + 0.025f * lv)) k = Kind.DROPS;      // (spike-drop rows anywhere, more higher up; was world 2 on)
+            if (hazOk && k != Kind.WET && k != Kind.CREATURE && !last.wet() && prev != Kind.DROPS && (secondHalf ? rnd.nextFloat() < 0.10f : rnd.nextFloat() < 0.015f + 0.025f * lv)) k = Kind.DROPS;      // (spike-drop rows anywhere, more higher up; was world 2 on)
             else if (secondHalf && (k == Kind.HOP || k == Kind.STAIRS) && rnd.nextFloat() < 0.3f) k = Kind.HAZ;          // a little rougher than the first half
             if (last.wet() && (k == Kind.HAZ || k == Kind.TRAP || k == Kind.MORTAR || k == Kind.CREATURE || k == Kind.DROPS)) k = Kind.STAIRS;          // after a slippery platform give a walk-up (not a hazard you must time, nor a jump you must push off a slippery surface for): its timing windows assume a normal run-up (SawFairnessTest) and the plain climb stays walkable
             if (beltSawY > 0f && !beltSawDone && last.y >= beltSawY && !last.wet() && !(castlePending && last.y > castleTarget - 14f)) {      // Build 77: this section's balance conveyor (tried again on the next module if it cannot be proven here)
@@ -1131,17 +1138,22 @@ public final class CourseGenerator {
 
     /**
      * {@link #layersClash} for a fork's branch, which runs below the route and so nearer the revolution beneath: the bodies must keep clear as usual, and
-     * no layer may reach the other: platforms out of jump reach (4 m; a jump rises about 1.9 m) unless the lower one bounces, which keeps the 9.5 m rule.
+     * no layer may reach the other: platforms out of jump reach (4 m; a jump rises about 1.9 m) unless the lower one launches or carries the climber
+     * ({@link #launches}: a pad, spring, seesaw, ramp, swing or moving platform), which keeps the 9.5 m rule. (Until rules 9 only a lower pad or spring
+     * counted: a rising platform 4-9.5 m under a branch could have carried the climber onto it.) A launcher ABOVE a plain platform is no shortcut: it
+     * throws the climber further up its own revolution, and the plain platform below is out of reach. Public for the tests that check generated courses.
      */
-    private boolean forkLayersClash(Element d, Element f) {
+    public static boolean forkLayersClash(Course c, Element d, Element f) {
         if (Math.abs(d.s - f.s) < c.circumference * 0.5f) return false;
         if (Math.abs(c.dsWrap(d.s, f.s)) > arcHalf(d) + arcHalf(f) + 2.5f) return false;
         if (vLo(d) - 1.5f < vHi(f) && vHi(d) + 1.5f > vLo(f)) return true;
         if (!d.isPlatform() || !f.isPlatform()) return false;
         Element lower = d.y < f.y ? d : f;
-        boolean bounces = lower.type == Element.Type.PAD || lower.type == Element.Type.SPRING;
-        return Math.abs(d.y - f.y) < (bounces ? 9.5f : 4f);
+        return Math.abs(d.y - f.y) < (launches(lower) ? 9.5f : 4f);
     }
+    private boolean forkLayersClash(Element d, Element f) { return forkLayersClash(c, d, f); }
+    /** Whether element {@code i} of {@code c} is on a fork's branch (see {@link Course#forks}: take-off, first branch element, count, rejoin). */
+    public static boolean onForkBranch(Course c, int i) { for (int[] f : c.forks) if (i >= f[1] && i < f[1] + f[2]) return true; return false; }
 
     private boolean clearOfOtherLayers(int idx) {
         Element e = c.get(idx);

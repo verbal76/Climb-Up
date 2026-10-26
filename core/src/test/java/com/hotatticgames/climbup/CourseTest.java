@@ -36,10 +36,13 @@ public class CourseTest {
             }
             assertTrue("a red gem about every 30 m (never more than 50 m apart) but was " + maxGapY, maxGapY <= 50f);
             assertTrue(cps >= 10);
-            // spiral layers must never overlap: non-neighbouring elements at the same angle need real vertical separation
+            // spiral layers must never overlap: non-neighbouring elements at the same angle need real vertical separation. A fork's branch (Build 80) is held
+            // to the fork rule the generator builds it with (bodies clear, out of jump reach unless the lower one launches or carries the climber); everything
+            // else to the route rule (9.5 m wherever either one is a launcher)
             for (int a = 0; a < c.size(); a++) for (int b = a + 1; b < c.size(); b++) {
                 Element ea = c.get(a), eb = c.get(b);
-                assertFalse("layer clash in tower " + i + " between " + a + " and " + b, CourseGenerator.layersClash(c, ea, eb));
+                boolean fork = CourseGenerator.onForkBranch(c, a) || CourseGenerator.onForkBranch(c, b);
+                assertFalse("layer clash in tower " + i + " between " + a + " and " + b, fork ? CourseGenerator.forkLayersClash(c, ea, eb) : CourseGenerator.layersClash(c, ea, eb));
             }
         }
         for (Element.Type ty : Element.Type.values()) { if (ty.ordinal() >= Element.Type.SAW_H.ordinal()) continue; assertTrue("tower bank uses element type " + ty, seen.getOrDefault(ty, 0) > 0); }   // hazards live outside the route
@@ -85,7 +88,10 @@ public class CourseTest {
             int lastAnchor = -1;
             for (int k = c.routeSize(); k < c.size(); k++) {
                 Element d = c.get(k);
-                assertTrue("decoys are plain platforms", d.type == Element.Type.STATIC || d.type == Element.Type.CRUMBLE);
+                boolean plain = d.type == Element.Type.STATIC || d.type == Element.Type.CRUMBLE;
+                // Build 80 (owner directive 2026-10-24): forks replace dead ends, and a trampoline fork's branch climbs back with a pad or spring
+                assertTrue("decoys are plain platforms, or a fork branch's pad or spring (" + d.type + " #" + k + ")", plain
+                    || (CourseGenerator.onForkBranch(c, k) && (d.type == Element.Type.PAD || d.type == Element.Type.SPRING)));
                 assertFalse("decoys never carry checkpoints", d.checkpoint);
                 assertTrue("anchored to a route element", d.anchor >= 0 && d.anchor < c.routeSize());
                 lastAnchor = d.anchor;     // key-room decoys come first, so anchors are not globally sorted (decoy windows are supersets, which is safe)

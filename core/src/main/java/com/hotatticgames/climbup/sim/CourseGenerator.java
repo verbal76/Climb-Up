@@ -86,7 +86,7 @@ public final class CourseGenerator {
         for (int attempt = 0; attempt < 24; attempt++) {      // a dead end is retried with different (but still deterministic) choices
             CourseGenerator g = new CourseGenerator(seed, t, k + 1 + attempt * 1000003L);
             g.endless = true; g.rampH = t.rampHeight; g.base = base;
-            g.relaxed = attempt >= 12;       // the previous slice can occasionally leave no room that keeps clear of every older spiral layer: after twelve normal tries, build above it without that clearance rather than ever failing
+            g.relaxed = attempt >= 12;       // the previous slice can occasionally leave no room that keeps clear of every older spiral layer: after twelve normal tries, build above it without the shortcut spacing to it (never without body clearance: ghostClash) rather than ever failing
             lastForDebug = g;
             GenTrace tr = GenTrace.GEN.get(); long a0 = tr != null ? GenTrace.now() : 0L; if (tr != null) { tr.attempt = attempt; tr.relaxed = g.relaxed; }      // observe-only (reports)
             try { g.buildChunk(prev); Course out = g.extract(); if (tr != null) { tr.finalAttempt = attempt; tr.attemptNanos.add(new long[]{attempt, GenTrace.now() - a0, 1}); } return out; }
@@ -218,11 +218,11 @@ public final class CourseGenerator {
             int rs = prev.routeSize(), m = Math.min(8, rs), from = rs - m;
             for (int i = from; i < rs; i++) c.add(copyOf(prev.get(i), -1));
             for (Element h : prev.hazards) if (h.anchor >= from - 2 && h.anchor < rs) c.hazards.add(copyOf(h, h.anchor - from));
-            if (!relaxed) {
-                for (int i = 0; i < rs; i++) if (i < from) ghostElems.add(prev.get(i));
-                for (int i = rs; i < prev.size(); i++) ghostElems.add(prev.get(i));
-                for (Element h : prev.hazards) if (h.anchor < from - 2) ghostHaz.add(h);
-            }
+            // (2026-10-26 audit: the relaxed attempts left the previous slice out altogether, so nothing kept their platforms and hazards from
+            // overlapping its earlier route, branches and hazards one revolution down; now they only waive the shortcut spacing to it, see ghostClash)
+            for (int i = 0; i < rs; i++) if (i < from) ghostElems.add(prev.get(i));
+            for (int i = rs; i < prev.size(); i++) ghostElems.add(prev.get(i));
+            for (Element h : prev.hazards) if (h.anchor < from - 2) ghostHaz.add(h);
             ctx = m;
             rests = prev.get(rs - 1).zone * 3 + rs;   // keeps the checkpoint cadence varied between slices
         }
@@ -245,9 +245,10 @@ public final class CourseGenerator {
         }
         float top = keyN > 0 ? Math.max(startY + T.chunkHeight, keyY + 6f) : startY + T.chunkHeight;
         GenTrace tr = GenTrace.GEN.get(); long p0 = GenTrace.now();      // (observe-only phase timing for reports)
-        extend(beltSawY > 0f ? Math.max(top, beltSawY + 12f) : top);
+        float extendTo = beltSawY > 0f ? Math.max(top, beltSawY + 12f) : top;
+        extend(extendTo);
         long p1 = GenTrace.now();
-        addRest(theme(c.get(c.size() - 1).y));
+        closeSlice(extendTo);
         c.get(c.size() - 1).checkpoint = true;
         thinCheckpoints();
         checkNoExactStructureSkipped(startY);
@@ -257,6 +258,47 @@ public final class CourseGenerator {
         finalizeRooms();
         if (tr != null) { tr.phase("extend", p1 - p0); tr.phase("closing_rest", p2 - p1); tr.phase("decoys_forks", p3 - p2); tr.phase("rooms", GenTrace.now() - p3); }
     }
+
+    /**
+     * The slice's closing rest, which the next slice builds on. 2026-10-26 (owner directive; PUNISHER seed 2 slice 49 failed twelve attempts at its first
+     * module, every one refused by the spiral-layer rule against this slice, and went on in relaxed mode): a closing rest that leaves the next slice no
+     * clear first step is not accepted. The next slice checks a new element against everything here except the last three route elements before it, with
+     * the same layer rule, so that is checked now on plain probe platforms (the shape of its fallback steps). If none fits, the rest is placed again and,
+     * failing that, the last plain module is undone and the climb rebuilt, a few times, before the slice attempt fails (and is retried here, where the
+     * cause is, rather than the next slice failing over it). Closing rests that leave room are kept exactly as before (the check draws no random numbers).
+     */
+    private void closeSlice(float targetY) {
+        for (int tries = 0; ; tries++) {
+            int n0 = c.size(), h0 = c.hazards.size(), r0 = rests;
+            addRest(theme(c.get(c.size() - 1).y));
+            Element probe = continuationProbe();
+            if (probe != null) { contReserve = probe; return; }
+            CONTINUATION_REFUSED.incrementAndGet(); GenTrace.tally("continuation_refused");
+            rollbackTo(n0, h0); rests = r0;
+            if (tries >= 3) throw new IllegalStateException("slice end leaves the next slice no clear first step at " + c.size());
+            if (tries >= 1 && !undo.isEmpty()) { int[] u = undo.pop(); rollbackTo(u[0], u[1]); prev = null; prev2 = null; GenTrace.tally("continuation_backtrack"); }
+            extend(targetY);
+        }
+    }
+
+    /** Plain first steps of the next slice: {gap after the closing rest, rise}. */
+    private static final float[][] CONT_PROBES = {{2.0f, 0f}, {3.0f, 0f}, {2.0f, 1.2f}, {3.0f, 1.2f}, {2.0f, 2.4f}, {3.0f, 2.4f}};
+    /** The first of {@link #CONT_PROBES} after the last element that keeps clear of every other spiral layer here as the next slice will check it, or null. */
+    private Element continuationProbe() {
+        Element r = c.get(c.size() - 1);
+        int idx = c.size();
+        for (float[] pr : CONT_PROBES) {
+            Element p = new Element(Element.Type.STATIC, r.s + r.w / 2f + pr[0] + 1.5f, r.y + pr[1], 3f);
+            boolean clear = true;
+            for (int i = Math.max(0, ctx - 1); i < idx - 3 && clear; i++) if (layersClash(c, p, c.get(i))) clear = false;   // this slice as the next one receives it (extract): the tail copied from the slice before, and the ghosts, it never sees
+            if (clear) return p;
+        }
+        return null;
+    }
+    /** The first step closeSlice found clear: the side structures placed after it (dead ends, forks' key rooms) keep it clear (decoyOk). */
+    private Element contReserve;
+    /** Diagnostics: closing rests refused because the next slice would have had no clear first step. */
+    public static final java.util.concurrent.atomic.AtomicInteger CONTINUATION_REFUSED = new java.util.concurrent.atomic.AtomicInteger();
 
     /**
      * A slice only looks 80 m ahead for the castle or red gem that belongs to it (castleTarget); a slice that grows taller than that (a key placed high in its section, rests, a long module) can climb
@@ -311,12 +353,27 @@ public final class CourseGenerator {
     }
 
     /** Appends modules until the last platform reaches height {@code targetY}. */
+    /**
+     * How high {@code e} is above the route one revolution back at the same arc (this slice's route and the previous slice's, which ghostElems holds),
+     * or +infinity where nothing lies a revolution back (the first revolution of the climb). Positions are unwrapped arcs, so a revolution back is
+     * {@code s - circumference}; the route element nearest that arc (within 8 m) stands for it.
+     */
+    private float layerGap(Element e) {
+        float want = e.s - c.circumference, best = 8f, y = Float.NaN;
+        for (int i = 0; i < c.size(); i++) { Element f = c.get(i); if (f.anchor >= 0) continue; float d = Math.abs(f.s - want); if (d < best) { best = d; y = f.y; } }
+        for (Element f : ghostElems) { if (f.anchor >= 0) continue; float d = Math.abs(f.s - want); if (d < best) { best = d; y = f.y; } }
+        return Float.isNaN(y) ? Float.POSITIVE_INFINITY : e.y - y;
+    }
+
+    /** Plain modules placed since the last structure, as {elements, hazards} before each (see extend; closeSlice can also undo one). */
+    private final java.util.ArrayDeque<int[]> undo = new java.util.ArrayDeque<>();
+
     private void extend(float targetY) {
         if (castleTarget > 0f && !castleDone) targetY = Math.max(targetY, castleTarget + (exactCastle ? 8f : 6f));
         int sinceRest = 0, backtracks = 0;
         // local backtracking (2026-10-26): plain modules placed since the last structure (rest, castle, fork, balance conveyor), as {elements, hazards}
         // before each; a dead end undoes up to two of them and builds on with fresh choices instead of discarding the whole section
-        java.util.ArrayDeque<int[]> undo = new java.util.ArrayDeque<>(); int undoneHere = 0;
+        int undoneHere = 0;
         float lastRestY = c.get(c.size() - 1).y, nextGap = T.gemSpacing * r(0.85f, 1.15f);      // red-gem checkpoints at even stretches of height, each with a little random give
         while (c.get(c.size() - 1).y < targetY || (beltSawY > 0f && !beltSawDone && c.get(c.size() - 1).y < beltSawY + 40f)) {      // (a balance conveyor that could not be proven yet gets up to 40 m more tries)
             Element last = c.get(c.size() - 1);
@@ -341,7 +398,7 @@ public final class CourseGenerator {
             // the spiral pitch controller (pick): while the route lags the climb a revolution needs, vertical modules come first; a lagging route brings the
             // next revolution down onto this one, after which every module fails the layer rule (NGH 2d4388a: "cannot extend course"). The safety-pressure
             // rules below (deferred Frost hazards, plain-pick pressure, threat fallback) therefore wait while it lags.
-            boolean lagging = last.y - T.spiralPitch * (last.s - 4f) / c.circumference < -2f;
+            boolean lagging = layerGap(last) < T.layerGapMin;
             if (deferredHaz != null && !last.wet() && !lagging) { k = deferredHaz; deferredHaz = null; }          // a hazard the Frost world's rain displaced comes on the next dry platform instead of being lost
             boolean clubTarget = false;
             if (clubBoost > 0) { clubBoost--; k = rnd.nextBoolean() ? Kind.TRAP : Kind.HAZ; clubTarget = true; }      // Build 71 (owner): a club was just placed - the next few modules give it crabs and bees to hit
@@ -1020,7 +1077,7 @@ public final class CourseGenerator {
     /** All earlier elements that matter for spiral-layer clearance: this working course plus the previous slice. */
     private boolean clashesWithOtherLayers(Element e, int selfIdx) {
         for (int i = 0; i < c.size(); i++) { if (i != selfIdx && c.get(i) != e && layersClash(c, e, c.get(i))) return true; }
-        for (Element g : ghostElems) if (layersClash(c, e, g)) return true;
+        for (Element g : ghostElems) if (ghostClash(e, g)) return true;
         return false;
     }
 
@@ -1040,7 +1097,8 @@ public final class CourseGenerator {
                 if (i < rs && e.isPlatform() && Math.abs(d.s - e.s) < d.w / 2f + e.halfW() + 0.3f && d.y > e.y + 0.5f && d.y < e.y + 3.9f) { decoyWhy = 1; return false; }   // Build 79: never a ceiling over a route platform (a left-hand spur hung 2.6 m over the route and blocked its jump: EndlessTest seed 224)
             } else if (fork ? forkLayersClash(d, e) : layersClash(c, d, e)) { decoyWhy = 2; return false; }
         }
-        for (Element g : ghostElems) if (layersClash(c, d, g)) { decoyWhy = 3; return false; }
+        for (Element g : ghostElems) if (ghostClash(d, g)) { decoyWhy = 3; return false; }
+        if (contReserve != null && layersClash(c, contReserve, d)) { decoyWhy = 6; return false; }      // the next slice's first step stays clear (closeSlice)
         // never in the flight corridor of any route pad or spring, in this revolution or another: a launch rises up to ~8.5 m and drifts up to
         // ~9 m with the run-up it was reached at, so a branch, dead end or key-room platform there catches the climber (OfficialRunTest seed 7
         // slice 44: a fork branch one revolution up, 7 m over a spring and 8.4 m ahead, outside the 4.5 m layer window; the spring's link was proven
@@ -1159,6 +1217,17 @@ public final class CourseGenerator {
         if (!e.isPlatform() || !f.isPlatform()) return false;
         return Math.abs(e.y - f.y) < (launches(e) || launches(f) ? 9.5f : PLAIN_LAYER_DY);   // no trampoline shortcuts between layers
     }
+    /**
+     * The layer rule against the previous slice ({@link #ghostElems}). The relaxed attempts of a slice (see chunkIn) waive only its shortcut spacing
+     * (4 m between plain platforms, 9.5 m where one launches): bodies of different revolutions stay clear of each other, as everywhere.
+     */
+    private boolean ghostClash(Element e, Element g) { return relaxed ? layersBodiesClash(c, e, g) : layersClash(c, e, g); }
+    /** The physical part of {@link #layersClash}: the bodies (with standing room) of two different revolutions overlap. */
+    static boolean layersBodiesClash(Course c, Element e, Element f) {
+        if (Math.abs(e.s - f.s) < c.circumference * 0.5f) return false;
+        if (Math.abs(c.dsWrap(e.s, f.s)) > arcHalf(e) + arcHalf(f) + 2.5f) return false;
+        return vLo(e) - 1.5f < vHi(f) && vHi(e) + 1.5f > vLo(f);
+    }
     /** Shortcut spacing between plain fixed platforms of different revolutions (see {@link #layersClash}). */
     static final float PLAIN_LAYER_DY = 4f;
     /** A platform that can throw the climber well above a jump, or carry them: these keep the full 9.5 m between revolutions. */
@@ -1188,7 +1257,7 @@ public final class CourseGenerator {
     private boolean clearOfOtherLayers(int idx) {
         Element e = c.get(idx);
         for (int i = 0; i < idx - 3; i++) if (layersClash(c, e, c.get(i))) { lastClash = c.get(i); lastClashGhost = false; return false; }
-        for (Element g : ghostElems) if (layersClash(c, e, g)) { lastClash = g; lastClashGhost = true; return false; }
+        for (Element g : ghostElems) if (ghostClash(e, g)) { lastClash = g; lastClashGhost = true; return false; }
         return true;
     }
     private Element lastClash; private boolean lastClashGhost;      // diagnostics: what the last refused element ran into
@@ -1335,6 +1404,21 @@ public final class CourseGenerator {
     private boolean commit(List<Element> es, List<Element> hz, float minMargin) {
         int n0 = c.size(), h0 = c.hazards.size();
         final int[] w0 = {failLayer, failHaz, failPlan, failWindow, failConflict, failThreat};
+        // Geometry first (2026-10-26, owner directive: PUNISHER seed 2 slice 51 spent most of its 62 s proving the links before modules that the
+        // spiral-layer rule then refused). The layer, hazard-placement, saw/creature and protected-row checks read only the geometry, with the module in
+        // place exactly as below, and none of them reads or changes what the proofs of the earlier links compute (no random numbers, no course state). So
+        // they run before those proofs: a module they refuse is refused exactly as before, with the same counters, without the planner runs. The same
+        // checks run again below with the module added (unchanged code path); they pass again there, as nothing between changes the course.
+        for (Element e : es) c.add(e);
+        for (Element h : hz) c.hazards.add(h);
+        if (!geometryOk(n0, hz)) {
+            rollbackTo(n0, h0);
+            hazardTried += hz.isEmpty() ? 0 : 1;
+            crabWhy(hz, false, w0);
+            PRECHECK_REFUSED.incrementAndGet();
+            return false;
+        }
+        rollbackTo(n0, h0);
         int from = n0 - 1;
         // Every link a new hazard can touch is proven with it there: a hazard on the platform the previous link lands on touches that link too (a cannon
         // fires across it; a saw on it sweeps the landing: seed 3 slice 16, a saw from the next module cut a saw link to 0.36), and a creature also the
@@ -1362,16 +1446,7 @@ public final class CourseGenerator {
         }
         for (Element e : es) c.add(e);
         for (Element h : hz) c.hazards.add(h);
-        boolean ok = true;
-        int clashAt = -1;
-        for (int i = n0; i < c.size() && ok; i++) { ok = clearOfOtherLayers(i); if (!ok) clashAt = i; }
-        if (!ok) failLayer++;
-        if (!ok) { boolean cr = false; for (Element h : hz) if (h.type == Element.Type.CRAB) cr = true;
-            if (cr) { Element e = c.get(clashAt), f = lastClash; boolean body = vLo(e) - 1.5f < vHi(f) && vHi(e) + 1.5f > vLo(f);
-                CRABCLASH[(f.anchor >= 0 ? 2 : 0) + (body ? 0 : 1) + (lastClashGhost ? 4 : 0)]++; } }
-        for (Element h : hz) { if (!ok) break; if (h.type == Element.Type.CLUB) continue; ok = hazardOk(h, ownerOf(h)); if (!ok) failHaz++; }
-        if (ok && !sawsClearOfCreatures(hz)) { ok = false; failHaz++; }
-        if (ok && !protectedRowsOk(n0)) { ok = false; failHaz++; }
+        boolean ok = geometryOk(n0, hz);
         Sim prevStart = null; Autopilot.Result prevRes = null;
         for (int i = from; i < c.size() - 1 && ok; i++) {
             if (i < n0 - 1 && !heldBefore[i - from]) { prevStart = null; prevRes = null; continue; }
@@ -1423,13 +1498,34 @@ public final class CourseGenerator {
         if (!ok) { while (c.size() > n0) c.elements.remove(c.size() - 1); while (c.hazards.size() > h0) c.hazards.remove(c.hazards.size() - 1); }
         else { for (int i = Math.max(0, n0 - 1); i < c.size() - 1; i++) setLinkNeed(i, minMargin); if (!hz.isEmpty()) hazardsPlaced += hz.size(); }
         hazardTried += hz.isEmpty() ? 0 : 1;
+        crabWhy(hz, ok, w0);
+        return ok;
+    }
+
+    /** The module's geometry, with it added from element {@code n0}: clear of other spiral layers, hazards placed clear, saws out of creatures' reach, protected rows kept (counts its refusal). */
+    private boolean geometryOk(int n0, List<Element> hz) {
+        boolean ok = true;
+        int clashAt = -1;
+        for (int i = n0; i < c.size() && ok; i++) { ok = clearOfOtherLayers(i); if (!ok) clashAt = i; }
+        if (!ok) failLayer++;
+        if (!ok) { boolean cr = false; for (Element h : hz) if (h.type == Element.Type.CRAB) cr = true;
+            if (cr) { Element e = c.get(clashAt), f = lastClash; boolean body = vLo(e) - 1.5f < vHi(f) && vHi(e) + 1.5f > vLo(f);
+                CRABCLASH[(f.anchor >= 0 ? 2 : 0) + (body ? 0 : 1) + (lastClashGhost ? 4 : 0)]++; } }
+        for (Element h : hz) { if (!ok) break; if (h.type == Element.Type.CLUB) continue; ok = hazardOk(h, ownerOf(h)); if (!ok) failHaz++; }
+        if (ok && !sawsClearOfCreatures(hz)) { ok = false; failHaz++; }
+        if (ok && !protectedRowsOk(n0)) { ok = false; failHaz++; }
+        return ok;
+    }
+
+    private void crabWhy(List<Element> hz, boolean ok, int[] w0) {
         boolean crabs = false; for (Element h : hz) if (h.type == Element.Type.CRAB) crabs = true;
         if (crabs) {          // diagnostics only: why modules carrying crabs are refused
             CRABWHY[0]++;
             CRABWHY[ok ? 7 : failLayer != w0[0] ? 1 : failHaz != w0[1] ? 2 : failPlan != w0[2] ? 3 : failWindow != w0[3] ? 4 : failConflict != w0[4] ? 5 : failThreat != w0[5] ? 6 : 0]++;
         }
-        return ok;
     }
+    /** Diagnostics: modules refused by their geometry before any link was proven (see commit). */
+    public static final java.util.concurrent.atomic.AtomicInteger PRECHECK_REFUSED = new java.util.concurrent.atomic.AtomicInteger();
 
     /**
      * A standing start at a moment when standing there is safe. Proofs start at time 0; on a platform inside a cannon's reach (its balls fly 14 m past
@@ -1497,11 +1593,13 @@ public final class CourseGenerator {
         if (zone >= 1) { w[Kind.SEESAW.ordinal()] = 4f; w[Kind.BRIDGE.ordinal()] = 4f; }
         else w[Kind.BRIDGE.ordinal()] = 2f;
         if (inten > 0f || (!endless && last.y > T.courseHeight * 0.18f)) { w[Kind.HAZ.ordinal()] = 3f + 9f * inten + LATE_HAZ * P.lateHazScale * lt; if (zone >= 1) w[Kind.SPRING.ordinal()] = 2f + 2f * inten; w[Kind.TRAP.ordinal()] = 2f + 5f * inten + LATE_TRAP * P.lateHazScale * lt; }
-        // keep the spiral pitch healthy: if climbing lags the arc travelled, prefer vertical modules
-        // spiral pitch controller: track y = pitch * (arc travelled / circumference) so successive revolutions stay a fixed distance apart
-        float guide = T.spiralPitch * (last.s - 4f) / c.circumference;
-        float dev = last.y - guide;
-        boolean lagging = dev < -2f, rushing = dev > 7f;
+        // spiral pitch controller: keep successive revolutions a healthy distance apart. Until 2026-10-26 it compared the height with
+        // pitch x (arc / circumference) in the slice's own frame, whose arc restarts every slice (whole laps) but whose height only every 500 m:
+        // past a slice's first ~60 m of a 500 m frame it always read "rushing" and damped the vertical modules, so the route could wind round
+        // without climbing (PUNISHER seed 2 slice 48 closed 1.4 m above its own previous revolution, and slice 49 failed twelve attempts on it).
+        // It now measures what it controls: the height above the route one revolution back (layerGap), in any frame.
+        float gap = layerGap(last);
+        boolean lagging = gap < T.layerGapMin, rushing = gap > T.layerGapMax;
         for (Kind k : Kind.values()) {
             boolean vert = k == Kind.PAD || k == Kind.ROPE || k == Kind.MOVER_V || k == Kind.STAIRS || k == Kind.ELEV_FALL;
             if (lagging && !vert) w[k.ordinal()] *= 0.12f;

@@ -29,6 +29,9 @@ public class Tuning {
     public float hazardStartY = 90f, hazardRampY = 1400f;   // hazards appear from hazardStartY and reach full frequency hazardRampY later
     public float minTimingWindow = 0.2f;     // fraction of a hazard's cycle that must leave a workable move at the start of the ramp (relaxes slightly at full intensity)
     public float spiralPitch = 24f;          // height gained per revolution, enforced by the generator
+    /** The spiral pitch controller (2026-10-26): the height of the route above itself one revolution back, at the same arc, is kept between these
+     *  (below the minimum only vertical modules are favoured, above the maximum vertical ones are damped). 9.5 m keeps a launcher's layer spacing. */
+    public float layerGapMin = 10f, layerGapMax = 16f;
     public int restEvery = 5, checkpointEveryRests = 1;
     public float minLinkMargin = 0.07f;
     public float assistJumpForgiveness = 0.08f, assistSlowFactor = 0.8f;

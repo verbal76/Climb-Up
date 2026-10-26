@@ -7,9 +7,10 @@ import java.util.*;
 import org.junit.Test;
 
 /**
- * Side structures. Until Build 79 these were long dead-end spurs; the owner directive of 2026-10-24 (Build 80) replaced dead ends with forks whose branch
- * reconnects to the route (and later "no stranded platforms or dead ends"), so this test now holds the current rule: forks exist, every branch rejoins the
- * route further on, nothing off the route is a long dead end, branches step up and down to throw the climber off, and the route itself sometimes steps
+ * Side structures. Until Build 79 these were long dead-end spurs, some leaving to the left; the owner directive of 2026-10-24 (Build 80) replaced them with
+ * decoy routes (forks, and nested sub-forks in the harder modes) that all reconnect to the main route: they still get you there, but by a longer way that
+ * costs completion time (owner, 2026-10-26). This test holds that rule: forks exist, every branch rejoins the route further on and is longer than the
+ * route it bypasses, nothing off the route is a long dead end, branches step up and down to throw the climber off, and the route itself sometimes steps
  * down. (The Build 79 left/right count no longer applies: a branch runs ahead to its rejoin by construction.) Completability is proven by the generator
  * (fork proofs) and the solver suites.
  */
@@ -23,8 +24,16 @@ public class DeadEndTest {
                 Course c = CourseGenerator.chunk(seed, k, prev, t); prev = c; slices++;
                 for (int[] f : c.forks) {
                     forks++;
-                    assertTrue("a fork's branch rejoins the route further on (take-off " + f[0] + ", rejoin " + f[3] + ")", f[3] > f[0] && f[3] < c.routeSize());
+                    boolean sub = f[0] >= c.routeSize();          // a sub-fork leaves from another branch (PUNISHER / NGH nesting)
+                    assertTrue("a fork's branch rejoins the route further on (take-off " + f[0] + ", rejoin " + f[3] + ")", f[3] < c.routeSize() && (sub || f[3] > f[0]));
                     assertTrue("a fork's branch lies off the route", f[1] >= c.routeSize() && f[2] >= 1);
+                    if (!sub) {          // owner (2026-10-26): a fork still gets you there, by a longer way that costs completion time
+                        double branch = 0, route = 0; Element p = c.get(f[0]);
+                        for (int i = f[1]; i < f[1] + f[2]; i++) { branch += Math.hypot(c.dsWrap(p.s, c.get(i).s), c.get(i).y - p.y); p = c.get(i); }
+                        branch += Math.hypot(c.dsWrap(p.s, c.get(f[3]).s), c.get(f[3]).y - p.y);
+                        for (int i = f[0]; i < f[3]; i++) { Element u = c.get(i), v = c.get(c.nextRoute(i)); route += Math.hypot(c.dsWrap(u.s, v.s), v.y - u.y); }
+                        assertTrue(String.format("a fork's branch is the longer way (branch %.1f m, route %.1f m, take-off %d)", branch, route, f[0]), branch > route);
+                    }
                     boolean up = false, down = false; float py = c.get(f[0]).y;
                     for (int i = f[1]; i < f[1] + f[2]; i++) { Element d = c.get(i); if (d.y > py + 0.05f) up = true; if (d.y < py - 0.05f) down = true; py = d.y; }
                     if (up && down) upAndDown++;

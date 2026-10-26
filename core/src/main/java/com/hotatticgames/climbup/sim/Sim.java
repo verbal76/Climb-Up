@@ -48,6 +48,8 @@ public final class Sim {
     public boolean deferRespawn, respawnPending;    // a managed world window: the respawn is completed by Tower.maintain
     public float floorOverride = Float.NaN;          // managed window: the height of the lowest platform of the WHOLE tower (the resident part is not all of it)
     public boolean teleported;       // set when the last step moved the player discontinuously (respawn)
+    /** Planner trials only (see MotionCache): the planning call's position cache, its generation, and the trial's step count. Null everywhere else. */
+    MotionCache motion; int motionGen, mstep;
     public float assistForgive;      // extra coyote/buffer seconds from assists
 
     // element dynamic state
@@ -230,6 +232,7 @@ public final class Sim {
         clubTime = o.clubTime; swingT = o.swingT; shoveCd = o.shoveCd; crabS = o.crabS; crabY = o.crabY; keys = o.keys; keysFree = o.keysFree; featDone = o.featDone.clone(); aimAng = o.aimAng.clone(); aimFireT = o.aimFireT.clone(); aimArmed = o.aimArmed.clone(); crabPos = o.crabPos.clone(); crabVel = o.crabVel.clone(); crabMode = o.crabMode.clone(); crabStuck = o.crabStuck.clone(); crabCool = o.crabCool.clone(); crabTurn = o.crabTurn.clone(); crabSeen = o.crabSeen.clone(); mobState = o.mobState.clone(); mobT = o.mobT.clone(); mobS = o.mobS.clone(); mobY = o.mobY.clone(); mobDir = o.mobDir.clone(); mobTgt = o.mobTgt.clone(); mobSeen = o.mobSeen.clone(); deckOff = o.deckOff.clone(); crabJump = o.crabJump.clone(); crabFrom = o.crabFrom.clone(); crabFromDeck = o.crabFromDeck.clone(); crabFall = o.crabFall.clone(); aimYaw = o.aimYaw.clone(); squashT = o.squashT; slipCd = o.slipCd; finishedRun = o.finishedRun; lastGateNo = o.lastGateNo; lastKeyColor = o.lastKeyColor; lastGateColor = o.lastGateColor;
         act = o.act; hz = o.hz; winLo = o.winLo; winHi = o.winHi; invuln = o.invuln; hits = o.hits; hitS = o.hitS; hitY = o.hitY;
         humanHold = o.humanHold; heldX = o.heldX; heldY = o.heldY; heldXT = o.heldXT; heldYT = o.heldYT;
+        motion = o.motion; motionGen = o.motionGen; mstep = o.mstep;
     }
 
     public Sim copy() { return new Sim(this); }
@@ -459,6 +462,7 @@ public final class Sim {
         float dt = DT;
         ps0 = s; py0 = y; teleported = false;
         time += dt;
+        final int mk = mstep++;
         if (course.size() > es0.length || course.hazards.size() > featDone.length) ensureCapacity();
         int n = course.size();
         int cnt0 = act == null ? n : act.length;
@@ -467,8 +471,14 @@ public final class Sim {
             es0[i] = es1[i]; ey0[i] = ey1[i]; edy[i] = 0f;
             Element e = course.get(i);
             if (e.isMoving()) {
-                es1[i] = e.sAt(time); ey1[i] = e.yAt(time); edy[i] = e.yOffsetAt(time) - e.yOffsetAt(time - dt);
-                if (e.type == Element.Type.MOVE_Z) gone[i] = Math.abs(e.zAt(time)) > Element.Z_REACH && !(mode == Mode.GROUND && onElem == i);   // out of your plane: nothing to land on
+                int o = motion == null ? -1 : motion.elAt(motionGen, i, e, mk, time);
+                float z;
+                if (o >= 0) { float[] v = motion.elVals(i); es1[i] = v[o]; ey1[i] = v[o + 1]; edy[i] = v[o + 2]; z = v[o + 3]; }
+                else {
+                    es1[i] = e.sAt(time); ey1[i] = e.yAt(time); edy[i] = e.yOffsetAt(time) - e.yOffsetAt(time - dt); z = e.type == Element.Type.MOVE_Z ? e.zAt(time) : 0f;
+                    if (motion != null) motion.elPut(motionGen, i, e, mk, time, es1[i], ey1[i], edy[i], z);
+                }
+                if (e.type == Element.Type.MOVE_Z) gone[i] = Math.abs(z) > Element.Z_REACH && !(mode == Mode.GROUND && onElem == i);   // out of your plane: nothing to land on
             }
             else if (e.type == Element.Type.SEESAW) {          // surface height is reported at the player's own position along the plank
                 float hw = e.halfW(), x = Math.max(-hw, Math.min(hw, course.dsWrap(s, es1[i])));
@@ -845,8 +855,20 @@ public final class Sim {
      * CRAB_TURN seconds to turn round when you are behind it), kept on its own platform; when it loses you it walks back onto the sweep and resumes it.
      * Driven by sim state alone, so it is deterministic and the generator's proofs and the autopilot (which hops it where it actually is) include the chase.
      */
+    /** Hazard {@code hi}'s arc, height and (crabs) facing on its sweep right now, through the planner's MotionCache when there is one: the offset of
+     *  the three values in {@link #hzv}. */
+    private int hzPose(int hi, Element e) {
+        int o = motion == null ? -1 : motion.hzAt(motionGen, hi, e, mstep - 1, time);
+        if (o >= 0) { hzv = motion.hzVals(hi); return o; }
+        float sa = e.sAt(time), ya = e.yAt(time), face = e.type == Element.Type.CRAB ? (e.amp * (float) StrictMath.cos(2 * Math.PI * time / e.period + e.phase) >= 0f ? 1f : -1f) : 0f;
+        if (motion != null) motion.hzPut(motionGen, hi, e, mstep - 1, time, sa, ya, face);
+        hzTmp[0] = sa; hzTmp[1] = ya; hzTmp[2] = face; hzv = hzTmp; return 0;
+    }
+    private float[] hzv; private final float[] hzTmp = new float[3];
+
     private float stepCrab(Element e, int idx) {
-        float patrol = e.sAt(time);
+        int po = hzPose(idx, e);
+        float patrol = hzv[po], sweepFace = hzv[po + 2];
         if (idx >= crabPos.length) return patrol;
         int a0 = e.anchor, off = Math.round(deckOff[idx]), j = a0 + off;
         if (off != 0 && (j < 0 || j >= course.size())) { off = 0; j = a0; deckOff[idx] = 0f; crabJump[idx] = -1f; crabMode[idx] = 2; }     // its deck left the course window: back home
@@ -879,7 +901,7 @@ public final class Sim {
             else if (off != 0) { int back = off > 0 ? -1 : 1; if (canHop(j, j + back)) follow = back * 3; }      // lost you away from home: it heads back
         }
         // the way it faces: along its sweep, else the way it last moved (or was turned)
-        float face = crabMode[idx] == 0 && off == 0 ? (e.amp * (float) StrictMath.cos(2 * Math.PI * time / e.period + e.phase) >= 0f ? 1f : -1f) : (crabVel[idx] >= 0f ? 1f : -1f);
+        float face = crabMode[idx] == 0 && off == 0 ? sweepFace : (crabVel[idx] >= 0f ? 1f : -1f);
         boolean turning = false;
         float lim = deck != null ? Math.max(0f, deck.halfW() - CRAB_EDGE) : 1e9f;
         if (sees || follow == 1 || follow == -1 || follow == 3 || follow == -3) {
@@ -1092,10 +1114,12 @@ public final class Sim {
             }
             if (!e.lethalAt(time)) continue;
             float cs = carryS(e, time), cyOff = carryY(e, time);      // ride the platform this hazard sits on (both are 0 unless the platform is a mover)
-            float dx = Math.abs(course.dsWrap(e.sAt(time) + cs, s));
+            int po = hzPose(hz == null ? k : hz[k], e);
+            float ePosY = hzv[po + 1];
+            float dx = Math.abs(course.dsWrap(hzv[po] + cs, s));
             float r = e.discR();
             if (r > 0f) {
-                float ddx = Math.max(0f, dx - hw), cy = e.yAt(time) + cyOff;
+                float ddx = Math.max(0f, dx - hw), cy = ePosY + cyOff;
                 float ddy = cy < lo ? lo - cy : (cy > hi ? cy - hi : 0f);
                 if (ddx * ddx + ddy * ddy < r * r) return true;
             } else if (e.type == Element.Type.SPIKE_TRAP) {

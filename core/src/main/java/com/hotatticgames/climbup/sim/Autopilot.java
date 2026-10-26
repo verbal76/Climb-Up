@@ -54,11 +54,14 @@ public final class Autopilot {
     static final class GroundPolicy implements Policy {
         final int a, b, dir, steerMode; final float wait, offset, hold; float speed = 1f;
         float t, t2, holdT; int phase;
+        /** Shared-wait probe (see {@link WaitPrefix}): stops, touching nothing, at the first step whose action depends on more than the wait. */
+        boolean probe, diverged;
         GroundPolicy(int a, int b, int dir, float wait, float offset, float hold, int steerMode) {
             this.a = a; this.b = b; this.dir = dir; this.wait = wait; this.offset = offset; this.hold = hold; this.steerMode = steerMode;
         }
         public void act(Sim s, InputState in) {
             if (s.mode == Sim.Mode.LEDGE || s.mode == Sim.Mode.PULLUP) { in.moveY = 1f; return; }
+            if (probe && !(phase == 0 && s.mode == Sim.Mode.GROUND && t < wait)) { diverged = true; return; }
             if (phase == 0) {
                 if (s.mode != Sim.Mode.GROUND) { phase = 2; }
                 else if (t < wait) { t += Sim.DT; return; }
@@ -337,25 +340,89 @@ public final class Autopilot {
     /** Like {@link #trial} but returns the state at the moment of success (null on failure). */
     static Sim trialEnd(Sim base, int a, PolicyFactory f, float limit) { return trialEnd(base, a, -1, f, limit); }
 
-    static Sim trialEnd(Sim base, int a, int tgt, PolicyFactory f, float limit) {
+    static Sim trialEnd(Sim base, int a, int tgt, PolicyFactory f, float limit) { return trialEnd(base, a, tgt, f, limit, (MotionCache) null); }
+
+    private static Sim trialEnd(Sim base, int a, int tgt, PolicyFactory f, float limit, MotionCache mc) {
+        Sim s = trialStart(base, a, tgt, mc);
+        return trialRun(s, make(f), a, tgt, s.setbacks(), 0, (int) (limit / Sim.DT));
+    }
+
+    private static Sim trialStart(Sim base, int a, int tgt, MotionCache mc) {
         Sim s = base.copy(); s.humanHold = HUMAN_HOLD;
+        s.motion = mc; s.motionGen = mc == null ? 0 : mc.gen(); s.mstep = 0;
         if (tgt >= 0) s.setWindowNear(anchorIdx(s.course, a) - 2, anchorIdx(s.course, a) + 6, a, tgt);     // plus earlier route platforms the climb passed that hang over a side branch
         else s.setWindow(a - 1, a + 6);
-        Policy p = make(f);
+        return s;
+    }
+
+    /** Steps {@code from..n-1} of a trial; {@code s} has already run steps 0..from-1 of it. */
+    private static Sim trialRun(Sim s, Policy p, int a, int tgt, int fallsBefore, int from, int n) {
         InputState in = new InputState();
-        int fallsBefore = s.setbacks();
-        float floorY = (tgt >= 0 ? Math.min(s.course.get(a).y, s.course.get(tgt).y) : Math.min(s.course.get(a).y, s.course.get(Math.min(s.course.routeSize() - 1, s.course.nextRoute(a))).y)) - 4.5f;
-        int n = (int) (limit / Sim.DT);
-        for (int i = 0; i < n; i++) {
+        float floorY = trialFloor(s.course, a, tgt);
+        for (int i = from; i < n; i++) {
             in.clear();
             p.act(s, in);
             s.step(in);
-            if (s.setbacks() != fallsBefore) return null;
-            if (tgt >= 0 ? succeededTo(s, tgt) : succeeded(s, a)) return tgt >= 0 && !staysOn(s, tgt) ? null : s;
-            if (tgt < 0 && s.mode == Sim.Mode.GROUND && s.onElem >= 0 && (s.onElem < a || !onRoute(s.course, s.onElem))) return null;   // fell back, or onto a dead end
-            if (s.mode == Sim.Mode.AIR && s.vy < 0 && s.y < floorY) return null;
+            int end = trialEnded(s, a, tgt, fallsBefore, floorY);
+            if (end != 0) return end > 0 ? s : null;
         }
         return null;
+    }
+
+    private static float trialFloor(Course c, int a, int tgt) { return (tgt >= 0 ? Math.min(c.get(a).y, c.get(tgt).y) : Math.min(c.get(a).y, c.get(Math.min(c.routeSize() - 1, c.nextRoute(a))).y)) - 4.5f; }
+
+    /** After a trial step: 1 succeeded, -1 failed, 0 carry on. */
+    private static int trialEnded(Sim s, int a, int tgt, int fallsBefore, float floorY) {
+        if (s.setbacks() != fallsBefore) return -1;
+        if (tgt >= 0 ? succeededTo(s, tgt) : succeeded(s, a)) return tgt >= 0 && !staysOn(s, tgt) ? -1 : 1;
+        if (tgt < 0 && s.mode == Sim.Mode.GROUND && s.onElem >= 0 && (s.onElem < a || !onRoute(s.course, s.onElem))) return -1;   // fell back, or onto a dead end
+        if (s.mode == Sim.Mode.AIR && s.vy < 0 && s.y < floorY) return -1;
+        return 0;
+    }
+
+    /**
+     * Speed only, same results (2026-10-26, generation performance): every ground move that waits {@code wait} seconds before its run-up stands still
+     * for exactly the same steps whatever its offset, hold and steering (the reflexes it runs under react to creatures the same way, and a reflex that
+     * interrupts the wait restarts it the same way). So the wait is simulated once per wait and each move carries on from where it ends, instead of
+     * every one of the 24 moves of a wait repeating it. A trial resumed here runs exactly the steps the whole trial would have.
+     */
+    static final class WaitPrefix {
+        final Sim base; final int a, b, tgt, dir, n; final MotionCache mc;
+        private final java.util.HashMap<Float, Object[]> done = new java.util.HashMap<>();          // wait -> {state where the moves part (null: the trial ended during the wait), step, policy clock, ended state}
+        WaitPrefix(Sim base, int a, int b, int tgt, int dir, float limit) { this.base = base; this.a = a; this.b = b; this.tgt = tgt; this.dir = dir; this.n = (int) (limit / Sim.DT); this.mc = MotionCache.open(n); }
+
+        Sim trial(GroundPolicy shape, PolicyFactory f) {
+            Object[] pre = done.computeIfAbsent(shape.wait, this::prefix);
+            if (pre[0] == null) return pre[3] == null ? null : ((Sim) pre[3]).copy();
+            Sim s = ((Sim) pre[0]).copy();
+            Reflex p = (Reflex) make(f);
+            ((GroundPolicy) p.inner).t = (Float) pre[2];
+            return trialRun(s, p, a, tgt, (Integer) pre[4], (Integer) pre[1], n);
+        }
+
+        private Object[] prefix(float wait) {
+            Sim s = trialStart(base, a, tgt, mc);
+            int fallsBefore = s.setbacks();
+            float floorY = trialFloor(s.course, a, tgt);
+            Reflex p = (Reflex) make(() -> { GroundPolicy g = new GroundPolicy(a, b, dir, wait, 0f, 0f, 0); g.probe = true; return g; });
+            InputState in = new InputState();
+            for (int i = 0; i < n; i++) {
+                in.clear();
+                p.act(s, in);
+                GroundPolicy g = (GroundPolicy) p.inner;
+                if (g.diverged) return new Object[]{s, i, g.t, null, fallsBefore};
+                s.step(in);
+                int end = trialEnded(s, a, tgt, fallsBefore, floorY);
+                if (end != 0) return new Object[]{null, i, 0f, end > 0 ? s : null, fallsBefore};
+            }
+            return new Object[]{null, n, 0f, null, fallsBefore};
+        }
+    }
+
+    /** The trial for candidate {@code f}, through the shared wait when it is a plain waiting ground move. */
+    private static Sim trialEnd(Sim base, int a, int tgt, PolicyFactory f, float limit, WaitPrefix wp) {
+        if (wp != null) { Policy probe = f.create(); if (probe instanceof GroundPolicy && ((GroundPolicy) probe).wait > 0f) return wp.trial((GroundPolicy) probe, f); }
+        return trialEnd(base, a, tgt, f, limit, wp == null ? null : wp.mc);
     }
 
     /** True if, after finishing a pull-up, the planner can also solve the next link from this state. */
@@ -456,18 +523,19 @@ public final class Autopilot {
             }
         }
         PolicyFactory firstOk = null;
+        WaitPrefix wp = new WaitPrefix(base, a, b, tgt, dir, 4.5f + (c.get(a).crumbles() ? 0 : 6f));
         for (int ci = 0; ci < cands.size(); ci++) {
             PolicyFactory f = cands.get(ci);
             r.trials++;
             float limit = 4.5f + (c.get(a).crumbles() ? 0 : 6f);
             if (lookahead) {
-                Sim end = trialEnd(base, a, tgt, f, limit);
+                Sim end = trialEnd(base, a, tgt, f, limit, wp);
                 if (end == null) continue;
                 r.successes++;
                 if (firstOk == null) firstOk = f;
                 if (!r.ok && leavesGoodState(end, a)) { r.ok = true; r.factory = f; }
                 if (r.ok && !measureMargin) break;
-            } else if (trialEnd(base, a, tgt, f, limit) != null) {
+            } else if (trialEnd(base, a, tgt, f, limit, wp) != null) {
                 r.successes++;
                 if (ci < group.size()) groupWins[group.get(ci)]++;
                 if (!r.ok) { r.ok = true; r.factory = f; }
@@ -477,7 +545,7 @@ public final class Autopilot {
         if (!r.ok && slowCands != null) {
             for (PolicyFactory f : slowCands) {
                 r.trials++;
-                Sim end = trialEnd(base, a, tgt, f, 4.5f + (c.get(a).crumbles() ? 0 : 6f));
+                Sim end = trialEnd(base, a, tgt, f, 4.5f + (c.get(a).crumbles() ? 0 : 6f), wp);
                 if (end == null) continue;
                 r.successes++;
                 if (!lookahead || leavesGoodState(end, a)) { r.ok = true; r.factory = f; break; }      // while playing, a slow move that also suits the next link beats a working one that does not

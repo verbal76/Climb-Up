@@ -84,12 +84,15 @@ public final class LaneReport {
                 GenTrace.Solve st = null; Autopilot.Report rep = null; double secs = Double.NaN; long sal = -1;
                 if (solve) {
                     st = new GenTrace.Solve(); GenTrace.SOLVE.set(st); long s0 = System.nanoTime(), sa = alloc();
-                    try { rep = Autopilot.run(f.c, t, 4000f); } catch (RuntimeException e) { rep = new Autopilot.Report(); rep.failInfo = "solver threw " + e; } finally { GenTrace.SOLVE.remove(); }
+                    try { rep = Autopilot.run(f.c, t, 4000f); } catch (RuntimeException e) { rep = new Autopilot.Report(); rep.failInfo = "solver threw " + e + " at " + frames(e); } finally { GenTrace.SOLVE.remove(); }
                     secs = (System.nanoTime() - s0) / 1e9; solveSeconds += secs; sal = sa < 0 ? -1 : alloc() - sa;
                     if (!rep.completed && (rep.failInfo == null || rep.failInfo.isEmpty())) rep.failInfo = derivedFailInfo(rep, st);
-                    solverSlices.add(new String[]{"" + k, f3(f.yBase + f.c.get(0).y), f3(f.yBase + f.c.get(f.c.routeSize() - 1).y), "" + rep.completed, "" + rep.links, "" + rep.failedLink, f3(rep.simTime), f3(rep.minMargin), "" + rep.worstLink, f3(secs), q(rep.failInfo)});
+                    solverSlices.add(new String[]{"" + k, f3(f.yBase + f.c.get(0).y), f3(f.yBase + f.c.get(f.c.routeSize() - 1).y), "" + rep.completed, "" + rep.links, "" + rep.failedLink, f3(rep.simTime), f3(rep.minMargin), "" + rep.worstLink, f3(secs), q(rep.failInfo), failClass(rep.completed, rep.failInfo)});
                 }
+                int nf = solverFailures.size();
                 measure(k, f, tr, rep, st);
+                if (rep != null && !rep.completed && solverFailures.size() == nf)          // every unsuccessful slice has a failure row, also when no route link was marked FAILED (a solver exception, an invalid link)
+                    solverFailures.add(new String[]{"" + k, "" + rep.failedLink, "-", "-", "-", f3(f.yBase + f.c.get(0).y), f3(f.yBase + f.c.get(f.c.routeSize() - 1).y), "" + castleOf(f.yBase + f.c.get(0).y), q(rep.failInfo)});
                 { long okN = 0, badN = 0; int bad = 0; for (long[] a : tr.attemptNanos) { if (a[2] == 1) okN += a[1]; else { badN += a[1]; bad++; } }
                   long acc = 0, rej = 0, fb = 0; int na = 0, nr = 0; for (GenTrace.Module m : tr.modules) { if (m.ok && m.attempt == tr.finalAttempt) { acc += m.nanos; na++; } else { rej += m.nanos; nr++; } if ("FALLBACK".equals(m.role)) fb += m.nanos; }
                   Runtime rt = Runtime.getRuntime();
@@ -347,6 +350,23 @@ public final class LaneReport {
     static double pct(List<Double> s, double p) { double i = p * (s.size() - 1); int lo = (int) Math.floor(i), hi = (int) Math.ceil(i); return s.get(lo) + (s.get(hi) - s.get(lo)) * (i - lo); }
 
     // ------------------------------------------------------------------ output
+    /** Failure classes for the reports (owner solver directive 2026-10-26): every unsuccessful slice falls in exactly one. */
+    static String failClass(boolean completed, String info) {
+        if (completed) return "completed";
+        String i = info == null ? "" : info.replace("\"", "");
+        if (i.startsWith("solver threw")) return "solver_exception";
+        if (i.startsWith("setback while executing")) return "route_link_failure";
+        if (i.startsWith("plan failed")) return "planning_failure";
+        if (i.startsWith("recover") || i.startsWith("detour") || i.startsWith("lost the route") || i.startsWith("stuck on a spike slab")) return "recovery_failure";
+        if (i.startsWith("stuck at one link")) return "knockback_loop";
+        if (i.contains("within 20 s") || i.contains("sim time")) return "timeout";
+        return "unknown";
+    }
+    static String frames(Throwable e) {
+        StringBuilder b = new StringBuilder(); int n = 0;
+        for (StackTraceElement f : e.getStackTrace()) if (f.getClassName().startsWith("com.hotatticgames") && n++ < 3) b.append(n > 1 ? " < " : "").append(f.getClassName().replaceAll(".*\\.", "")).append('.').append(f.getMethodName()).append(':').append(f.getLineNumber());
+        return b.toString();
+    }
     public void write(Path out, Map<String, String> meta) throws IOException {
         Files.createDirectories(out);
         String run = MODE[mode] + "-s" + seed;
@@ -380,12 +400,12 @@ public final class LaneReport {
             for (String[] m : modules) w.println(run + "," + String.join(",", m));
         }
         try (PrintWriter w = pw(out, "solver.csv")) {
-            w.println("run,slice,y0,y1,completed,plans,failed_link,sim_time_s,min_margin,worst_link,wall_seconds,fail_info");
+            w.println("run,slice,y0,y1,completed,plans,failed_link,sim_time_s,min_margin,worst_link,wall_seconds,fail_info,fail_class");
             for (String[] m : solverSlices) w.println(run + "," + String.join(",", m));
         }
         try (PrintWriter w = pw(out, "solver_failures.csv")) {
-            w.println("run,slice,from,to,from_type,to_type,y0,y1,castle,fail_info");
-            for (String[] m : solverFailures) w.println(run + "," + String.join(",", m));
+            w.println("run,slice,from,to,from_type,to_type,y0,y1,castle,fail_info,fail_class");
+            for (String[] m : solverFailures) w.println(run + "," + String.join(",", m) + "," + failClass(false, m[8]));
         }
         try (PrintWriter w = pw(out, "generation_failures.csv")) {
             w.println("run,slice,detail"); for (String[] m : sliceFailures) w.println(run + "," + String.join(",", m));

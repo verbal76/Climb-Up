@@ -600,13 +600,22 @@ public final class Autopilot {
         for (int q = 0; q < 24 && real.mode == Sim.Mode.GROUND && real.onElem == r; q++) { in.clear(); real.step(in); }
     }
     /** Knocked into the air by a bee or a crab (nothing to do with a planned move): steer back towards the platform we meant to stand on until something is under our feet. True if we landed on a route platform without a setback. */
+    /** Standing on a spike slab's top: the way off it, toward the middle of the platform the slab hangs over (onto its deck; walking on toward the route ahead
+     *  walked into whatever the next platform holds - NGH seed 2 slice 1, crabs on an intermediate platform, a 15 m fall). */
+    static float slabStepOff(Sim real) {
+        Course c = real.course; int p = c.hazards.get(real.onSlab).anchor;
+        if (p < 0 || p >= c.size()) return -real.facing;
+        float d = c.dsWrap(real.es1[p], real.s);
+        return Math.abs(d) < 0.3f ? -1f : Math.signum(d);
+    }
     static boolean recover(Sim real, int a, InputState in) {
         // a fall (back to the checkpoint) ends the recovery; another knock while still in the air does not: like a person, keep steering and land
         // (2026-10-26 campaign: four solver failures were a second bump during recovery, reported as "plan failed" mid-knock-back at 6.9/6.9)
         Course c = real.course; int f0 = real.falls;
-        for (int q = 0; q < 360 && real.mode != Sim.Mode.GROUND; q++) {
+        for (int q = 0; q < 360 && (real.mode != Sim.Mode.GROUND || (real.onElem < 0 && real.onSlab >= 0)); q++) {      // a spike slab's top is a surface, not the route: step off it onto its platform
             in.clear();
-            if (real.mode == Sim.Mode.LEDGE || real.mode == Sim.Mode.PULLUP) in.moveY = 1f;
+            if (real.mode == Sim.Mode.GROUND) in.moveX = slabStepOff(real);
+            else if (real.mode == Sim.Mode.LEDGE || real.mode == Sim.Mode.PULLUP) in.moveY = 1f;
             else if (real.mode == Sim.Mode.AIR) in.moveX = Math.max(-1f, Math.min(1f, 1.5f * c.dsWrap(real.es1[a], real.s)));
             real.step(in);
             if (real.falls != f0) return false;
@@ -668,6 +677,16 @@ public final class Autopilot {
             if (a == lastA) sameA++; else { lastA = a; sameA = 0; GenTrace.Solve st = GenTrace.SOLVE.get(); if (st != null) st.arrive(a, real.time, real.setbacks()); }      // (observe-only trace for reports)
             if (DBG) System.out.printf("loop a=%d same=%d mode=%s on=%d s=%.2f y=%.2f vx=%.2f vy=%.2f t=%.2f%n", a, sameA, real.mode, real.onElem, real.s, real.y, real.vx, real.vy, real.time);
             if (sameA > 30) { rep.failedLink = a; rep.simTime = real.time; rep.failInfo = "stuck at one link: knocked back again and again"; return rep; }
+            if (a < 0 || a >= c.routeSize()) { rep.failedLink = a; rep.simTime = real.time; rep.failInfo = String.format("lost the route: link index %d outside the route (0..%d) mode=%s on=%d slab=%d s=%.2f y=%.2f", a, c.routeSize() - 1, real.mode, real.onElem, real.onSlab, real.s, real.y); return rep; }      // never index with it (2026-10-26: seven IndexOutOfBoundsException -1)
+            if (real.mode == Sim.Mode.GROUND && real.onElem < 0 && real.onSlab >= 0) {
+                // like a person: standing on top of a spike slab (a surface: Sim lands on it, onElem -1), so step off it onto its own platform and land; the
+                // AIR branch below then recovers onto whatever route platform that is. 2026-10-26 campaign: seven slices threw IndexOutOfBoundsException -1
+                // because a move ending on a slab's top set the link to onElem (-1)
+                float dir = slabStepOff(real);
+                for (int q = 0; q < 120 && real.mode == Sim.Mode.GROUND && real.onElem < 0; q++) { in.clear(); in.moveX = dir; real.step(in); }
+                if (real.mode == Sim.Mode.GROUND && real.onElem < 0) { rep.failedLink = a; rep.simTime = real.time; rep.failInfo = String.format("stuck on a spike slab top: could not step off in 2 s s=%.2f y=%.2f slab=%d", real.s, real.y, real.onSlab); return rep; }
+                continue;
+            }
             if (endless && a >= c.goalIndex()) { rep.completed = true; rep.simTime = real.time; return rep; }
             for (int[] kr : c.keyRooms) {
                 if (kr[0] != a || !visited.add(kr[0])) continue;
@@ -806,7 +825,9 @@ public final class Autopilot {
                 int g2 = 120;
                 while (g2-- > 0 && real.mode != Sim.Mode.GROUND) { in.clear(); pull.act(real, in); real.step(in); }
             }
-            a = real.mode == Sim.Mode.AIR ? real.lastPad : real.onElem;
+            int reached = real.mode == Sim.Mode.AIR ? real.lastPad : real.onElem;
+            if (reached < 0 && real.mode == Sim.Mode.GROUND && real.onSlab >= 0) reached = Math.max(a + 1, c.hazards.get(real.onSlab).anchor);      // ended on a spike slab's top: the link is its platform (the loop steps off the slab next)
+            a = reached;
             if (real.won) break;
             if (a >= c.goalIndex()) {
                 // goal reached by attachment: let it register

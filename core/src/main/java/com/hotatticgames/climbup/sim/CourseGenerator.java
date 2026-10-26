@@ -1346,6 +1346,14 @@ public final class CourseGenerator {
                     if (!Autopilot.plan(b, i, false).ok) { ok = false; failPlan++; break; }
                 }
             }
+            Element land = c.get(i + 1);
+            if (ok && i >= n0 - 2 && (land.type == Element.Type.PAD || land.type == Element.Type.SPRING) && c.nextRoute(i + 1) < c.size()) {
+                // a pad or spring launches the climber as they arrive, with the run-up they arrive with: its own link was proven from a standstill on it,
+                // which nobody coming off the link before it is in. So the link onto it must have a move that leaves a launch the next link can be made
+                // from - the solver's own lookahead (2026-10-26: PUNISHER seed 2 581 m and other "did not reach the next link" failures after pads/springs)
+                Sim b = Sim.startOn(c, T, i); quietStart(b, i);
+                if (!Autopilot.plan(b, i, false, true).ok) { ok = false; failPlan++; if (trace.length() < 600) trace.append(String.format("[link %d onto %s: no arrival leaves a launch that makes the next link]", i, land.type)); }
+            }
         }
         // Owner directive 2026-10-24 (sections 10-14): no link may ask for incompatible things at once: several creatures chasing the climber where the
         // jump also has to wait for a cycle from a cramped take-off. Such a module is not dropped from the game; this arrangement of it is refused and the

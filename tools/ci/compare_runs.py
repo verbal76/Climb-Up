@@ -92,3 +92,19 @@ print("=== every unsuccessful solver slice (new): run slice y0 y1 links failed_l
 for r in rows(sys.argv[2], "solver.csv"):
     if r["completed"] != "true":
         print(r["run"], r.get("slice"), r.get("y0"), r.get("y1"), r.get("plans"), r.get("failed_link"), (r.get("fail_info") or "")[:220])
+print("=== unsuccessful solver slices by class (new; fail_class column, derived here when the run predates it) ===")
+def cls(r):
+    c = r.get("fail_class")
+    if c: return c
+    i = (r.get("fail_info") or "").replace('"', "")
+    for pre, k in (("solver threw", "solver_exception"), ("setback while executing", "route_link_failure"), ("plan failed", "planning_failure"),
+                   ("recover", "recovery_failure"), ("detour", "recovery_failure"), ("lost the route", "recovery_failure"), ("stuck on a spike slab", "recovery_failure"),
+                   ("stuck at one link", "knockback_loop")):
+        if i.startswith(pre): return k
+    return "timeout" if "within 20 s" in i else "unknown"
+tally = defaultdict(lambda: defaultdict(int)); tot = defaultdict(lambda: [0, 0])
+for r in rows(sys.argv[2], "solver.csv"):
+    m = mode(r["run"]); tot[m][0] += 1
+    if r["completed"] != "true": tot[m][1] += 1; tally[m][cls(r)] += 1
+for m in MODES:
+    print(m, "slices", tot[m][0], "unsuccessful", tot[m][1], dict(tally[m]), "reconciled" if sum(tally[m].values()) == tot[m][1] else "MISMATCH")

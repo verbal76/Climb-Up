@@ -1620,6 +1620,8 @@ public final class CourseGenerator {
     private boolean decoyOk(Element d, int a) { return decoyOk(d, a, false); }
     /** {@code fork}: a fork's branch, which rejoins the route anyway, so the stepping-stone rule (no shortcut toward the route) does not apply to it. */
     private boolean decoyOk(Element d, int a, boolean fork) {
+        int di = c.size() - 1;
+        if (di >= 0 && c.get(di) == d && !padCorridorClear(di)) { decoyWhy = 0; GenTrace.tally("pad_corridor_refused"); return false; }
         int rs = c.routeSize();
         for (int i = 0; i < c.size(); i++) {
             Element e = c.get(i);
@@ -1892,6 +1894,20 @@ public final class CourseGenerator {
      * slice 1 in all 24 attempts on exactly those).
      */
     private static boolean otherRevolution(Course c, Element pad, Element h) { return Math.abs(hzS(h) - pad.s) >= c.circumference * 0.5f; }
+    /**
+     * The placement-time half of {@link #checkLaunchCorridors}: a pad or spring being placed (a route module's, or a fork's, dead end's or key room's)
+     * keeps its corridor clear of the hazards already there, this slice's and the previous slice's, of another revolution. Refusing it here lets the
+     * generator place something else at that point; the slice audit alone could only throw the whole attempt away, and when the clash came from
+     * structure every attempt rebuilt the same way it failed all of them (Campaign A on 78292a7: NORMAL seed 2 slice 37, PUNISHER seed 2 slice 34).
+     */
+    private boolean padCorridorClear(int i) {
+        Element e = c.get(i);
+        if (!launchPad(e)) return true;
+        Element land = padLanding(i);
+        for (Element h : c.hazards) if (h.anchor != i && otherRevolution(c, e, h) && corridorBlocked(c, T, e, land, h)) return false;
+        for (Element h : ghostHaz) if (otherRevolution(c, e, h) && corridorBlocked(c, T, e, land, h)) return false;
+        return true;
+    }
     private static void corridorFail(Element e, Element h) {
         CORRIDOR_REFUSED.incrementAndGet(); GenTrace.tally("corridor_refused");
         throw new IllegalStateException(String.format(java.util.Locale.ROOT, "launch corridor of the %s at s=%.2f y=%.2f holds a %s at s=%.2f y=%.2f", e.type, e.s, e.y, h.type, h.s, h.y));
@@ -1908,6 +1924,10 @@ public final class CourseGenerator {
                 Element e = c.get(i);
                 if (i == ownerIdx || !launchPad(e)) continue;
                 if (corridorBlocked(c, T, e, padLanding(i), h)) return false;
+            }
+            for (int i = 0; i < ghostElems.size(); i++) {          // (rules 14: the previous slice's pads and springs as well)
+                Element e = ghostElems.get(i);
+                if (launchPad(e) && otherRevolution(c, e, h) && corridorBlocked(c, T, e, i + 1 < ghostElems.size() ? ghostElems.get(i + 1) : null, h)) return false;
             }
         }
         for (int pass = 0; pass < 2; pass++) {
@@ -2114,6 +2134,7 @@ public final class CourseGenerator {
             if (cr) { Element e = c.get(clashAt), f = lastClash; boolean body = vLo(e) - 1.5f < vHi(f) && vHi(e) + 1.5f > vLo(f);
                 CRABCLASH[(f.anchor >= 0 ? 2 : 0) + (body ? 0 : 1) + (lastClashGhost ? 4 : 0)]++; } }
         for (Element h : hz) { if (!ok) break; if (h.type == Element.Type.CLUB) continue; ok = hazardOk(h, ownerOf(h)); if (!ok) failHaz++; }
+        for (int i = n0; i < c.size() && ok; i++) if (!padCorridorClear(i)) { ok = false; failHaz++; GenTrace.tally("pad_corridor_refused"); }
         if (ok && !sawsClearOfCreatures(hz)) { ok = false; failHaz++; }
         if (ok && !protectedRowsOk(n0)) { ok = false; failHaz++; }
         return ok;

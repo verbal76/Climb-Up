@@ -1828,8 +1828,16 @@ public final class CourseGenerator {
             for (int i = 0; i < c.size(); i++) {
                 Element e = c.get(i);
                 if (i == ownerIdx || (e.type != Element.Type.PAD && e.type != Element.Type.SPRING)) continue;
-                float side = e.w / 2f + hh + (e.type == Element.Type.SPRING ? 2.5f : 1.2f);
-                if (Math.abs(c.dsWrap(hs, e.s)) < side && lo < e.y + apex + 1.8f && hi > e.y + 0.3f) return false;
+                float side = e.w / 2f + hh + (e.type == Element.Type.SPRING ? 2.5f : 1.2f), ds = c.dsWrap(hs, e.s);
+                if (Math.abs(ds) < side && lo < e.y + apex + 1.8f && hi > e.y + 0.3f) return false;
+                // rules 14 (Campaign A, NORMAL seed 3 slice 53 on cbe6415): the launch drifts forward to the deck it lands on, so the column extends
+                // over the flight to that deck; a spiked block one revolution up, 3.65 m ahead of a pad and 9 m above it, caught the launch (the
+                // straight-up column above reached only 2.7 m ahead)
+                int nx = i < c.routeSize() ? c.nextRoute(i) : -1;
+                if (nx > i && nx < c.size()) {
+                    Element land = c.get(nx); float to = c.dsWrap(land.s, e.s), reach = Math.abs(to) + land.halfW() + hh + 0.5f;
+                    if (ds * to > 0f && Math.abs(ds) < reach && lo < Math.max(e.y, land.y) + apex + 1.8f && hi > Math.min(e.y, land.y) + 0.3f) return false;
+                }
             }
         }
         for (int pass = 0; pass < 2; pass++) {

@@ -15,6 +15,7 @@ on:
       solve: { description: '1 = run the slice solver on every slice, 0 = generation only (targeted generation checks)', required: false, default: '1' }
       bench: { description: '1 = GenBench instead of the report: untraced generation time per slice and a streaming-wait estimate', required: false, default: '0' }
       baseline_run: { description: 'Earlier Difficulty report run (any commit) to compare variety, ropes and difficulty against (its lanes-mode-* artifacts)', required: false, default: '' }
+      campaign: { description: 'Campaign charts tag (A = NORMAL+PUNISHER, B = NGH; owner 2026-10-27): A1-A9 or B1-B9 from this run''s courses', required: false, default: '' }
   push:
     branches: [build-74-determinism]
     paths:
@@ -105,6 +106,9 @@ jobs:
           pip install --quiet matplotlib
           python3 tools/ci/lane_report.py parts baseline
           python3 tools/ci/variety_report.py parts baseline baseline_parts
+          if [ -n "${{ inputs.campaign }}" ]; then
+            python3 tools/ci/campaign_charts.py "${{ inputs.campaign }}" "Campaign ${{ inputs.campaign }} ($(git rev-parse --short HEAD))" baseline/campaign_${{ inputs.campaign }} $(dirname $(find parts -name castle_control.csv | sort))
+          fi
           cat baseline/INDEX.md >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
         if: always()

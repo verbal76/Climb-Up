@@ -1852,6 +1852,8 @@ public final class CourseGenerator {
      * to that deck; a spiked block one revolution up, 3.65 m ahead of a pad and 9 m above it, caught the launch (the column reached only 2.7 m ahead).
      * Keys, gates and clubs are not obstacles. Shared by the placement check and the whole-slice audit, so the order things are placed in does not matter.
      */
+    /** Farthest a pad or spring carries the climber along the lane to its landing deck (m); a "landing" farther than this is no landing of that launch. */
+    static final float PAD_FLIGHT_MAX = 12f;
     static boolean corridorBlocked(Course c, Tuning t, Element e, Element land, Element h) {
         if (h.type == Element.Type.KEY || h.type == Element.Type.GATE || h.type == Element.Type.CLUB) return false;
         float apex = t.padBounceHeld * t.padBounceHeld / (2f * t.gravity), hs = hzS(h), hh = hzHalf(h), lo = hzLo(h), hi = hzHi(h);
@@ -1859,6 +1861,7 @@ public final class CourseGenerator {
         if (Math.abs(ds) < side && lo < e.y + apex + 1.8f && hi > e.y + 0.3f) return true;
         if (land == null) return false;
         float to = c.dsWrap(land.s, e.s), reach = Math.abs(to) + land.halfW() + hh + 0.5f;
+        if (Math.abs(to) > PAD_FLIGHT_MAX) return false;          // not this launch's landing (a list neighbour of another structure): the column alone applies
         return ds * to > 0f && Math.abs(ds) < reach && lo < Math.max(e.y, land.y) + apex + 1.8f && hi > Math.min(e.y, land.y) + 0.3f;
     }
     /**

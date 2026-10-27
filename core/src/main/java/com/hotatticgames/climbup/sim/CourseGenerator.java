@@ -1414,6 +1414,7 @@ public final class CourseGenerator {
         }
         if (!ok) { rollbackTo(n0, h0); c.indexDecoys(); return -1; }
         c.forks.add(new int[]{e, n0, es.size(), j});
+        if (!forkCorridorsClear(n0, h0)) return -1;
         decoys += es.size();
         return j;
     }
@@ -1445,6 +1446,7 @@ public final class CourseGenerator {
             }
             if (!ok) { rollbackTo(n0, h0); c.indexDecoys(); continue; }
             c.forks.add(new int[]{a, n0, 1, t});
+            if (!forkCorridorsClear(n0, h0)) continue;
             decoys++;
             return t;
         }
@@ -1463,6 +1465,21 @@ public final class CourseGenerator {
         float ceil = Float.MAX_VALUE;
         for (int q = 0; q < c.size(); q++) { Element e = c.get(q); if (Math.abs(e.s - x) < arcHalf(e) + 1f + 1.2f && vHi(e) > y0 - 12f && e.y < y1 + 3f) ceil = Math.min(ceil, vLo(e) - 0.9f); }
         return ceil;
+    }
+    /**
+     * A fork's pads checked again once the fork is registered: {@link #decoyOk} judged each pad as it was added, before {@code c.forks} knew the
+     * branch, so {@link #padLanding} found no landing and only the launch column was checked, never the flight forward to the rejoin deck. The
+     * slice audit, which runs with the fork registered, then refused the whole attempt (NORMAL seed 2 slices 13, 18 and 24 on 4478d7d: a branch
+     * pad's flight to its rejoin under a spike block or spike trap one revolution up). Refused here, the fork is taken back and the generator tries
+     * the next candidate. Returns false after rolling the fork back.
+     */
+    private boolean forkCorridorsClear(int n0, int h0) {
+        for (int i = n0; i < c.size(); i++) if (!padCorridorClear(i)) {
+            GenTrace.tally("pad_corridor_refused"); FORKWHY[13]++;
+            c.forks.remove(c.forks.size() - 1); rollbackTo(n0, h0); c.indexDecoys();
+            return false;
+        }
+        return true;
     }
     private boolean hazOn(int i) { for (Element h : c.hazards) if (h.anchor == i) return true; return false; }
     private int tryFork(int a, int from, Random dr, int maxAhead) {
@@ -1526,6 +1543,7 @@ public final class CourseGenerator {
             }
             if (!ok) { rollbackTo(n0, h0); c.indexDecoys(); continue; }
             c.forks.add(new int[]{from, n0, es.size(), t});
+            if (!forkCorridorsClear(n0, h0)) continue;
             decoys += es.size();
             return t;
         }

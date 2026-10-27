@@ -2244,20 +2244,28 @@ public final class CourseGenerator {
      * A row of five or six level islands with a mortar in the ground under every gap, pointing straight up: the ball rises through the gap to about twice the player's height above the path, falls back
      * into the barrel and fires again. Neighbouring mortars are out of step (a travelling wave), so there is always a moment to cross each gap. Every link is proven by {@link #commit} like any hazard gap.
      */
+    /**
+     * NOT GONNA HAPPEN round 2 correction (owner directive 2026-10-27, late hazards): a mortar row was 5-8 decks laid dead level, ~40 m of arc without
+     * climbing, so on the spiral it ran into the revolution below whenever the route lagged its pitch: NGH round 1 accepted 10-15 of ~140 mortar rows per
+     * course (all refusals but a few were the layer rule; NORMAL/PUNISHER rules 13 ~24%). NGH rows rise MORTAR_RISE0-1 m a deck (the gaps sized with
+     * reach(rise)); each mortar fires from below the lower deck past the higher one. NORMAL and PUNISHER rows are unchanged.
+     */
+    static final float MORTAR_RISE0 = 0.2f, MORTAR_RISE1 = 0.45f;
     private List<Element> buildMortar(Element last, float d, int z, int attempt, List<Element> hzOut) {
         float inten = intensity(last.y);
         int n = 5 + rnd.nextInt(2) + (rnd.nextFloat() < late(last.y) ? 2 : 0);          // Build 71: longer mortar rows higher up
         List<Element> es = new ArrayList<>();
         Element cur = last; int base = c.size();
         float period = r(3.2f, 4.0f) - 0.4f * inten;
+        boolean climbs = P == DifficultyProfile.NGH;          // NGH round 2 correction: the row climbs with the spiral (see MORTAR_RISE)
         for (int k = 0; k < n; k++) {
-            float uR = cur.s + cur.w / 2f;
-            float g = Math.min(3.0f, Math.max(2.2f, reach(0f) * lerp(0.55f, 0.72f, d) * r(0.95f, 1f) * (1f - 0.03f * attempt)));
+            float uR = cur.s + cur.w / 2f, rise = climbs ? r(MORTAR_RISE0, MORTAR_RISE1) : 0f;
+            float g = Math.min(3.0f, Math.max(2.2f, reach(rise) * lerp(0.55f, 0.72f, d) * r(0.95f, 1f) * (1f - 0.03f * attempt)));
             float w = k == n - 1 ? 3.5f : r(2.4f, 3.2f);
-            Element v = plat(Element.Type.STATIC, uR + g + w / 2f, cur.y, w, z);
+            Element v = plat(Element.Type.STATIC, uR + g + w / 2f, cur.y + rise, w, z);
             es.add(v);
             Element m = hz(Element.Type.MORTAR, uR + g / 2f, cur.y - MORTAR_DEPTH, 0f, z);
-            m.amp = MORTAR_DEPTH + 2f * T.height; m.period = period * r(0.9f, 1.1f); m.phase = r(0f, 6.28f);      // Build 71 (owner): each mortar keeps its own time - no wait-jump-wait wave; a few gaps may line up for two or three jumps in a row
+            m.amp = MORTAR_DEPTH + rise + 2f * T.height; m.period = period * r(0.9f, 1.1f); m.phase = r(0f, 6.28f);      // Build 71 (owner): each mortar keeps its own time - no wait-jump-wait wave; a few gaps may line up for two or three jumps in a row
             m.anchor = k == 0 ? base - 1 : base + k - 1;
             hzOut.add(m);
             cur = v;

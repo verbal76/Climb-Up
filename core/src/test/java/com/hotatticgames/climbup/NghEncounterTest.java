@@ -112,6 +112,25 @@ public class NghEncounterTest {
         assertTrue(DifficultyProfile.NGH.enforcers()); assertTrue(DifficultyProfile.PUNISHER.enforcers()); assertFalse("NORMAL stays Enforcer-free", DifficultyProfile.NORMAL.enforcers());
     }
 
+    /**
+     * Round 1 finding (NGH seed 1 slice 10 on 27603e4): an avalanche proven for one arrival time failed the whole-slice solver when the climb arrived later.
+     * Every NGH avalanche the generator keeps is clean for each of the extra arrival delays, and seed 1 slice 10 solves end to end.
+     */
+    @Test public void nghAvalanchesHoldForEveryArrivalTimeAndSeedOneSliceTenSolves() throws Exception {
+        Tuning t = TestUtil.tuning().hardCopy(2);
+        CourseGenerator.Framed f = null; int checked = 0;
+        for (int k = 0; k <= 10; k++) {
+            f = CourseGenerator.chunkFramed(1L, k, f, t);
+            for (Element h : f.c.hazards) if (h.type == Element.Type.AVALANCHE) {
+                checked++;
+                for (float w : new float[]{0f, 0.7f, 1.6f, 2.9f}) assertTrue("slice " + k + " avalanche on deck " + h.anchor + " with the climber " + w + " s later", Autopilot.chainClean(f.c, t, h.anchor - 1, h.anchor + 4, w));
+            }
+        }
+        assertTrue("avalanches were checked (" + checked + ")", checked > 0);
+        Autopilot.Report r = Autopilot.run(f.c, t, 4000f);
+        assertTrue("NGH seed 1 slice 10 solves (link " + r.failedLink + ": " + r.failInfo + ")", r.completed);
+    }
+
     /** Generated NGH slices: every Enforcer red, every avalanche of 5-7 blocks marked for the per-block physics; and generation is deterministic. */
     @Test public void generatedNghSlicesCarryRedEnforcersAndChaoticAvalanches() throws Exception {
         Tuning t = TestUtil.tuning().hardCopy(2);

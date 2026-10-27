@@ -231,7 +231,7 @@ public final class LaneReport {
                     try { rep = Autopilot.run(f.c, t, 4000f); } catch (RuntimeException e) { rep = new Autopilot.Report(); rep.failInfo = "solver threw " + e + " at " + frames(e); } finally { GenTrace.SOLVE.remove(); }
                     secs = (System.nanoTime() - s0) / 1e9; solveSeconds += secs; sal = sa < 0 ? -1 : alloc() - sa;
                     if (!rep.completed && (rep.failInfo == null || rep.failInfo.isEmpty())) rep.failInfo = derivedFailInfo(rep, st);
-                    solverSlices.add(new String[]{"" + k, f3(f.yBase + f.c.get(0).y), f3(f.yBase + f.c.get(f.c.routeSize() - 1).y), "" + rep.completed, "" + rep.links, "" + rep.failedLink, f3(rep.simTime), f3(rep.minMargin), "" + rep.worstLink, f3(secs), q(rep.failInfo), failClass(rep.completed, rep.failInfo)});
+                    solverSlices.add(new String[]{"" + k, f3(f.yBase + f.c.get(0).y), f3(f.yBase + f.c.get(f.c.routeSize() - 1).y), "" + rep.completed, "" + rep.links, "" + rep.failedLink, f3(rep.simTime), f3(rep.minMargin), "" + rep.worstLink, f3(secs), q(rep.failInfo), failClass(rep.completed, rep.failInfo), "" + rep.verdict, rep.cause, "" + rep.fallbackMoves, "" + rep.resyncs, "" + rep.waits, "" + rep.unclearMoves, "" + (Autopilot.lastReal == null ? -1 : Autopilot.lastReal.setbacks())});
                 }
                 int nf = solverFailures.size();
                 measure(k, f, tr, rep, st);
@@ -580,7 +580,7 @@ public final class LaneReport {
             for (String[] m : modules) w.println(run + "," + String.join(",", m));
         }
         try (PrintWriter w = pw(out, "solver.csv")) {
-            w.println("run,slice,y0,y1,completed,plans,failed_link,sim_time_s,min_margin,worst_link,wall_seconds,fail_info,fail_class");
+            w.println("run,slice,y0,y1,completed,plans,failed_link,sim_time_s,min_margin,worst_link,wall_seconds,fail_info,fail_class,verdict,cause,fallback_moves,resyncs,waits,unclear_moves,witness_setbacks");          // (DC1: the verdict and how the witness got through)
             for (String[] m : solverSlices) w.println(run + "," + String.join(",", m));
         }
         try (PrintWriter w = pw(out, "solver_failures.csv")) {

@@ -1,3 +1,14 @@
+## RESUME HERE (2026-10-28: OWNER AUTHORISATION - CORRECTIONS -> SMOKE GATE -> 30-SEED BATCH, ACTIVE)
+
+- Directive: correct DC1-DC10 of docs/verification/CONSOLIDATED_AUDIT_REPORT.md, focused tests, one smoke gate, then AUTOMATICALLY the batch:
+  10 NORMAL + 10 PUNISHER + 10 NGH fresh seeds, 5,000 m, one frozen SHA, GitHub Actions; seed ledger; one final owner report (A-J). Build 82 and
+  main merge stay on hold; no APK/desktop/Steam/OTA publishing.
+- Done (commits): DC4+DC8 physics 8c2ae8d (PhysicsCorrectionsTest 10, all fail on old Sim); DC1+DC2 verdicts/arrivals 5cb56fa (SolverVerdictTest);
+  DC3 checkpoint contract 744a480 (CheckpointContractTest; RunSnapshotTest updated); DC5 generator validation order 3e08cf0.
+- Next: DC6+DC7 (world route membership, seam-safe deck lookup, roam/avl deck types, solver group ids/windows), DC9+DC10 (codec forks/frame,
+  oracles, coverage.json), smoke gate, freeze (fingerprints, replays, rules version), batch.
+- Probe tool: scratchpad gt/AttemptProbe (hard seed K) against javac-compiled main classes in scratchpad dev2.
+
 ## RESUME HERE (2026-10-27 late: OWNER CLARIFICATION - AUDIT FIRST, CORRECTIONS SECOND)
 
 - No further corrections during the audit unless an issue blocks the investigation itself. Finish discovery + coverage mapping, independently

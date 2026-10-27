@@ -1177,3 +1177,34 @@ None was class A (geometry unclimbable from a legitimate arrival). All four depe
 
 ### Regression tests
 WholeSliceSolvabilityTest (the four fixtures complete; arrival sweeps of 19 and 45 show both clean and failing arrival times; branch decks recognised; forks survive JSON; corridor geometry incl. the NORMAL seed 3 slice 53 case, a block behind the pad and a pad landing the other way left alone), IntegrityFrameTest (3).
+
+## Audit correction phase (owner authorisation 2026-10-28, rules 15) - decisions
+
+Source: docs/verification/CONSOLIDATED_AUDIT_REPORT.md (DC1-DC10) and docs/verification/evidence. One shared correction per defect class.
+
+- **Verdicts (DC1).** `Autopilot.Report.verdict` is PROVEN_SOLVABLE (a continuous, hit-free witness on the real Sim reached the goal and every
+  route key was taken), PROVEN_UNSOLVABLE (only a sound bound: a rise between fixed decks beyond a held jump's apex plus the hands' reach, with no
+  lift - launcher, mover, rope, cable, higher reachable deck or creature - within 20 m), UNKNOWN (budget, no move, a hit, lost, stuck: never a
+  pass) or FAILED_VALIDATION (the generator's own integrity and corridor audits). `completed` stays true only for PROVEN_SOLVABLE. Refused slice
+  attempts are classed GENERATION / FAILED_VALIDATION / UNKNOWN / PROVEN_UNSOLVABLE in GenTrace.
+- **Witness policy (owner).** Hit-free start to goal: any setback anywhere fails the witness (it used to fail only inside move execution).
+  Landing on a lower route deck and continuing stays legitimate recovery. Undecided look-aheads are no longer "clear"; the lookahead override is
+  gone, and the run's "any working move" fallback is explicit (`planRun`) and counted.
+- **Arrivals (DC2).** A ledge catch is an arrival only once the pull-up ends standing on a deck that is still there. Re-proofs and baselines use the
+  link's proven start (quiet moment, belt landing) and its margin; a balance conveyor's exit is proven from the landing wherever a proof starts on it.
+- **Checkpoint contract (DC3, owner policy).** A retry resets every encounter in progress and keeps keys, gates, checkpoints, time and resolved
+  encounters; avalanches above the checkpoint re-arm, a spent one records itself done; a save in the frame of a fall is the respawned climb.
+- **Physics (DC4/DC8, owner policy).** Pad/spring bounce wins over a jump tap; rope/cable grabs and shoves clear coyote and the jump buffer (ledges
+  keep jump = pull up); knock-off sets a 0.3 s grab lockout and pushes away from the actual contact; ropes and climbing holds are out of every
+  creature's reach (the Enforcer swat gated like the rest), lethal hazards still hit in every mode; pull-ups let go of vanished or out-of-plane
+  decks; no step-across onto an open hole; no ground jump off a deck that vanished this step.
+- **Generator order (DC5).** One landing rule for every pad (route, fork incl. a fork being built, key room, previous-slice ghosts on their own
+  slice); new hazards re-prove links within their real reach; chainClean encounters are replayed when a later module reaches into them; Enforcers
+  and avalanches get insertion checks; new decks and decoys stay out of earlier hazards' boxes; module hazards obey the audit's I4 rule; the context
+  tail is 10 decks. Recovery stays the bounded, deterministic 24-attempt slice retry (relaxed after 12) on top of module/fallback retries.
+- **World consistency (DC6), solver metrics (DC7), serialization (DC9).** `Course.deck(a, k)` steps over route decks in slices and in the live
+  tower alike; forks are stitched and stored (slice format 3, colour/skin as shorts); unique move-style ids; rope/cable waits beside moving
+  things (6, over the period); pair windows reach fork rejoins; aimed cannons, bees and mortars are in view of every link they reach.
+- **Coverage (DC10).** coverage.json corrected from the evidence; the gate requires a test for every VERIFIED and checks verdicts against code.
+- **Deferred (documented, not reached by current content).** Castle numbers above 32767; the beam mount dropping a jump pressed during its 0.62 s;
+  holes staying open while the climber stands on the bridge; MidHop hopping only the first non-crab hazard of a deck.

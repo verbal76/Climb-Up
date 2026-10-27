@@ -890,11 +890,14 @@ public final class Autopilot {
             if (!r.ok) { rep.failedLink = a; rep.simTime = real.time; rep.failInfo = String.format("plan failed: mode=%s on=%d s=%.2f y=%.2f vx=%.2f vy=%.2f", real.mode, real.onElem, real.s, real.y, real.vx, real.vy); return rep; }
             // like a person, who sees the whole screen: the planner tries moves among the nearby elements, so check the chosen one against every hazard (an aimed
             // cannon or a cannonball from links back) and, if one would catch it, hold on a moment and size it up again
+            // (on a rope or a cable too: you can hang on and wait there as well - 2026-10-27, PUNISHER seed 2 slice 57, an aimed cannon by platform 10 hit the
+            // move off rope 11, which this check skipped)
+            final Sim.Mode holdAt = real.mode;
             for (int look = 0; look < 25 && !clearOfEverything(real, a, r.factory); look++) {
-                if (real.mode != Sim.Mode.GROUND || real.onElem != a) break;
+                if ((holdAt != Sim.Mode.GROUND && holdAt != Sim.Mode.ROPE && holdAt != Sim.Mode.CABLE) || real.mode != holdAt || real.onElem != a) break;
                 int before = real.setbacks();
                 for (int q = 0; q < 12 && real.setbacks() == before; q++) { in.clear(); real.step(in); }
-                if (real.setbacks() != before || real.mode != Sim.Mode.GROUND || real.onElem != a) break;
+                if (real.setbacks() != before || real.mode != holdAt || real.onElem != a) break;
                 Result again = plan(real, a, false, true); if (!again.ok) again = plan(real, a, false, false);
                 if (again.ok) r = again;
             }

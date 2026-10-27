@@ -78,6 +78,15 @@ public class SolverRecoveryTest {
         assertTrue("NORMAL seed 1 slice 55 (5c09272) completes (link " + r.failedLink + ": " + r.failInfo + ")", r.completed);
     }
 
+    /** Before a move the solver checks it against every hazard on screen (the planner only sees nearby ones) and waits if one would catch it; that check
+     *  ran only on a platform, so the move off rope 11 walked into a ball from the aimed cannon by platform 10 (2026-10-27, Difficulty report 40422375969:
+     *  PUNISHER seed 2 slice 57 on 5c09272). It now holds on to ropes and cables as well. */
+    @Test public void aClimberOnARopeWaitsForACannonballFromLinksBack() throws Exception {
+        Course c = CourseIO.fromJson(new String(Files.readAllBytes(Paths.get("src/test/resources/fixtures/punisher_seed2_slice57_5c09272.json"))));
+        Autopilot.Report r = Autopilot.run(c, tuning().hardCopy(1), 4000f);
+        assertTrue("PUNISHER seed 2 slice 57 (5c09272) completes (link " + r.failedLink + ": " + r.failInfo + ")", r.completed);
+    }
+
     @Test public void everyUnsuccessfulSliceHasExactlyOneFailureClass() {
         assertEquals("completed", LaneReport.failClass(true, ""));
         assertEquals("solver_exception", LaneReport.failClass(false, "\"solver threw java.lang.IndexOutOfBoundsException\""));

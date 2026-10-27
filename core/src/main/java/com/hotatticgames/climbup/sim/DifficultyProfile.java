@@ -87,6 +87,9 @@ public final class DifficultyProfile {
         false, EncounterModel.THREAT_BASE, EncounterModel.THREAT_PER_LEVEL, EncounterModel.THREAT_CRAMPED, false, 1, 0.18f, 0.04f, 1.15f, 1667.0, 2.5f,
         0.3f, 0.4f, 0.5f, 0.4f, 2f);
 
+    /** PUNISHER only (owner 2026-10-27): Enforcer robot encounters, one or two between every two castles. NORMAL (frozen) and NGH never get them. */
+    public boolean enforcers() { return this == PUNISHER; }
+
     /** The profile a climb at {@code t.hard} generates with. */
     public static DifficultyProfile of(Tuning t) { return t.hard >= 2 ? NGH : t.hard > 0 ? PUNISHER : NORMAL; }
 

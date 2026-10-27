@@ -55,7 +55,7 @@ public final class CourseGenerator {
      * generator (the crab rules of Build 63 changed what a seed produced, so runs from earlier builds carry version 0, "old rules", and are not compared).
      * {@code GeneratorFingerprintTest} fails when generation changes without a bump.
      */
-    public static final int RULES_VERSION = 11;     // 11 = Build 82 (owner directive 2026-10-27, NORMAL seed 2 stopped at 881 m): while the spiral lags its pitch a refused pick falls back only to challenges that climb, and a slice ending must leave the next slice two ordinary steps (rises a hop or stair makes), climbing out first when it does not; 10 = (unreleased) Build 82 draft (owner release requirements 2026-10-26): spiral pitch measured above the revolution below, slice endings that leave the next slice room, relaxed attempts keep body clearance, geometry integrity enforced on every slice, challenges before ropes in the fallbacks; 9 = (unreleased) Build 82 draft (owner correction directive 2026-10-26): terrain difficulty rises over the whole climb with each mode's head start, NGH has its own profile, no enemies on spike-drop platforms (rare ones on intermediate safe platforms instead), the solver hops a skull at its real dash speed; 8 = Build 81 (owner decisions 2026-10-25): keys lie on a main-route platform (no rooms, branches or perches); 7 = Build 80 (owner directive 2026-10-24): no level gates, PUNISHER on its own curve, encounter-conflict rule, splits with reconnecting branches instead of dead ends; 6 = Build 79: skulls, blobs and crabs reach the platforms either side (crabs follow up to three, fall with crumbling decks), faster skull, no blob wobble, two to four crabs a deck, bee pairs, creatures on spike-drop rows, bridges that drop planks, flat-turning aimed cannons, an always-running balance conveyor, decoys kept off ropes, a slightly harder first world; 5 = Build 77: faster skull with loop+swoop, key detours proved with the skull at either end, one balance conveyor per section from Castle 6 to 10; 4 = Build 76: faster plank conveyor bridges; 3 = Build 72: flush ramps, faster crumbling, a wilder shaking ramp, the spinning ramp; 2 = Build 71: the bee homes in, skulls and green blobs, mortars out of step at random
+    public static final int RULES_VERSION = 11;     // 11 = Build 82 (owner directive 2026-10-27, NORMAL seed 2 stopped at 881 m): while the spiral lags its pitch a refused pick falls back only to challenges that climb, and a slice ending must leave the next slice two ordinary steps (rises a hop or stair makes), climbing out first when it does not; PUNISHER only (2026-10-27, still unreleased rules 11): Enforcer robot encounters, with crabs and bees kept clear of them; 10 = (unreleased) Build 82 draft (owner release requirements 2026-10-26): spiral pitch measured above the revolution below, slice endings that leave the next slice room, relaxed attempts keep body clearance, geometry integrity enforced on every slice, challenges before ropes in the fallbacks; 9 = (unreleased) Build 82 draft (owner correction directive 2026-10-26): terrain difficulty rises over the whole climb with each mode's head start, NGH has its own profile, no enemies on spike-drop platforms (rare ones on intermediate safe platforms instead), the solver hops a skull at its real dash speed; 8 = Build 81 (owner decisions 2026-10-25): keys lie on a main-route platform (no rooms, branches or perches); 7 = Build 80 (owner directive 2026-10-24): no level gates, PUNISHER on its own curve, encounter-conflict rule, splits with reconnecting branches instead of dead ends; 6 = Build 79: skulls, blobs and crabs reach the platforms either side (crabs follow up to three, fall with crumbling decks), faster skull, no blob wobble, two to four crabs a deck, bee pairs, creatures on spike-drop rows, bridges that drop planks, flat-turning aimed cannons, an always-running balance conveyor, decoys kept off ropes, a slightly harder first world; 5 = Build 77: faster skull with loop+swoop, key detours proved with the skull at either end, one balance conveyor per section from Castle 6 to 10; 4 = Build 76: faster plank conveyor bridges; 3 = Build 72: flush ramps, faster crumbling, a wilder shaking ramp, the spinning ramp; 2 = Build 71: the bee homes in, skulls and green blobs, mortars out of step at random
     /** The rules version a climb started on a given build used (0 = unknown or before the stamps: not comparable). */
     public static int rulesOfBuild(int build) { return build >= 82 ? 9 : build >= 81 ? 8 : build >= 80 ? 7 : build >= 79 ? 6 : build >= 77 ? 5 : build >= 76 ? 4 : build >= 72 ? 3 : build >= 71 ? 2 : build >= 63 ? 1 : 0; }
 
@@ -246,7 +246,13 @@ public final class CourseGenerator {
         float top = keyN > 0 ? Math.max(startY + T.chunkHeight, keyY + 6f) : startY + T.chunkHeight;
         GenTrace tr = GenTrace.GEN.get(); long p0 = GenTrace.now();      // (observe-only phase timing for reports)
         float extendTo = beltSawY > 0f ? Math.max(top, beltSawY + 12f) : top;
+        // PUNISHER Enforcers are claimed like the keys: the slice whose first 80 m hold an encounter's height builds it, and climbs at least 25 m past it
+        // (claiming only up to this slice's own top let a height between one slice's top and the next one's start fall through: seed 2, section 1).
+        // Encounters not built by the end of the climb are dropped, never carried into the next slice's context.
+        planEnforcers(startY, startY + 80f);
+        if (!enfPending.isEmpty()) extendTo = Math.max(extendTo, enfPending.get(enfPending.size() - 1)[0] + 25f);
         extend(extendTo);
+        for (int k = 0; k < enfPending.size(); k++) { ENFORCERS_DROPPED.incrementAndGet(); GenTrace.tally("enforcer_dropped"); }
         long p1 = GenTrace.now();
         closeSlice(extendTo);
         c.get(c.size() - 1).checkpoint = true;
@@ -429,6 +435,13 @@ public final class CourseGenerator {
                 if (forked) { undo.clear(); forkEntries.add(new int[]{e0, n}); lastForkY = last.y; prev2 = prev; prev = Kind.FORK; sinceRest++; continue; }
                 lastForkY = last.y - forkEvery + 8f;          // no room here: try again a little higher
             }
+            if (!enfPending.isEmpty() && last.y >= enfPending.get(0)[0] && last.isPlatform() && !last.isMoving() && !last.wet() && last.type != Element.Type.PAD && last.type != Element.Type.SPRING
+                    && !(castlePending && last.y > castleTarget - 30f)) {          // PUNISHER: this slice's Enforcer encounter, as soon as the climb reaches its height
+                float[] pl = enfPending.remove(0);
+                int n0 = c.size(), h0 = c.hazards.size(); long s0 = GenTrace.now();
+                if (enforcerModule((int) pl[1], (int) pl[2], th)) { undo.clear(); traceStructure("ENFORCER", n0, h0, last.y, s0); enfQuiet = 2; prev2 = prev; prev = null; sinceRest++; ENFORCERS_PLACED.incrementAndGet(); GenTrace.tally("enforcer_placed_t" + (int) pl[1]); continue; }
+                ENFORCERS_DROPPED.incrementAndGet(); GenTrace.tally("enforcer_dropped");
+            }
             Kind k = pick(zone, last);
             // the spiral pitch controller (pick): while the route lags the climb a revolution needs, vertical modules come first; a lagging route brings the
             // next revolution down onto this one, after which every module fails the layer rule (NGH 2d4388a: "cannot extend course"). The safety-pressure
@@ -436,12 +449,12 @@ public final class CourseGenerator {
             boolean lagging = layerGap(last) < T.layerGapMin;
             if (deferredHaz != null && !last.wet() && !lagging) { k = deferredHaz; deferredHaz = null; }          // a hazard the Frost world's rain displaced comes on the next dry platform instead of being lost
             boolean clubTarget = false;
-            if (clubBoost > 0) { clubBoost--; k = rnd.nextBoolean() ? Kind.TRAP : Kind.HAZ; clubTarget = true; }      // Build 71 (owner): a club was just placed - the next few modules give it crabs and bees to hit
+            if (clubBoost > 0 && !enfCalm()) { clubBoost--; k = rnd.nextBoolean() ? Kind.TRAP : Kind.HAZ; clubTarget = true; }      // Build 71 (owner): a club was just placed - the next few modules give it crabs and bees to hit
             wantCreature = clubTarget;
             if (th == 1 && last.type == Element.Type.STATIC && rnd.nextFloat() < 0.2f) { GenTrace.tally("wet_replaced_" + k); if (hazardKind(k)) deferredHaz = k; k = Kind.WET; }          // the Frost world: some platforms are under a rain cloud (slippery)
             float lv = Math.min(1f, level(last.y));
             boolean hazOk = !endless || intensity(last.y) > 0f;          // the first hazardStartY metres stay free of hazards and creatures (EndlessTest: a spike-drop row at 7.5 m, seed 3), as for every other hazard module
-            if (hazOk && k != Kind.WET && prev != Kind.CREATURE && !last.wet() && rnd.nextFloat() < (0.025f + 0.045f * lv + 0.05f * late(last.y)) * P.creatureScale) k = Kind.CREATURE;      // owner directive 2026-10-24: creature decks from Level 1 on, more as the levels rise (was world 2 on)
+            if (hazOk && k != Kind.WET && prev != Kind.CREATURE && !last.wet() && !enfCalm() && rnd.nextFloat() < (0.025f + 0.045f * lv + 0.05f * late(last.y)) * P.creatureScale) k = Kind.CREATURE;      // owner directive 2026-10-24: creature decks from Level 1 on, more as the levels rise (was world 2 on)
             else if (prev == Kind.CREATURE && !last.wet() && rnd.nextFloat() < 0.35f * late(last.y)) k = rnd.nextBoolean() ? Kind.HAZ : Kind.TRAP;      // Build 71: higher up, a creature deck runs straight into a trap      // Build 71: a skull's deck (world 2 on), or a green blob's (world 3 on)
             boolean secondHalf = endless && th == 0 && ((last.y + base) % T.zoneHeight) >= 0.5f * T.zoneHeight - 15f;      // castle 1 to castle 2: the Meadow's second, harder half (owner, Build 71)
             if (hazOk && k != Kind.WET && k != Kind.CREATURE && !last.wet() && prev != Kind.DROPS && (secondHalf ? rnd.nextFloat() < 0.10f : rnd.nextFloat() < 0.015f + 0.025f * lv)) k = Kind.DROPS;      // (spike-drop rows anywhere, more higher up; was world 2 on)
@@ -489,6 +502,7 @@ public final class CourseGenerator {
                 if (!ok) throw new IllegalStateException("cannot extend course (layer=" + failLayer + " haz=" + failHaz + " plan=" + failPlan + " window=" + failWindow + ") at " + c.size() + " last=" + last.type + " s=" + last.s + " y=" + last.y + " below=" + below(last));
             }
             undo.push(new int[]{u0, uh0}); undoneHere = 0;
+            if (enfQuiet > 0) enfQuiet--;
             prev2 = prev; prev = k; sinceRest++;
         }
     }
@@ -601,6 +615,80 @@ public final class CourseGenerator {
         for (int i = 0; i < 32; i++) { float h = lo + r.nextFloat() * (hi - lo); if (Math.abs(h - mid) >= 25f) return h; }
         return lo;
     }
+    // ------------------------------------------------------------------ PUNISHER Enforcer encounters (owner 2026-10-27)
+
+    /**
+     * The Enforcer encounters planned for section n (castle n-1 to castle n), fixed by the seed and the section like the keys: one, or two with a chance
+     * growing with the curve level (never more), each at a height spread through the section, with its tier (0 yellow, 1 orange, 2 red: yellow early,
+     * orange from the middle levels, red late and most often at the top) and its length in decks (3-5). Returns {height, tier, decks} per encounter.
+     */
+    public static float[][] enforcerPlan(long seed, int n, float spacing, float curveShift) {
+        Random r = new Random(seed * 0xD6E8FEB86659FD93L + n * 0x9E3779B97F4A7C15L + 53L);
+        float lo = spacing * (n - 1) + 45f, hi = spacing * n - 70f, mid = spacing * (n - 1) + spacing * 0.5f;
+        float lv = (float) ((spacing * (n - 0.5) + curveShift) / (10.0 * spacing));
+        int count = r.nextFloat() < Math.max(0.15f, Math.min(0.75f, 0.15f + 0.6f * (lv - 0.4f))) ? 2 : 1;
+        float[][] out = new float[count][];
+        for (int k = 0; k < count; k++) {
+            float a = lo + (hi - lo) * k / count, b = lo + (hi - lo) * (k + 1) / count, h = a;
+            for (int i = 0; i < 16; i++) { h = a + r.nextFloat() * (b - a); if (Math.abs(h - mid) >= 25f) break; }
+            float red = Math.max(0f, Math.min(0.7f, (lv - 0.85f) / 0.5f)), orange = Math.max(0f, Math.min(1f, (lv - 0.5f) / 0.35f)) * (1f - red), u = r.nextFloat();
+            int tier = u < red ? 2 : u < red + orange ? 1 : 0;
+            out[k] = new float[]{h, tier, 3 + r.nextInt(3)};
+        }
+        return out;
+    }
+
+    /** Diagnostics (never read by generation): encounters placed, and planned encounters dropped for want of a fair window in their slice. */
+    public static final java.util.concurrent.atomic.AtomicInteger ENFORCERS_PLACED = new java.util.concurrent.atomic.AtomicInteger(), ENFORCERS_DROPPED = new java.util.concurrent.atomic.AtomicInteger();
+
+    /** This slice's Enforcer encounters still to build ({height above this slice's frame, tier, decks}), lowest first (PUNISHER only). */
+    private final List<float[]> enfPending = new ArrayList<>();
+    /** Modules left after an Enforcer encounter in which no crab, bee, skull or blob deck is drawn (the robot's encounter keeps its room). */
+    private int enfQuiet;
+
+    /**
+     * PUNISHER (owner directive 2026-10-27): crabs and bees do not clutter an Enforcer encounter, so none are drawn in the two modules after one or
+     * from 10 m below a planned one. Always false in NORMAL (no Enforcers are planned), so NORMAL's draws are untouched.
+     */
+    private boolean enfCalm() { return enfQuiet > 0 || (!enfPending.isEmpty() && c.get(c.size() - 1).y >= enfPending.get(0)[0] - 10f); }
+
+    /** The planned encounters whose heights this slice claims (above its start, up to {@code topY}). */
+    private void planEnforcers(float startY, float topY) {
+        enfPending.clear(); enfQuiet = 0;
+        if (!endless || !P.enforcers() || T.castleSpacing <= 0f) return;
+        double sp = T.castleSpacing, startAbs = startY + base, topAbs = topY + base;
+        for (int n = Math.max(1, (int) Math.floor(startAbs / sp) + 1); n <= (int) Math.floor(topAbs / sp) + 1; n++)
+            for (float[] pl : enforcerPlan(c.seed, n, T.castleSpacing, P.curveShift))
+                if (pl[0] > startAbs && pl[0] <= topAbs) enfPending.add(new float[]{(float) (pl[0] - base), pl[1], pl[2]});
+        enfPending.sort((x, y) -> Float.compare(x[0], y[0]));
+    }
+
+    /**
+     * An Enforcer encounter as its own module (owner 2026-10-27: its own encounter logic, with room to do its job): {@code len} clean, solid, flat decks it
+     * can hop between (gaps 1.3-2.6 m, at most ENF_HOP_GAP; small rises) and an exit deck, the robot waiting at the far end of the first one. The decks are
+     * proven like any module's (commit); the encounter is kept only if a climber gets from the deck before it to the exit deck clean with the robot active
+     * (Autopilot.chainClean). Up to four geometries are tried.
+     */
+    private boolean enforcerModule(int tier, int len, int zone) {
+        for (int attempt = 0; attempt < 4; attempt++) {
+            int n0 = c.size(), h0 = c.hazards.size();
+            Element last = c.get(n0 - 1);
+            List<Element> l = new ArrayList<>();
+            float s = last.s + last.w / 2f, y = last.y;
+            for (int k = 0; k <= len; k++) {          // the robot's decks, then the exit deck
+                float w = k == len ? r(3f, 4.5f) : r(3.2f, 5.2f), gap = r(1.3f, 2.6f) * (1f - 0.08f * attempt), dy = r(-0.2f, 0.8f);
+                s += gap + w / 2f; y += dy; l.add(plat(Element.Type.STATIC, s, y, w, zone)); s += w / 2f;
+            }
+            if (!commit(l, 0.12f)) continue;
+            Element d = c.get(n0), r = new Element(Element.Type.ENFORCER, d.s, d.y, d.w);
+            r.anchor = n0; r.len = len; r.skin = tier; r.zone = zone;
+            c.hazards.add(r);
+            if (Autopilot.chainClean(c, T, n0 - 1, n0 + len)) return true;
+            rollbackTo(n0, h0); GenTrace.tally("enforcer_unfair");
+        }
+        return false;
+    }
+
     /** The key (and gate) colour of castle n is fixed by the run's seed and the castle number, so the key can be placed sections before its gate is built. */
     public static int castleColor(long seed, int n) { return new Random(seed * 0x2545F4914F6CDD1DL + n * 7919L + 5L).nextInt(Element.KEY_COUNT); }
 
@@ -1328,6 +1416,7 @@ public final class CourseGenerator {
             case CANNON: return h.len * 0.5f + Element.SHOT_R;
             case MORTAR: return Element.MORTAR_R;
             case AIMED: return 0.6f;
+            case ENFORCER: return Element.ENF_HALF + 0.2f;          // its footprint where it waits (it chases along its own revolution's decks)
             default: return h.w * 0.5f;
         }
     }
@@ -1346,6 +1435,7 @@ public final class CourseGenerator {
             case SPIKE_DROP: return h.y + h.amp + Element.DROP_H;
             case GATE: return h.y + h.len;
             case CRAB: return h.y + 0.7f;
+            case ENFORCER: return h.y + Element.ENF_H;
             case SKULL: case BLOB: return h.y + 2.3f;      // the skull's hover; the blob's leap goes off the top of the screen and is not standing-room clutter
             case BEE: return h.y + h.len + 0.6f;
             default: return h.y + h.len;
@@ -1871,7 +1961,7 @@ public final class CourseGenerator {
         float lift = 0f;
         for (int k = 0; k < n; k++) {
             float uR = cur.s + cur.w / 2f;
-            if (k > 0 && mid > 0f && rnd.nextFloat() < mid && k < n - 1) {          // (the chance is drawn first, as before batch 5: drawing it only when k < n - 1 reshuffled every later row, and NGH seed 1 lost its castle-1 spike-drop rows - ModeProfileTest)
+            if (k > 0 && mid > 0f && rnd.nextFloat() < mid && k < n - 1 && !enfCalm()) {          // (the chance is drawn first, as before batch 5: drawing it only when k < n - 1 reshuffled every later row, and NGH seed 1 lost its castle-1 spike-drop rows - ModeProfileTest)
                 n--;          // the row keeps its length: one drop platform fewer (a row made longer by it ran into the spiral layer below: batch 4 probe, every such row refused)
                 // owner structural rule (2026-10-26): a genuine intermediate safe platform between two drop platforms may host a rare enemy (a bee over it
                 // or a pair of crabs); the drop platforms themselves are protected and carry none
@@ -1933,6 +2023,7 @@ public final class CourseGenerator {
             int roll = wantCreature && j == 0 ? 3 : rnd.nextInt(cannonOk ? 5 : 4);
             if ((roll == 1 && prevRoll == 3) || (roll == 3 && prevRoll == 1)) roll = 2;      // Build 71: the bee now homes in and bumps you, so it never sits next to a saw you must time (it cut the saw's window to 0.2 s; SawFairnessTest)
             if ((roll == 1 && prevRoll == 4) || (roll == 4 && prevRoll == 1)) roll = 2;      // Build 79: nor a cannon lane right before or after it (a cannon across the landing cut a saw's window from its whole cycle to 0.36; SawFairnessTest, seed 3)
+            if (roll == 3 && enfCalm()) roll = 2;          // PUNISHER: no bee next to an Enforcer encounter (the draw is kept, so NORMAL is unchanged)
             prevRoll = roll;
             if (roll == 1 && creatureReaches(j == 0 ? c.size() - 1 : base + j - 1)) roll = 2;      // Build 79: nor next to a skull, blob or crab that can roam onto its decks (a skull there cut the window to 0.36; SawFairnessTest)
             if (roll == 1) dy = Math.min(dy, 0.1f);      // a saw never guards an uphill jump: the blade would sit higher than the take-off
@@ -1984,6 +2075,7 @@ public final class CourseGenerator {
         float uR = last.s + last.w / 2f, dy = r(0f, 0.6f);
         float gapIn = reach(dy) * lerp(0.5f, 0.85f, d) * (1f - 0.03f * attempt);
         int roll = wantCreature ? 4 : rnd.nextInt(5);
+        if (roll == 4 && enfCalm()) roll = 2;          // PUNISHER: no crab deck next to an Enforcer encounter
         if (roll == 1 && creatureReaches(c.size())) roll = 2;      // Build 79: no floor saw where a skull, blob or crab can roam onto it (see sawsClearOfCreatures)
         int crabs = roll == 4 ? 2 + (rnd.nextFloat() < inten * 0.7f ? 1 : 0) + (rnd.nextFloat() < late(last.y) * 0.6f ? 1 : 0) + T.hard : 0;      // (PUNISHER one more, NEVER GONNA HAPPEN two)      // Build 79 (owner): never fewer than two crabs, more higher up
         float w = roll == 4 ? 9f + 2f * (crabs - 2) : 8f;

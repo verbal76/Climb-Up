@@ -69,6 +69,7 @@ public final class Course {
                 float reach = h.cannonReach() + 2f;
                 for (int j = Math.max(0, aLo); j <= aHi && j < elements.size() && !take; j++) { float ahead = h.dir * dsWrap(elements.get(j).s, h.s); if (ahead >= -2f && ahead <= reach) take = true; }
             }
+            if (!take && h.type == Element.Type.ENFORCER && h.anchor - 1 <= aHi && h.anchor + Math.round(h.len) >= aLo) take = true;      // it chases across its decks: in view for every link of its encounter
             if (take) { in[i] = true; n++; }
         }
         int[] r = new int[n]; int k = 0;

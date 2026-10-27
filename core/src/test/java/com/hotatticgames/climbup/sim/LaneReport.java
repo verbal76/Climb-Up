@@ -60,7 +60,7 @@ public final class LaneReport {
     final List<double[]> travLinks = new ArrayList<>(); final List<String[]> travMods = new ArrayList<>();
     static final String[] FORK_COUNTS = {"fork_try", "fork_ok", "padfork_try", "padfork_ok", "subfork_eligible", "subfork_try", "subfork_ok", "subfork_refused"};
 
-    static boolean enemy(Element h) { return h.type == Element.Type.CRAB || h.type == Element.Type.BEE || h.type == Element.Type.SKULL || h.type == Element.Type.BLOB; }
+    static boolean enemy(Element h) { return h.type == Element.Type.CRAB || h.type == Element.Type.BEE || h.type == Element.Type.SKULL || h.type == Element.Type.BLOB || h.type == Element.Type.ENFORCER; }          // (ENFORCER: PUNISHER only)
     static boolean terrainDemand(Element e) { return e.crumbles() || e.isMoving() || e.type == Element.Type.RAMP || e.type == Element.Type.SEESAW || e.type == Element.Type.SWING || e.wet(); }
 
     /**
@@ -639,7 +639,7 @@ public final class LaneReport {
         for (Field f : DifficultyProfile.class.getFields()) { if (java.lang.reflect.Modifier.isStatic(f.getModifiers())) continue;
             try { b.append(first ? "" : ",").append(js("profile." + f.getName())).append(':').append(js(String.valueOf(f.get(DifficultyProfile.of(base))))); first = false; } catch (IllegalAccessException e) { } }
         for (Field f : Tuning.class.getFields()) { if (java.lang.reflect.Modifier.isStatic(f.getModifiers())) continue; String n = f.getName().toLowerCase(Locale.ROOT);
-            if (!(n.contains("hard") || n.contains("crab") || n.contains("bee") || n.contains("skull") || n.contains("blob") || n.contains("enemy") || n.contains("creature") || n.contains("aggr"))) continue;
+            if (!(n.contains("hard") || n.contains("crab") || n.contains("bee") || n.contains("skull") || n.contains("blob") || n.contains("enforcer") || n.contains("enemy") || n.contains("creature") || n.contains("aggr"))) continue;
             try { Object v = f.get(base); if (v != null && v.getClass().isArray()) v = arr(v); b.append(",").append(js("tuning." + f.getName())).append(':').append(js(String.valueOf(v))); } catch (IllegalAccessException e) { } }
         return b.append('}').toString();
     }

@@ -28,7 +28,7 @@ public final class EncounterModel {
     private EncounterModel() {}
 
     // weights (first estimates; see the class comment)
-    static final float W_CRAB = 1.0f, W_SKULL = 1.2f, W_BLOB = 1.0f, W_BEE = 0.8f;
+    static final float W_CRAB = 1.0f, W_SKULL = 1.2f, W_BLOB = 1.0f, W_BEE = 0.8f, W_ENFORCER = 1.6f;      // (Enforcer 2026-10-27, PROVISIONAL: a faster, attacking pursuer)
     static final float OVERLAP = 0.25f;                  // each extra pursuer adds this much of the others again
     static final float X_PURSUE_WAIT = 1.5f, X_PURSUE_POSITION = 1.0f, X_WAIT_POSITION = 0.5f, X_PURSUE_COMMIT = 0.5f;
 
@@ -118,6 +118,7 @@ public final class EncounterModel {
             case CRAB: return crabReaches(c, h.anchor, p);
             case SKULL: case BLOB: return neighbourReaches(c, h.anchor, p);
             case BEE: return beeReaches(c, t, h, p);
+            case ENFORCER: return p >= h.anchor - 1 && p < h.anchor + Math.round(h.len);          // its encounter: the approach deck and its own decks
             default: return false;
         }
     }
@@ -213,10 +214,10 @@ public final class EncounterModel {
     }
 
     static int roamReach(Element h) {
-        switch (h.type) { case CRAB: return Sim.CRAB_FOLLOW; case SKULL: case BLOB: case BEE: return 1; default: return -1; }
+        switch (h.type) { case CRAB: return Sim.CRAB_FOLLOW; case SKULL: case BLOB: case BEE: return 1; case ENFORCER: return Math.round(h.len); default: return -1; }
     }
     static float weight(Element.Type k) {
-        switch (k) { case CRAB: return W_CRAB; case SKULL: return W_SKULL; case BLOB: return W_BLOB; case BEE: return W_BEE; default: return 0f; }
+        switch (k) { case CRAB: return W_CRAB; case SKULL: return W_SKULL; case BLOB: return W_BLOB; case BEE: return W_BEE; case ENFORCER: return W_ENFORCER; default: return 0f; }
     }
     static float reach(Tuning t, float dy) {
         float v = t.jumpVel, g = t.gravity, disc = v * v - 2 * g * dy;

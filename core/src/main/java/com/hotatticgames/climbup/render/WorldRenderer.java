@@ -1050,6 +1050,9 @@ public final class WorldRenderer implements Disposable {
         batch.render(r.inst, env);
     }
 
+    /** The Enforcer's body paint per tier (yellow, orange, red) and its size: the model is 4.48 units tall, drawn Element.ENF_H (1.6 m) tall at tier 0. */
+    private static final float[][] ENF_TINT = {{0.98f, 0.80f, 0.16f}, {1.0f, 0.48f, 0.10f}, {0.86f, 0.13f, 0.11f}};
+    private static final float ENF_SCALE = Element.ENF_H / 4.48f;
     private ModelInstance stone;
     private final Color tmpDoor = new Color();
 
@@ -1361,6 +1364,28 @@ public final class WorldRenderer implements Disposable {
                         .rotate(0, 1, 0, phi * MathUtils.radiansToDegrees + (face >= 0f ? 40f : -40f)).scale(sc * sx, sc * sy, sc * sx);
                 batch.render(r.inst, env);
                 if (st != 3) castShadow(r.inst, bs, surf + lift);           // (in its leap it is off the top of the screen: the landing marker shows where it will come down)
+                break;
+            }
+            case ENFORCER: {
+                // PUNISHER (owner directive 2026-10-27): the Enforcer robot (Quaternius Animated Robot, CC0), painted by tier - yellow, orange, red - and
+                // never by colour alone: each tier is a little bigger and wears one, two or three lamps on its head (spec 12). It glows hot while it winds up a kick.
+                if (done) break;
+                int st = rsim != null ? rsim.enforcerState(rhz) : 1, tier = MathUtils.clamp(h.skin, 0, 2);
+                float es = rsim != null ? rsim.enforcerS(rhz, h) : h.s, ey = (rsim != null ? rsim.enforcerY(rhz, h) : h.y) - (st <= 3 ? dipY : 0f);
+                float dir = rsim != null && st != 0 ? rsim.mobDir[rhz] : -1f, mt = rsim != null ? rsim.mobT[rhz] : 0f;
+                String clip = st == 2 || st == 6 ? "Running" : st == 3 ? "Punch" : st == 4 || st == 5 || st == 8 ? "Jump" : st == 7 ? "Death" : "Idle";
+                Rig r = rig(h, "robot_anim", clip);
+                if (r.inst.userData == null) {          // paint the body once, by tier
+                    for (com.badlogic.gdx.graphics.g3d.Material m : r.inst.materials) if (m.id != null && m.id.contains("Main")) m.set(ColorAttribute.createDiffuse(ENF_TINT[tier][0], ENF_TINT[tier][1], ENF_TINT[tier][2], 1f));
+                    r.inst.userData = Boolean.TRUE;
+                }
+                float wind = st == 3 ? MathUtils.clamp(mt / (Element.ENF_WINDUP[tier] / (rsim != null ? rsim.T.react() : 1f)), 0f, 1f) : 0f, hot = st == 3 && wind < 1f ? wind : 0f;
+                for (com.badlogic.gdx.graphics.g3d.Material m : r.inst.materials) m.set(ColorAttribute.createEmissive(0.22f + 0.6f * hot, 0.22f + 0.1f * hot, 0.2f, 1f));
+                float sc = ENF_SCALE * (1f + 0.08f * tier), spin = st == 7 ? mt * 240f : 0f;
+                if (st != 7 && st != 8) castShadow(r.inst, es, ey);
+                drawRig(r, es, ey, 0f, camS, sc, dir >= 0f ? 70f : -70f, spin, st == 2 || st == 6 ? 1.3f + 0.15f * tier : 1f);
+                for (int q = 0; q <= tier; q++) drawBox(es + (q - tier * 0.5f) * 0.18f, ey + Element.ENF_H * (1f + 0.08f * tier) + 0.08f, 0.1f, camS, 0.1f, 0.1f, 0.1f, 1f, 0.95f - 0.3f * tier, 0.4f);
+                if (st == 2 && mt < 0.5f && !reducedMotion && quality > 0 && MathUtils.randomBoolean(0.3f)) { ambCol.set(1f, 0.9f, 0.3f, 1f); particles.spawn(es, ey + Element.ENF_H + 0.4f, 0f, 1.2f, ambCol, 0.08f, 0f, 0.4f); }      // it has seen you
                 break;
             }
             case CLUB: {

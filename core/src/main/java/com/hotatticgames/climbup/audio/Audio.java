@@ -23,7 +23,8 @@ public final class Audio implements Disposable {
     private int listIdx;
     public static final String[] GAME_TRACKS = {"music_game", "music_leaplike", "music_mountain_jig", "music_track4"};
     public static final String[] SFX = {"jump", "land", "bounce", "grab", "pull", "crumble", "checkpoint", "respawn", "win", "click", "rope", "step", "grunt1", "grunt2", "grunt3", "effort", "hit", "cannon", "saw", "spikes", "key", "door", "locked", "swing", "bonk", "squeak", "poof", "buzz", "whoosh",
-            "dash", "skull", "wobble", "blobup", "splat", "clack", "dive", "slam", "motor", "scan"};
+            "dash", "skull", "wobble", "blobup", "splat", "clack", "dive", "slam", "motor", "scan",
+            "enf_step1", "enf_step2", "enf_step3", "enf_step4", "enf_stomp"};          // PUNISHER Enforcer: Helton Yan, Mecha Footsteps (CC BY 4.0, owner exception; tools/audio/mecha_steps.py)
 
     public Audio(Settings s) {
         settings = s;

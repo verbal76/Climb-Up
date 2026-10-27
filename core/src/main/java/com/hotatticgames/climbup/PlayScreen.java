@@ -347,11 +347,11 @@ public final class PlayScreen extends ScreenAdapter {
     }
 
     private final java.util.HashMap<Element, Integer> cycleSeen = new java.util.HashMap<>();
-    private float sawT, crabT;
+    private float sawT, crabT, enfStepT;
 
     /** Hazards you can hear: cannon booms, spikes snapping up, the saw's whir. Volume falls off with distance. */
     private void hazardSounds(float dt) {
-        sawT -= dt; crabT -= dt;
+        sawT -= dt; crabT -= dt; enfStepT -= dt;
         for (int k = 0, cnt = sim.hz == null ? course.hazards.size() : sim.hz.length; k < cnt; k++) {
             int hk = sim.hz == null ? k : sim.hz[k];
             Element h = course.hazards.get(hk);
@@ -388,6 +388,16 @@ public final class PlayScreen extends ScreenAdapter {
                     int st = hk < sim.mobState.length ? sim.mobState[hk] : 0;
                     Integer prev = cycleSeen.put(h, st);
                     if (prev != null && prev != st && st == 2 && d < 12f) { g.audio.play("wobble", 0.6f * vol + 0.05f, 1f); say("[WOBBLE]"); }
+                    break;
+                }
+                case ENFORCER: {        // PUNISHER: heavy mecha steps while it runs (faster tiers step faster), a stomp as it winds up a kick and when it lands
+                    int st = sim.enforcerState(hk);
+                    Integer prev = cycleSeen.put(h, st);
+                    if (d < 14f) {
+                        if ((st == 2 || st == 6) && enfStepT <= 0f) { enfStepT = 0.34f - 0.04f * Math.max(0, Math.min(2, h.skin)); g.audio.play("enf_step" + (1 + MathUtils.random(3)), 0.55f * vol + 0.05f, 0.95f + MathUtils.random(0.1f)); }
+                        if (prev != null && prev != st && st == 3) { g.audio.play("enf_stomp", 0.6f * vol + 0.1f, 1.15f); say("[CLANK]"); }
+                        if (prev != null && (prev == 4 || prev == 5) && st == 2) { g.audio.play("enf_stomp", 0.8f * vol + 0.1f, 0.9f); world.shake(0.2f * vol); say("[STOMP]"); }
+                    }
                     break;
                 }
                 case BEE:
@@ -598,6 +608,8 @@ public final class PlayScreen extends ScreenAdapter {
         // Build 71 creatures: the skull's dash, the blob's leap and landing, being squashed, being launched
         if ((ev & Sim.EV_SLIP) != 0) { g.audio.play("slip", 1f, 1.45f + MathUtils.random(0.2f)); pop("WHOA!", Color.WHITE); say("[SQUEAK]"); vibrate(15, 2); }      // a squeaky-shoe skid on ice (sfx.json "slip")
         if ((ev & Sim.EV_DASH) != 0) { g.audio.play("dash", 0.9f, 1f); say("[WHOOSH]"); }
+        if ((ev & Sim.EV_ENF_ALERT) != 0) { g.audio.play("scan", 0.8f, 0.8f); g.audio.play("enf_stomp", 0.5f, 1.3f); say("[ROBOT ALERT]"); }          // PUNISHER: an Enforcer has seen you
+        if ((ev & Sim.EV_ENF_JUMP) != 0) { g.audio.play("whoosh", 0.8f, 0.8f); say("[WHOOSH]"); }
         if ((ev & Sim.EV_BLOB_JUMP) != 0) { g.audio.play("blobup", 0.9f, 1f); say("[BOING]"); }
         if ((ev & Sim.EV_BLOB_LAND) != 0) { g.audio.play("splat", 1f, 1f); world.shake(0.25f); say("[THUD]"); }
         if ((ev & Sim.EV_SQUASH) != 0) { g.audio.play("splat", 1f, 0.7f); g.audio.play("bonk", 0.7f, 0.6f); world.shake(0.6f); freeze(0.08f); vibrate(45, 1); pop("SQUASH!", SQUASH_GREEN); say("[SQUASH]"); }

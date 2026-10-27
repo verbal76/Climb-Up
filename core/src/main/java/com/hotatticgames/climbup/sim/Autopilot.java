@@ -579,6 +579,32 @@ public final class Autopilot {
         return plan(sim, a, false, false);
     }
 
+    /**
+     * The generator's fairness proof for a pursuing creature's encounter (PUNISHER Enforcer, 2026-10-27): from the proven standing start on route
+     * element {@code from}, play every link up to {@code to} the way the solver does - plan (preferring moves that suit the next link), execute on the
+     * real simulation with every hazard of the course active, pull up a caught ledge, carry on from the route element landed on - and require that no
+     * hit or fall happens and the route is never lost. A creature's shove that still lands on the route is no failure; one that throws the climber off it is.
+     */
+    public static boolean chainClean(Course c, Tuning t, int from, int to) {
+        Sim real = CourseGenerator.provenStart(c, t, from);
+        real.humanHold = HUMAN_HOLD; real.act = null; real.hz = null;
+        InputState in = new InputState(); int sb = real.setbacks(), a = from;
+        while (a < to) {
+            for (int q = 0; q < 120 && (real.mode == Sim.Mode.LEDGE || real.mode == Sim.Mode.PULLUP); q++) { in.clear(); in.moveY = 1f; real.step(in); }
+            for (int q = 0; q < 120 && real.mode == Sim.Mode.AIR; q++) { in.clear(); real.step(in); }          // (a shove's flight: it lands somewhere)
+            if (real.setbacks() != sb || !(real.mode == Sim.Mode.GROUND || real.mode == Sim.Mode.ROPE || real.mode == Sim.Mode.CABLE) || !onRoute(c, real.onElem) || real.onElem < a) return false;
+            if (real.onElem > a) { a = real.onElem; continue; }
+            Result r = plan(real, a, false, true);
+            if (!r.ok) r = plan(real, a, false, false);
+            if (!r.ok) return false;
+            Policy p = make(r.factory);
+            for (int guard = (int) (20f / Sim.DT); guard > 0 && !succeeded(real, a); guard--) { in.clear(); p.act(real, in); real.step(in); if (real.setbacks() != sb) return false; }
+            if (!succeeded(real, a)) return false;
+            a = real.mode == Sim.Mode.AIR ? real.lastPad : real.onElem;
+        }
+        return real.setbacks() == sb;
+    }
+
     /** True if the move reaches the next link on a copy with every hazard of the course active (no planning window). */
     static boolean clearOfEverything(Sim real, int a, PolicyFactory f) {
         Sim s = real.copy(); s.act = null; s.hz = null; s.humanHold = HUMAN_HOLD;

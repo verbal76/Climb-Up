@@ -1008,7 +1008,7 @@ Measured from start times 0.5-2.0 s the window is 0.91-1.09. The generator prove
 
 The saw itself is fair; the test samples one instant at which another hazard is mid-flight. A fix would measure from `provenStart`, as CourseTest does. That is an owner decision because it changes what a test measures: owner rule "don't weaken tests". BundledReplayTest stays red until replays are re-recorded.
 
-## PUNISHER content directive (owner, 2026-10-27): Enforcer robot family and spike-block avalanche - decisions so far (implementation not started)
+## PUNISHER content directive (owner, 2026-10-27): Enforcer robot family and spike-block avalanche - decisions
 
 - NORMAL frozen. Both new threats are PUNISHER-only; existing PUNISHER enemies/hazards may be reweighted or suppressed to give them room.
 - Assets: Quaternius "LowPoly Robot" (Animated Robot by Quaternius.zip, Nov 2018; FBX/OBJ/Blend, 14 animations), CC0 1.0 per the pack's License.txt and the itch.io page (owner screenshots). Spike block: the existing Quaternius Ultimate Platformer `cube_spikes` model already in `assets/pack` (CC0, ASSETS.md).
@@ -1017,6 +1017,7 @@ The saw itself is fair; the test samples one instant at which another hazard is 
   - Avalanche timing: recurring, with a cooldown that is deterministic but seeded-random each time, roughly 30-90 s between drops (examples 30, 45, 60, 90 s). Target about 2-3 avalanches per level (castle interval, 5-10 min) as a starting balance: "rough but not too rough - it is PUNISHER".
   - Robot conversion: installing an FBX converter (Blender Python module or FBX2glTF) to convert Robot.fbx with its animations into the game's model format is approved. Only the converted model, license text and provenance are committed.
   - Sequencing: finish SawFairnessTest first, then start the PUNISHER content. Build 82 stays on hold.
+  - **Asset-policy exception (owner, 2026-10-27): Helton Yan's "MECHA FOOTSTEPS" (FREE Retro Mecha SFX, CC BY 4.0) is allowed with credit**, although the spec's policy is CC0 or original. Asked explicitly ("Allow, with credit"). It applies to this pack only: five clips (trimmed mono, `tools/audio/mecha_steps.py`) are the Enforcer's steps, kick wind-up stomp and landing. Attribution is on the in-game Credits screen, in ASSETS.md and THIRD_PARTY_ASSETS.md, with the full CC BY 4.0 text in `assets/licenses/HeltonYan_MechaFootsteps_License.txt`. (creativecommons.org was blocked from the build environment, so the legal code was copied from the Debian copy shipped in the container, verbatim.)
 
 ### SawFairnessTest corrected (owner decision 2026-10-27)
 

@@ -11,7 +11,8 @@ public final class Sim {
     // event bits
     public static final int EV_JUMP = 1, EV_LAND = 2, EV_BOUNCE = 4, EV_GRAB = 8, EV_PULL = 16, EV_CRUMBLE = 32,
             EV_CHECKPOINT = 64, EV_RESPAWN = 128, EV_WIN = 256, EV_ROPE = 512, EV_CABLE = 1024, EV_FALL_NEAR = 2048, EV_HIT = 4096, EV_KEY = 8192, EV_DOOR = 16384, EV_BLOCKED = 32768, EV_CLUB = 65536, EV_SWING = 131072, EV_SHOVE = 262144, EV_CRAB_OFF = 524288, EV_FINISH = 1048576, EV_AIM = 2097152,
-            EV_DASH = 4194304, EV_BLOB_JUMP = 8388608, EV_BLOB_LAND = 16777216, EV_SQUASH = 33554432, EV_LAUNCH = 67108864, EV_SLIP = 134217728;   // Build 71: a skull starts a dash, a blob leaps, a blob lands, you were squashed, a skull or a tipping bridge launched you
+            EV_DASH = 4194304, EV_BLOB_JUMP = 8388608, EV_BLOB_LAND = 16777216, EV_SQUASH = 33554432, EV_LAUNCH = 67108864, EV_SLIP = 134217728,
+            EV_ENF_ALERT = 268435456, EV_ENF_JUMP = 536870912;   // (2026-10-27 PUNISHER Enforcer: it starts its chase; it jumps (a swat or its leap away))   // Build 71: a skull starts a dash, a blob leaps, a blob lands, you were squashed, a skull or a tipping bridge launched you
 
     public final Course course;
     public final Tuning T;
@@ -738,6 +739,137 @@ public final class Sim {
             }
         }
     }
+    /**
+     * Enforcer robot (PUNISHER, owner 2026-10-27). States: 1 waits at the far end of its first deck; 2 chases - runs at you on your deck, runs to the
+     * edge and hops to the next deck toward you (one deck at a time, only gaps it can jump, inside its {@code len} decks); 3 kick - rears back
+     * (ENF_WINDUP, the telegraph), kicks for ENF_KICK_ACT (a hit throws you off your footing), recovers; 4 swat (orange, red) - while you are in the
+     * air within reach it jumps (ENF_SWAT_VY, steering toward where you are - red: where you will be) and bats you away on contact; 5 hop; 6 runs up the
+     * tower to its deck's far edge, 8 leaps away up and right; 7 falls (it missed its deck). It leaves after ENF_PURSUE seconds of chase or once you are past
+     * its last deck. Ballistic parts use the player's gravity. Per-hazard state reuses the creature arrays: mobS arc, mobY height above its deck,
+     * mobDir facing, mobTgt hop/edge target, mobSeen chase clock, deckOff deck, crabVel vertical speed, crabFrom arc speed (or hop origin), crabStuck
+     * notice clock, crabCool swat cooldown. Pure sim state: deterministic.
+     */
+    private void stepEnforcer(Element e, int idx, float hw) {
+        if (idx >= mobState.length || (idx < featDone.length && featDone[idx])) return;
+        int tier = Math.max(0, Math.min(2, e.skin)), a0 = e.anchor, n = Math.max(1, Math.round(e.len));
+        if (a0 < 0 || a0 >= course.size()) return;
+        float rc = T.react();
+        if (mobState[idx] == 0) {
+            Element d0 = course.get(a0);
+            mobState[idx] = 1; deckOff[idx] = 0f; mobS[idx] = course.wrap(es1[a0] + Math.max(0f, d0.halfW() - 0.6f)); mobDir[idx] = -1f; mobY[idx] = 0f;
+            mobT[idx] = 0f; mobSeen[idx] = 0f; crabVel[idx] = 0f; crabFrom[idx] = 0f; crabStuck[idx] = 0f; crabCool[idx] = 0f;
+        }
+        int j = a0 + Math.round(deckOff[idx]);
+        if (j < 0 || j >= course.size()) { featDone[idx] = true; return; }
+        Element deck = course.get(j);
+        float dS = es1[j], half = deck.halfW(), dY = deckY(j), g = T.gravity;
+        mobT[idx] += DT;
+        if (crabCool[idx] > 0f) crabCool[idx] = Math.max(0f, crabCool[idx] - DT);
+        int cur = j - a0, pk = standOff(a0, -1, n - 1, false);
+        float dx = course.dsWrap(s, mobS[idx]);
+        byte st = mobState[idx];
+        if (st >= 2 && st <= 5) mobSeen[idx] += DT;
+        boolean past = mode == Mode.GROUND && onElem >= 0 && onElem < course.routeSize() && onElem > a0 + n - 1 && course.get(onElem).anchor < 0;
+        if (st >= 2 && st <= 3 && (mobSeen[idx] >= ENFPURSUE(tier, rc) || past)) { mobState[idx] = 6; mobT[idx] = 0f; st = 6; }
+        switch (st) {
+            case 1: {
+                crabStuck[idx] = (pk != NONE || onDeck(dS, half, dY)) ? crabStuck[idx] + DT : 0f;
+                if (crabStuck[idx] >= Element.ENF_NOTICE[tier] / rc) { mobState[idx] = 2; mobT[idx] = 0f; events |= EV_ENF_ALERT; }
+                break;
+            }
+            case 2: {
+                float run = Element.ENF_RUN[tier] * rc * DT;
+                if (mode == Mode.AIR && crabCool[idx] <= 0f && Element.ENF_SWAT_RANGE[tier] > 0f && Math.abs(dx) < Element.ENF_SWAT_RANGE[tier]
+                        && y - dY > 0.6f && y - dY < 3.2f && (tier == 2 || vy > -2f)) {
+                    float tUp = Element.ENF_SWAT_VY / g, aim = tier == 2 ? course.dsWrap(s + vx * tUp, mobS[idx]) : dx;
+                    float lim = Element.ENF_RUN[tier] * rc * 1.3f;
+                    crabFrom[idx] = Math.max(-lim, Math.min(lim, aim / tUp)); crabVel[idx] = Element.ENF_SWAT_VY; mobY[idx] = 0f;
+                    mobDir[idx] = dx >= 0f ? 1f : -1f; mobState[idx] = 4; mobT[idx] = 0f; crabCool[idx] = Element.ENF_SWAT_CD[tier] / rc; events |= EV_ENF_JUMP;
+                    break;
+                }
+                int want = pk != NONE ? Math.max(0, pk) : cur;
+                if (want == cur) {
+                    if (mode == Mode.GROUND && onElem == j && Math.abs(dx) <= Element.ENF_HALF + hw + Element.ENF_KICK_REACH[tier]) {
+                        mobDir[idx] = dx >= 0f ? 1f : -1f; mobState[idx] = 3; mobT[idx] = 0f;
+                    } else if (Math.abs(dx) > 0.3f && (mode == Mode.GROUND && onElem == j || mode == Mode.AIR)) {
+                        float lo = -half + 0.3f, hiE = half - 0.3f, x = course.dsWrap(mobS[idx], dS);
+                        float nx = Math.max(lo, Math.min(hiE, x + Math.signum(dx) * run));
+                        mobS[idx] = course.wrap(dS + nx); mobDir[idx] = Math.signum(dx);
+                    }
+                } else {
+                    int nj = j + (want > cur ? 1 : -1);
+                    float side = course.dsWrap(es1[nj], dS) >= 0f ? 1f : -1f, edge = side * (half - 0.35f), x = course.dsWrap(mobS[idx], dS);
+                    mobDir[idx] = side;
+                    if (Math.abs(edge - x) > run) mobS[idx] = course.wrap(dS + x + Math.signum(edge - x) * run);
+                    else if (enfHopOk(j, nj)) {
+                        Element nd = course.get(nj);
+                        crabFrom[idx] = mobS[idx]; mobTgt[idx] = course.wrap(es1[nj] - side * Math.max(0.3f, nd.halfW() - 0.5f));
+                        crabVel[idx] = nj - a0; mobState[idx] = 5; mobT[idx] = 0f;
+                    }
+                }
+                break;
+            }
+            case 3: {
+                float wu = Element.ENF_WINDUP[tier] / rc, act = Element.ENF_KICK_ACT, rec = Element.ENF_RECOVER[tier] / rc, t = mobT[idx];
+                if (t >= wu && t < wu + act && shoveCd <= 0f && invuln <= 0f && (mode == Mode.GROUND || mode == Mode.AIR)) {
+                    float ahead = dx * mobDir[idx];
+                    if (ahead > -Element.ENF_HALF - hw && ahead < Element.ENF_HALF + hw + Element.ENF_KICK_REACH[tier] && y < dY + 1.3f && y + T.height > dY + 0.1f) {
+                        vx = mobDir[idx] * Element.ENF_KICK_X; vy = Math.max(vy, Element.ENF_KICK_Y); mode = Mode.AIR; onElem = -1; coyote = 0f; lockout = 0.3f; jumpedUp = false; shoveCd = 0.9f;
+                        events |= EV_SHOVE | EV_LAUNCH;
+                    }
+                }
+                if (t >= wu + act + rec) { mobState[idx] = 2; mobT[idx] = 0f; }
+                break;
+            }
+            case 4: {
+                mobS[idx] = course.wrap(mobS[idx] + crabFrom[idx] * DT); mobY[idx] += crabVel[idx] * DT; crabVel[idx] -= g * DT;
+                float cy = dY + mobY[idx], bx = course.dsWrap(s, mobS[idx]);
+                if (shoveCd <= 0f && invuln <= 0f && Math.abs(bx) < Element.ENF_HALF + hw + 0.25f && y < cy + Element.ENF_H + Element.ENF_REACH_UP && y + T.height > cy) {
+                    vx = (bx >= 0f ? 1f : -1f) * Element.ENF_SWAT_X; vy = Math.min(vy, Element.ENF_SWAT_Y); mode = Mode.AIR; onElem = -1; coyote = 0f; lockout = 0.3f; jumpedUp = false; shoveCd = 0.9f;
+                    events |= EV_SHOVE | EV_LAUNCH;
+                }
+                if (crabVel[idx] < 0f && mobY[idx] <= 0f) {
+                    if (Math.abs(course.dsWrap(mobS[idx], dS)) <= half) { mobY[idx] = 0f; crabVel[idx] = 0f; crabFrom[idx] = 0f; mobState[idx] = 2; mobT[idx] = 0f; }
+                    else { mobState[idx] = 7; mobT[idx] = 0f; }          // it came down off its deck: it falls
+                }
+                break;
+            }
+            case 5: {
+                int to = Math.round(crabVel[idx]), nj = a0 + to;
+                float k = Math.min(1f, mobT[idx] / (Element.ENF_HOP_T / rc)), rise = deckY(nj) - dY;
+                mobS[idx] = course.wrap(crabFrom[idx] + course.dsWrap(mobTgt[idx], crabFrom[idx]) * k);
+                mobY[idx] = rise * k + 4f * (Element.ENF_HOP_PEAK + Math.max(0f, rise) * 0.5f) * k * (1f - k);
+                if (k >= 1f) { deckOff[idx] = to; mobY[idx] = 0f; crabVel[idx] = 0f; mobState[idx] = 2; mobT[idx] = 0f; }
+                break;
+            }
+            case 6: {          // leaving: up the tower, to its deck's far (+s) edge, then a leap away
+                float x = course.dsWrap(mobS[idx], dS), edge = half - 0.3f, run = Element.ENF_EXIT_RUN * rc * DT;
+                mobDir[idx] = 1f;
+                if (edge - x > run) mobS[idx] = course.wrap(mobS[idx] + run);
+                else { crabFrom[idx] = Element.ENF_EXIT_VX; crabVel[idx] = Element.ENF_EXIT_VY; mobState[idx] = 8; mobT[idx] = 0f; events |= EV_ENF_JUMP; }
+                break;
+            }
+            default: {          // 7 falling, 8 leaping away: ballistic, then gone
+                mobS[idx] = course.wrap(mobS[idx] + crabFrom[idx] * DT); mobY[idx] += crabVel[idx] * DT; crabVel[idx] -= g * DT;
+                if ((st == 8 && (mobY[idx] > Element.ENF_GONE_Y || mobT[idx] > 2.5f)) || (st == 7 && mobT[idx] > Element.ENF_FALL_T)) featDone[idx] = true;
+                break;
+            }
+        }
+    }
+    private static float ENFPURSUE(int tier, float rc) { return Element.ENF_PURSUE[tier] / rc; }
+    /** The robot can hop from deck j to deck nj: a flat fixed route deck, a gap it can jump and a height it can climb or drop. */
+    private boolean enfHopOk(int j, int nj) {
+        if (!roamDeck(nj, false)) return false;
+        Element a = course.get(j), b = course.get(nj);
+        float gap = Math.abs(course.dsWrap(es1[nj], es1[j])) - a.halfW() - b.halfW();
+        return gap <= Element.ENF_HOP_GAP && Math.abs(deckY(nj) - deckY(j)) <= Element.ENF_HOP_DY;
+    }
+    /** Enforcer state for the renderer and reports (0 not started, 1 waiting, 2 chasing, 3 kicking, 4 swatting, 5 hopping, 6 leaving, 7 falling, 8 leaping away). */
+    public int enforcerState(int hi) { return hi < mobState.length ? mobState[hi] : 0; }
+    /** Its feet: arc and absolute height. */
+    public float enforcerS(int hi, Element e) { return hi < mobS.length && mobState[hi] != 0 ? mobS[hi] : e.s; }
+    public float enforcerY(int hi, Element e) { int j = mobDeckIdx(hi, e); return (j >= 0 ? deckY(j) : e.y) + (hi < mobY.length ? mobY[hi] : 0f); }
+
     /** The skull's live arc / height above its deck / heading (for the renderer and the planner's reflex); state 3 = dashing. */
     public boolean skullDashing(int hi) { return hi < mobState.length && mobState[hi] == 3; }
 
@@ -989,6 +1121,7 @@ public final class Sim {
             if (e.type == Element.Type.CLUB || e.type == Element.Type.CRAB || e.type == Element.Type.BEE) { stepClubCrab(e, hi_, hw); continue; }
             if (e.type == Element.Type.SKULL) { stepSkull(e, hi_, hw); continue; }
             if (e.type == Element.Type.BLOB) { stepBlob(e, hi_, hw); continue; }
+            if (e.type == Element.Type.ENFORCER) { stepEnforcer(e, hi_, hw); continue; }
             if (e.type != Element.Type.KEY && e.type != Element.Type.GATE) continue;
             if (e.type == Element.Type.GATE && !finishedRun && e.skin > 0 && e.skin == T.finishCastle && hi_ < featDone.length && featDone[hi_]
                     && Math.abs(course.dsWrap(s, e.s)) < 0.35f && hi < e.y + e.len && lo > e.y - 1f) { finishedRun = true; events |= EV_FINISH; }          // walked through the finish castle's open door

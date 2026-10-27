@@ -16,7 +16,7 @@ public final class Lanes {
                 return Lane.TERRAIN;
             case SAW_H: case SAW_V: case PENDULUM: case CANNON: case AIMED: case MORTAR: case SPIKE_TRAP: case SPIKE_BLOCK: case SPIKE_DROP:
                 return Lane.HAZARDS;
-            case CRAB: case BEE: case SKULL: case BLOB:
+            case CRAB: case BEE: case SKULL: case BLOB: case ENFORCER:
                 return Lane.ENEMIES;
             case GOAL: case KEY: case GATE: case CLUB:
                 return Lane.UTILITY;
@@ -48,6 +48,7 @@ public final class Lanes {
             case SPIKE_BLOCK: return "Spiked-block collision threat";
             case SPIKE_DROP: return "Falling spike slab (its platform is TERRAIN)";
             case CRAB: return "Crab enemy"; case BEE: return "Bee enemy"; case SKULL: return "Skull enemy"; case BLOB: return "Blob enemy";
+            case ENFORCER: return "Enforcer robot (PUNISHER): pursuit across 3-5 decks, kick, air swat (orange/red)";
             case GOAL: return "Completion/progression marker"; case KEY: return "Progression and route requirement";
             case GATE: return "Progression/access control"; case CLUB: return "Defensive/protective pickup (mitigation, never a negative enemy)";
             default: throw new IllegalStateException("UNCLASSIFIED Element.Type " + k);

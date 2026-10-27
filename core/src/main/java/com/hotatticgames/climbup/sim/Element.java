@@ -26,7 +26,13 @@ public final class Element {
         /** Skull (Build 71, owner): hovers and bobs above one end of a long fixed platform or bridge; when you are on its deck it drops low and dashes straight along it at you, leaving a misty trail. Jump over it; a hit launches you hard the way it was going (never hurts). Then it turns, rises, bobs, and comes again. w = its deck's width. */
         SKULL,
         /** Green blob (Build 71, owner): sits on a long fixed platform or a tipping bridge. When you are on its deck it wobbles, leaps high off the screen and drops on you: only its shadow shows where, at the last moment. Squashed flat, you are bounced away (never hurts). Landing on the far end of a tipping bridge you stand on launches you three times your jump height. w = its deck's width. */
-        BLOB }
+        BLOB,
+        /**
+         * Enforcer robot (PUNISHER only, owner 2026-10-27): a pursuit enemy that waits at the far end of its first deck ({@code anchor}), chases you across
+         * {@code len} consecutive route decks (3-5), kicks you off your footing, and - orange and red - jumps to swat you out of the air. After its burst it
+         * runs off up the tower and leaps away. skin: tier 0 yellow, 1 orange, 2 red. It obeys gravity and the decks; it can be knocked or fall off.
+         */
+        ENFORCER }
 
     public Type type;
     public int zone;
@@ -103,7 +109,7 @@ public final class Element {
     public float rampSlope(float t) { return spins() ? amp * (float) StrictMath.cos(spinAngle(t)) : amp; }
 
     public boolean isMoving() {
-        switch (type) { case MOVE_H: case MOVE_V: case MOVE_Z: case SWING: case SAW_H: case SAW_V: case PENDULUM: case CANNON: case SPIKE_TRAP: case SPIKE_DROP: case CRAB: case BEE: case MORTAR: case AIMED: case SKULL: case BLOB: return true; default: return false; }
+        switch (type) { case MOVE_H: case MOVE_V: case MOVE_Z: case SWING: case SAW_H: case SAW_V: case PENDULUM: case CANNON: case SPIKE_TRAP: case SPIKE_DROP: case CRAB: case BEE: case MORTAR: case AIMED: case SKULL: case BLOB: case ENFORCER: return true; default: return false; }
     }
 
     public static final float CANNON_FLIGHT = 0.7f;      // fraction of the cycle the cycle's ball takes to cross the lane (its launch speed)
@@ -211,6 +217,24 @@ public final class Element {
     public static final float BLOB_PUSH_X = 9f, BLOB_PUSH_Y = 7f;
     /** Landing on the far end of a tipping bridge you stand on: launch speed = this times the jump speed (sqrt 3 = three times the jump height). */
     public static final float BLOB_LAUNCH = 1.7320508f;
+    // ---- Enforcer robot (PUNISHER, owner 2026-10-27). Per tier {yellow, orange, red}; times are scaled by Tuning.react() like every creature's.
+    /** Body: half-width along the lane and height (the robot model is drawn to this size). */
+    public static final float ENF_HALF = 0.4f, ENF_H = 1.6f;
+    /** Seconds you must be in its range before it starts; its run speed (m/s); kick wind-up (the telegraph: it rears back), active and recovery times (s). */
+    public static final float[] ENF_NOTICE = {0.5f, 0.4f, 0.3f}, ENF_RUN = {3.6f, 4.4f, 5.2f}, ENF_WINDUP = {0.45f, 0.36f, 0.28f}, ENF_RECOVER = {0.75f, 0.55f, 0.4f};
+    public static final float ENF_KICK_ACT = 0.15f;
+    /** How far in front of its body a kick reaches (m), and how hard it throws you (m/s along / up), like a crab's shove but harder. */
+    public static final float[] ENF_KICK_REACH = {0.85f, 0.95f, 1.05f};
+    public static final float ENF_KICK_X = 9.5f, ENF_KICK_Y = 6.5f;
+    /** Air swat (orange and red): it jumps when you are airborne within this arc distance (0 = never), at most once per cooldown; its jump reaches about 2.3 m. */
+    public static final float[] ENF_SWAT_RANGE = {0f, 2.4f, 3.0f}, ENF_SWAT_CD = {99f, 1.6f, 1.1f};
+    public static final float ENF_SWAT_VY = 12.5f, ENF_SWAT_X = 8f, ENF_SWAT_Y = -2f, ENF_REACH_UP = 0.5f;
+    /** How long a burst lasts at most (s), then it leaves; a hop between decks (s) and the largest gap / height change it hops. */
+    public static final float[] ENF_PURSUE = {6.5f, 7.5f, 8.5f};
+    public static final float ENF_HOP_T = 0.5f, ENF_HOP_GAP = 3.6f, ENF_HOP_DY = 2.2f, ENF_HOP_PEAK = 1.0f;
+    /** Leaving: it runs up the tower at ENF_EXIT_RUN and leaps away (m/s); once ENF_GONE_Y above its deck (or falling for ENF_FALL_T s) it is gone. */
+    public static final float ENF_EXIT_RUN = 7f, ENF_EXIT_VX = 6f, ENF_EXIT_VY = 13f, ENF_GONE_Y = 10f, ENF_FALL_T = 2f;
+
     /** Height of the leaping blob above its deck, k = 0..1 through the leap: up fast, a hang off screen, and down. */
     public static float blobLeapY(float k) {
         if (k < 0.45f) { float u = k / 0.45f; return BLOB_APEX * (1f - (1f - u) * (1f - u)); }

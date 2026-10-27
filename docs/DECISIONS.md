@@ -1017,3 +1017,17 @@ The saw itself is fair; the test samples one instant at which another hazard is 
   - Avalanche timing: recurring, with a cooldown that is deterministic but seeded-random each time, roughly 30-90 s between drops (examples 30, 45, 60, 90 s). Target about 2-3 avalanches per level (castle interval, 5-10 min) as a starting balance: "rough but not too rough - it is PUNISHER".
   - Robot conversion: installing an FBX converter (Blender Python module or FBX2glTF) to convert Robot.fbx with its animations into the game's model format is approved. Only the converted model, license text and provenance are committed.
   - Sequencing: finish SawFairnessTest first, then start the PUNISHER content. Build 82 stays on hold.
+
+### SawFairnessTest corrected (owner decision 2026-10-27)
+
+The test now measures each saw's timing window from a start a player can really have (`core/src/test/.../sim/SafeStart`), instead of slice time 0. The steps:
+1. **Arrive.** The climber reaches the saw's platform by the previous route link's proven move, run from that link's proven start. A caught ledge is pulled up, as a player and the solver do.
+2. **Go to the waiting spot.** The climber walks to the spot the link was proven from (`provenStart`) with the solver's own walk-and-stop (`standAt`, direction-only stick), and stops.
+3. **Wait.** It stands still, with every hazard of the course active the whole time. Nothing is repositioned, reset or disabled, and cannonballs from other platforms count.
+4. **Jump at the earliest clean moment.** Every 0.15 s, up to 9 s, it checks for a planner move that also clears every hazard on its whole way (`Autopilot.clearOfEverything`). The first moment one exists is used, and the planner's timing window there is the measured window. The limits are unchanged: at least 0.5 of the cycle for every saw, floor-saw amplitude, gap and blade-height rules.
+
+Failing to arrive, being hit or carried off on the way or while waiting, or finding no clean move within 9 s fails the test; no saw is skipped. The procedure is deterministic: a fixed step grid, a fixed bound, no randomness. Generator unchanged (rules 11).
+
+Results (seeds 1-5, slices 0-25, 245 saws): every saw is reachable, survivable and passable. Worst windows: gap 0.50, floor 0.67.
+- **The original case (seed 2 slice 25, platform 48):** the climber really arrives at t = 1.10 s, after the cannonball that passes the standing spot at t = 0. The jump that clears every hazard is available at once, with window 0.91. Genuinely playable.
+- **Seed 4 slice 6, platform 50:** a floor saw and a gap saw share the platform. Timed from the landing spot instead of the proven waiting spot the window is 0.33; from the waiting spot it is 0.83. The waiting spot is reachable and safe, so the combination is fair, but it is the tightest found.

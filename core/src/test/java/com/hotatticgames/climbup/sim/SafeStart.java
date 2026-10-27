@@ -32,15 +32,13 @@ public final class SafeStart {
         // the waiting spot is the one the link was proven from (CourseGenerator.provenStart: the platform's middle, or its safe pocket behind a hazard in
         // the middle); from the real landing the climber walks there and stops, under every hazard (seed 4 slice 6: two saws on one platform, timed from
         // the landing spot 0.33 of their cycle, from the proven spot 0.83). The timing is judged from a standstill, as the test always measured it.
-        float spot = CourseGenerator.provenStart(c, t, a).s;
+        float spot = CourseGenerator.provenStart(c, t, a).s, t0 = s.time;
+        Autopilot.standAt(s, spot, in);          // the solver's own walk-and-stop with a direction-only stick (a fixed sequence of inputs, as a player would make)
+        if (s.setbacks() != sb) { out.why = String.format("hit walking to the waiting spot on %d (%.2f s, %s)", a, s.time - t0, s.hitBy == null ? "fall" : s.hitBy.type + " of platform " + s.hitBy.anchor); return out; }
+        if (s.mode != Sim.Mode.GROUND || s.onElem != a) { out.why = String.format("left platform %d walking to the waiting spot (mode %s)", a, s.mode); return out; }
         boolean standing = false;
         for (int step = 0; step <= max; step++) {
-            if (!standing) {
-                float d = c.dsWrap(spot, s.s);
-                if (Math.abs(d) < 0.25f && Math.abs(s.vx) < 0.05f) standing = true;
-                else { in.clear(); in.moveX = Math.abs(d) < 0.25f ? 0f : Math.signum(d); s.step(in); if (s.setbacks() != sb) { out.why = String.format("hit walking to the waiting spot on %d (%.2f s, %s)", a, step * Sim.DT, s.hitBy == null ? "fall" : s.hitBy.type + " of platform " + s.hitBy.anchor); return out; }
-                       if (s.mode != Sim.Mode.GROUND || s.onElem != a) { out.why = String.format("left platform %d walking to the waiting spot (%.2f s, mode %s)", a, step * Sim.DT, s.mode); return out; } continue; }
-            }
+            if (!standing && Math.abs(s.vx) < 0.05f) standing = true;
             if (standing && step % every == 0 && s.mode == Sim.Mode.GROUND && s.onElem == a) {
                 Autopilot.Result r = Autopilot.plan(s, a, true);
                 if (r.ok && Autopilot.clearOfEverything(s, a, r.factory)) { out.ok = true; out.waited = step * Sim.DT; out.window = r.window; return out; }

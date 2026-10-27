@@ -114,6 +114,10 @@ public final class Sim {
     public float crabS, crabY;                    // where the last crab was knocked off (effects)
     public Element hitBy;
     public float hitS, hitY;                      // where the last hit happened (effects)
+    /** Arc position of the part of the hazard that touched the body in the last {@link #hazardHit} that returned true (the ball, the blade where it rides now, the falling block). */
+    private float hitFromS = Float.NaN;
+    /** Seconds a knock-off keeps the hands from grabbing again (owner correction 2026-10-27, DC4: knocked off a rope, the climber re-grabbed it the next frame and was hit again every 0.72 s). */
+    static final float KNOCK_LOCKOUT = 0.3f;
     public int[] act;                // planner window: element indices simulated (null = everything)
     public int[] hz;                 // hazard indices simulated (null = every hazard)
     public int winLo = 0, winHi = Integer.MAX_VALUE;   // element index range covered by the window (renderers iterate just this)
@@ -353,8 +357,10 @@ public final class Sim {
 
     /** A hazard never teleports you: it knocks you off whatever you hold, and you land on what is below or, if nothing is, fall back to the last red gem. */
     private void knockOff() {
-        float side = hitBy == null ? 0f : course.dsWrap(s, hitBy.sAt(time));
-        mode = Mode.AIR; onElem = -1; coyote = 0; jumpBuf = 0;
+        // away from what touched you (DC4: the hazard's home was used, so a body between a carried saw's home and the saw itself was thrown through it)
+        float side = hitBy == null ? 0f : course.dsWrap(s, Float.isNaN(hitFromS) ? hitBy.sAt(time) : hitFromS);
+        hitFromS = Float.NaN;
+        mode = Mode.AIR; onElem = -1; coyote = 0; jumpBuf = 0; lockout = Math.max(lockout, KNOCK_LOCKOUT);
         vx = (side >= 0f ? 1f : -1f) * T.hitKnockSide; vy = T.hitKnockUp; invuln = 0.7f;      // tuning.json: hitKnockSide / hitKnockUp
     }
 
@@ -601,7 +607,7 @@ public final class Sim {
         }
         if (shoveCd <= 0f && invuln <= 0f && Math.abs(dx) < 0.55f + hw && y < cy + 0.62f && y + T.height > cy + 0.05f && (mode == Mode.GROUND || mode == Mode.AIR)) {
             float side = Math.signum(dx); if (side == 0f) side = -facing;
-            vx = side * 9f; vy = Math.max(vy, 6f); mode = Mode.AIR; onElem = -1; lockout = 0.3f; jumpedUp = false; shoveCd = 0.9f; events |= EV_SHOVE;
+            vx = side * 9f; vy = Math.max(vy, 6f); mode = Mode.AIR; onElem = -1; lockout = 0.3f; jumpedUp = false; coyote = 0f; shoveCd = 0.9f; events |= EV_SHOVE;
         }
     }
     /** Build 79: a bridge's plank holes are open (see Element.holed); you drop through one once your middle is HOLE_FOOT inside its edges. */
@@ -619,7 +625,7 @@ public final class Sim {
         }
         if (shoveCd <= 0f && invuln <= 0f && Math.abs(dx) < Element.BEE_R + hw && by + Element.BEE_R > y + 0.1f && by - Element.BEE_R < y + T.height - 0.05f && (mode == Mode.GROUND || mode == Mode.AIR)) {
             float side = Math.signum(dx); if (side == 0f) side = -facing;
-            vx = side * Element.BEE_PUSH_X; vy = Math.max(vy, Element.BEE_PUSH_Y); mode = Mode.AIR; onElem = -1; lockout = 0.25f; jumpedUp = false; shoveCd = 1.0f; events |= EV_SHOVE;
+            vx = side * Element.BEE_PUSH_X; vy = Math.max(vy, Element.BEE_PUSH_Y); mode = Mode.AIR; onElem = -1; lockout = 0.25f; jumpedUp = false; coyote = 0f; shoveCd = 1.0f; events |= EV_SHOVE;
         }
     }
     private final float[] beeTmp = new float[2], beeEnv = new float[4];
@@ -870,7 +876,7 @@ public final class Sim {
                 }
                 mobS[idx] = course.wrap(mobS[idx] + crabFrom[idx] * DT); mobY[idx] += crabVel[idx] * DT; crabVel[idx] -= g * DT;
                 float cy = dY + mobY[idx], bx = course.dsWrap(s, mobS[idx]);
-                if (shoveCd <= 0f && invuln <= 0f && Math.abs(bx) < Element.ENF_HALF + hw + 0.25f && y < cy + Element.ENF_H + Element.ENF_REACH_UP && y + T.height > cy) {
+                if (shoveCd <= 0f && invuln <= 0f && (mode == Mode.GROUND || mode == Mode.AIR) && Math.abs(bx) < Element.ENF_HALF + hw + 0.25f && y < cy + Element.ENF_H + Element.ENF_REACH_UP && y + T.height > cy) {      // (DC4: hanging on a rope, cable or ledge is out of a creature's reach, as for every other creature)
                     vx = (bx >= 0f ? 1f : -1f) * Element.ENF_SWAT_X; vy = Math.min(vy, Element.ENF_SWAT_Y); mode = Mode.AIR; onElem = -1; coyote = 0f; lockout = 0.3f; jumpedUp = false; shoveCd = 0.9f;
                     events |= EV_SHOVE | EV_LAUNCH | EV_ENF_HIT; enfSwatHits++;
                 }
@@ -1216,7 +1222,7 @@ public final class Sim {
             if (e.skin == 1) R = avlRadius(e, b);
             float dx = Math.max(0f, Math.abs(course.dsWrap(es1[a0] + avl[p], s)) - hw), by = ay + avl[p + 1];
             float dy = by < lo ? lo - by : (by > hi ? by - hi : 0f);
-            if (dx * dx + dy * dy < R * R) return true;
+            if (dx * dx + dy * dy < R * R) { hitFromS = es1[a0] + avl[p]; return true; }
         }
         return false;
     }
@@ -1578,7 +1584,8 @@ public final class Sim {
         if (b == null) return false;
         float dx = Math.abs(course.dsWrap(b[0], s)), ddx = Math.max(0f, dx - hw);
         float ddy = b[1] < lo ? lo - b[1] : (b[1] > hiY ? b[1] - hiY : 0f);
-        return ddx * ddx + ddy * ddy < Element.AIM_R * Element.AIM_R;
+        if (ddx * ddx + ddy * ddy >= Element.AIM_R * Element.AIM_R) return false;
+        hitFromS = b[0]; return true;
     }
 
     // ---------------------------------------------------------------- hazards that ride a moving platform (bug #14)
@@ -1619,7 +1626,7 @@ public final class Sim {
                 for (int back = 0; back < Element.CANNON_TRAIL; back++) {
                     if (!e.cannonBallAlive(time, back)) continue;
                     float dx = Math.abs(course.dsWrap(e.cannonBallS(time, back) + cs, s)), ddx = Math.max(0f, dx - hw);
-                    if (ddx * ddx + ddy * ddy < r * r) return true;
+                    if (ddx * ddx + ddy * ddy < r * r) { hitFromS = e.cannonBallS(time, back) + cs; return true; }
                 }
                 continue;
             }
@@ -1628,6 +1635,7 @@ public final class Sim {
             int po = hzPose(hz == null ? k : hz[k], e);
             float ePosY = hzv[po + 1];
             float dx = Math.abs(course.dsWrap(hzv[po] + cs, s));
+            hitFromS = hzv[po] + cs;
             float r = e.discR();
             if (r > 0f) {
                 float ddx = Math.max(0f, dx - hw), cy = ePosY + cyOff;
@@ -1674,7 +1682,7 @@ public final class Sim {
         s += vx * dt;
         if (saw) s -= tilt[e] * T.seesawSlide * dt;       // the tipped plank slides you downhill whatever you do
         coyote = T.coyote + assistForgive;
-        if (jumpBuf > 0) {
+        if (jumpBuf > 0 && !gone[e]) {          // (DC8: not off a deck that vanished this step; the coyote grace still gives the jump next step, without its velocity)
             float pv = platformVy(e);
             vx += platformVs(e) * 0.6f;
             float boost = Math.max(0, pv) * 0.6f;
@@ -1816,6 +1824,7 @@ public final class Sim {
             Element el = course.get(i);
             boolean fixed = el.type == Element.Type.STATIC || el.type == Element.Type.CRUMBLE || el.type == Element.Type.GOAL || (el.type == Element.Type.RAMP && !el.spins());
             if (!fixed || Math.abs(course.dsWrap(s, es1[i])) > el.halfW()) continue;
+            if (holesOpen(i) && el.overHole(course.dsWrap(s, es1[i]), HOLE_FOOT)) continue;          // (DC8: never onto an open hole)
             float top = surfaceAt(i);
             if (top < y - 0.05f || top > y + STEP_ACROSS || top <= bestTop) continue;
             best = i; bestTop = top;
@@ -1890,7 +1899,8 @@ public final class Sim {
             float v = in.jumpHeld ? T.padBounceHeld : T.padBounce;
             if (el.type == Element.Type.SPRING) { vy = v * (float) StrictMath.cos(el.amp); vx = v * (float) StrictMath.sin(el.amp); if (Math.abs(vx) > 0.5f) facing = vx > 0 ? 1 : -1; }
             else vy = v;
-            jumpedUp = false; mode = Mode.AIR; onElem = -1; lastPad = i; padSquash[i] = 0.25f;
+            // the bounce wins (DC4: a coyote left from the step off a deck let a jump tap replace a 6.3 m bounce with a 0.44 m hop)
+            jumpedUp = false; mode = Mode.AIR; onElem = -1; lastPad = i; padSquash[i] = 0.25f; coyote = 0; jumpBuf = 0;
             events |= EV_BOUNCE;
             progress(i);
             return;
@@ -1898,7 +1908,7 @@ public final class Sim {
         vy = 0; mode = Mode.GROUND; onElem = i; jumpedUp = false; coyote = T.coyote + assistForgive;
         events |= EV_LAND;
         if (course.isCheckpoint(el) && i > checkpoint) { checkpoint = i; events |= EV_CHECKPOINT; }
-        if (el.crumbles() && crumbleT[i] < 0) crumbleT[i] = 0;
+        if ((el.crumbles() || el.holed()) && crumbleT[i] < 0) crumbleT[i] = 0;          // (DC8: a holed bridge starts on landing too, as a crumble does, so a landing jump cannot skip it)
         if (el.type == Element.Type.GOAL && !won) { won = true; events |= EV_WIN; }
         progress(i);
         // buffered jump on landing
@@ -1915,7 +1925,7 @@ public final class Sim {
             Element el = course.get(i);
             if (el.type == Element.Type.ROPE) {
                 if (Math.abs(course.dsWrap(es1[i], s)) <= T.ropeGrabRadius && hand <= el.y + 0.1f && hand >= el.yBottom()) {
-                    mode = Mode.ROPE; onElem = i; vx = vy = 0; s = es1[i]; events |= EV_GRAB | EV_ROPE;
+                    mode = Mode.ROPE; onElem = i; vx = vy = 0; s = es1[i]; coyote = 0; jumpBuf = 0; events |= EV_GRAB | EV_ROPE;      // (DC4: no coyote or buffered press carried onto the rope)
                     progress(i);
                     return true;
                 }
@@ -1923,7 +1933,7 @@ public final class Sim {
                 float half = el.w * 0.5f;
                 float d = course.dsWrap(s, es1[i]);
                 if (Math.abs(d) <= half && hand >= el.y - 0.45f && hand <= el.y + 0.15f && vy < 4f) {
-                    mode = Mode.CABLE; onElem = i; vx = vy = 0; y = el.y - T.handHeight; events |= EV_GRAB | EV_CABLE;
+                    mode = Mode.CABLE; onElem = i; vx = vy = 0; y = el.y - T.handHeight; coyote = 0; jumpBuf = 0; events |= EV_GRAB | EV_CABLE;
                     progress(i);
                     return true;
                 }
@@ -2001,7 +2011,7 @@ public final class Sim {
         if (Math.abs(in.moveX) > 0.15f) facing = in.moveX > 0 ? 1 : -1;
         if (jumpBuf > 0) { vx = Math.abs(in.moveX) > 0.2f ? in.moveX * T.runSpeed : 0f; doJump(0f); lockout = T.grabLockout; return; }
         float d = course.dsWrap(s, es1[i]);
-        if (in.moveY < -0.7f) { mode = Mode.ROPE; s = es1[i]; y = el.y - T.handHeight; vx = 0; ropeTopT = 0f; lockout = 0f; return; }
+        if (in.moveY < -0.7f) { mode = Mode.ROPE; s = es1[i]; y = el.y - T.handHeight; vx = 0; ropeTopT = 0f; lockout = 0f; coyote = 0; return; }
         if (Math.abs(d) > BEAM_HALF) { mode = Mode.AIR; onElem = -1; vy = 0; lockout = T.grabLockout; jumpedUp = false; }
     }
 
@@ -2036,6 +2046,9 @@ public final class Sim {
 
     private void stepPull(float dt) {
         int i = onElem; Element el = course.get(i);
+        // the deck crumbled or a depth mover left the plane mid-pull: let go, as a hang does (DC8: the pull completed onto it and stood on nothing,
+        // or on a platform metres deep)
+        if (gone[i]) { mode = Mode.AIR; onElem = -1; lockout = T.grabLockout; vx = vy = 0; return; }
         pullT += dt;
         float k = Math.min(1f, pullT / T.pullUpTime);
         float fromS = pullFromS;       // where the pull began (the hang spot for a ledge grab, or the player's own position for a step-up)

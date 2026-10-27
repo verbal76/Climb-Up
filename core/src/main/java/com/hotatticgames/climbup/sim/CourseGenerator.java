@@ -851,6 +851,8 @@ public final class CourseGenerator {
     static final float DEMAND_GAIN = 0.6f, DEMAND_MAX = 1.1f;
     /** A 25 m window whose route hazards and enemies already weigh this many times the castle's per-window hazard + enemy target is a spike. */
     static final float HOT = 3f;
+    /** The proof margin a balance conveyor's links need (NORMAL, PUNISHER; PROVISIONAL). */
+    static final float BELT_MARGIN = 0.25f;
 
     private void progStart(Course prev) {
         progIn = prev == null ? new Progression() : Progression.of(prev.prog);
@@ -2149,6 +2151,9 @@ public final class CourseGenerator {
             if (es == null) continue;
             if (T.hard > 0) for (Element h : hz) if (h.type == Element.Type.CANNON || h.type == Element.Type.AIMED || h.type == Element.Type.MORTAR || h.type == Element.Type.BEE) h.period /= T.react();   // Build 79 PUNISHER / NEVER GONNA HAPPEN: they come round faster
             float margin = k == Kind.GRAB ? Math.min(0.05f, T.minLinkMargin) : T.minLinkMargin;
+            // rules 13 (NORMAL seed 2, 4,415 m): a balance conveyor whose exit holds only from its exact proven landing (margin 0.083: 8% of trials)
+            // fails for a climber who lands 2 cm away a moment later - the belt runs them off the back. Its links need a real margin (PROVISIONAL 0.25).
+            if (beltSawNow && endless && P.progression()) margin = Math.max(margin, BELT_MARGIN);
             boolean ok = commit(es, hz, margin);
             if (k == Kind.WET) { wetTried++; if (ok) wetOk++; }
             if (ok) return true;

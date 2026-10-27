@@ -1060,3 +1060,45 @@ rope clustering investigation, traverse-bar colour) and answered:
   verified visually (day, night, dark blue sky, space). Fix release blockers with focused checks, rerun only invalidated courses, then one report
   and STOP. Build 82 on hold.
 
+### Implementation decisions (engineering, 2026-10-27; owner amendments above)
+
+**Enforcer (PUNISHER).** Encounters are planned per castle interval (CourseGenerator.enforcerPlan: one or two, tiers by level) and claimed by the
+slice whose first 80 m hold their height, like keys (claiming only up to a slice's own top let heights fall between slices: seed 2 lost its first
+one). A planned encounter is tried from up to 4 decks before it is dropped. Its decks are a module of their own; it is kept only if Autopilot.chainClean
+climbs the deck before it to its exit deck with no setback and the robot active. Each robot has its own seed (phase): where it waits along its first
+deck, how soon it notices you (x0.8-1.2) and its leap away (x0.8-1.2) vary; its attacks follow the player. Crab, bee, skull and blob decks are not
+drawn from 25 m below a planned encounter to 25 m above a placed one, nor in the two modules after it (measured before widening: ordinary enemies
+were denser near the robot, 13.1 vs 10.2 per 100 m). Scoring weight +3 (pursuer that launches you: the skull's rule).
+
+**Spike-block avalanche.** One Sim implementation for every mode (Sim.stepAvalanche): blocks are spinning discs (radius 0.45 m) under gravity 24 m/s2,
+colliding with deck tops (a ramp by its own slope normal) and sides (restitution 0.42, friction 0.82, spin from rolling) and with each other (equal
+masses, restitution 0.55); gone 16 m below the trigger deck, after 12 s, or 0.6 s at rest. Release: 1.4 s warning (flashing down arrows and grit over
+each column, rumble, caption), then one block every ~0.35 s from 11-13.5 m above the decks ahead; each block's deck, offset, delay, speed and spin come
+from the hazard's seed through a fixed integer mixer (no Math.random, no float transcendental in the physics). State per hazard is relative to its
+trigger deck (rebase-safe) and saved (RunSnapshot aKey/aState/lastAvlT, optional for older files). Single use: landing on the trigger deck fires it
+when the cooldown (30-90 s of simulation time, per avalanche) since the last one has passed, else the spot is spent. Plan per castle interval
+(CourseGenerator.avalanchePlan): PUNISHER 2 or 3 (3 more often higher up), 4 or 5 blocks; NORMAL castle 9 30% one, castle 10 45% one (8% two), 2
+blocks, none elsewhere (none past castle 10); NOT GONNA HAPPEN none. Placement: once four decks lie beyond a suitable trigger deck (plain, nothing
+anchored on it, clear of the castle approach) the hazard is attached and kept only if chainClean climbs from the deck before it to the fourth deck
+after it with the blocks falling for real; otherwise up to 4 trigger decks are tried, then it is dropped (reported). Geometry and the generator's
+random numbers are untouched by placement. Scoring weight +2 (falling spiked weight that knocks you off the route), once per avalanche.
+
+**Variety measurement.** core/src/test/.../sim/VarietyReport (per course: variety_windows.csv, variety_rolling.csv, variety_castles.csv,
+variety_run.json) and tools/ci/variety_report.py (campaign: variety_report.pdf, variety_compare.csv with the baseline, ropes_all.csv,
+encounters_all.csv, variety_summary.json). Definitions in both files' headers; the score is observe-only and has no target. encounters.csv records
+per slice what the generator placed, refused and dropped and what happened when the solver climbed it (Sim's report-only counters).
+
+**History-aware variety (PUNISHER only).** VarietyMemory: accepted placements only (undo forgets them), families as the variety report's, within
+100 m; each earlier same-family placement multiplies the weight by 1 - 0.45 exp(-distance/30 m), floor 0.1. Module weights are penalised then
+re-normalised within their class (ordinary traversal, terrain challenges, hazard modules), before the spiral pitch controller; hazard and creature
+choices inside modules and the continuation order use the same memory. Carried across slices (previous slice's last 100 m). Telemetry: the same
+random number is also resolved against the unpenalised weights (adaptive_picks / adaptive_shift).
+
+**NORMAL rope correction (authorised narrow fix).** Measured on NORMAL seed 1 to 5,000 m: 72% of rope modules came from the continuation list, 42%
+of rope-to-rope spacings under 10 m. When a rope lies within 12 m below, the continuation now tries the rope after stairs (lagging spiral) or last.
+Nothing else in NORMAL's selection changed; this changes NORMAL courses from the first time it applies (rules 12; fingerprint updated with the final
+generator).
+
+**Traverse bar.** The cable is drawn in the rope's colour (WorldRenderer.ROPE_COLOR, shared), same size and place; checked in all five skies with
+desktop/src/test/.../CableShot (docs/verification/traverse_bar_rope_colour_2026-10-27.jpg).
+

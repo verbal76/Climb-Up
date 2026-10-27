@@ -98,6 +98,21 @@ public class EnforcerTest {
         assertTrue("red notices faster than yellow", run(t, 2)[0] < run(t, 0)[0]);
     }
 
+    /** Owner 2026-10-27 (variety): robots with different seeds wait in different places and leave differently; one seed always behaves the same. */
+    @Test public void differentSeedsGiveDifferentEncounters() throws Exception {
+        Tuning t = TestUtil.tuning().hardCopy(1);
+        java.util.Set<Float> starts = new java.util.HashSet<>();
+        for (float ph : new float[]{0.13f, 0.41f, 0.77f}) {
+            Course c = TestUtil.flat(t);
+            Element r = new Element(Element.Type.ENFORCER, c.get(0).s, c.get(0).y, c.get(0).w); r.anchor = 0; r.len = 1; r.skin = 1; r.phase = ph;
+            c.hazards.add(r);
+            Sim s = Sim.startOn(c, t, 0); s.s = c.get(0).s - c.get(0).halfW() + 0.3f;          // at the near end, out of its way at first
+            s.step(new InputState());
+            starts.add(s.enforcerS(c.hazards.indexOf(r), r));
+        }
+        assertEquals("three seeds, three waiting spots", 3, starts.size());
+    }
+
     /** {first alert time, first shove time, gone time, last state, then the robot's arc every 0.5 s}. */
     private static float[] run(Tuning t, int tier) throws Exception {
         Course c = TestUtil.flat(t);

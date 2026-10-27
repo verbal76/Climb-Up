@@ -777,7 +777,10 @@ public final class Sim {
         float rc = T.react();
         if (mobState[idx] == 0) {
             Element d0 = course.get(a0);
-            mobState[idx] = 1; deckOff[idx] = 0f; mobS[idx] = course.wrap(es1[a0] + Math.max(0f, d0.halfW() - 0.6f)); mobDir[idx] = -1f; mobY[idx] = 0f;
+            // (owner 2026-10-27, variety: not the same encounter every time) where it waits along its first deck - from the far end to a third of the
+            // way in - comes from its seed (phase); its notice delay and its leap away vary a little the same way
+            float far = Math.max(0f, d0.halfW() - 0.6f), at = far - (far + d0.halfW() * 0.33f) * enfVar(e, 0) * 0.85f;
+            mobState[idx] = 1; deckOff[idx] = 0f; mobS[idx] = course.wrap(es1[a0] + Math.max(-d0.halfW() * 0.33f, at)); mobDir[idx] = -1f; mobY[idx] = 0f;
             mobT[idx] = 0f; mobSeen[idx] = 0f; crabVel[idx] = 0f; crabFrom[idx] = 0f; crabStuck[idx] = 0f; crabCool[idx] = 0f;
         }
         int j = a0 + Math.round(deckOff[idx]);
@@ -795,7 +798,7 @@ public final class Sim {
         switch (st) {
             case 1: {
                 crabStuck[idx] = (pk != NONE || onDeck(dS, half, dY)) ? crabStuck[idx] + DT : 0f;
-                if (crabStuck[idx] >= Element.ENF_NOTICE[tier] / rc) { mobState[idx] = 2; mobT[idx] = 0f; events |= EV_ENF_ALERT; }
+                if (crabStuck[idx] >= Element.ENF_NOTICE[tier] * (0.8f + 0.4f * enfVar(e, 1)) / rc) { mobState[idx] = 2; mobT[idx] = 0f; events |= EV_ENF_ALERT; }
                 break;
             }
             case 2: {
@@ -867,7 +870,7 @@ public final class Sim {
                 float x = course.dsWrap(mobS[idx], dS), edge = half - 0.3f, run = Element.ENF_EXIT_RUN * rc * DT;
                 mobDir[idx] = 1f;
                 if (edge - x > run) mobS[idx] = course.wrap(mobS[idx] + run);
-                else { crabFrom[idx] = Element.ENF_EXIT_VX; crabVel[idx] = Element.ENF_EXIT_VY; mobState[idx] = 8; mobT[idx] = 0f; events |= EV_ENF_JUMP; }
+                else { crabFrom[idx] = Element.ENF_EXIT_VX * (0.8f + 0.4f * enfVar(e, 2)); crabVel[idx] = Element.ENF_EXIT_VY * (0.8f + 0.4f * enfVar(e, 3)); mobState[idx] = 8; mobT[idx] = 0f; events |= EV_ENF_JUMP; }
                 break;
             }
             default: {          // 7 falling, 8 leaping away: ballistic, then gone
@@ -877,6 +880,8 @@ public final class Sim {
             }
         }
     }
+    /** A seeded value in [0, 1) for draw k of an Enforcer (its phase: the same on every platform). 0 for an unseeded one (phase 0): the original behaviour. */
+    private static float enfVar(Element e, int k) { return e.phase == 0f ? 0f : avlRand(e, 7, k); }
     private static float ENFPURSUE(int tier, float rc) { return Element.ENF_PURSUE[tier] / rc; }
     /** The robot can hop from deck j to deck nj: a flat fixed route deck, a gap it can jump and a height it can climb or drop. */
     private boolean enfHopOk(int j, int nj) {

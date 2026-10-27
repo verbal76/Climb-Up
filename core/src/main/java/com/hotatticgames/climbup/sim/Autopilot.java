@@ -794,6 +794,14 @@ public final class Autopilot {
                 for (int q = 0; q < 120 && (real.mode == Sim.Mode.LEDGE || real.mode == Sim.Mode.PULLUP) && real.setbacks() == before; q++) { in.clear(); pull.act(real, in); real.step(in); }
                 if (real.mode == Sim.Mode.GROUND && onRoute(c, real.onElem)) { a = resync(real, real.onElem); continue; }
             }
+            int nx = c.nextRoute(a);
+            if (sameA == 0 && nx < c.size() && c.get(nx).tiltBelt() && real.mode == Sim.Mode.GROUND && real.onElem == a && c.get(a).isPlatform() && !c.get(a).isMoving() && !hasMidHazard(c, a)) {
+                // like a person: line up for the balance conveyor where its proven jump starts (the platform's middle, standing, CourseGenerator.provenStart).
+                // Its exit is proven only from the landing that jump makes; jumping on from wherever we arrived (a rope top, at speed) can land at the near end,
+                // which tips down and slides you off it again and again (2026-10-27, NORMAL seed 1 slices 55 and 75)
+                standAt(real, real.es1[a], in);
+                if (real.mode == Sim.Mode.GROUND && real.onElem == a) real.restartHold();
+            }
             Result r = plan(real, a, false, true);
             if (!r.ok) r = plan(real, a, false, false);        // no move leaves a state that suits the next link: take any that works and sort the next link out from there
             rep.links++;

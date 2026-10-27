@@ -69,6 +69,15 @@ public class SolverRecoveryTest {
         assertTrue("PUNISHER seed 2 slice 53 (e097d29) completes (link " + r.failedLink + ": " + r.failInfo + ")", r.completed);
     }
 
+    /** The balance conveyor's exit is proven from the landing of the jump from the middle of the platform before it (CourseGenerator.provenStart); the
+     *  climber came off a rope onto that platform and jumped on at speed, landed at the near end, which tips down, and slid off it again and again
+     *  (2026-10-27, Difficulty report 40422375969: NORMAL seed 1 slice 55 on 5c09272). Like a person, it now lines up in the middle first. */
+    @Test public void theBalanceConveyorIsBoardedFromWhereItsJumpWasProven() throws Exception {
+        Course c = CourseIO.fromJson(new String(Files.readAllBytes(Paths.get("src/test/resources/fixtures/normal_seed1_slice55_5c09272.json"))));
+        Autopilot.Report r = Autopilot.run(c, tuning(), 4000f);
+        assertTrue("NORMAL seed 1 slice 55 (5c09272) completes (link " + r.failedLink + ": " + r.failInfo + ")", r.completed);
+    }
+
     @Test public void everyUnsuccessfulSliceHasExactlyOneFailureClass() {
         assertEquals("completed", LaneReport.failClass(true, ""));
         assertEquals("solver_exception", LaneReport.failClass(false, "\"solver threw java.lang.IndexOutOfBoundsException\""));

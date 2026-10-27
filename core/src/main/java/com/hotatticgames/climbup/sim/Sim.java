@@ -12,7 +12,7 @@ public final class Sim {
     public static final int EV_JUMP = 1, EV_LAND = 2, EV_BOUNCE = 4, EV_GRAB = 8, EV_PULL = 16, EV_CRUMBLE = 32,
             EV_CHECKPOINT = 64, EV_RESPAWN = 128, EV_WIN = 256, EV_ROPE = 512, EV_CABLE = 1024, EV_FALL_NEAR = 2048, EV_HIT = 4096, EV_KEY = 8192, EV_DOOR = 16384, EV_BLOCKED = 32768, EV_CLUB = 65536, EV_SWING = 131072, EV_SHOVE = 262144, EV_CRAB_OFF = 524288, EV_FINISH = 1048576, EV_AIM = 2097152,
             EV_DASH = 4194304, EV_BLOB_JUMP = 8388608, EV_BLOB_LAND = 16777216, EV_SQUASH = 33554432, EV_LAUNCH = 67108864, EV_SLIP = 134217728,
-            EV_ENF_ALERT = 268435456, EV_ENF_JUMP = 536870912;   // (2026-10-27 PUNISHER Enforcer: it starts its chase; it jumps (a swat or its leap away))   // Build 71: a skull starts a dash, a blob leaps, a blob lands, you were squashed, a skull or a tipping bridge launched you
+            EV_ENF_ALERT = 268435456, EV_ENF_JUMP = 536870912, EV_ENF_HIT = 1073741824;   // (2026-10-27 PUNISHER Enforcer: it starts its chase; it jumps (a swat or its leap away))   // Build 71: a skull starts a dash, a blob leaps, a blob lands, you were squashed, a skull or a tipping bridge launched you
 
     public final Course course;
     public final Tuning T;
@@ -815,7 +815,7 @@ public final class Sim {
                     float ahead = dx * mobDir[idx];
                     if (ahead > -Element.ENF_HALF - hw && ahead < Element.ENF_HALF + hw + Element.ENF_KICK_REACH[tier] && y < dY + 1.3f && y + T.height > dY + 0.1f) {
                         vx = mobDir[idx] * Element.ENF_KICK_X; vy = Math.max(vy, Element.ENF_KICK_Y); mode = Mode.AIR; onElem = -1; coyote = 0f; lockout = 0.3f; jumpedUp = false; shoveCd = 0.9f;
-                        events |= EV_SHOVE | EV_LAUNCH;
+                        events |= EV_SHOVE | EV_LAUNCH | EV_ENF_HIT;
                     }
                 }
                 if (t >= wu + act + rec) { mobState[idx] = 2; mobT[idx] = 0f; }
@@ -826,7 +826,7 @@ public final class Sim {
                 float cy = dY + mobY[idx], bx = course.dsWrap(s, mobS[idx]);
                 if (shoveCd <= 0f && invuln <= 0f && Math.abs(bx) < Element.ENF_HALF + hw + 0.25f && y < cy + Element.ENF_H + Element.ENF_REACH_UP && y + T.height > cy) {
                     vx = (bx >= 0f ? 1f : -1f) * Element.ENF_SWAT_X; vy = Math.min(vy, Element.ENF_SWAT_Y); mode = Mode.AIR; onElem = -1; coyote = 0f; lockout = 0.3f; jumpedUp = false; shoveCd = 0.9f;
-                    events |= EV_SHOVE | EV_LAUNCH;
+                    events |= EV_SHOVE | EV_LAUNCH | EV_ENF_HIT;
                 }
                 if (crabVel[idx] < 0f && mobY[idx] <= 0f) {
                     if (Math.abs(course.dsWrap(mobS[idx], dS)) <= half) { mobY[idx] = 0f; crabVel[idx] = 0f; crabFrom[idx] = 0f; mobState[idx] = 2; mobT[idx] = 0f; }

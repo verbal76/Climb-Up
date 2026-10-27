@@ -2,8 +2,10 @@ FREE Retro Mecha SFX - "MECHA FOOTSTEPS" by Helton Yan
 Source: https://heltonyan.itch.io  (pack page "FREE Retro Mecha SFX by Helton Yan"; file MECHA FOOTSTEPS.rar, owner-supplied 2026-10-27)
 License: Creative Commons Attribution 4.0 International (CC BY 4.0), http://creativecommons.org/licenses/by/4.0/
 Attribution: "Mecha Footsteps" from FREE Retro Mecha SFX by Helton Yan, CC BY 4.0. Credited on the in-game Credits screen.
-Changes: five of the 50 footsteps (3, 9, 17, 27, 38) mixed to mono, resampled to 22.05 kHz, tail trimmed with a fade, and normalised
-(tools/audio/mecha_steps.py) -> assets/audio/enf_step1..4.wav, enf_stomp.wav.
+Also used: "MECHA SOUND SOURCES" from the same pack (MECHA SOUND SOURCES.zip, owner release "Enforcer", same LICENSE.txt).
+Changes: five of the 50 footsteps (3, 9, 17, 27, 38) and three of the 75 sound sources (2, 55, 19) mixed to mono, resampled to 22.05 kHz,
+tail trimmed with a fade, and normalised (tools/audio/mecha_steps.py) -> assets/audio/enf_step1..4.wav, enf_stomp.wav, enf_alert.wav,
+enf_hit.wav, enf_jet.wav.
 Project note: an owner-approved exception (2026-10-27) to the CC0-or-original asset policy; see docs/DECISIONS.md.
 
 LICENSE.txt shipped in the pack (verbatim):

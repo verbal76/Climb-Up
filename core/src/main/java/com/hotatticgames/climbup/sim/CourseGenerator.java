@@ -437,10 +437,12 @@ public final class CourseGenerator {
             }
             if (!enfPending.isEmpty() && last.y >= enfPending.get(0)[0] && last.isPlatform() && !last.isMoving() && !last.wet() && last.type != Element.Type.PAD && last.type != Element.Type.SPRING
                     && !(castlePending && last.y > castleTarget - 30f)) {          // PUNISHER: this slice's Enforcer encounter, as soon as the climb reaches its height
-                float[] pl = enfPending.remove(0);
+                float[] pl = enfPending.get(0);
                 int n0 = c.size(), h0 = c.hazards.size(); long s0 = GenTrace.now();
-                if (enforcerModule((int) pl[1], (int) pl[2], th)) { undo.clear(); traceStructure("ENFORCER", n0, h0, last.y, s0); enfQuiet = 2; prev2 = prev; prev = null; sinceRest++; ENFORCERS_PLACED.incrementAndGet(); GenTrace.tally("enforcer_placed_t" + (int) pl[1]); continue; }
-                ENFORCERS_DROPPED.incrementAndGet(); GenTrace.tally("enforcer_dropped");
+                if (enforcerModule((int) pl[1], (int) pl[2], th)) { enfPending.remove(0); undo.clear(); traceStructure("ENFORCER", n0, h0, last.y, s0); enfQuiet = 2; prev2 = prev; prev = null; sinceRest++; ENFORCERS_PLACED.incrementAndGet(); GenTrace.tally("enforcer_placed_t" + (int) pl[1]); continue; }
+                // no fair encounter from this deck: tried again from the next suitable decks (a few modules on), then dropped
+                if (++pl[3] >= ENF_TRIES) { enfPending.remove(0); ENFORCERS_DROPPED.incrementAndGet(); GenTrace.tally("enforcer_dropped"); }
+                else pl[0] = last.y + 6f;
             }
             Kind k = pick(zone, last);
             // the spiral pitch controller (pick): while the route lags the climb a revolution needs, vertical modules come first; a lagging route brings the
@@ -641,7 +643,9 @@ public final class CourseGenerator {
     /** Diagnostics (never read by generation): encounters placed, and planned encounters dropped for want of a fair window in their slice. */
     public static final java.util.concurrent.atomic.AtomicInteger ENFORCERS_PLACED = new java.util.concurrent.atomic.AtomicInteger(), ENFORCERS_DROPPED = new java.util.concurrent.atomic.AtomicInteger();
 
-    /** This slice's Enforcer encounters still to build ({height above this slice's frame, tier, decks}), lowest first (PUNISHER only). */
+    /** Spots an encounter is tried from (each a few modules higher) before it is dropped. */
+    private static final int ENF_TRIES = 4;
+    /** This slice's Enforcer encounters still to build ({height above this slice's frame, tier, decks, failed tries}), lowest first (PUNISHER only). */
     private final List<float[]> enfPending = new ArrayList<>();
     /** Modules left after an Enforcer encounter in which no crab, bee, skull or blob deck is drawn (the robot's encounter keeps its room). */
     private int enfQuiet;
@@ -659,7 +663,7 @@ public final class CourseGenerator {
         double sp = T.castleSpacing, startAbs = startY + base, topAbs = topY + base;
         for (int n = Math.max(1, (int) Math.floor(startAbs / sp) + 1); n <= (int) Math.floor(topAbs / sp) + 1; n++)
             for (float[] pl : enforcerPlan(c.seed, n, T.castleSpacing, P.curveShift))
-                if (pl[0] > startAbs && pl[0] <= topAbs) enfPending.add(new float[]{(float) (pl[0] - base), pl[1], pl[2]});
+                if (pl[0] > startAbs && pl[0] <= topAbs) enfPending.add(new float[]{(float) (pl[0] - base), pl[1], pl[2], 0f});
         enfPending.sort((x, y) -> Float.compare(x[0], y[0]));
     }
 
@@ -679,7 +683,7 @@ public final class CourseGenerator {
                 float w = k == len ? r(3f, 4.5f) : r(3.2f, 5.2f), gap = r(1.3f, 2.6f) * (1f - 0.08f * attempt), dy = r(-0.2f, 0.8f);
                 s += gap + w / 2f; y += dy; l.add(plat(Element.Type.STATIC, s, y, w, zone)); s += w / 2f;
             }
-            if (!commit(l, 0.12f)) continue;
+            if (!commit(l, 0.12f)) { GenTrace.tally("enforcer_geometry"); continue; }
             Element d = c.get(n0), r = new Element(Element.Type.ENFORCER, d.s, d.y, d.w);
             r.anchor = n0; r.len = len; r.skin = tier; r.zone = zone;
             c.hazards.add(r);

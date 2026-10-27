@@ -1032,3 +1032,24 @@ Failing to arrive, being hit or carried off on the way or while waiting, or find
 Results (seeds 1-5, slices 0-25, 245 saws): every saw is reachable, survivable and passable. Worst windows: gap 0.50, floor 0.67.
 - **The original case (seed 2 slice 25, platform 48):** the climber really arrives at t = 1.10 s, after the cannonball that passes the standing spot at t = 0. The jump that clears every hazard is available at once, with window 0.91. Genuinely playable.
 - **Seed 4 slice 6, platform 50:** a floor saw and a gap saw share the platform. Timed from the landing spot instead of the proven waiting spot the window is 0.33; from the waiting spot it is 0.83. The waiting spot is reachable and safe, so the combination is fair, but it is the tightest found.
+
+## Owner amendments 2026-10-27: NORMAL avalanche, variety measurement, adaptive variety, traverse bar - approved answers
+
+Owner approved the four amendments (NORMAL avalanche exception, gameplay-variety measurement and repetition control, history-aware generation with
+rope clustering investigation, traverse-bar colour) and answered:
+- **Avalanche trigger.** The generator picks seeded avalanche locations it can prove safe; a deterministic seeded 30-90 s cooldown (simulation
+  time, never wall clock) only makes the next encounter *eligible*, it never forces one. Nothing spawns because a timer ran out at an unproven
+  spot, and standing still near a spot never retriggers it. PUNISHER: about 2-3 encounters per castle interval as guidance, at most 3, typically
+  4-5 blocks, seeded variation in placement, timing, count and initial conditions. NORMAL: none in castles 1-8, rare in 9, slightly more in 10,
+  at most 2 blocks, never mandatory. Same physics in both modes. Report real frequency and spacing.
+- **Rules version 12** for the completed generator changes; fingerprints and bundled replays updated once, against the final generator. NORMAL
+  changes only by the castle 9-10 avalanches and, if measurements show real clustering, a narrow rope-selection correction. NOT GONNA HAPPEN is
+  protected the same way: any effect of shared changes is validated and reported.
+- **Sounds.** Further clips from Helton Yan's FREE Retro Mecha SFX (CC BY 4.0) are approved once confirmed to come from that pack, with the same
+  attribution, source, license, modification records and credits. Not a blanket approval for other packs.
+- **Order.** (1) finish and verify the Enforcer (commit 70ba1ce), (2) avalanche physics, (3) NORMAL avalanche exception, (4) variety and
+  repetition reporting, (5) adaptive variety weighting for PUNISHER, (6) rope clustering where authorised, (7) traverse bar in the rope's
+  colour in every mode, (8) integrated validation, (9) ONE final campaign (NORMAL + PUNISHER, seeds 1-2, to 5,000 m; NGH only if affected),
+  (10) comparison report, then STOP for owner review. No speculative balancing campaigns, no scoring-weight changes without an independent
+  justification. Build 82 on hold.
+

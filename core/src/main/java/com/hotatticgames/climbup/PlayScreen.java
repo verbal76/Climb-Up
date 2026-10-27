@@ -608,8 +608,9 @@ public final class PlayScreen extends ScreenAdapter {
         // Build 71 creatures: the skull's dash, the blob's leap and landing, being squashed, being launched
         if ((ev & Sim.EV_SLIP) != 0) { g.audio.play("slip", 1f, 1.45f + MathUtils.random(0.2f)); pop("WHOA!", Color.WHITE); say("[SQUEAK]"); vibrate(15, 2); }      // a squeaky-shoe skid on ice (sfx.json "slip")
         if ((ev & Sim.EV_DASH) != 0) { g.audio.play("dash", 0.9f, 1f); say("[WHOOSH]"); }
-        if ((ev & Sim.EV_ENF_ALERT) != 0) { g.audio.play("scan", 0.8f, 0.8f); g.audio.play("enf_stomp", 0.5f, 1.3f); say("[ROBOT ALERT]"); }          // PUNISHER: an Enforcer has seen you
-        if ((ev & Sim.EV_ENF_JUMP) != 0) { g.audio.play("whoosh", 0.8f, 0.8f); say("[WHOOSH]"); }
+        if ((ev & Sim.EV_ENF_ALERT) != 0) { g.audio.play("enf_alert", 0.85f, 1f); say("[ROBOT ALERT]"); }          // PUNISHER: an Enforcer has seen you
+        if ((ev & Sim.EV_ENF_HIT) != 0) { g.audio.play("enf_hit", 1f, 0.95f + MathUtils.random(0.1f)); say("[ROBOT KICK]"); }          // its kick or swat landed (the launch itself sounds below)
+        if ((ev & Sim.EV_ENF_JUMP) != 0) { g.audio.play("enf_jet", 0.8f, 0.95f + MathUtils.random(0.1f)); say("[JETS]"); }          // its swat jump or its leap away
         if ((ev & Sim.EV_BLOB_JUMP) != 0) { g.audio.play("blobup", 0.9f, 1f); say("[BOING]"); }
         if ((ev & Sim.EV_BLOB_LAND) != 0) { g.audio.play("splat", 1f, 1f); world.shake(0.25f); say("[THUD]"); }
         if ((ev & Sim.EV_SQUASH) != 0) { g.audio.play("splat", 1f, 0.7f); g.audio.play("bonk", 0.7f, 0.6f); world.shake(0.6f); freeze(0.08f); vibrate(45, 1); pop("SQUASH!", SQUASH_GREEN); say("[SQUASH]"); }

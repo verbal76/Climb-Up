@@ -302,7 +302,7 @@ public final class WorldRenderer implements Disposable {
                 break;
             }
             case ROPE: {
-                Color rope = new Color(0.86f, 0.70f, 0.42f, 1f), beam = new Color(0.45f, 0.30f, 0.18f, 1f);
+                Color rope = ROPE_COLOR, beam = new Color(0.45f, 0.30f, 0.18f, 1f);
                 ps.add(boxPart(0, -e.len * 0.5f, 0, 0.11f, e.len, 0.11f, rope));
                 int knots = (int) e.len;
                 for (int k = 1; k <= knots; k++) ps.add(boxPart(0, -k + 0.5f, 0, 0.2f, 0.12f, 0.2f, new Color(0.7f, 0.52f, 0.28f, 1f)));
@@ -317,9 +317,10 @@ public final class WorldRenderer implements Disposable {
                 break;
             }
             case CABLE: {
-                Color steel = new Color(0.16f, 0.17f, 0.22f, 1f), post = new Color(0.45f, 0.30f, 0.18f, 1f), hook = new Color(1f, 0.55f, 0.15f, 1f);
+                // the traverse bar in the rope's colour (owner 2026-10-27: the near-black steel all but vanished against the night and space skies); same size and place
+                Color line = ROPE_COLOR, post = new Color(0.45f, 0.30f, 0.18f, 1f), hook = new Color(1f, 0.55f, 0.15f, 1f);
                 int seg = Math.max(1, (int) Math.ceil(e.w));
-                for (int i = 0; i < seg; i++) ps.add(boxPart(-e.w / 2f + (i + 0.5f) * e.w / seg, 0f, 0f, e.w / seg + 0.05f, 0.07f, 0.07f, steel));
+                for (int i = 0; i < seg; i++) ps.add(boxPart(-e.w / 2f + (i + 0.5f) * e.w / seg, 0f, 0f, e.w / seg + 0.05f, 0.07f, 0.07f, line));
                 for (int i = 0; i <= 1; i++) {
                     float du = (i == 0 ? -1 : 1) * e.w / 2f;
                     ps.add(boxPart(du, -1.2f, 0.6f, 0.22f, 2.6f, 0.22f, post));     // posts stand BEHIND the lane (like the rope's), so they never punch through a platform the traverse passes over
@@ -1053,6 +1054,8 @@ public final class WorldRenderer implements Disposable {
     /** The Enforcer's body paint per tier (yellow, orange, red) and its size: the model is 4.48 units tall, drawn Element.ENF_H (1.6 m) tall at tier 0. */
     private static final float[][] ENF_TINT = {{0.98f, 0.80f, 0.16f}, {1.0f, 0.48f, 0.10f}, {0.86f, 0.13f, 0.11f}};
     private static final float ENF_SCALE = Element.ENF_H / 4.48f;
+    /** The climbing rope's colour, shared by the horizontal traverse bar (cable) so both read the same against every sky. */
+    static final Color ROPE_COLOR = new Color(0.86f, 0.70f, 0.42f, 1f);
     /** cube_spikes is 3.16 units across: drawn at the avalanche block's collision diameter. */
     private static final float AVL_SCALE = 2f * Element.AVL_R / 3.16f;
     private ModelInstance stone;

@@ -703,7 +703,7 @@ public final class CourseGenerator {
     /**
      * The avalanches planned for section n (castle n-1 to castle n), fixed by the seed and the section like the keys: {height, blocks, cooldown s, seed}.
      * PUNISHER: two, sometimes three (more often higher up), never more; 4 or 5 blocks (5 more often higher up). NORMAL: none before castle 9; castle 9
-     * rarely one, castle 10 a little more often; always 2 blocks. NOT GONNA HAPPEN: none. The cooldown (30-90 s of simulation time) only makes an
+     * rarely one, castle 10 a little more often, none past castle 10; always 2 blocks. NOT GONNA HAPPEN: none. The cooldown (30-90 s of simulation time) only makes an
      * avalanche eligible; none is ever forced. Guidance, not a quota: a planned avalanche that cannot be proven safe is dropped.
      */
     public static float[][] avalanchePlan(long seed, int n, float spacing, int mode) {
@@ -711,7 +711,8 @@ public final class CourseGenerator {
         Random r = new Random(seed * 0x9FB21C651E98DF25L + n * 0xC13FA9A902A6328FL + 71L);
         int count, blocks;
         if (mode == 2) { count = 2 + (r.nextFloat() < Math.min(0.85f, 0.25f + 0.07f * (n - 1)) ? 1 : 0); blocks = -1; }
-        else { if (n < 9) return new float[0][]; float u = r.nextFloat(); count = n == 9 ? (u < 0.3f ? 1 : 0) : (u < 0.45f ? 1 : 0) + (u < 0.08f ? 1 : 0); blocks = 2; }
+        // NORMAL: castles 9 and 10 only (owner), none in the climb on past the finish
+        else { if (n < 9 || n > 10) return new float[0][]; float u = r.nextFloat(); count = n == 9 ? (u < 0.3f ? 1 : 0) : (u < 0.45f ? 1 : 0) + (u < 0.08f ? 1 : 0); blocks = 2; }
         float lo = spacing * (n - 1) + 40f, hi = spacing * n - 60f;
         float[][] out = new float[count][];
         for (int k = 0; k < count; k++) {

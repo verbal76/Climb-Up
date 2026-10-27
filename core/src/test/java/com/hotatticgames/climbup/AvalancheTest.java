@@ -105,7 +105,7 @@ public class AvalancheTest {
             float[][] pun = CourseGenerator.avalanchePlan(seed, n, sp, DifficultyProfile.PUNISHER.avalanches());
             assertEquals("NOT GONNA HAPPEN has none", 0, CourseGenerator.avalanchePlan(seed, n, sp, DifficultyProfile.NGH.avalanches()).length);
             assertArrayEquals("deterministic", pun, CourseGenerator.avalanchePlan(seed, n, sp, DifficultyProfile.PUNISHER.avalanches()));
-            if (n <= 8) assertEquals("NORMAL castles 1-8: none (seed " + seed + ", castle " + n + ")", 0, nor.length);
+            if (n <= 8 || n > 10) assertEquals("NORMAL: none outside castles 9-10 (seed " + seed + ", castle " + n + ")", 0, nor.length);
             if (n == 9) n9 += nor.length; if (n == 10) n10 += nor.length;
             for (float[] a : nor) { assertEquals("NORMAL: two blocks", 2f, a[1], 0f); assertTrue(a[2] >= 30f && a[2] <= 90f); }
             assertTrue("PUNISHER: two or three a castle interval (" + pun.length + ")", pun.length >= 2 && pun.length <= 3);

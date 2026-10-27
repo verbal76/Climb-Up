@@ -21,17 +21,20 @@ public final class DifficultyScore {
     static {
         Object[][] d = {{Element.Type.CRAB, 1f}, {Element.Type.BLOB, 2f}, {Element.Type.SKULL, 3f}, {Element.Type.BEE, 2f}, {Element.Type.CLUB, -1f},
             {Element.Type.SAW_H, 2f}, {Element.Type.SAW_V, 2f}, {Element.Type.PENDULUM, 2f}, {Element.Type.CANNON, 1f}, {Element.Type.AIMED, 2f},
-            {Element.Type.MORTAR, 2f}, {Element.Type.SPIKE_TRAP, 1f}, {Element.Type.SPIKE_BLOCK, 1f}, {Element.Type.SPIKE_DROP, 2f}};
+            {Element.Type.MORTAR, 2f}, {Element.Type.SPIKE_TRAP, 1f}, {Element.Type.SPIKE_BLOCK, 1f}, {Element.Type.SPIKE_DROP, 2f},
+            // 2026-10-27, by the same written rules (PROVISIONAL, not fitted to any graph): the Enforcer pursues and its hit launches you, the skull's
+            // behaviour class (+3); an avalanche is falling spiked weight that knocks you off the route (+2), scored once per avalanche, not per block
+            {Element.Type.ENFORCER, 3f}, {Element.Type.AVALANCHE, 2f}};
         for (Object[] e : d) WEIGHTS.put((Element.Type) e[0], (Float) e[1]);
         try (java.io.InputStream in = DifficultyScore.class.getResourceAsStream("/difficulty_weights.properties")) {
             if (in != null) { Properties p = new Properties(); p.load(in); for (String k : p.stringPropertyNames()) WEIGHTS.put(Element.Type.valueOf(k.trim()), Float.parseFloat(p.getProperty(k).trim())); }
         } catch (java.io.IOException e) { throw new IllegalStateException(e); }
     }
     public static float points(Element.Type k) { Float v = WEIGHTS.get(k); return v == null ? 0f : v; }
-    public static boolean enemy(Element.Type k) { return k == Element.Type.CRAB || k == Element.Type.BLOB || k == Element.Type.SKULL || k == Element.Type.BEE; }
-    /** The nine static hazards: scored when they sit on a route platform. */
+    public static boolean enemy(Element.Type k) { return k == Element.Type.CRAB || k == Element.Type.BLOB || k == Element.Type.SKULL || k == Element.Type.BEE || k == Element.Type.ENFORCER; }
+    /** The static hazards (and, since 2026-10-27, the avalanche, by its trigger deck): scored when they sit on a route platform. */
     public static boolean hazard(Element.Type k) {
-        switch (k) { case SAW_H: case SAW_V: case PENDULUM: case CANNON: case AIMED: case MORTAR: case SPIKE_TRAP: case SPIKE_BLOCK: case SPIKE_DROP: return true; default: return false; }
+        switch (k) { case SAW_H: case SAW_V: case PENDULUM: case CANNON: case AIMED: case MORTAR: case SPIKE_TRAP: case SPIKE_BLOCK: case SPIKE_DROP: case AVALANCHE: return true; default: return false; }
     }
     public static boolean threat(Element.Type k) { return enemy(k) || hazard(k); }
     public static final float WINDOW = 25f, CASTLE_SPAN = 500f;

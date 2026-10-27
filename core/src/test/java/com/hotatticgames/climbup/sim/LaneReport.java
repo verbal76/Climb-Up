@@ -106,6 +106,28 @@ public final class LaneReport {
         StringBuilder why = new StringBuilder(); for (Map.Entry<String, Integer> e : tr.counts.entrySet()) if (e.getKey().contains("_why_")) why.append(why.length() > 0 ? " " : "").append(e.getKey()).append('=').append(e.getValue());
         String[] r2 = java.util.Arrays.copyOf(row, row.length + 1); r2[row.length] = q(why.toString()); forkCountRows.add(r2);
     }
+    /** PUNISHER Enforcers and spike-block avalanches per slice (owner 2026-10-27): placed (by tier / block count), refused and dropped by the generator,
+     *  and what happened when the solver climbed the slice (Sim's report-only counters). Columns: see encounters.csv's header. */
+    final List<String[]> encounterRows = new ArrayList<>();
+    static final String ENCOUNTER_HEADER = "run,slice,y0,castle,enforcers_yellow,enforcers_orange,enforcers_red,enforcer_decks,enforcer_unfair,enforcer_dropped,avalanches,avalanche_blocks,avalanche_unfair,avalanche_dropped,"
+        + "solved,enf_kick_tries,enf_kick_hits,enf_swat_tries,enf_swat_hits,enf_retreats,enf_falls,avl_fired,avl_skipped_cooldown,avl_blocks_released,avl_blocks_near_player,avl_blocks_in_traversal_area,avl_block_knocks,avl_hits,setbacks";
+    void encounterTelemetry(int k, CourseGenerator.Framed f, GenTrace tr, Autopilot.Report rep) {
+        int[] tiers = new int[3]; int decks = 0, avl = 0, blocks = 0;
+        for (Element h : f.c.hazards) {
+            if (h.type == Element.Type.ENFORCER) { tiers[Math.max(0, Math.min(2, h.skin))]++; decks += Math.round(h.len); }
+            if (h.type == Element.Type.AVALANCHE) { avl++; blocks += Math.round(h.len); }
+        }
+        Sim s = rep != null ? Autopilot.lastReal : null;
+        double y0 = f.yBase + f.c.get(0).y;
+        String[] o = s == null ? new String[15] : new String[]{"" + rep.completed, "" + s.enfKickTries, "" + s.enfKickHits, "" + s.enfSwatTries, "" + s.enfSwatHits, "" + s.enfRetreats, "" + s.enfFalls,
+            "" + s.avlFired, "" + s.avlSkipped, "" + s.avlReleased, "" + s.avlNear, "" + s.avlArea, "" + s.avlKnocks, "" + s.avlHits, "" + s.setbacks()};
+        if (s == null) java.util.Arrays.fill(o, "");
+        String[] row = {MODE[mode] + "-s" + seed, "" + k, f3(y0), "" + castleOf(y0), "" + tiers[0], "" + tiers[1], "" + tiers[2], "" + decks,
+            "" + tr.counts.getOrDefault("enforcer_unfair", 0), "" + tr.counts.getOrDefault("enforcer_dropped", 0), "" + avl, "" + blocks,
+            "" + tr.counts.getOrDefault("avalanche_unfair", 0), "" + tr.counts.getOrDefault("avalanche_dropped", 0)};
+        String[] all = java.util.Arrays.copyOf(row, row.length + o.length); System.arraycopy(o, 0, all, row.length, o.length);
+        encounterRows.add(all);
+    }
     public float reached; public int slices; public String stopped; public double genSeconds, solveSeconds; public boolean solve;
     public int failedSlice = -1;
     /** Independent geometry check of every generated slice in the absolute frame (GeometryIntegrity, against the previous slice too): {slice, violation}. */
@@ -187,6 +209,7 @@ public final class LaneReport {
                     f3(okN / 1e9), f3(badN / 1e9), "" + na, f3(acc / 1e9), "" + nr, f3(rej / 1e9), f3(fb / 1e9), "" + tr.relaxed, gal < 0 ? "" : "" + gal, f3(secs), sal < 0 ? "" : "" + sal, "" + (rt.totalMemory() - rt.freeMemory()),
                     f3(tr.phaseNanos.getOrDefault("extend", 0L) / 1e9), f3(tr.phaseNanos.getOrDefault("closing_rest", 0L) / 1e9), f3(tr.phaseNanos.getOrDefault("decoys_forks", 0L) / 1e9), f3(tr.phaseNanos.getOrDefault("rooms", 0L) / 1e9),
                     f3(tr.phaseNanos.getOrDefault("forks_reserved", 0L) / 1e9), f3(tr.phaseNanos.getOrDefault("forks_open", 0L) / 1e9), f3(tr.phaseNanos.getOrDefault("key_rooms", 0L) / 1e9)}); }
+                encounterTelemetry(k, f, tr, rep);
                 forkTelemetry(k, f, tr);
                 safetyTelemetry(k, f, t);
                 v2.add(f.c, (float) f.yBase);
@@ -578,6 +601,7 @@ public final class LaneReport {
             for (String[] m : hazardRows) w.println(run + "," + String.join(",", m));
         }
         List<String[]> castles = castleRows(run);
+        try (PrintWriter w = pw(out, "encounters.csv")) { w.println(ENCOUNTER_HEADER); for (String[] r : encounterRows) w.println(String.join(",", r)); }
         try (PrintWriter w = pw(out, "castles.csv")) {
             w.println("run,mode,seed,castle,lane,windows,mean,median,min,max,sd,q1,q3,raw_sum,adj_sum,high_spike_windows,low_gap_windows,solver_links_failed,solver_links_unreached,solver_time_s,flags");
             for (String[] r : castles) w.println(String.join(",", r));
@@ -623,7 +647,7 @@ public final class LaneReport {
         j.append(",\"castles\":["); first = true;
         for (String[] r : castles) { j.append(first ? "" : ",").append("{\"castle\":").append(r[3]).append(",\"lane\":").append(js(r[4])).append(",\"windows\":").append(r[5]).append(",\"mean\":").append(num(r[6])).append(",\"median\":").append(num(r[7]))
             .append(",\"min\":").append(num(r[8])).append(",\"max\":").append(num(r[9])).append(",\"sd\":").append(num(r[10])).append(",\"q1\":").append(num(r[11])).append(",\"q3\":").append(num(r[12])).append(",\"adj_sum\":").append(num(r[14])).append('}'); first = false; }
-        j.append("],\"files\":[\"windows.csv\",\"ledger.csv\",\"elements.csv\",\"links.csv\",\"modules.csv\",\"solver.csv\",\"solver_failures.csv\",\"generation_failures.csv\",\"rule_checks.csv\",\"inventory.csv\",\"module_inventory.csv\",\"castles.csv\",\"windows_v2_reference.csv\",\"chunks.csv\",\"hazards.csv\",\"forks.csv\",\"fork_attempts.csv\",\"platforms.csv\",\"traversal.csv\",\"integrity.csv\",\"gate.json\"]");
+        j.append("],\"files\":[\"windows.csv\",\"ledger.csv\",\"elements.csv\",\"links.csv\",\"modules.csv\",\"solver.csv\",\"solver_failures.csv\",\"generation_failures.csv\",\"rule_checks.csv\",\"inventory.csv\",\"module_inventory.csv\",\"castles.csv\",\"windows_v2_reference.csv\",\"chunks.csv\",\"hazards.csv\",\"forks.csv\",\"fork_attempts.csv\",\"platforms.csv\",\"traversal.csv\",\"integrity.csv\",\"gate.json\",\"variety_windows.csv\",\"variety_rolling.csv\",\"variety_castles.csv\",\"variety_run.json\"]");
         j.append(",\"measurement_limits\":[\"cannon pillars and mortar emplacements are render-only (no traversal geometry in the simulation); they contribute no terrain\","
             + "\"hazard attack envelopes are reported as the element parameters the Sim interprets (amp, period, len, phase, dir), not swept volumes\","
             + "\"per-type hazard and enemy placement attempts are not observable; module attempts and refusal counters are\","
@@ -666,7 +690,7 @@ public final class LaneReport {
         for (String[] kv : new String[][]{{"commit", "GITHUB_SHA"}, {"branch", "GITHUB_REF_NAME"}, {"actions_run_id", "GITHUB_RUN_ID"}, {"actions_run_attempt", "GITHUB_RUN_ATTEMPT"}, {"workflow", "GITHUB_WORKFLOW"}})
             meta.put(kv[0], System.getenv().getOrDefault(kv[1], "local"));
         meta.put("solver_version", "Autopilot.run at commit " + meta.get("commit"));
-        r.write(out, meta); r.writeV2(out);
+        r.write(out, meta); r.writeV2(out); VarietyReport.write(r, out);          // gameplay variety, apart from difficulty (owner 2026-10-27)
         System.out.printf(Locale.ROOT, "%s seed %d: reached %.0f m, %d slices, %d windows, %d ledger rows, gen %.0f s, solve %.0f s%s%n", MODE[mode], seed, r.reached, r.slices, r.windows.size(), r.ledger.size(), r.genSeconds, r.solveSeconds, r.stopped == null ? "" : " - " + r.stopped);
         for (Map.Entry<String, String> e : r.verdicts().entrySet()) System.out.println("  " + e.getKey() + ": " + e.getValue());
         // validation gate (owner directive 2026-10-27): the artifacts above are written first; an incomplete course, a solver failure or a geometry

@@ -240,6 +240,18 @@ public final class Element {
     /** How long a burst lasts at most (s), then it leaves; a hop between decks (s) and the largest gap / height change it hops. */
     public static final float[] ENF_PURSUE = {6.5f, 7.5f, 8.5f};
     public static final float ENF_HOP_T = 0.5f, ENF_HOP_GAP = 3.6f, ENF_HOP_DY = 2.2f, ENF_HOP_PEAK = 1.0f;
+    /**
+     * Jump judgment (owner 2026-10-27, "no lemmings, no trained assassins"). Each robot draws its own fixed traits from its seed inside its tier's
+     * [LO, HI]: how far ahead it reads your flight (0 = where you are now, 1 = where you will be at its peak), the landing margin it still accepts (m from
+     * the deck's end; smaller = bolder), its reaction before it swats (s, scaled by Tuning.react()), how hard it can steer in the air (m/s^2), and its
+     * temper (a 0..1 draw that scales its chase time and swat cooldown by 0.85..1.15). A landing at least ENF_SAFE in from an end is reasonable (A),
+     * one inside the margin it accepts is risky (B), anything else is never attempted (C). The planned landing is any flat fixed deck of its encounter.
+     */
+    public static final float[] ENF_PREDICT_LO = {0f, 0.25f, 0.55f}, ENF_PREDICT_HI = {0f, 0.55f, 0.9f};
+    public static final float[] ENF_MARGIN_LO = {0.6f, 0.35f, 0.1f}, ENF_MARGIN_HI = {0.6f, 0.5f, 0.3f};
+    public static final float[] ENF_REACT_LO = {0.3f, 0.12f, 0.06f}, ENF_REACT_HI = {0.4f, 0.22f, 0.14f};
+    public static final float[] ENF_STEER_LO = {0f, 2.5f, 3.5f}, ENF_STEER_HI = {0f, 4f, 6f};
+    public static final float ENF_SAFE = 0.5f;
     // ---- spike-block avalanche (one physics for every mode: only the count and how often differ)
     /** Most blocks in one avalanche; a block's collision radius (the cube_spikes body, m). */
     public static final int AVL_MAX = 7;          // (5 until rules 14: NORMAL and PUNISHER still drop at most 5; NOT GONNA HAPPEN 5-7)

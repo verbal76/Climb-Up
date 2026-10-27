@@ -92,6 +92,10 @@ public final class Sim {
      *  retreats and falls; avalanches fired and skipped (cooldown), blocks released, blocks that came within 2.5 m of the body, blocks that reached the
      *  route decks from the one before the trigger deck to the fourth after it (the traversal area), avalanche hits. */
     public int enfKickTries, enfKickHits, enfSwatTries, enfSwatHits, enfRetreats, enfFalls, avlFired, avlSkipped, avlReleased, avlNear, avlArea, avlHits;
+    /** Enforcer judgment telemetry (report-only, rules 14): robots that started a chase; swats sized up, turned down (no landing it accepts), taken although
+     *  risky (category B); landings back on its own deck and on a neighbouring one; hops; falls by cause - came down just past an end (within 0.6 m),
+     *  carried off by its own chase steering, nothing under it at all. */
+    public int enfAlerts, enfSwatConsidered, enfSwatRejected, enfSwatRisky, enfLandOwn, enfLandNear, enfHops, enfFallEdge, enfFallChase, enfFallNoDeck;
     public static final int AVL_B = 9, AVL_W = 2 + Element.AVL_MAX * AVL_B;
     public float[] mobT = new float[0], mobS = new float[0], mobY = new float[0], mobDir = new float[0], mobTgt = new float[0], mobSeen = new float[0];
     /** Build 79 (owner: creatures reach the platforms before and after their own): the deck a skull, blob or crab is on, as an offset from its home deck (its anchor). */
@@ -248,7 +252,7 @@ public final class Sim {
         landSpeed = o.landSpeed; events = o.events; assistForgive = o.assistForgive; ps0 = o.ps0; py0 = o.py0; teleported = o.teleported;
         es0 = o.es0.clone(); ey0 = o.ey0.clone(); es1 = o.es1.clone(); ey1 = o.ey1.clone(); edy = o.edy.clone();
         crumbleT = o.crumbleT.clone(); gone = o.gone.clone(); goneT = o.goneT.clone(); padSquash = o.padSquash.clone(); tilt = o.tilt.clone(); onT = o.onT.clone();
-        clubTime = o.clubTime; swingT = o.swingT; shoveCd = o.shoveCd; crabS = o.crabS; crabY = o.crabY; keys = o.keys; keysFree = o.keysFree; featDone = o.featDone.clone(); aimAng = o.aimAng.clone(); aimFireT = o.aimFireT.clone(); aimArmed = o.aimArmed.clone(); crabPos = o.crabPos.clone(); crabVel = o.crabVel.clone(); crabMode = o.crabMode.clone(); crabStuck = o.crabStuck.clone(); crabCool = o.crabCool.clone(); crabTurn = o.crabTurn.clone(); crabSeen = o.crabSeen.clone(); mobState = o.mobState.clone(); mobT = o.mobT.clone(); mobS = o.mobS.clone(); mobY = o.mobY.clone(); mobDir = o.mobDir.clone(); mobTgt = o.mobTgt.clone(); mobSeen = o.mobSeen.clone(); deckOff = o.deckOff.clone(); crabJump = o.crabJump.clone(); crabFrom = o.crabFrom.clone(); crabFromDeck = o.crabFromDeck.clone(); crabFall = o.crabFall.clone(); aimYaw = o.aimYaw.clone(); avl = o.avl.clone(); lastAvlT = o.lastAvlT; avlImpacts = o.avlImpacts; avlKnocks = o.avlKnocks; enfKickTries = o.enfKickTries; enfKickHits = o.enfKickHits; enfSwatTries = o.enfSwatTries; enfSwatHits = o.enfSwatHits; enfRetreats = o.enfRetreats; enfFalls = o.enfFalls; avlFired = o.avlFired; avlSkipped = o.avlSkipped; avlReleased = o.avlReleased; avlNear = o.avlNear; avlArea = o.avlArea; avlHits = o.avlHits; avlRicochets = o.avlRicochets; avlPeak = o.avlPeak; squashT = o.squashT; slipCd = o.slipCd; finishedRun = o.finishedRun; lastGateNo = o.lastGateNo; lastKeyColor = o.lastKeyColor; lastGateColor = o.lastGateColor;
+        clubTime = o.clubTime; swingT = o.swingT; shoveCd = o.shoveCd; crabS = o.crabS; crabY = o.crabY; keys = o.keys; keysFree = o.keysFree; featDone = o.featDone.clone(); aimAng = o.aimAng.clone(); aimFireT = o.aimFireT.clone(); aimArmed = o.aimArmed.clone(); crabPos = o.crabPos.clone(); crabVel = o.crabVel.clone(); crabMode = o.crabMode.clone(); crabStuck = o.crabStuck.clone(); crabCool = o.crabCool.clone(); crabTurn = o.crabTurn.clone(); crabSeen = o.crabSeen.clone(); mobState = o.mobState.clone(); mobT = o.mobT.clone(); mobS = o.mobS.clone(); mobY = o.mobY.clone(); mobDir = o.mobDir.clone(); mobTgt = o.mobTgt.clone(); mobSeen = o.mobSeen.clone(); deckOff = o.deckOff.clone(); crabJump = o.crabJump.clone(); crabFrom = o.crabFrom.clone(); crabFromDeck = o.crabFromDeck.clone(); crabFall = o.crabFall.clone(); aimYaw = o.aimYaw.clone(); avl = o.avl.clone(); lastAvlT = o.lastAvlT; avlImpacts = o.avlImpacts; avlKnocks = o.avlKnocks; enfKickTries = o.enfKickTries; enfKickHits = o.enfKickHits; enfSwatTries = o.enfSwatTries; enfSwatHits = o.enfSwatHits; enfRetreats = o.enfRetreats; enfFalls = o.enfFalls; enfAlerts = o.enfAlerts; enfSwatConsidered = o.enfSwatConsidered; enfSwatRejected = o.enfSwatRejected; enfSwatRisky = o.enfSwatRisky; enfLandOwn = o.enfLandOwn; enfLandNear = o.enfLandNear; enfHops = o.enfHops; enfFallEdge = o.enfFallEdge; enfFallChase = o.enfFallChase; enfFallNoDeck = o.enfFallNoDeck; avlFired = o.avlFired; avlSkipped = o.avlSkipped; avlReleased = o.avlReleased; avlNear = o.avlNear; avlArea = o.avlArea; avlHits = o.avlHits; avlRicochets = o.avlRicochets; avlPeak = o.avlPeak; squashT = o.squashT; slipCd = o.slipCd; finishedRun = o.finishedRun; lastGateNo = o.lastGateNo; lastKeyColor = o.lastKeyColor; lastGateColor = o.lastGateColor;
         act = o.act; hz = o.hz; winLo = o.winLo; winHi = o.winHi; invuln = o.invuln; hits = o.hits; hitS = o.hitS; hitY = o.hitY;
         humanHold = o.humanHold; heldX = o.heldX; heldY = o.heldY; heldXT = o.heldXT; heldYT = o.heldYT;
         motion = o.motion; motionGen = o.motionGen; mstep = o.mstep;
@@ -794,23 +798,23 @@ public final class Sim {
         byte st = mobState[idx];
         if (st >= 2 && st <= 5) mobSeen[idx] += DT;
         boolean past = mode == Mode.GROUND && onElem >= 0 && onElem < course.routeSize() && onElem > a0 + n - 1 && course.get(onElem).anchor < 0;
-        if (st >= 2 && st <= 3 && (mobSeen[idx] >= ENFPURSUE(tier, rc) || past)) { mobState[idx] = 6; mobT[idx] = 0f; st = 6; enfRetreats++; }
+        float temper = 0.85f + 0.3f * enfTrait(e, 4, 0f, 1f);          // (rules 14: its temper scales its chase time and swat cooldown, 0.85-1.15)
+        if (st >= 2 && st <= 3 && (mobSeen[idx] >= ENFPURSUE(tier, rc) * temper || past)) { mobState[idx] = 6; mobT[idx] = 0f; st = 6; enfRetreats++; }
         switch (st) {
             case 1: {
                 crabStuck[idx] = (pk != NONE || onDeck(dS, half, dY)) ? crabStuck[idx] + DT : 0f;
-                if (crabStuck[idx] >= Element.ENF_NOTICE[tier] * (0.8f + 0.4f * enfVar(e, 1)) / rc) { mobState[idx] = 2; mobT[idx] = 0f; events |= EV_ENF_ALERT; }
+                if (crabStuck[idx] >= Element.ENF_NOTICE[tier] * (0.8f + 0.4f * enfVar(e, 1)) / rc) { mobState[idx] = 2; mobT[idx] = 0f; crabStuck[idx] = 0f; events |= EV_ENF_ALERT; enfAlerts++; }
                 break;
             }
             case 2: {
                 float run = Element.ENF_RUN[tier] * rc * DT;
-                if (mode == Mode.AIR && crabCool[idx] <= 0f && Element.ENF_SWAT_RANGE[tier] > 0f && Math.abs(dx) < Element.ENF_SWAT_RANGE[tier]
-                        && y - dY > 0.6f && y - dY < 3.2f && (tier == 2 || vy > -2f)) {
-                    float tUp = Element.ENF_SWAT_VY / g, aim = tier == 2 ? course.dsWrap(s + vx * tUp, mobS[idx]) : dx;
-                    float lim = Element.ENF_RUN[tier] * rc * 1.3f;
-                    crabFrom[idx] = Math.max(-lim, Math.min(lim, aim / tUp)); crabVel[idx] = Element.ENF_SWAT_VY; mobY[idx] = 0f;
-                    mobDir[idx] = dx >= 0f ? 1f : -1f; mobState[idx] = 4; mobT[idx] = 0f; crabCool[idx] = Element.ENF_SWAT_CD[tier] / rc; events |= EV_ENF_JUMP; enfSwatTries++;
-                    break;
-                }
+                // rules 14 (owner: no lemmings, no trained assassins): a swat only after its reaction time with you in reach in the air, and only when it
+                // has somewhere it accepts to come down; otherwise it keeps after you on foot (below: under you along its deck, or the next deck over)
+                boolean inReach = mode == Mode.AIR && Element.ENF_SWAT_RANGE[tier] > 0f && Math.abs(dx) < Element.ENF_SWAT_RANGE[tier]
+                        && y - dY > 0.6f && y - dY < 3.2f && (tier == 2 || vy > -2f);
+                crabStuck[idx] = inReach ? crabStuck[idx] + DT : 0f;
+                if (inReach && crabCool[idx] <= 0f && crabStuck[idx] >= enfTrait(e, 5, Element.ENF_REACT_LO[tier], Element.ENF_REACT_HI[tier]) / rc
+                        && enfSwat(e, idx, tier, j, a0, n, dx, rc, hw, temper)) break;
                 int want = pk != NONE ? Math.max(0, pk) : cur;
                 if (want == cur) {
                     if (mode == Mode.GROUND && onElem == j && Math.abs(dx) <= Element.ENF_HALF + hw + Element.ENF_KICK_REACH[tier]) {
@@ -828,7 +832,7 @@ public final class Sim {
                     else if (enfHopOk(j, nj)) {
                         Element nd = course.get(nj);
                         crabFrom[idx] = mobS[idx]; mobTgt[idx] = course.wrap(es1[nj] - side * Math.max(0.3f, nd.halfW() - 0.5f));
-                        crabVel[idx] = nj - a0; mobState[idx] = 5; mobT[idx] = 0f;
+                        crabVel[idx] = nj - a0; mobState[idx] = 5; mobT[idx] = 0f; enfHops++;
                     }
                 }
                 break;
@@ -846,15 +850,41 @@ public final class Sim {
                 break;
             }
             case 4: {
+                // in the air (rules 14): limited steering only - rising, it keeps after you; coming down, it steers for the deck it planned to land on.
+                // It lands on whichever deck of its encounter it actually comes down on, and falls only once it has passed below all of them
+                float prevY = mobY[idx], steer = enfTrait(e, 8, Element.ENF_STEER_LO[tier], Element.ENF_STEER_HI[tier]) * DT, lim = Element.ENF_RUN[tier] * rc * 1.3f, v0 = crabFrom[idx];
+                if (crabVel[idx] > 0f) {
+                    float tA = Math.max(0.05f, crabVel[idx] / g), want = course.dsWrap(s, mobS[idx]) / tA;
+                    crabFrom[idx] = Math.max(-lim, Math.min(lim, v0 + Math.max(-steer, Math.min(steer, want - v0))));
+                    crabStuck[idx] += Math.abs(crabFrom[idx] - v0);          // how far its chase has pulled it off the jump it planned
+                } else {
+                    int q = a0 + Math.round(mobTgt[idx]);
+                    if (q >= 0 && q < course.size()) {
+                        float r = deckY(q) - dY - mobY[idx], disc = crabVel[idx] * crabVel[idx] - 2f * g * r;
+                        if (disc >= 0f) {
+                            float t = Math.max(0.05f, (crabVel[idx] + (float) Math.sqrt(disc)) / g), in = Math.max(0f, course.get(q).halfW() - 0.3f);
+                            float land = course.dsWrap(course.wrap(mobS[idx] + v0 * t), es1[q]), to = Math.max(-in, Math.min(in, land));
+                            crabFrom[idx] = Math.max(-lim, Math.min(lim, v0 + Math.max(-steer, Math.min(steer, (to - land) / t))));
+                        }
+                    }
+                }
                 mobS[idx] = course.wrap(mobS[idx] + crabFrom[idx] * DT); mobY[idx] += crabVel[idx] * DT; crabVel[idx] -= g * DT;
                 float cy = dY + mobY[idx], bx = course.dsWrap(s, mobS[idx]);
                 if (shoveCd <= 0f && invuln <= 0f && Math.abs(bx) < Element.ENF_HALF + hw + 0.25f && y < cy + Element.ENF_H + Element.ENF_REACH_UP && y + T.height > cy) {
                     vx = (bx >= 0f ? 1f : -1f) * Element.ENF_SWAT_X; vy = Math.min(vy, Element.ENF_SWAT_Y); mode = Mode.AIR; onElem = -1; coyote = 0f; lockout = 0.3f; jumpedUp = false; shoveCd = 0.9f;
                     events |= EV_SHOVE | EV_LAUNCH | EV_ENF_HIT; enfSwatHits++;
                 }
-                if (crabVel[idx] < 0f && mobY[idx] <= 0f) {
-                    if (Math.abs(course.dsWrap(mobS[idx], dS)) <= half) { mobY[idx] = 0f; crabVel[idx] = 0f; crabFrom[idx] = 0f; mobState[idx] = 2; mobT[idx] = 0f; }
-                    else { mobState[idx] = 7; mobT[idx] = 0f; enfFalls++; }          // it came down off its deck: it falls
+                if (crabVel[idx] < 0f) {
+                    int q = enfTouch(j, a0, n, prevY, mobY[idx], mobS[idx]);
+                    if (q >= 0) {
+                        if (q == j) enfLandOwn++; else { deckOff[idx] = q - a0; enfLandNear++; }
+                        mobY[idx] = 0f; crabVel[idx] = 0f; crabFrom[idx] = 0f; crabStuck[idx] = 0f; mobState[idx] = 2; mobT[idx] = 0f;
+                    } else if (mobY[idx] < enfLowest(j, a0, n) - 0.5f) {          // below every deck it could land on: it falls
+                        int p = a0 + Math.round(mobTgt[idx]);
+                        float off = p >= 0 && p < course.size() ? Math.abs(course.dsWrap(mobS[idx], es1[p])) - course.get(p).halfW() : 99f;
+                        if (crabStuck[idx] > 1f) enfFallChase++; else if (off < 0.6f) enfFallEdge++; else enfFallNoDeck++;
+                        mobState[idx] = 7; mobT[idx] = 0f; enfFalls++;
+                    }
                 }
                 break;
             }
@@ -883,6 +913,76 @@ public final class Sim {
     /** A seeded value in [0, 1) for draw k of an Enforcer (its phase: the same on every platform). 0 for an unseeded one (phase 0): the original behaviour. */
     private static float enfVar(Element e, int k) { return e.phase == 0f ? 0f : avlRand(e, 7, k); }
     private static float ENFPURSUE(int tier, float rc) { return Element.ENF_PURSUE[tier] / rc; }
+    /** One of a robot's fixed traits (rules 14): its seeded draw k placed in [lo, hi]; an unseeded robot (phase 0) sits in the middle of its tier's range. */
+    private static float enfTrait(Element e, int k, float lo, float hi) { return lo + (hi - lo) * (e.phase == 0f ? 0.5f : avlRand(e, 7, k)); }
+    private float enfMargin;          // (scratch: enfLand's landing margin)
+    /**
+     * Sizes up a swat (rules 14 jump judgment) from a few candidate jumps - toward where it reads you will be, part way there, straight up - each kept
+     * only if it can still reach you and comes down on a deck of its encounter with a margin this robot accepts (category A, or B within its boldness;
+     * C, nothing to land on, is never attempted). It takes the one that gets closest to you, reasonable before risky; false when none qualifies (it
+     * looks again after a moment and keeps after you on foot meanwhile). Closed-form arcs: a handful of products per candidate, no search.
+     */
+    private boolean enfSwat(Element e, int idx, int tier, int j, int a0, int n, float dx, float rc, float hw, float temper) {
+        float g = T.gravity, vy0 = Element.ENF_SWAT_VY, tUp = vy0 / g, lim = Element.ENF_RUN[tier] * rc * 1.3f;
+        float pred = course.dsWrap(s + vx * tUp, mobS[idx]), aim = dx + enfTrait(e, 6, Element.ENF_PREDICT_LO[tier], Element.ENF_PREDICT_HI[tier]) * (pred - dx);
+        float need = enfTrait(e, 7, Element.ENF_MARGIN_LO[tier], Element.ENF_MARGIN_HI[tier]), reach = Element.ENF_HALF + hw + 0.6f;
+        float best = Float.MAX_VALUE, bestV = 0f; int bestQ = -1; boolean any = false, risky = false;
+        for (int c = 0; c < 4; c++) {
+            float want = c == 0 ? aim : c == 1 ? 0.65f * aim : c == 2 ? 0.35f * aim : 0f;
+            float v = Math.max(-lim, Math.min(lim, want / tUp)), miss = Math.abs(aim - v * tUp);
+            if (miss > reach) continue;
+            any = true;
+            int q = enfLand(j, a0, n, mobS[idx], v, vy0, 0f);
+            if (q < 0 || enfMargin < need) continue;
+            boolean b = enfMargin < Element.ENF_SAFE;
+            float score = miss + (b ? 0.5f : 0f);
+            if (score < best) { best = score; bestV = v; bestQ = q; risky = b; }
+        }
+        if (!any) return false;
+        enfSwatConsidered++;
+        if (bestQ < 0) { enfSwatRejected++; crabCool[idx] = 0.25f / rc; return false; }
+        if (risky) enfSwatRisky++;
+        crabFrom[idx] = bestV; crabVel[idx] = vy0; mobY[idx] = 0f; mobTgt[idx] = bestQ - a0; crabStuck[idx] = 0f;
+        mobDir[idx] = dx >= 0f ? 1f : -1f; mobState[idx] = 4; mobT[idx] = 0f; crabCool[idx] = Element.ENF_SWAT_CD[tier] * temper / rc; events |= EV_ENF_JUMP; enfSwatTries++;
+        return true;
+    }
+    /** Decks a robot of encounter a0..a0+n-1 standing on deck j can land on: those within two of j that are flat fixed route decks (its own always). */
+    private boolean enfDeck(int q, int j) { return q == j || roamDeck(q, false); }
+    /**
+     * Where a robot leaving arc {@code s0}, {@code y0} above deck j, at {@code v} along and {@code vy0} up, first comes down on a deck it can land on:
+     * that deck's index (or -1), with enfMargin = how far in from that deck's nearer end. Uses the decks' real spans and heights as they are now (a robot
+     * knows nothing of the future).
+     */
+    private int enfLand(int j, int a0, int n, float s0, float v, float vy0, float y0) {
+        float g = T.gravity, dY = deckY(j), bestT = Float.MAX_VALUE; int best = -1;
+        for (int q = Math.max(a0, j - 2); q <= Math.min(a0 + n - 1, j + 2); q++) {
+            if (q < 0 || q >= course.size() || !enfDeck(q, j)) continue;
+            float r = deckY(q) - dY - y0, disc = vy0 * vy0 - 2f * g * r;
+            if (disc < 0f) continue;
+            float t = (vy0 + (float) Math.sqrt(disc)) / g;
+            if (t <= 0f || t >= bestT) continue;
+            float m = course.get(q).halfW() - Math.abs(course.dsWrap(course.wrap(s0 + v * t), es1[q]));
+            if (m < 0f) continue;
+            bestT = t; best = q; enfMargin = m;
+        }
+        return best;
+    }
+    /** The deck (of those it can land on) whose top a robot coming down from {@code y0} to {@code y1} above deck j crossed this step over its span, or -1. */
+    private int enfTouch(int j, int a0, int n, float y0, float y1, float ms) {
+        float dY = deckY(j), top = -Float.MAX_VALUE; int best = -1;
+        for (int q = Math.max(a0, j - 2); q <= Math.min(a0 + n - 1, j + 2); q++) {
+            if (q < 0 || q >= course.size() || !enfDeck(q, j)) continue;
+            float r = deckY(q) - dY;
+            if (y0 >= r && y1 < r && r > top && Math.abs(course.dsWrap(ms, es1[q])) <= course.get(q).halfW()) { top = r; best = q; }
+        }
+        return best;
+    }
+    /** The lowest deck top it could land on, relative to deck j: below that (and a little more) it has fallen. */
+    private float enfLowest(int j, int a0, int n) {
+        float dY = deckY(j), lo = 0f;
+        for (int q = Math.max(a0, j - 2); q <= Math.min(a0 + n - 1, j + 2); q++) if (q >= 0 && q < course.size() && enfDeck(q, j)) lo = Math.min(lo, deckY(q) - dY);
+        return lo;
+    }
     /** The robot can hop from deck j to deck nj: a flat fixed route deck, a gap it can jump and a height it can climb or drop. */
     private boolean enfHopOk(int j, int nj) {
         if (!roamDeck(nj, false)) return false;
@@ -1135,6 +1235,16 @@ public final class Sim {
     /** Its feet: arc and absolute height. */
     public float enforcerS(int hi, Element e) { return hi < mobS.length && mobState[hi] != 0 ? mobS[hi] : e.s; }
     public float enforcerY(int hi, Element e) { int j = mobDeckIdx(hi, e); return (j >= 0 ? deckY(j) : e.y) + (hi < mobY.length ? mobY[hi] : 0f); }
+    /** Its deck: the offset from its first deck it stands on (or took off from). */
+    public int enforcerDeck(int hi) { return hi < deckOff.length ? Math.round(deckOff[hi]) : 0; }
+    /** Its speed along the lane while in the air (a swat's steering), m/s. */
+    public float enforcerVs(int hi) { return hi < crabFrom.length && hi < mobState.length && mobState[hi] == 4 ? crabFrom[hi] : 0f; }
+    /** Tests and probes (rules 14): put Enforcer {@code hi} straight into its chase, standing on deck offset {@code off} of its encounter at arc {@code at}. */
+    public void enforcerChaseAt(int hi, int off, float at) {
+        if (hi >= mobState.length) return;
+        mobState[hi] = 2; deckOff[hi] = off; mobS[hi] = course.wrap(at); mobY[hi] = 0f; mobT[hi] = 0f; mobSeen[hi] = 0f; mobDir[hi] = 1f;
+        crabVel[hi] = 0f; crabFrom[hi] = 0f; crabStuck[hi] = 0f; crabCool[hi] = 0f;
+    }
 
     /** The skull's live arc / height above its deck / heading (for the renderer and the planner's reflex); state 3 = dashing. */
     public boolean skullDashing(int hi) { return hi < mobState.length && mobState[hi] == 3; }

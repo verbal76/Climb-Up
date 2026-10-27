@@ -116,7 +116,8 @@ public final class LaneReport {
      *  and what happened when the solver climbed the slice (Sim's report-only counters). Columns: see encounters.csv's header. */
     final List<String[]> encounterRows = new ArrayList<>();
     static final String ENCOUNTER_HEADER = "run,slice,y0,castle,enforcers_yellow,enforcers_orange,enforcers_red,enforcer_decks,enforcer_unfair,enforcer_dropped,avalanches,avalanche_blocks,avalanche_unfair,avalanche_dropped,"
-        + "solved,enf_kick_tries,enf_kick_hits,enf_swat_tries,enf_swat_hits,enf_retreats,enf_falls,avl_fired,avl_skipped_cooldown,avl_blocks_released,avl_blocks_near_player,avl_blocks_in_traversal_area,avl_block_knocks,avl_hits,setbacks,enforcers_planned,avalanches_planned,avl_ricochets,avl_peak_active,avl_blocks_5,avl_blocks_6,avl_blocks_7,hot_window_guard";
+        + "solved,enf_kick_tries,enf_kick_hits,enf_swat_tries,enf_swat_hits,enf_retreats,enf_falls,avl_fired,avl_skipped_cooldown,avl_blocks_released,avl_blocks_near_player,avl_blocks_in_traversal_area,avl_block_knocks,avl_hits,setbacks,enforcers_planned,avalanches_planned,avl_ricochets,avl_peak_active,avl_blocks_5,avl_blocks_6,avl_blocks_7,hot_window_guard,"
+        + "enf_robots_alerted,enf_swats_considered,enf_swats_declined,enf_swats_risky,enf_land_own_deck,enf_land_neighbour_deck,enf_hops,enf_fall_edge,enf_fall_chase,enf_fall_no_deck";
     /**
      * NGH capacity-aware hazard control per castle (owner amendment 2026-10-27): hazard-module attempts and acceptance, the hazard points the accepted
      * modules added, acceptance per kind ("accepted/attempted"), the factor the controller requested and the one applied, how much was withheld and why,
@@ -147,7 +148,10 @@ public final class LaneReport {
         int[] bn = new int[8]; for (Element h : f.c.hazards) if (h.type == Element.Type.AVALANCHE) bn[Math.max(0, Math.min(7, Math.round(h.len)))]++;
         // rules 14: planned vs placed (the slice's planned encounters are the placed ones plus those refused for good), ricochets, the most blocks in the air at once
         String[] o2 = {"" + (tiers[0] + tiers[1] + tiers[2] + tr.counts.getOrDefault("enforcer_dropped", 0)), "" + (avl + tr.counts.getOrDefault("avalanche_dropped", 0)),
-            s == null ? "" : "" + s.avlRicochets, s == null ? "" : "" + s.avlPeak, "" + bn[5], "" + bn[6], "" + bn[7], "" + tr.counts.getOrDefault("progression_hot_window", 0)};
+            s == null ? "" : "" + s.avlRicochets, s == null ? "" : "" + s.avlPeak, "" + bn[5], "" + bn[6], "" + bn[7], "" + tr.counts.getOrDefault("progression_hot_window", 0),
+            // rules 14 Enforcer judgment: robots that chased, swats sized up / declined (no landing it accepts) / taken although risky, where swats came down, hops, falls by cause
+            s == null ? "" : "" + s.enfAlerts, s == null ? "" : "" + s.enfSwatConsidered, s == null ? "" : "" + s.enfSwatRejected, s == null ? "" : "" + s.enfSwatRisky,
+            s == null ? "" : "" + s.enfLandOwn, s == null ? "" : "" + s.enfLandNear, s == null ? "" : "" + s.enfHops, s == null ? "" : "" + s.enfFallEdge, s == null ? "" : "" + s.enfFallChase, s == null ? "" : "" + s.enfFallNoDeck};
         String[] row = {MODE[mode] + "-s" + seed, "" + k, f3(y0), "" + castleOf(y0), "" + tiers[0], "" + tiers[1], "" + tiers[2], "" + decks,
             "" + tr.counts.getOrDefault("enforcer_unfair", 0), "" + tr.counts.getOrDefault("enforcer_dropped", 0), "" + avl, "" + blocks,
             "" + tr.counts.getOrDefault("avalanche_unfair", 0), "" + tr.counts.getOrDefault("avalanche_dropped", 0)};

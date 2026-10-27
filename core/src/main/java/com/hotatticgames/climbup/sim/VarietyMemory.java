@@ -21,10 +21,12 @@ public final class VarietyMemory {
     public void forget(int n0) { h.removeIf(e -> e[2] >= n0); }
     /** Entries more than SPAN m below {@code top} leave the memory (they no longer affect anything). */
     public void prune(float top) { h.removeIf(e -> e[1] < top - SPAN); }
-    public float penalty(int fam, float y) {
+    public float penalty(int fam, float y) { return penalty(fam, y, A); }
+    /** The penalty with strength {@code a} in place of {@link #A} (rules 13: NORMAL uses a lighter touch, DifficultyProfile.varietyStrength). */
+    public float penalty(int fam, float y, float a) {
         if (fam < 0) return 1f;
         double f = 1.0;
-        for (float[] e : h) { if ((int) e[0] != fam) continue; float d = y - e[1]; if (d >= 0f && d <= SPAN) f *= 1.0 - A * StrictMath.exp(-d / DECAY); }
+        for (float[] e : h) { if ((int) e[0] != fam) continue; float d = y - e[1]; if (d >= 0f && d <= SPAN) f *= 1.0 - a * StrictMath.exp(-d / DECAY); }
         return (float) Math.max(FLOOR, f);
     }
 }

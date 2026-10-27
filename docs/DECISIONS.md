@@ -1108,3 +1108,15 @@ desktop/src/test/.../CableShot (docs/verification/traverse_bar_rope_colour_2026-
 - Rerun scope (owner: rerun only the courses a fix invalidates): NORMAL and PUNISHER seeds 1-3 on the fixed commit; the three NGH courses are taken from run 40480870533 (difficulty-report.yml `include_pattern: lanes-mode-2-*`), since the fix cannot change NGH generation.
 - NGH seed 1 slice 39 (castle 6, ~2563 m, link 60->61: a 2.65 m gap with a vertical saw, an aimed cannon two decks back and a skull deck three ahead) fails the solver with a knockback loop. It is PRE-EXISTING: baseline commit 7173ff1 generates the identical slice (123 elements) with the identical solver failure. Not changed here (NGH is protected from unintended changes); reported to the owner as an open NGH reliability item.
 - Campaign result and owner report: docs/reports/CAMPAIGN_2026-10-27.md (all nine courses generate to 5,000 m; solver complete on 8 of 9, NGH seed 1 slice 39 pre-existing; geometric integrity clean on all). Bundled seed-12 replay re-recorded on the final generator (384da49). Stopped for owner review; no tuning done on the results.
+
+## Difficulty progression and category-aware variety (owner directive 2026-10-27, Rules 13 work)
+
+### Owner answers (2026-10-27)
+- PUNISHER Castle 1 aims at NORMAL Castles 3-4 (this directive supersedes the 2026-10-26 "about NORMAL Castle 5" head start). The Enforcer and avalanche counts stay as approved; early PUNISHER terrain and hazards ease instead.
+- PUNISHER Castle 10 aims about 20% above NORMAL Castle 10 (PROVISIONAL).
+
+### Phase 1 audit (source b63da9c, branch build-74-determinism; CI validate running; no other workers on this branch)
+- Rules 12 per-castle lane means (lane report, campaign 40483855261 + NGH from 40480870533): terrain is 63-81% of every castle's total and nearly flat (NORMAL 508 -> 554, PUNISHER 525 -> 555); PUNISHER hazards flat at ~160; PUNISHER enemies rise 99 -> 125; PUNISHER castle 1 (811) is NORMAL castle 8's level.
+- Fallbacks are 25-43% of accepted modules in every castle (traversal.csv), and every continuation fallback is built at a fixed terrain demand of 0.15 whatever the castle (extend: tryModuleBelow(fb, 0.15f, th)): the generic, easy footing the owner sees, and a cause of the flat terrain lane.
+- Slices are a pure function of (seed, k, slice k-1) and are stored with SliceCodec; a castle-to-castle controller therefore carries its measurements inside the slice (no wall clock, no whole-tower pass, streaming and resume replay the same decisions).
+- The lane report's rules (T-*, H-*, E-*, X-*, M-CLUB) use only main-code functions (EncounterModel reach rules, element properties) plus DifficultyScore's weight table, so the generator-side estimator applies the same rules in the same units; its weight table is a copy pinned to DifficultyScore's by a test (the report model itself is not changed).

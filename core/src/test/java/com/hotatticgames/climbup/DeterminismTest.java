@@ -75,7 +75,7 @@ public class DeterminismTest {
     }
 
     @Test public void theRulesVersionIsStampedAndOlderBuildsAreNotComparable() {
-        assertEquals(12, CourseGenerator.RULES_VERSION);          // owner amendments 2026-10-27 (Enforcer, avalanches, PUNISHER variety memory, NORMAL rope-fallback correction); 11 never released          // Build 82: owner directive 2026-10-27 (pitch controller governs the fallbacks, slice endings leave two ordinary steps); 10 (release requirements 2026-10-26) and 9 were never released           // Build 82: owner correction directive 2026-10-26 (terrain curve over the whole climb, NGH profile, protected spike-drop platforms, skull hop timing)
+        assertEquals(13, CourseGenerator.RULES_VERSION);          // rules 13: owner progression directive 2026-10-27 (castle-to-castle controller), unreleased; 12: owner amendments 2026-10-27 (Enforcer, avalanches, PUNISHER variety memory, NORMAL rope-fallback correction); 11 never released          // Build 82: owner directive 2026-10-27 (pitch controller governs the fallbacks, slice endings leave two ordinary steps); 10 (release requirements 2026-10-26) and 9 were never released           // Build 82: owner correction directive 2026-10-26 (terrain curve over the whole climb, NGH profile, protected spike-drop platforms, skull hop timing)
         assertEquals(9, CourseGenerator.rulesOfBuild(82));           // Build 81: owner decisions 2026-10-25 (keys on the main route, the threat evaluator uses the simulation's reach rules)
         assertEquals(8, CourseGenerator.rulesOfBuild(81));
         assertEquals(7, CourseGenerator.rulesOfBuild(80));        // Build 80: the owner's generator directive (no level gates, PUNISHER's own curve, conflicts, splits with reconnecting branches)

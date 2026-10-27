@@ -55,7 +55,7 @@ public final class CourseGenerator {
      * generator (the crab rules of Build 63 changed what a seed produced, so runs from earlier builds carry version 0, "old rules", and are not compared).
      * {@code GeneratorFingerprintTest} fails when generation changes without a bump.
      */
-    public static final int RULES_VERSION = 12;     // 12 = (unreleased) owner amendments 2026-10-27: PUNISHER Enforcer robots (crabs, bees, skulls and blobs kept clear of them), spike-block avalanches (PUNISHER 2-3 a castle; NORMAL castles 9-10, two blocks), PUNISHER history-aware variety, NORMAL narrow rope-fallback correction; 11 = Build 82 (owner directive 2026-10-27, NORMAL seed 2 stopped at 881 m): while the spiral lags its pitch a refused pick falls back only to challenges that climb, and a slice ending must leave the next slice two ordinary steps (rises a hop or stair makes), climbing out first when it does not; 10 = (unreleased) Build 82 draft (owner release requirements 2026-10-26): spiral pitch measured above the revolution below, slice endings that leave the next slice room, relaxed attempts keep body clearance, geometry integrity enforced on every slice, challenges before ropes in the fallbacks; 9 = (unreleased) Build 82 draft (owner correction directive 2026-10-26): terrain difficulty rises over the whole climb with each mode's head start, NGH has its own profile, no enemies on spike-drop platforms (rare ones on intermediate safe platforms instead), the solver hops a skull at its real dash speed; 8 = Build 81 (owner decisions 2026-10-25): keys lie on a main-route platform (no rooms, branches or perches); 7 = Build 80 (owner directive 2026-10-24): no level gates, PUNISHER on its own curve, encounter-conflict rule, splits with reconnecting branches instead of dead ends; 6 = Build 79: skulls, blobs and crabs reach the platforms either side (crabs follow up to three, fall with crumbling decks), faster skull, no blob wobble, two to four crabs a deck, bee pairs, creatures on spike-drop rows, bridges that drop planks, flat-turning aimed cannons, an always-running balance conveyor, decoys kept off ropes, a slightly harder first world; 5 = Build 77: faster skull with loop+swoop, key detours proved with the skull at either end, one balance conveyor per section from Castle 6 to 10; 4 = Build 76: faster plank conveyor bridges; 3 = Build 72: flush ramps, faster crumbling, a wilder shaking ramp, the spinning ramp; 2 = Build 71: the bee homes in, skulls and green blobs, mortars out of step at random
+    public static final int RULES_VERSION = 13;     // 13 = (unreleased) owner directive 2026-10-27: castle-to-castle progression controller (Progression: measured castles steer the next castle's terrain, hazard, enemy and interaction selection within fixed bounds; a 25 m spike guard), continuations at the castle's own demand first, NORMAL shares the history-aware variety at a lighter strength, PUNISHER's head start 1,250 m (castle 1 at NORMAL castles 3-4); NGH unchanged; 12 = (unreleased) owner amendments 2026-10-27: PUNISHER Enforcer robots (crabs, bees, skulls and blobs kept clear of them), spike-block avalanches (PUNISHER 2-3 a castle; NORMAL castles 9-10, two blocks), PUNISHER history-aware variety, NORMAL narrow rope-fallback correction; 11 = Build 82 (owner directive 2026-10-27, NORMAL seed 2 stopped at 881 m): while the spiral lags its pitch a refused pick falls back only to challenges that climb, and a slice ending must leave the next slice two ordinary steps (rises a hop or stair makes), climbing out first when it does not; 10 = (unreleased) Build 82 draft (owner release requirements 2026-10-26): spiral pitch measured above the revolution below, slice endings that leave the next slice room, relaxed attempts keep body clearance, geometry integrity enforced on every slice, challenges before ropes in the fallbacks; 9 = (unreleased) Build 82 draft (owner correction directive 2026-10-26): terrain difficulty rises over the whole climb with each mode's head start, NGH has its own profile, no enemies on spike-drop platforms (rare ones on intermediate safe platforms instead), the solver hops a skull at its real dash speed; 8 = Build 81 (owner decisions 2026-10-25): keys lie on a main-route platform (no rooms, branches or perches); 7 = Build 80 (owner directive 2026-10-24): no level gates, PUNISHER on its own curve, encounter-conflict rule, splits with reconnecting branches instead of dead ends; 6 = Build 79: skulls, blobs and crabs reach the platforms either side (crabs follow up to three, fall with crumbling decks), faster skull, no blob wobble, two to four crabs a deck, bee pairs, creatures on spike-drop rows, bridges that drop planks, flat-turning aimed cannons, an always-running balance conveyor, decoys kept off ropes, a slightly harder first world; 5 = Build 77: faster skull with loop+swoop, key detours proved with the skull at either end, one balance conveyor per section from Castle 6 to 10; 4 = Build 76: faster plank conveyor bridges; 3 = Build 72: flush ramps, faster crumbling, a wilder shaking ramp, the spinning ramp; 2 = Build 71: the bee homes in, skulls and green blobs, mortars out of step at random
     /** The rules version a climb started on a given build used (0 = unknown or before the stamps: not comparable). */
     public static int rulesOfBuild(int build) { return build >= 82 ? 9 : build >= 81 ? 8 : build >= 80 ? 7 : build >= 79 ? 6 : build >= 77 ? 5 : build >= 76 ? 4 : build >= 72 ? 3 : build >= 71 ? 2 : build >= 63 ? 1 : 0; }
 
@@ -89,7 +89,7 @@ public final class CourseGenerator {
             g.relaxed = attempt >= 12;       // the previous slice can occasionally leave no room that keeps clear of every older spiral layer: after twelve normal tries, build above it without the shortcut spacing to it (never without body clearance: ghostClash) rather than ever failing
             lastForDebug = g;
             GenTrace tr = GenTrace.GEN.get(); long a0 = tr != null ? GenTrace.now() : 0L; if (tr != null) { tr.attempt = attempt; tr.relaxed = g.relaxed; }      // observe-only (reports)
-            try { g.buildChunk(prev); g.checkIntegrity(); Course out = g.extract(); if (tr != null) { tr.finalAttempt = attempt; tr.attemptNanos.add(new long[]{attempt, GenTrace.now() - a0, 1}); } return out; }
+            try { g.buildChunk(prev); g.checkIntegrity(); Course out = g.extract(); g.progFinish(out); if (tr != null) { tr.finalAttempt = attempt; tr.attemptNanos.add(new long[]{attempt, GenTrace.now() - a0, 1}); } return out; }
             catch (IllegalStateException e) { last = e; SLICE_FAILURES.incrementAndGet(); if (tr != null) { tr.sliceFailures.add("attempt " + attempt + ": " + e.getMessage()); tr.attemptNanos.add(new long[]{attempt, GenTrace.now() - a0, 0}); } }
         }
         throw last;
@@ -119,7 +119,7 @@ public final class CourseGenerator {
         for (Element h : src.hazards) { Element e = copyOf(h, h.anchor); e.y -= dy; e.s -= ds; out.hazards.add(e); }
         for (int[] k : src.keyRooms) out.keyRooms.add(k.clone());
         for (int[] f : src.forks) out.forks.add(f.clone());
-        out.routeCount = src.routeCount; out.gemCheckpoints = src.gemCheckpoints; out.indexDecoys();
+        out.routeCount = src.routeCount; out.gemCheckpoints = src.gemCheckpoints; out.prog = src.prog == null ? null : src.prog.clone(); out.indexDecoys();
         return out;
     }
 
@@ -229,6 +229,7 @@ public final class CourseGenerator {
             lastEnfY = Float.NEGATIVE_INFINITY; for (Element h : prev.hazards) if (h.type == Element.Type.ENFORCER) lastEnfY = Math.max(lastEnfY, h.y);          // (prev is already in this frame)
         }
         float startY = c.get(ctx - 1).y;
+        progStart(prev);
         castleTarget = 0f; castleDone = false; exactCastle = false; keyN = 0; keyY = 0f; gemBest = -1; beltSawY = 0f; beltSawDone = false; beltSawNow = false;
         if (T.castleSpacing > 0f) {          // exact heights: the castles at spacing x N, and ONE red-gem checkpoint halfway between every two castles (and between the start and castle 1)
             double sp = T.castleSpacing, half = sp * 0.5, startAbs = startY + base;          // absolute heights in double: the same maths at any altitude
@@ -439,7 +440,8 @@ public final class CourseGenerator {
         float lastRestY = c.get(c.size() - 1).y, nextGap = T.gemSpacing * r(0.85f, 1.15f);      // red-gem checkpoints at even stretches of height, each with a little random give
         while (c.get(c.size() - 1).y < targetY || (beltSawY > 0f && !beltSawDone && c.get(c.size() - 1).y < beltSawY + 40f)) {      // (a balance conveyor that could not be proven yet gets up to 40 m more tries)
             Element last = c.get(c.size() - 1);
-            float d = diff(last.y);
+            float[] pf = fac(last.y); hotNow = hotWindow(last.y);          // rules 13: this castle's selection factors and the 25 m spike guard
+            float d = adjD(diff(last.y), pf[Progression.T]);
             int zone = tier(last.y), th = theme(last.y);
             boolean castlePending = castleTarget > 0f && !castleDone;
             if (castlePending && exactCastle && last.y >= castleTarget - 6f) { int n0 = c.size(), h0 = c.hazards.size(); long s0 = GenTrace.now(); buildExactCastle(th); undo.clear(); traceStructure("CASTLE", n0, h0, last.y, s0); castleDone = true; lastRestY = c.get(c.size() - 1).y; continue; }
@@ -477,13 +479,13 @@ public final class CourseGenerator {
             if (th == 1 && last.type == Element.Type.STATIC && rnd.nextFloat() < 0.2f) { GenTrace.tally("wet_replaced_" + k); if (hazardKind(k)) deferredHaz = k; k = Kind.WET; }          // the Frost world: some platforms are under a rain cloud (slippery)
             float lv = Math.min(1f, level(last.y));
             boolean hazOk = !endless || intensity(last.y) > 0f;          // the first hazardStartY metres stay free of hazards and creatures (EndlessTest: a spike-drop row at 7.5 m, seed 3), as for every other hazard module
-            if (hazOk && k != Kind.WET && prev != Kind.CREATURE && !last.wet() && !enfCalm() && rnd.nextFloat() < (0.025f + 0.045f * lv + 0.05f * late(last.y)) * P.creatureScale) k = Kind.CREATURE;      // owner directive 2026-10-24: creature decks from Level 1 on, more as the levels rise (was world 2 on)
-            else if (prev == Kind.CREATURE && !last.wet() && rnd.nextFloat() < 0.35f * late(last.y)) k = rnd.nextBoolean() ? Kind.HAZ : Kind.TRAP;      // Build 71: higher up, a creature deck runs straight into a trap      // Build 71: a skull's deck (world 2 on), or a green blob's (world 3 on)
+            if (hazOk && k != Kind.WET && prev != Kind.CREATURE && !last.wet() && !enfCalm() && rnd.nextFloat() < (0.025f + 0.045f * lv + 0.05f * late(last.y)) * P.creatureScale * (hotNow ? 0f : pf[Progression.E])) k = Kind.CREATURE;      // owner directive 2026-10-24: creature decks from Level 1 on, more as the levels rise (was world 2 on)
+            else if (prev == Kind.CREATURE && !last.wet() && rnd.nextFloat() < 0.35f * late(last.y) * (hotNow ? 0f : pf[Progression.X])) k = rnd.nextBoolean() ? Kind.HAZ : Kind.TRAP;      // Build 71: higher up, a creature deck runs straight into a trap      // Build 71: a skull's deck (world 2 on), or a green blob's (world 3 on)
             boolean secondHalf = endless && th == 0 && ((last.y + base) % T.zoneHeight) >= 0.5f * T.zoneHeight - 15f;      // castle 1 to castle 2: the Meadow's second, harder half (owner, Build 71)
-            if (hazOk && k != Kind.WET && k != Kind.CREATURE && !last.wet() && prev != Kind.DROPS && (secondHalf ? rnd.nextFloat() < 0.10f : rnd.nextFloat() < 0.015f + 0.025f * lv)) k = Kind.DROPS;      // (spike-drop rows anywhere, more higher up; was world 2 on)
+            if (hazOk && k != Kind.WET && k != Kind.CREATURE && !last.wet() && prev != Kind.DROPS && (secondHalf ? rnd.nextFloat() < 0.10f * (hotNow ? 0f : pf[Progression.H]) : rnd.nextFloat() < (0.015f + 0.025f * lv) * (hotNow ? 0f : pf[Progression.H]))) k = Kind.DROPS;      // (spike-drop rows anywhere, more higher up; was world 2 on)
             // a little rougher than the first half, and (Phase 1, 2026-10-26) from then on: it applied to castle 2 alone, so castle 2 stood out as a hazard
             // spike and castle 3 fell back to the first half's mix (the chained spike drops above stay castle 2's own)
-            else if (hazOk && (k == Kind.HOP || (k == Kind.STAIRS && !lagging)) && rnd.nextFloat() < Math.max((secondHalf || (endless && last.y + base >= T.zoneHeight)) ? 0.3f : 0f, endless ? P.pressure(level(last.y)) : 0f))
+            else if (hazOk && (k == Kind.HOP || (k == Kind.STAIRS && !lagging)) && rnd.nextFloat() < Math.max((secondHalf || (endless && last.y + base >= T.zoneHeight)) ? 0.3f : 0f, endless ? P.pressure(level(last.y)) : 0f) * (hotNow ? 0f : Math.min(1.25f, pf[Progression.H])))
                 k = rnd.nextFloat() < 0.6f ? Kind.HAZ : Kind.TRAP;          // owner 2026-10-26: plain platforms grow rarer with the climb and the mode (DifficultyProfile.pressure)
             if (last.wet() && (k == Kind.HAZ || k == Kind.TRAP || k == Kind.MORTAR || k == Kind.CREATURE || k == Kind.DROPS)) { GenTrace.tally("wet_stairs_" + k); deferredHaz = k; k = Kind.STAIRS; }          // after a slippery platform give a walk-up (not a hazard you must time, nor a jump you must push off a slippery surface for): its timing windows assume a normal run-up (SawFairnessTest) and the plain climb stays walkable
             if (beltSawY > 0f && !beltSawDone && last.y >= beltSawY && !last.wet() && !(castlePending && last.y > castleTarget - 14f)) {      // Build 77: this section's balance conveyor (tried again on the next module if it cannot be proven here)
@@ -495,7 +497,7 @@ public final class CourseGenerator {
                 rejected++;
                 boolean ok = false;
                 tracePicked = k.name(); traceRole = "FALLBACK";
-                if (endless && hazOk && !last.wet() && !lagging && hazardKind(k) && rnd.nextFloat() < P.threatFallback(level(last.y))) {          // owner 2026-10-26: a refused hazard tries one other hazard before a safe platform
+                if (endless && hazOk && !last.wet() && !lagging && hazardKind(k) && rnd.nextFloat() < Math.min(1f, P.threatFallback(level(last.y)) * pf[Progression.X])) {          // owner 2026-10-26: a refused hazard tries one other hazard before a safe platform
                     Kind fb = k == Kind.HAZ ? Kind.TRAP : Kind.HAZ;          // one alternative only: trying three, each with its full set of placement attempts, made NGH generation 3-4x slower (2d4388a)
                     if (tryModuleBelow(fb, d, th)) { k = fb; ok = true; GenTrace.tally("threat_fallback_ok"); } else GenTrace.tally("threat_fallback_failed");
                 }
@@ -517,8 +519,17 @@ public final class CourseGenerator {
                 // then the continuation the climb needs, easiest proofs first: vertical moves with timing before stairs, and ropes and plain hops
                 // last (rope first when the spiral lags its pitch: a hop flattens it), so a section always goes on
                 Kind[] cont = continuation(zone, lagging, ordinaryUsed);
-                if (P.adaptiveVariety()) cont = varOrder(cont, last.y); else if (P.ropeFallbackSpacing()) cont = ropeAfterRecent(cont, last.y, lagging);
-                if (!ok) for (Kind fb : cont) { if (fb != k && tryModuleBelow(fb, 0.15f, th)) { k = fb; ok = true; if (ordinary(fb)) ordinaryUsed[fb.ordinal()] = ++ordinaryClock; break; } }
+                if (P.ropeFallbackSpacing()) cont = ropeAfterRecent(cont, last.y, lagging); else if (P.adaptiveVariety()) cont = varOrder(cont, last.y);
+                // rules 13 (NORMAL, PUNISHER): every continuation used to be built at the fixed easy demand 0.15 whatever the castle (25-43% of accepted
+                // modules in rules 12); it is tried at this castle's own demand first, then at 0.15 as before, so the climb still always goes on
+                float dFb = endless && P.progression() ? Math.max(0.15f, FALLBACK_DEMAND * d) : 0.15f;
+                if (!ok) for (Kind fb : cont) {
+                    if (fb == k) continue;
+                    if (dFb > 0.15f && tryModuleBelow(fb, dFb, th)) { GenTrace.tally("fallback_at_demand_ok"); }
+                    else if (tryModuleBelow(fb, 0.15f, th)) { if (dFb > 0.15f) GenTrace.tally("fallback_at_demand_failed"); }
+                    else continue;
+                    k = fb; ok = true; if (ordinary(fb)) ordinaryUsed[fb.ordinal()] = ++ordinaryClock; break;
+                }
                 traceRole = "PICK"; tracePicked = null;
                 if (!ok && !undo.isEmpty() && undoneHere < 2 && backtracks < 6) {
                     int[] u = undo.pop(); rollbackTo(u[0], u[1]); backtracks++; undoneHere++; BACKTRACKS.incrementAndGet(); prev = null; prev2 = null; GenTrace.tally("backtrack");
@@ -826,6 +837,56 @@ public final class CourseGenerator {
         return l.toArray(new Kind[0]);
     }
 
+    // ------------------------------------------------------------------ castle-to-castle progression (owner directive 2026-10-27, rules 13)
+
+    /** The measurements carried in from the previous slice, and the selection factors for the castle in progress and the one after it. */
+    private Progression progIn = new Progression();
+    private static final float[] ONE = {1f, 1f, 1f, 1f};
+    private float[] facCur = ONE, facNext = ONE;
+    /** True while the 25 m window being built already carries a threat spike (see hotWindow). */
+    private boolean hotNow;
+    /** Continuations are tried at this share of the castle's terrain demand first (PROVISIONAL). */
+    static final float FALLBACK_DEMAND = 0.7f;
+    /** How strongly the terrain factor moves the terrain demand d (precision: gaps, landings, mover spans), and its ceiling (PROVISIONAL). */
+    static final float DEMAND_GAIN = 0.6f, DEMAND_MAX = 1.1f;
+    /** A 25 m window whose route hazards and enemies already weigh this many times the castle's per-window hazard + enemy target is a spike. */
+    static final float HOT = 3f;
+
+    private void progStart(Course prev) {
+        progIn = prev == null ? new Progression() : Progression.of(prev.prog);
+        if (!endless || !P.progression() || T.castleSpacing <= 0f) { facCur = facNext = ONE; return; }
+        facCur = progIn.factors(progIn.castle(), P, T.castleSpacing);
+        facNext = progIn.factors(progIn.castle() + 1, P, T.castleSpacing);
+    }
+    /** Measures the finished slice into the state it hands to the next one. */
+    private void progFinish(Course out) {
+        if (!endless || !P.progression() || T.castleSpacing <= 0f) return;
+        Progression p = progIn.copy(); p.addSlice(out, base, T, facCur); out.prog = p.toArray();
+    }
+    /** The selection factors {terrain, hazards, enemies, interaction} at height y. */
+    private float[] fac(float y) {
+        if (!endless || !P.progression() || T.castleSpacing <= 0f) return ONE;
+        return Progression.castleOf(y + base, T.castleSpacing) <= progIn.castle() ? facCur : facNext;
+    }
+    private float adjD(float d, float fT) { return fT == 1f ? d : Math.max(0.05f, Math.min(Math.max(d, DEMAND_MAX), d * (1f + DEMAND_GAIN * (fT - 1f)))); }
+    /** Route hazards and enemies already placed in the 25 m window of height y, in lane-report points. */
+    private float windowLoad(float y) {
+        double w0 = Math.floor((y + base) / Progression.WINDOW) * Progression.WINDOW - base, w1 = w0 + Progression.WINDOW; float sum = 0f;
+        for (Element h : c.hazards) {
+            if (h.anchor < 0 || h.anchor >= c.size()) continue;
+            Element p = c.get(h.anchor); if (p.anchor >= 0 || p.y < w0 || p.y >= w1) continue;
+            if (Progression.hazard(h.type) || Progression.enemy(h.type)) sum += Progression.points(h.type);
+        }
+        return sum;
+    }
+    private boolean hotWindow(float y) {
+        if (!endless || !P.progression() || T.castleSpacing <= 0f) return false;
+        int n = Progression.castleOf(y + base, T.castleSpacing);
+        float cap = HOT * (P.target(n, Progression.H) + P.target(n, Progression.E)) / (T.castleSpacing / Progression.WINDOW);
+        boolean hot = windowLoad(y) > cap; if (hot) GenTrace.tally("progression_hot_window");
+        return hot;
+    }
+
     // ------------------------------------------------------------------ history-aware variety (PUNISHER; owner 2026-10-27)
 
     /**
@@ -891,7 +952,7 @@ public final class CourseGenerator {
         for (int i = h0; i < c.hazards.size(); i++) varAdd(hazFam(c.hazards.get(i)), c.hazards.get(i).y, n0);
         varHist.prune(c.get(c.size() - 1).y);
     }
-    float varPenalty(int fam, float y) { return P.adaptiveVariety() ? varHist.penalty(fam, y) : 1f; }
+    float varPenalty(int fam, float y) { return P.adaptiveVariety() ? varHist.penalty(fam, y, P.varietyStrength()) : 1f; }
     /** Penalties applied to module weights, each class keeping its total (so repetition control never lowers the challenge mix). */
     private void varAdapt(float[] w, float y) {
         double[] before = new double[3], after = new double[3];
@@ -2022,7 +2083,11 @@ public final class CourseGenerator {
         if (zone >= 1) { w[Kind.SEESAW.ordinal()] = 4f; w[Kind.BRIDGE.ordinal()] = 4f; }
         else w[Kind.BRIDGE.ordinal()] = 2f;
         if (inten > 0f || (!endless && last.y > T.courseHeight * 0.18f)) { w[Kind.HAZ.ordinal()] = 3f + 9f * inten + LATE_HAZ * P.lateHazScale * lt; if (zone >= 1) w[Kind.SPRING.ordinal()] = 2f + 2f * inten; w[Kind.TRAP.ordinal()] = 2f + 5f * inten + LATE_TRAP * P.lateHazScale * lt; }
-        if (adaptive && P.adaptiveVariety()) varAdapt(w, last.y);          // PUNISHER: recent mechanics less likely, within their own class (before the pitch controller)
+        if (endless && P.progression()) {          // rules 13: the castle's category factors - terrain challenges and hazard modules gain or lose weight against plain traversal
+            float[] f = fac(last.y);
+            for (Kind q : Kind.values()) { int cl = kindClass(q); if (cl == 1) w[q.ordinal()] *= f[Progression.T]; else if (cl == 2) w[q.ordinal()] *= hotNow ? 0.3f * Math.min(1f, f[Progression.H]) : f[Progression.H]; }
+        }
+        if (adaptive && P.adaptiveVariety()) varAdapt(w, last.y);          // PUNISHER and (rules 13, lighter) NORMAL: recent mechanics less likely, within their own class (before the pitch controller)
         // spiral pitch controller: keep successive revolutions a healthy distance apart. Until 2026-10-26 it compared the height with
         // pitch x (arc / circumference) in the slice's own frame, whose arc restarts every slice (whole laps) but whose height only every 500 m:
         // past a slice's first ~60 m of a 500 m frame it always read "rushing" and damped the vertical modules, so the route could wind round
@@ -2259,9 +2324,10 @@ public final class CourseGenerator {
     /** One or two hazard-guarded gaps: a saw blade, a spiked pendulum-free blade, a cannon lane, or a spiked block you must clear. */
     private List<Element> buildHaz(Element last, float d, int z, int attempt, List<Element> hzOut) {
         float inten = intensity(last.y);
-        int n = (inten > 0.35f && rnd.nextFloat() < inten * 0.6f) ? 2 : 1;
+        float fh = hotNow ? Math.min(1f, fac(last.y)[Progression.H]) : fac(last.y)[Progression.H];          // rules 13: the castle's hazard factor lengthens or shortens the chain (1 for NGH)
+        int n = (inten > 0.35f && rnd.nextFloat() < Math.min(0.95f, inten * 0.6f * fh)) ? 2 : 1;
         float lt = late(last.y);
-        if (n == 2 && lt > 0.2f && rnd.nextFloat() < lt * 0.55f) n = 3;          // Build 71: higher up, three guarded gaps in a row
+        if (n == 2 && lt > 0.2f && rnd.nextFloat() < Math.min(0.9f, lt * 0.55f * fh)) n = 3;          // Build 71: higher up, three guarded gaps in a row
         List<Element> es = new ArrayList<>();
         Element cur = last;
         int base = c.size(), prevRoll = -1;

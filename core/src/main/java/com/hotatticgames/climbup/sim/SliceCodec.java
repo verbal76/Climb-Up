@@ -11,7 +11,8 @@ import java.util.zip.InflaterInputStream;
 /** Lossless compact binary form of a generated slice (every float stored as its exact bits, deflated): about 1-2 KB per slice, so the whole history of a very long climb stays cheap to keep and to save. */
 public final class SliceCodec {
     private SliceCodec() {}
-    private static final int FORMAT = 1;
+    /** 2 (rules 13): the slice's progression state follows the key rooms (format 1 slices decode with none). */
+    private static final int FORMAT = 2;
 
     public static byte[] encode(CourseGenerator.Framed f) {
         try {
@@ -24,6 +25,7 @@ public final class SliceCodec {
             for (int i = 0; i < c.size(); i++) put(o, c.get(i));
             for (Element h : c.hazards) put(o, h);
             for (int[] k : c.keyRooms) for (int v : k) o.writeInt(v);
+            o.writeInt(c.prog == null ? -1 : c.prog.length); if (c.prog != null) for (float v : c.prog) o.writeFloat(v);
             o.close();
             return raw.toByteArray();
         } catch (IOException e) { throw new IllegalStateException(e); }
@@ -32,7 +34,7 @@ public final class SliceCodec {
     public static CourseGenerator.Framed decode(byte[] data) {
         try {
             DataInputStream in = new DataInputStream(new InflaterInputStream(new ByteArrayInputStream(data)));
-            int fmt = in.readByte(); if (fmt != FORMAT) throw new IOException("unknown slice format " + fmt);
+            int fmt = in.readByte(); if (fmt != FORMAT && fmt != 1) throw new IOException("unknown slice format " + fmt);
             long seed = in.readLong(); float circ = in.readFloat(); int route = in.readInt(); boolean gem = in.readBoolean();
             double yBase = in.readDouble(), sBase = in.readDouble();
             int n = in.readInt(), nh = in.readInt(), nk = in.readInt();
@@ -40,6 +42,7 @@ public final class SliceCodec {
             for (int i = 0; i < n; i++) c.add(get(in));
             for (int i = 0; i < nh; i++) c.hazards.add(get(in));
             for (int i = 0; i < nk; i++) { int[] k = new int[6]; for (int j = 0; j < 6; j++) k[j] = in.readInt(); c.keyRooms.add(k); }
+            if (fmt >= 2) { int np = in.readInt(); if (np >= 0) { c.prog = new float[np]; for (int i = 0; i < np; i++) c.prog[i] = in.readFloat(); } }
             c.routeCount = route; c.indexDecoys();
             return new CourseGenerator.Framed(c, yBase, sBase);
         } catch (IOException e) { throw new IllegalStateException("corrupt slice", e); }
@@ -66,7 +69,7 @@ public final class SliceCodec {
         for (int i = 0; i < a.size(); i++) if (!sameE(a.get(i), b.get(i))) return false;
         for (int i = 0; i < a.hazards.size(); i++) if (!sameE(a.hazards.get(i), b.hazards.get(i))) return false;
         for (int i = 0; i < a.keyRooms.size(); i++) if (!java.util.Arrays.equals(a.keyRooms.get(i), b.keyRooms.get(i))) return false;
-        return true;
+        return java.util.Arrays.equals(a.prog, b.prog);
     }
 
     private static boolean sameE(Element a, Element b) {

@@ -7,7 +7,7 @@ import org.junit.Test;
 
 /**
  * History-aware variety (owner 2026-10-27; PUNISHER): the memory penalises recent, frequent mechanics and forgets them with distance; it holds only
- * accepted placements (undoing modules forgets them); it never forbids anything; it changes PUNISHER picks and leaves NORMAL and NOT GONNA HAPPEN alone;
+ * accepted placements (undoing modules forgets them); it never forbids anything; it changes PUNISHER picks, NORMAL's with a lighter strength (rules 13), and leaves NOT GONNA HAPPEN alone;
  * generation stays deterministic.
  */
 public class AdaptiveVarietyTest {
@@ -55,7 +55,7 @@ public class AdaptiveVarietyTest {
         return n;
     }
 
-    @Test public void punisherPicksChangeAndStayDeterministicWhileNormalAndNghAreUntouched() throws Exception {
+    @Test public void punisherPicksChangeAndStayDeterministicNormalUsesALighterTouchAndNghIsUntouched() throws Exception {
         Tuning base = tuning();
         StringBuilder a = new StringBuilder(), b = new StringBuilder();
         int[] p = tally(base.hardCopy(1), 3L, 5, a);
@@ -65,7 +65,7 @@ public class AdaptiveVarietyTest {
         assertTrue("and changes some of them (" + p[1] + " of " + p[0] + ")", p[1] > 0);
         assertTrue("but not most of them: no forced alternation (" + p[1] + " of " + p[0] + ")", p[1] < p[0] / 2);
         int[] n = tally(base, 3L, 3, null), g = tally(base.hardCopy(2), 3L, 3, null);
-        assertEquals("NORMAL never consults it", 0, n[0]);
+        assertTrue("rules 13 (owner directive 2026-10-27): NORMAL consults it too, at a lighter strength (" + n[0] + ")", n[0] > 0 && DifficultyProfile.NORMAL.varietyStrength() < DifficultyProfile.PUNISHER.varietyStrength());
         assertEquals("NOT GONNA HAPPEN never consults it", 0, g[0]);
         System.out.println("adaptive: PUNISHER seed 3, 5 slices: " + p[0] + " picks, " + p[1] + " changed, " + p[2] + " ropes avoided");
     }

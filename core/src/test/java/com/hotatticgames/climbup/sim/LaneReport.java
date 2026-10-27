@@ -55,6 +55,12 @@ public final class LaneReport {
     public final EnumMap<Element.Type, int[]> inventory = new EnumMap<>(Element.Type.class);   // {placed (in course), on route / reaching route (active), scored}
     public final TreeMap<String, int[]> kindStats = new TreeMap<>();   // kind -> {tried, accepted (final course), refused, fallback picks}
     public final List<String[]> ruleChecks = new ArrayList<>();
+    /** Rules 13: the progression state the last slice handed on (completed castles with the factors they were built with). */
+    float[] lastProg;
+    /** Rules 13: every fallback and selection-guard outcome the generator tallies, per slice (the refused modules' own reasons are in modules.csv). */
+    static final String[] FALLBACK_KEYS = {"challenge_fallback_ok", "challenge_fallback_failed", "threat_fallback_ok", "threat_fallback_failed", "fallback_at_demand_ok", "fallback_at_demand_failed",
+        "rope_fallback_after_recent", "adaptive_rope_fallback_demoted", "continuation_refused", "continuation_backtrack", "backtrack", "progression_hot_window", "adaptive_picks", "adaptive_shift", "adaptive_rope_avoided"};
+    final List<String[]> fallbackRows = new ArrayList<>();
     public final List<String[]> chunks = new ArrayList<>(), hazardRows = new ArrayList<>(), forkRows = new ArrayList<>(), forkCountRows = new ArrayList<>(), platformRows = new ArrayList<>();
     /** Traversal variety (owner 2026-10-26, release requirement): route links in climbing order {castle, y0, y1, arc m, rope rise m, challenge 0/1, rope link 0/1}, and the accepted modules {castle, kind, role}. */
     final List<double[]> travLinks = new ArrayList<>(); final List<String[]> travMods = new ArrayList<>();
@@ -210,9 +216,12 @@ public final class LaneReport {
                     f3(tr.phaseNanos.getOrDefault("extend", 0L) / 1e9), f3(tr.phaseNanos.getOrDefault("closing_rest", 0L) / 1e9), f3(tr.phaseNanos.getOrDefault("decoys_forks", 0L) / 1e9), f3(tr.phaseNanos.getOrDefault("rooms", 0L) / 1e9),
                     f3(tr.phaseNanos.getOrDefault("forks_reserved", 0L) / 1e9), f3(tr.phaseNanos.getOrDefault("forks_open", 0L) / 1e9), f3(tr.phaseNanos.getOrDefault("key_rooms", 0L) / 1e9)}); }
                 encounterTelemetry(k, f, tr, rep);
+                { String[] r = new String[FALLBACK_KEYS.length + 3]; r[0] = "" + k; r[1] = f3(f.yBase + f.c.get(0).y); r[2] = "" + castleOf(f.yBase + f.c.get(0).y);
+                  for (int i = 0; i < FALLBACK_KEYS.length; i++) r[i + 3] = "" + tr.counts.getOrDefault(FALLBACK_KEYS[i], 0); fallbackRows.add(r); }
                 forkTelemetry(k, f, tr);
                 safetyTelemetry(k, f, t);
                 v2.add(f.c, (float) f.yBase);
+                if (f.c.prog != null) lastProg = f.c.prog;
                 reached = (float) (f.yBase + f.c.get(f.c.routeSize() - 1).y); k++;
                 if ((System.nanoTime() - t0) / 1e9 > budget) { stopped = "time budget of " + (int) budget + " s reached (partial results)"; break; }
             }
@@ -601,6 +610,24 @@ public final class LaneReport {
             for (String[] m : hazardRows) w.println(run + "," + String.join(",", m));
         }
         List<String[]> castles = castleRows(run);
+        try (PrintWriter w = pw(out, "fallbacks.csv")) { w.println("slice,y0,castle," + String.join(",", FALLBACK_KEYS)); for (String[] r : fallbackRows) w.println(String.join(",", r)); }
+        try (PrintWriter w = pw(out, "castle_control.csv")) {          // rules 13: what the generator's progression controller saw and did, per castle, beside this report's own lane totals
+            w.println("run,castle,status,target_total,target_terrain,target_hazards,target_enemies,target_interaction,est_terrain,est_hazards,est_enemies,est_interaction,est_mitigation,est_total,est_links,est_challenge_links,est_recovery,"
+                + "factor_terrain,factor_hazards,factor_enemies,factor_interaction,lane_terrain,lane_hazards,lane_enemies,lane_interaction,lane_mitigation,lane_total,deviation_from_target");
+            DifficultyProfile P = DifficultyProfile.of(t); Progression pr = Progression.of(lastProg);
+            double[][] lane = new double[12][6];
+            for (Win x : windows.values()) { int cs = castleOf(x.index * WINDOW); lane[cs][0] += x.adj[0]; lane[cs][1] += x.adj[1]; lane[cs][2] += x.adj[2]; lane[cs][3] += x.interaction; lane[cs][4] += x.mitigation; lane[cs][5] += x.total(); }
+            List<float[]> recs = new ArrayList<>(); for (int i = 0; i < pr.completedCount(); i++) recs.add(pr.completed(i));
+            if (lastProg != null) { float[] cur = pr.current(), r = new float[Progression.REC]; r[0] = pr.castle(); System.arraycopy(cur, 0, r, 1, Progression.ACC); System.arraycopy(pr.lastFactors(), 0, r, 1 + Progression.ACC, 4); recs.add(r); }
+            for (float[] r : recs) {
+                int n = (int) r[0]; if (n < 1 || n > 10) continue; boolean partial = r == recs.get(recs.size() - 1) && lastProg != null;
+                double est = Progression.total(r, 1), tgt = P.progression() ? P.targetTotal(n) : Double.NaN;
+                w.println(String.join(",", MODE[mode] + "-s" + seed, "" + n, partial ? "in_progress" : "complete", f3(tgt), f3(P.progression() ? P.target(n, 0) : Double.NaN), f3(P.progression() ? P.target(n, 1) : Double.NaN), f3(P.progression() ? P.target(n, 2) : Double.NaN), f3(P.progression() ? P.target(n, 3) : Double.NaN),
+                    f3(r[1]), f3(r[2]), f3(r[3]), f3(r[4]), f3(r[5]), f3(est), f3(r[1 + Progression.A_LINKS]), f3(r[1 + Progression.A_CHALL]), f3(r[1 + Progression.A_REC]),
+                    f3(r[1 + Progression.ACC]), f3(r[2 + Progression.ACC]), f3(r[3 + Progression.ACC]), f3(r[4 + Progression.ACC]),
+                    f3(lane[n][0]), f3(lane[n][1]), f3(lane[n][2]), f3(lane[n][3]), f3(lane[n][4]), f3(lane[n][5]), f3(P.progression() ? (lane[n][5] - tgt) / tgt : Double.NaN)));
+            }
+        }
         try (PrintWriter w = pw(out, "encounters.csv")) { w.println(ENCOUNTER_HEADER); for (String[] r : encounterRows) w.println(String.join(",", r)); }
         try (PrintWriter w = pw(out, "castles.csv")) {
             w.println("run,mode,seed,castle,lane,windows,mean,median,min,max,sd,q1,q3,raw_sum,adj_sum,high_spike_windows,low_gap_windows,solver_links_failed,solver_links_unreached,solver_time_s,flags");

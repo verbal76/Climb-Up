@@ -13,6 +13,8 @@ public final class Course {
 
     /** Endless climb: only the gem platforms (STATIC skin 3, halfway between castles) are checkpoints; the other 'checkpoint' flags merely mark rest platforms for the generator. */
     public boolean gemCheckpoints;
+    /** Castle-to-castle progression state after this slice (rules 13, {@link Progression#toArray}); null when the climb has none (NOT GONNA HAPPEN, finite towers, older slices). */
+    public float[] prog;
     public boolean isCheckpoint(Element e) { return e.checkpoint && (!gemCheckpoints || (e.type == Element.Type.STATIC && e.skin == 3)); }
 
     public Course(long seed, float circumference) { this.seed = seed; this.circumference = circumference; }

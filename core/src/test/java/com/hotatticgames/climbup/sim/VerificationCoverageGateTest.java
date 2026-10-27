@@ -45,6 +45,21 @@ public class VerificationCoverageGateTest {
         for (JsonValue t = c.get("transitions").child; t != null; t = t.next) assertTrue(t.getString("id") + " names an unknown mechanic", ids.contains(t.getString("mechanic")));
     }
 
+    /** DC10 (owner correction 2026-10-28): VERIFIED needs behavioural evidence: a sim status of VERIFIED cites at least one test. */
+    @Test public void verifiedNeedsATest() throws Exception {
+        for (JsonValue m = cov().get("mechanics").child; m != null; m = m.next)
+            if (m.getString("sim_status").equals("VERIFIED")) assertTrue(m.getString("id") + " is VERIFIED with no test", m.get("sim_tests").size > 0);
+    }
+
+    /** The solver's verdicts are the register's, and every transition the corrections removed names the test that keeps it removed. */
+    @Test public void verdictsAndRemovedTransitionsAreBackedByCode() throws Exception {
+        JsonValue c = cov();
+        Set<String> v = strings(c.get("verdicts")), e = new HashSet<>();
+        for (Autopilot.Verdict x : Autopilot.Verdict.values()) e.add(x.name());
+        assertEquals(e, v);
+        for (JsonValue r = c.get("removed_transitions").child; r != null; r = r.next) assertTrue(r.getString("was") + " cites a missing test", testExists(r.getString("test")));
+    }
+
     /** "Class" or "Class#method", looked up in this test tree's packages. */
     static boolean testExists(String ref) {
         String cls = ref.contains("#") ? ref.substring(0, ref.indexOf('#')) : ref, method = ref.contains("#") ? ref.substring(ref.indexOf('#') + 1) : null;

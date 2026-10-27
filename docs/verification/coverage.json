@@ -1,6 +1,6 @@
 {
  "schema": 1,
- "generated_from": "docs/verification (Phase 1 audit, 2026-10-27)",
+ "generated_from": "docs/verification (Phase 1 audit, 2026-10-27) | corrected 2026-10-28 from docs/verification/evidence (verified A/B/C) and the DC1-DC10 correction tests",
  "statuses": [
   "VERIFIED",
   "PARTIALLY VERIFIED",
@@ -83,13 +83,17 @@
   },
   {
    "id": "MV-07",
-   "name": "Buffered jump survives a rope/cable/ledge grab",
+   "name": "Jump buffer and coyote across grabs and forced transitions (DC4: cleared on rope/cable grabs, pad bounces and shoves; ledge keeps jump = pull up)",
    "source": "Sim.tryGrab 1910-1959 (jumpBuf not cleared), stepRope 1970, stepCable 2015, stepLedge 2028",
-   "sim_tests": [],
-   "sim_status": "NOT VERIFIED",
-   "solver_status": "NOT VERIFIED",
-   "proof_status": "NOT VERIFIED",
-   "note": "Rare transition; no test."
+   "sim_tests": [
+    "PhysicsCorrectionsTest#aBufferedPressDoesNotLeapOffAFreshRopeCatch",
+    "PhysicsCorrectionsTest#noStaleCoyoteJumpAfterBeamToRope",
+    "PhysicsCorrectionsTest#aShoveLeavesNoCoyoteJump"
+   ],
+   "sim_status": "VERIFIED",
+   "solver_status": "NOT APPLICABLE",
+   "proof_status": "NOT APPLICABLE",
+   "note": "DC4 (2026-10-28): the stale-coyote mid-air jump and the buffered leap off a fresh rope catch no longer exist; nothing to model."
   },
   {
    "id": "MV-08",
@@ -157,12 +161,13 @@
    "source": "Sim.tryGrab 1933-1956",
    "sim_tests": [
     "SimTest#ledgeGrabSavesAShortJump",
-    "EdgeContactTest#everyPlatformTypeHasEdgesAtEveryHeightSpeedAndDirection"
+    "EdgeContactTest#everyPlatformTypeHasEdgesAtEveryHeightSpeedAndDirection",
+    "SolverVerdictTest#aLedgeCatchWhosePullUpIsHitIsNoArrival"
    ],
    "sim_status": "VERIFIED",
    "solver_status": "PARTIALLY VERIFIED",
    "proof_status": "PARTIALLY VERIFIED",
-   "note": "LEDGE counts as arrival; no policy targets a catch deliberately; the pull-up is outside per-link proofs."
+   "note": "DC2: a ledge catch counts only once its pull-up ends standing on a deck that is still there (trial, look-ahead and witness)."
   },
   {
    "id": "MV-14",
@@ -194,12 +199,14 @@
    "source": "Sim.stepLedge 2023-2035, stepPull 2037-2055",
    "sim_tests": [
     "SimTest#ledgeGrabSavesAShortJump",
-    "WholeSliceSolvabilityTest#aCrumblingMoverIsBoardedOnlyWhenTheMoveOffItWorks"
+    "WholeSliceSolvabilityTest#aCrumblingMoverIsBoardedOnlyWhenTheMoveOffItWorks",
+    "PhysicsCorrectionsTest#aPullUpOntoAVanishingDeckLetsGo",
+    "PhysicsCorrectionsTest#aPullUpNeverEndsOnAnOutOfPlaneMover"
    ],
    "sim_status": "PARTIALLY VERIFIED",
    "solver_status": "PARTIALLY VERIFIED",
    "proof_status": "NOT VERIFIED",
-   "note": "Solver always pulls up; never drops deliberately. Pull-up onto a crumbled deck completes then drops (untested)."
+   "note": "DC8: a pull-up lets go when its deck crumbles or a depth mover leaves the plane."
   },
   {
    "id": "MV-17",
@@ -252,12 +259,13 @@
    "name": "Pad bounce (held 24 / unheld 21, sampled at landing)",
    "source": "Sim.land 1889-1897",
    "sim_tests": [
-    "SimTest#padBounces"
+    "SimTest#padBounces",
+    "PhysicsCorrectionsTest#aJumpTapRightAfterAPadBounceKeepsTheBounce"
    ],
    "sim_status": "VERIFIED",
    "solver_status": "PARTIALLY VERIFIED",
    "proof_status": "PARTIALLY VERIFIED",
-   "note": "Move onto a pad followed through its launch by the solver look-ahead (launchClear) since b224753."
+   "note": "DC4: the bounce wins over a jump tap (coyote and buffer cleared on the bounce). DC1: the pad-arrival lookahead in commit is effective (no override)."
   },
   {
    "id": "MV-22",
@@ -268,9 +276,9 @@
     "WholeSliceSolvabilityTest#aForcedSpringLaunchIsTimedFromTheDeckBefore"
    ],
    "sim_status": "VERIFIED",
-   "solver_status": "VERIFIED",
+   "solver_status": "PARTIALLY VERIFIED",
    "proof_status": "PARTIALLY VERIFIED",
-   "note": ""
+   "note": "Audit (verified_B): the VERIFIED solver status was not supported: launch clearance was optimistic. DC1 made it decided; no dedicated spring witness test."
   },
   {
    "id": "MV-23",
@@ -316,22 +324,25 @@
    "sim_tests": [
     "SimTest#crumbleFallsAndRespawns",
     "MoverTest#aFallingMoverDropsAfterTheDelayAndAComeBackLater",
-    "RampTest#crumblingRampFallsApartWhenStoodOn"
+    "RampTest#crumblingRampFallsApartWhenStoodOn",
+    "PhysicsCorrectionsTest#aPullUpOntoAVanishingDeckLetsGo"
    ],
    "sim_status": "VERIFIED",
-   "solver_status": "VERIFIED",
+   "solver_status": "PARTIALLY VERIFIED",
    "proof_status": "PARTIALLY VERIFIED",
-   "note": "Solver look-ahead (crumbleClear) requires a working exit before boarding (b224753)."
+   "note": "Audit: VERIFIED was not supported (playClear returned true after 10 s). DC1: decided now; DC8: no pull-up onto a vanished deck."
   },
   {
    "id": "MV-27",
    "name": "Holed bridge (planks drop 0.45 s after standing)",
    "source": "Sim 525-528, 1702, 1744",
-   "sim_tests": [],
-   "sim_status": "NOT VERIFIED",
+   "sim_tests": [
+    "PhysicsCorrectionsTest#noStepAcrossOntoAnOpenHole"
+   ],
+   "sim_status": "PARTIALLY VERIFIED",
    "solver_status": "PARTIALLY VERIFIED",
    "proof_status": "PARTIALLY VERIFIED",
-   "note": "HoleHopPolicy; no Sim behaviour test."
+   "note": "DC8: no step-across onto an open hole; the hole timer also starts on a landing (a landing jump no longer skips it). Holes stay open while you stand on the bridge (by design, solid plank under you)."
   },
   {
    "id": "MV-28",
@@ -377,12 +388,13 @@
    "source": "Sim 518-523, 1703-1708",
    "sim_tests": [
     "RampTest#shakingRampThrowsYouAround",
-    "RampTest#plainRampWalksUpToATallerBlock"
+    "RampTest#plainRampWalksUpToATallerBlock",
+    "CheckpointContractTest#aShakingRampKicksTheSameWayOnEveryAttempt"
    ],
    "sim_status": "VERIFIED",
    "solver_status": "PARTIALLY VERIFIED",
    "proof_status": "PARTIALLY VERIFIED",
-   "note": "Shaking-ramp kick counter not reset on respawn (untested)."
+   "note": "DC3: the shaking ramp kick count restarts on a retry, so every attempt meets the proven sequence."
   },
   {
    "id": "MV-32",
@@ -399,16 +411,19 @@
   },
   {
    "id": "MV-33",
-   "name": "Hazard hit -> knock-back 6.9/6.9, 0.7 s invulnerable (any mode)",
+   "name": "Hazard hit -> knock-back 6.9/6.9 away from the actual contact, 0.3 s grab lockout, 0.7 s invulnerable (any mode)",
    "source": "Sim.knockOff 355-359, hazardHit",
    "sim_tests": [
     "FallRulesTest#aHazardKnocksYouBackInsteadOfTeleportingYou",
-    "FallRulesTest#aHazardTouchNeverSendsYouToTheCheckpointByItself"
+    "FallRulesTest#aHazardTouchNeverSendsYouToTheCheckpointByItself",
+    "PhysicsCorrectionsTest#aKnockOffFromARopeIsAKnockOff",
+    "PhysicsCorrectionsTest#theKnockOffPushesAwayFromTheContact",
+    "SolverVerdictTest#aCleanWitnessIsProvenSolvable"
    ],
    "sim_status": "VERIFIED",
    "solver_status": "PARTIALLY VERIFIED",
    "proof_status": "PARTIALLY VERIFIED",
-   "note": "Solver treats any hit as a failed move (the witness must be hit-free)."
+   "note": "REFUTED earlier note corrected: the witness used to tolerate hits outside move execution. DC1 owner policy: the witness is hit-free from start to goal; any hit or fall makes the slice UNKNOWN, never a pass."
   },
   {
    "id": "MV-34",
@@ -440,12 +455,14 @@
    "source": "Sim 842-876",
    "sim_tests": [
     "EnforcerTest#itChasesKicksAndLeavesDeterministically",
-    "EnforcerJudgmentTest#anEasyJumpIsTakenAndLandsSafely"
+    "EnforcerJudgmentTest#anEasyJumpIsTakenAndLandsSafely",
+    "EnforcerJudgmentTest",
+    "PhysicsCorrectionsTest#anEnforcerSwatDoesNotReachARope"
    ],
    "sim_status": "VERIFIED",
    "solver_status": "PARTIALLY VERIFIED",
    "proof_status": "PARTIALLY VERIFIED",
-   "note": "Encounters proven with chainClean (robot live)."
+   "note": "DC4: the swat contact is gated to GROUND/AIR like every creature contact (ropes, cables, ledges, beams and pull-ups are out of reach)."
   },
   {
    "id": "MV-37",
@@ -508,19 +525,23 @@
    "sim_status": "VERIFIED",
    "solver_status": "PARTIALLY VERIFIED",
    "proof_status": "NOT VERIFIED",
-   "note": "A knock-back normally lands on a lower revolution; the solver fails the move (no retry from below)."
+   "note": "REFUTED earlier note corrected: a missed landing onto a lower route deck is resynced and continued (legitimate recovery, no setback); a fall to the checkpoint is a setback and makes the witness UNKNOWN."
   },
   {
    "id": "MV-42",
-   "name": "Respawn resets only crumbles and holes (tilt, creatures, avalanches persist)",
+   "name": "Respawn: one checkpoint contract (DC3) - encounters in progress reset, achievements kept, resolved encounters stay resolved",
    "source": "Sim.completeRespawn 370-379",
    "sim_tests": [
-    "SimTest#fallingFarReturnsToCheckpointAndNeverSoftLocks"
+    "SimTest#fallingFarReturnsToCheckpointAndNeverSoftLocks",
+    "CheckpointContractTest#aRetryResetsEncountersInProgressAndKeepsWhatTheRunAchieved",
+    "CheckpointContractTest#aShakingRampKicksTheSameWayOnEveryAttempt",
+    "CheckpointContractTest#aSpentAvalancheStaysSpent",
+    "CheckpointContractTest#aSaveInTheFrameOfAFallIsTheRespawnedClimb"
    ],
-   "sim_status": "PARTIALLY VERIFIED",
-   "solver_status": "NOT VERIFIED",
-   "proof_status": "NOT VERIFIED",
-   "note": "Retry-after-fall state is not part of any proof."
+   "sim_status": "VERIFIED",
+   "solver_status": "NOT APPLICABLE",
+   "proof_status": "NOT APPLICABLE",
+   "note": "Owner policy 2026-10-28: a retry meets the generated challenge; the witness never respawns, so nothing for the solver to model."
   },
   {
    "id": "MV-43",
@@ -528,12 +549,13 @@
    "source": "Autopilot.followBranch",
    "sim_tests": [
     "WholeSliceSolvabilityTest#aClimberCarriedOntoAForkBranchFollowsItToTheRejoin",
-    "WholeSliceSolvabilityTest#theRules13BaselineFailureIsTheSameBranchCase"
+    "WholeSliceSolvabilityTest#theRules13BaselineFailureIsTheSameBranchCase",
+    "WorldConsistencyTest#forksSurviveTheCodecAndAreStitchedIntoTheWorld"
    ],
    "sim_status": "NOT APPLICABLE",
-   "solver_status": "VERIFIED",
+   "solver_status": "PARTIALLY VERIFIED",
    "proof_status": "PARTIALLY VERIFIED",
-   "note": "Branch pair links are proven at fork placement; earlier branches are not re-proven later."
+   "note": "Audit: VERIFIED was not supported (the live tower had no forks). DC6/DC9: forks are stored and stitched; the witness follows a branch only when carried onto one."
   },
   {
    "id": "MV-44",
@@ -843,6 +865,24 @@
    "mechanic": "MV-41",
    "solver_initiates": false,
    "solver_recognises": false
+  },
+  {
+   "id": "TR-34",
+   "frm": "PULLUP",
+   "to": "AIR",
+   "trigger": "deck crumbles or a depth mover leaves the plane mid-pull (DC8): let go",
+   "mechanic": "MV-16",
+   "solver_initiates": false,
+   "solver_recognises": true
+  },
+  {
+   "id": "TR-35",
+   "frm": "AIR",
+   "to": "AIR",
+   "trigger": "landing with a buffered jump: GROUND for the landing step, AIR again at once (also on a spike slab top)",
+   "mechanic": "MV-05",
+   "solver_initiates": false,
+   "solver_recognises": true
   }
  ],
  "modes": [
@@ -886,5 +926,41 @@
   "BLOB",
   "ENFORCER",
   "AVALANCHE"
+ ],
+ "removed_transitions": [
+  {
+   "was": "AIR -> AIR: pad/spring bounce replaced by a residual-coyote jump",
+   "test": "PhysicsCorrectionsTest#aJumpTapRightAfterAPadBounceKeepsTheBounce"
+  },
+  {
+   "was": "AIR (knocked off a rope) -> ROPE the next frame",
+   "test": "PhysicsCorrectionsTest#aKnockOffFromARopeIsAKnockOff"
+  },
+  {
+   "was": "ROPE/CABLE/LEDGE/BEAM/PULLUP -> AIR by the Enforcer swat",
+   "test": "PhysicsCorrectionsTest#anEnforcerSwatDoesNotReachARope"
+  },
+  {
+   "was": "PULLUP -> GROUND onto an out-of-plane depth mover",
+   "test": "PhysicsCorrectionsTest#aPullUpNeverEndsOnAnOutOfPlaneMover"
+  },
+  {
+   "was": "PULLUP -> GROUND onto a crumbled deck",
+   "test": "PhysicsCorrectionsTest#aPullUpOntoAVanishingDeckLetsGo"
+  },
+  {
+   "was": "GROUND -> GROUND step-across onto an open hole",
+   "test": "PhysicsCorrectionsTest#noStepAcrossOntoAnOpenHole"
+  },
+  {
+   "was": "AIR -> AIR stale-coyote jump after beam->rope, grab freeze or shove",
+   "test": "PhysicsCorrectionsTest#noStaleCoyoteJumpAfterBeamToRope"
+  }
+ ],
+ "verdicts": [
+  "PROVEN_SOLVABLE",
+  "PROVEN_UNSOLVABLE",
+  "UNKNOWN",
+  "FAILED_VALIDATION"
  ]
 }

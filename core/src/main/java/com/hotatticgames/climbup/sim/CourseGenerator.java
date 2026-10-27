@@ -251,9 +251,12 @@ public final class CourseGenerator {
         // PUNISHER Enforcers are claimed like the keys: the slice whose first 80 m hold an encounter's height builds it, and climbs at least 25 m past it
         // (claiming only up to this slice's own top let a height between one slice's top and the next one's start fall through: seed 2, section 1).
         // Encounters not built by the end of the climb are dropped, never carried into the next slice's context.
-        planEnforcers(startY, startY + 80f);
+        // A claim's extra climb never reaches an exact-height structure this slice does not own (PUNISHER seed 1, 1667 m: an avalanche claimed at
+        // ~1745 m climbed past the red gem at 1750 m on every attempt); heights too close below it are left to the next slice.
+        float cap = nextForeignStructure(startY) - EXACT_ROOM;
+        planEnforcers(startY, Math.min(startY + 80f, cap - 25f));
         if (!enfPending.isEmpty()) extendTo = Math.max(extendTo, enfPending.get(enfPending.size() - 1)[0] + 25f);
-        planAvalanches(startY, startY + 80f);          // claimed the same way; the climb goes on far enough to give the last one its decks ahead
+        planAvalanches(startY, Math.min(startY + 80f, cap - 35f));          // claimed the same way; the climb goes on far enough to give the last one its decks ahead
         if (!avlPending.isEmpty()) extendTo = Math.max(extendTo, avlPending.get(avlPending.size() - 1)[0] + 35f);
         extend(extendTo);
         for (int k = 0; k < avlPending.size(); k++) { AVALANCHES_DROPPED.incrementAndGet(); GenTrace.tally("avalanche_dropped"); }
@@ -352,6 +355,18 @@ public final class CourseGenerator {
      * straight past an exact-height structure, and the next slice, already above it, cannot build it: a whole section would be left without its red gem (a fall would cost 500 m) or its castle.
      * Such a layout is rejected here, so the caller builds this slice again with different choices.
      */
+    /** Room kept below an exact-height structure that is not this slice's own, for the closing rest above a claimed encounter's climb. */
+    static final float EXACT_ROOM = 10f;
+    /** Local height of the first castle or red gem above {@code startY} that is not this slice's castleTarget (no limit without castles). */
+    private float nextForeignStructure(float startY) {
+        if (T.castleSpacing <= 0f) return Float.MAX_VALUE;
+        double half = T.castleSpacing * 0.5, startAbs = startY + base;
+        for (double t = Math.floor(startAbs / half) * half; ; t += half) {
+            if (t <= startAbs + 0.01) continue;
+            if (castleTarget > 0f && Math.abs(t - (castleTarget + base)) < 0.5) continue;
+            return (float) (t - base);
+        }
+    }
     private void checkNoExactStructureSkipped(float startY) {
         if (T.castleSpacing <= 0f) return;
         double sp = T.castleSpacing, half = sp * 0.5, startAbs = startY + base, endAbs = c.get(c.routeSize() - 1).y + base;

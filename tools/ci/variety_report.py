@@ -259,6 +259,20 @@ for m in MODES:
         for j in range(i + 1, len(rs)):
             a = {l["sig"] for l in new_links[rs[i]]}; b = {l["sig"] for l in new_links[rs[j]]}
             summary["seed_similarity"][f"{rs[i]} vs {rs[j]}"] = round(len(a & b) / len(a | b), 3) if a | b else None
+# Enforcer encounter composition (owner 2026-10-27): ordinary enemies (crab, bee, skull, blob) per 100 m within +-40 m of each Enforcer encounter,
+# against the run's overall rate. Lower near the robot = the encounter has room (and replaces them locally); higher = it is added to a crowded stretch.
+els = read(SRC, "elements.csv")
+for r in RUNS:
+    rows_ = [e for e in els if e["run"] == r]
+    ys_enf = [num(e["y"]) for e in rows_ if e["type"] == "ENFORCER"]
+    ys_ord = [num(e["y"]) for e in rows_ if e["type"] in ("CRAB", "BEE", "SKULL", "BLOB")]
+    top = max([num(e["y"]) or 0 for e in rows_] or [0])
+    if not ys_enf or top <= 0:
+        continue
+    near_m = len(ys_enf) * 80.0
+    near = sum(1 for y in ys_ord if any(abs(y - q) <= 40 for q in ys_enf))
+    summary["runs"][r]["enforcer_composition"] = {"ordinary_enemies_per_100m_near_enforcer": round(100 * near / near_m, 2),
+                                                  "ordinary_enemies_per_100m_overall": round(100 * len(ys_ord) / top, 2), "encounters": len(ys_enf)}
 json.dump(summary, open(os.path.join(OUT, "variety_summary.json"), "w"), indent=1, default=str)
 
 # ------------------------------------------------------------------ graphs

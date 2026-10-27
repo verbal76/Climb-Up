@@ -585,10 +585,17 @@ public final class Autopilot {
      * real simulation with every hazard of the course active, pull up a caught ledge, carry on from the route element landed on - and require that no
      * hit or fall happens and the route is never lost. A creature's shove that still lands on the route is no failure; one that throws the climber off it is.
      */
-    public static boolean chainClean(Course c, Tuning t, int from, int to) {
+    public static boolean chainClean(Course c, Tuning t, int from, int to) { return chainClean(c, t, from, to, 0f); }
+    /**
+     * As {@link #chainClean(Course, Tuning, int, int)}, but the climber first stands {@code wait} seconds on deck {@code from} (rules 14: a NOT GONNA HAPPEN
+     * avalanche is proven for several arrival times, because its long-lived blocks meet movers and creatures in whatever phase the real climb brings;
+     * NGH seed 1 slice 10 on 27603e4 passed the one-arrival proof and failed the whole-slice solver). Standing there must itself be clean.
+     */
+    public static boolean chainClean(Course c, Tuning t, int from, int to, float wait) {
         Sim real = CourseGenerator.provenStart(c, t, from);
         real.humanHold = HUMAN_HOLD; real.act = null; real.hz = null;
         InputState in = new InputState(); int sb = real.setbacks(), a = from;
+        for (int q = 0; q < (int) (wait / Sim.DT); q++) { in.clear(); real.step(in); if (real.setbacks() != sb) return false; }
         while (a < to) {
             for (int q = 0; q < 120 && (real.mode == Sim.Mode.LEDGE || real.mode == Sim.Mode.PULLUP); q++) { in.clear(); in.moveY = 1f; real.step(in); }
             for (int q = 0; q < 120 && real.mode == Sim.Mode.AIR; q++) { in.clear(); real.step(in); }          // (a shove's flight: it lands somewhere)

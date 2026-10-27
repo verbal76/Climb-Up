@@ -799,6 +799,8 @@ public final class CourseGenerator {
     public static final java.util.concurrent.atomic.AtomicInteger AVALANCHES_PLACED = new java.util.concurrent.atomic.AtomicInteger(), AVALANCHES_DROPPED = new java.util.concurrent.atomic.AtomicInteger();
     /** Trigger decks an avalanche is tried from before it is dropped. */
     private static final int AVL_TRIES = 4;
+    /** NOT GONNA HAPPEN round 1 correction: the extra arrival delays (s) an avalanche is also proven with (the climber waits on the deck before the trigger). */
+    static final float[] AVL_NGH_WAITS = {0.7f, 1.6f, 2.9f};
     /** This slice's avalanches still to place ({height above the frame, blocks, cooldown, seed, failed tries}), lowest first; the deck being tried (-1 none). */
     private final List<float[]> avlPending = new ArrayList<>();
     private int avlCand = -1;
@@ -839,7 +841,9 @@ public final class CourseGenerator {
         a.anchor = avlCand; a.len = pl[1]; a.period = pl[2]; a.phase = pl[3]; a.zone = d.zone; if (P == DifficultyProfile.NGH) a.skin = 1;          // NOT GONNA HAPPEN's blocks: each its own size and physics (Sim.stepChaos)
         int hi = c.hazards.size(); c.hazards.add(a);
         long t0 = GenTrace.now();
-        if (Autopilot.chainClean(c, T, avlCand - 1, avlCand + 4)) {
+        boolean proven = Autopilot.chainClean(c, T, avlCand - 1, avlCand + 4);
+        if (proven && a.skin == 1) for (float w : AVL_NGH_WAITS) if (!Autopilot.chainClean(c, T, avlCand - 1, avlCand + 4, w)) { proven = false; GenTrace.tally("avalanche_arrival_unfair"); break; }      // NGH: every arrival time
+        if (proven) {
             avlPending.remove(0); avlPlaced.add(new Object[]{hi, pl}); varAdd(hazFam(a), a.y, c.size()); avlCand = -1;
             AVALANCHES_PLACED.incrementAndGet(); GenTrace.tally("avalanche_placed_b" + Math.round(pl[1]));
             GenTrace.tally("avalanche_proof_ms", (int) ((GenTrace.now() - t0) / 1_000_000L));

@@ -377,7 +377,7 @@ public final class Autopilot {
     }
 
     private static Sim trialStart(Sim base, int a, int tgt, MotionCache mc) {
-        Sim s = base.copy(); s.humanHold = HUMAN_HOLD;
+        Sim s = base.copy(); s.humanHold = HUMAN_HOLD; s.deferRespawn = false;          // (a trial's fall is a setback at once, never a respawn waiting for its window)
         s.motion = mc; s.motionGen = mc == null ? 0 : mc.gen(); s.mstep = 0;
         if (tgt >= 0) s.setWindowNear(anchorIdx(s.course, a) - 2, anchorIdx(s.course, a) + 6, a, tgt);     // plus earlier route platforms the climb passed that hang over a side branch
         else s.setWindow(a - 1, a + 6);

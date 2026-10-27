@@ -252,6 +252,7 @@ public final class Sim {
         lastPad = o.lastPad; onSlab = o.onSlab; coyote = o.coyote; jumpBuf = o.jumpBuf; lockout = o.lockout; pullT = o.pullT;
         ropeTopT = o.ropeTopT; pullFromS = o.pullFromS; pullFromY = o.pullFromY; pullToS = o.pullToS; pullToY = o.pullToY;
         ledgeSide = o.ledgeSide; sideIn = o.sideIn; sideDir = o.sideDir; jumpedUp = o.jumpedUp; prevJumpHeld = o.prevJumpHeld; lastGroundY = o.lastGroundY; floorY = o.floorY;
+        deferRespawn = o.deferRespawn; respawnPending = o.respawnPending; floorOverride = o.floorOverride;          // (DC3/DC9: a copy of a managed sim behaves as the sim does)
         checkpoint = o.checkpoint; bestElem = o.bestElem; maxHeight = o.maxHeight; won = o.won; falls = o.falls;
         landSpeed = o.landSpeed; events = o.events; assistForgive = o.assistForgive; ps0 = o.ps0; py0 = o.py0; teleported = o.teleported;
         es0 = o.es0.clone(); ey0 = o.ey0.clone(); es1 = o.es1.clone(); ey1 = o.ey1.clone(); edy = o.edy.clone();
@@ -309,6 +310,9 @@ public final class Sim {
     }
 
     public int consumeEvents() { int e = events; events = 0; return e; }
+    /** The side entry in progress (see trackSideEntry): {platform, side}, for saving a climb mid-catch (DC3). */
+    public int[] sideEntry() { return new int[]{sideIn, sideDir}; }
+    public void setSideEntry(int platform, int side) { sideIn = platform; sideDir = side >= 0 ? 1 : -1; }
 
     // ---------------------------------------------------------------- spawning
 
@@ -381,7 +385,40 @@ public final class Sim {
         // restore crumbled platforms so a retry is never stale or soft-locked
         java.util.Arrays.fill(crumbleT, -1f);
         java.util.Arrays.fill(gone, false);
+        resetEncounters(idx);
         spawnAtCheckpoint(idx);
+    }
+
+    /**
+     * The checkpoint contract (owner correction directive 2026-10-27, DC3), one rule for every retry: a retry from checkpoint {@code cp} meets the
+     * challenge as it was generated and proven. Every encounter still in progress goes back to its starting state - creatures mid-chase (crabs, bees,
+     * skulls, blobs, Enforcers), aimed cannons, seesaw tilt, ramp and belt timers, the shaking ramp's kick count, and avalanches above the checkpoint
+     * (armed again, their blocks gone). What the run has achieved stays: keys, opened gates, checkpoints, the run time, and encounters already resolved
+     * (a creature knocked off or gone, an avalanche spent at or below the checkpoint). Crumbles and holes are restored by the caller as before.
+     */
+    void resetEncounters(int cp) {
+        java.util.Arrays.fill(tilt, 0f); java.util.Arrays.fill(onT, 0f); java.util.Arrays.fill(padSquash, 0f);
+        ensureCapacity();
+        boolean avlReset = false;
+        for (int i = 0; i < course.hazards.size(); i++) {
+            Element h = course.hazards.get(i);
+            boolean done = i < featDone.length && featDone[i];
+            switch (h.type) {
+                case AVALANCHE:
+                    if (h.anchor > cp) { if (i < featDone.length) featDone[i] = false; if ((i + 1) * AVL_W <= avl.length) java.util.Arrays.fill(avl, i * AVL_W, (i + 1) * AVL_W, 0f); avlReset = true; }
+                    break;
+                case CRAB: case BEE: case SKULL: case BLOB: case ENFORCER: case AIMED:
+                    if (done) break;
+                    aimAng[i] = 0f; aimFireT[i] = -1e9f; aimArmed[i] = false; aimYaw[i] = 0f;
+                    crabPos[i] = 0f; crabVel[i] = 0f; crabMode[i] = 0; crabStuck[i] = 0f; crabCool[i] = 0f; crabTurn[i] = 0f; crabSeen[i] = 0f;
+                    mobState[i] = 0; mobT[i] = 0f; mobS[i] = 0f; mobY[i] = 0f; mobDir[i] = 0f; mobTgt[i] = 0f; mobSeen[i] = 0f;
+                    deckOff[i] = 0f; crabJump[i] = -1f; crabFrom[i] = 0f; crabFromDeck[i] = 0f; crabFall[i] = -1f;
+                    break;
+                default: break;
+            }
+        }
+        if (avlReset) lastAvlT = -1e9f;
+        shoveCd = 0f; swingT = 0f; squashT = 0f; slipCd = 0f;
     }
 
     /**
@@ -1018,7 +1055,8 @@ public final class Sim {
         int o = idx * AVL_W, a0 = e.anchor;
         if (o + AVL_W > avl.length || a0 < 0 || a0 >= course.size()) return;
         float st = avl[o];
-        if (st == 2f) return;
+        if (st == 2f) { if (idx < featDone.length) featDone[idx] = true; return; }          // (DC3: spent is resolved, so it stays spent across a slice unload: Tower keeps featDone)
+        if (idx < featDone.length && featDone[idx]) { avl[o] = 2f; return; }
         if (st == 0f) {
             if (!(mode == Mode.GROUND && onElem == a0)) return;
             if (time - lastAvlT < e.period) { avl[o] = 2f; avlSkipped++; return; }          // reached during the cooldown: this spot is spent, it never fires later
@@ -1119,7 +1157,8 @@ public final class Sim {
         int o = idx * AVL_W, a0 = e.anchor;
         if (o + AVL_W > avl.length || a0 < 0 || a0 >= course.size()) return;
         float st = avl[o];
-        if (st == 2f) return;
+        if (st == 2f) { if (idx < featDone.length) featDone[idx] = true; return; }          // (DC3: spent is resolved, so it stays spent across a slice unload: Tower keeps featDone)
+        if (idx < featDone.length && featDone[idx]) { avl[o] = 2f; return; }
         if (st == 0f) {
             if (!(mode == Mode.GROUND && onElem == a0)) return;
             if (time - lastAvlT < e.period) { avl[o] = 2f; avlSkipped++; return; }

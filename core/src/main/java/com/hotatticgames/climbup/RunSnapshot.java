@@ -47,14 +47,25 @@ public final class RunSnapshot {
     public long[] aKey = new long[0];
     public float[] aState = new float[0];
     public float lastAvlT = -1e9f;
+    // DC3 (2026-10-27): a side catch in progress (the platform whose side the body slipped into, and from which side). Optional: older files have none.
+    public long sideKey = -1;
+    public int sideDir = 1;
 
     public RunSnapshot() {}
 
     // ------------------------------------------------------------------ capture
 
-    /** The state of a live climb, or null when it is not in a state that can be saved faithfully (a respawn is waiting for its window). */
+    /**
+     * The state of a live climb, or null when it cannot be saved faithfully. DC3 (owner correction 2026-10-27): a save in the very frame of a fall
+     * (the respawn waiting for its window) is the climb as it will be a moment later, back at the checkpoint, when the checkpoint is resident; it used
+     * to give null, and the run file was deleted, so the next CONTINUE was a checkpoint-only resume.
+     */
     public static RunSnapshot capture(Sim sim, Tower tower, long seed) {
-        if (sim.respawnPending || tower == null) return null;
+        if (tower == null) return null;
+        if (sim.respawnPending) {
+            if (sim.checkpoint < 0 || sim.checkpoint >= sim.course.size()) return null;
+            Sim back = sim.copy(); back.completeRespawn(sim.checkpoint); sim = back;
+        }
         RunSnapshot r = new RunSnapshot();
         r.seed = seed;
         r.time = sim.time; r.vx = sim.vx; r.vy = sim.vy; r.coyote = sim.coyote; r.jumpBuf = sim.jumpBuf; r.lockout = sim.lockout; r.pullT = sim.pullT; r.ropeTopT = sim.ropeTopT;
@@ -96,6 +107,8 @@ public final class RunSnapshot {
         r.aKey = new long[ak.size()]; r.aState = new float[ak.size() * Sim.AVL_W];
         for (int i = 0; i < ak.size(); i++) { r.aKey[i] = ak.get(i); System.arraycopy(sim.avl, ai.get(i) * Sim.AVL_W, r.aState, i * Sim.AVL_W, Sim.AVL_W); }
         r.lastAvlT = sim.lastAvlT;
+        int[] se = sim.sideEntry();
+        if (se[0] >= 0) { r.sideKey = tower.elemKeyAt(se[0]); r.sideDir = se[1]; }
         java.util.List<Long> done = tower.doneKeys(sim);
         r.doneKeys = new long[done.size()]; for (int i = 0; i < r.doneKeys.length; i++) r.doneKeys[i] = done.get(i);
         r.maxSlice = Math.max(tower.sliceAtAbs(r.absY), r.cpSlice);
@@ -220,6 +233,7 @@ public final class RunSnapshot {
         tower.addDone(doneKeys);
         tower.applyDone(sim);
         sim.syncElements(hasS0 ? localS(sim, tower, absS0) : sim.s);
+        if (sideKey >= 0 && sim.mode == Sim.Mode.AIR) { int w = tower.indexOfElemKey(sideKey); if (w >= 0) sim.setSideEntry(w, sideDir); }          // (after syncElements, which clears it)
         return true;
     }
 }

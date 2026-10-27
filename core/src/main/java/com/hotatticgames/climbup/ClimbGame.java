@@ -294,12 +294,12 @@ public class ClimbGame extends Game {
 
     public void forgetRun() { RunRecord.forgetClimb(save); if (history != null) history.delete(); if (store != null) store.deleteRun(); }
 
-    /** Writes the exact state of the climb in progress (SAVE &amp; EXIT, pause, autosave). Nothing is written when the state cannot be saved faithfully; the previous snapshot then stays, or is dropped if it would now be wrong. */
+    /** Writes the exact state of the climb in progress (SAVE &amp; EXIT, pause, autosave). Nothing is written when the state cannot be saved faithfully; the previous snapshot then stays. */
     public void saveRun(Tower tower, com.hotatticgames.climbup.sim.Sim sim) {
         if (tower == null || save.seed == 0 || save.seed != tower.seed || store == null) return;
         syncHistory(tower);
         RunSnapshot r = RunSnapshot.capture(sim, tower, save.seed);
-        if (r == null) { store.deleteRun(); return; }
+        if (r == null) return;          // DC3: nothing faithful to write this frame: the last snapshot stays (deleting it turned a pause during a fall into a checkpoint-only resume)
         store.saveRun(r);
         ResumeState.capture(save, sim);
         save.cpSlice = r.cpSlice; save.cpLocal = r.cpLocal;
@@ -319,7 +319,7 @@ public class ClimbGame extends Game {
         if (tower == null || save.seed == 0 || save.seed != tower.seed || store == null) return;
         if (history != null) for (int k = history.count(); k < tower.sliceCount(); k++) history.appendLater(tower.blob(k));
         RunSnapshot r = RunSnapshot.capture(sim, tower, save.seed);
-        if (r == null) { store.deleteRun(); return; }
+        if (r == null) return;          // DC3: nothing faithful to write this frame: the last snapshot stays (deleting it turned a pause during a fall into a checkpoint-only resume)
         store.saveRunLater(r);
         ResumeState.capture(save, sim);
         save.cpSlice = r.cpSlice; save.cpLocal = r.cpLocal;

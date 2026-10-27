@@ -18,7 +18,12 @@ public class SawFairnessTest {
                     if (h.type != Element.Type.SAW_H || h.anchor < 0 || h.anchor >= c.routeSize() - 1) continue;
                     Element p = c.get(h.anchor), n = c.get(h.anchor + 1);
                     boolean onPlatform = p.w >= 7f && Math.abs(h.y - p.y - 0.62f) < 0.01f;
-                    float window = Autopilot.plan(Sim.startOn(c, t, h.anchor), h.anchor, true).window;
+                    // owner decision 2026-10-27: measured from a start a player can really have (SafeStart: the proven arrival, a wait with every
+                    // hazard active, the earliest clean move), not from the slice's first instant (seed 2 slice 25: a ball from the cannon on platform 45
+                    // was passing the standing spot at t = 0, so every wait failed although the saw leaves ~0.9 of its cycle)
+                    SafeStart.Result ss = SafeStart.evaluate(c, t, h.anchor);
+                    assertTrue("seed " + seed + " slice " + k + " saw on platform " + h.anchor + ": " + ss, ss.ok);
+                    float window = ss.window;
                     if (onPlatform) {
                         mid++; worstMid = Math.min(worstMid, window);
                         assertTrue("a floor saw sweeps at most 1.1 m each way, leaving room at both ends (amp " + h.amp + ")", h.amp <= 1.1f + 1e-4f);

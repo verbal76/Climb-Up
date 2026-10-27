@@ -1007,3 +1007,13 @@ The failing saw is seed 2, slice 25, floor saw on platform 48: 8 m deck, saw cen
 Measured from start times 0.5-2.0 s the window is 0.91-1.09. The generator proves the link from `CourseGenerator.provenStart` (the first quiet moment, here t = 0.6 s, window 0.91), as CourseTest does.
 
 The saw itself is fair; the test samples one instant at which another hazard is mid-flight. A fix would measure from `provenStart`, as CourseTest does. That is an owner decision because it changes what a test measures: owner rule "don't weaken tests". BundledReplayTest stays red until replays are re-recorded.
+
+## PUNISHER content directive (owner, 2026-10-27): Enforcer robot family and spike-block avalanche - decisions so far (implementation not started)
+
+- NORMAL frozen. Both new threats are PUNISHER-only; existing PUNISHER enemies/hazards may be reweighted or suppressed to give them room.
+- Assets: Quaternius "LowPoly Robot" (Animated Robot by Quaternius.zip, Nov 2018; FBX/OBJ/Blend, 14 animations), CC0 1.0 per the pack's License.txt and the itch.io page (owner screenshots). Spike block: the existing Quaternius Ultimate Platformer `cube_spikes` model already in `assets/pack` (CC0, ASSETS.md).
+- Owner answers (2026-10-27):
+  - Hits: Enforcer kick, air swat and spike-block contact are knockback like today's hazard hits. A fall off the tower goes back to the checkpoint by the existing fall rule. No new damage model.
+  - Avalanche timing: recurring, with a cooldown that is deterministic but seeded-random each time, roughly 30-90 s between drops (examples 30, 45, 60, 90 s). Target about 2-3 avalanches per level (castle interval, 5-10 min) as a starting balance: "rough but not too rough - it is PUNISHER".
+  - Robot conversion: installing an FBX converter (Blender Python module or FBX2glTF) to convert Robot.fbx with its animations into the game's model format is approved. Only the converted model, license text and provenance are committed.
+  - Sequencing: finish SawFairnessTest first, then start the PUNISHER content. Build 82 stays on hold.

@@ -13,6 +13,7 @@ on:
       top: { description: 'Climb height in metres', required: false, default: '5000' }
       solve: { description: '1 = run the slice solver on every slice, 0 = generation only (targeted generation checks)', required: false, default: '1' }
       bench: { description: '1 = GenBench instead of the report: untraced generation time per slice and a streaming-wait estimate', required: false, default: '0' }
+      baseline_run: { description: 'Earlier Difficulty report run (any commit) to compare variety, ropes and difficulty against (its lanes-mode-* artifacts)', required: false, default: '' }
   push:
     branches: [build-74-determinism]
     paths:
@@ -91,10 +92,18 @@ jobs:
           run-id: ${{ inputs.include_run }}
           github-token: ${{ github.token }}
           path: parts
+      - uses: actions/download-artifact@v4          # owner 2026-10-27: an earlier campaign to compare against (variety measured from its links.csv)
+        if: ${{ inputs.baseline_run != '' && inputs.baseline_run != null }}
+        with:
+          pattern: lanes-mode-*
+          run-id: ${{ inputs.baseline_run }}
+          github-token: ${{ github.token }}
+          path: baseline_parts
       - name: Build PDFs, merged CSV/JSON, validation and index
         run: |
           pip install --quiet matplotlib
           python3 tools/ci/lane_report.py parts baseline
+          python3 tools/ci/variety_report.py parts baseline baseline_parts
           cat baseline/INDEX.md >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
         if: always()

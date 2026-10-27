@@ -92,6 +92,8 @@ public final class DifficultyProfile {
     /** Spike-block avalanches (owner 2026-10-27): 2 PUNISHER (2-3 a castle interval, 4-5 blocks), 1 NORMAL (castles 9-10 only, rare, 2 blocks), 0 none (NOT GONNA HAPPEN). */
     /** History-aware variety weighting (owner 2026-10-27): authorised for PUNISHER; NORMAL and NOT GONNA HAPPEN keep their selection. */
     public boolean adaptiveVariety() { return this == PUNISHER; }
+    /** NORMAL's narrow rope correction (owner 2026-10-27, authorised on measured clustering): see CourseGenerator.ropeAfterRecent. */
+    public boolean ropeFallbackSpacing() { return this == NORMAL; }
     public int avalanches() { return this == PUNISHER ? 2 : this == NORMAL ? 1 : 0; }
 
     /** The profile a climb at {@code t.hard} generates with. */

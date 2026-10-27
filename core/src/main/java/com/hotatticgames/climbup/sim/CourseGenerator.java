@@ -500,7 +500,9 @@ public final class CourseGenerator {
                 }
                 // then the continuation the climb needs, easiest proofs first: vertical moves with timing before stairs, and ropes and plain hops
                 // last (rope first when the spiral lags its pitch: a hop flattens it), so a section always goes on
-                if (!ok) for (Kind fb : P.adaptiveVariety() ? varOrder(continuation(zone, lagging, ordinaryUsed), last.y) : continuation(zone, lagging, ordinaryUsed)) { if (fb != k && tryModuleBelow(fb, 0.15f, th)) { k = fb; ok = true; if (ordinary(fb)) ordinaryUsed[fb.ordinal()] = ++ordinaryClock; break; } }
+                Kind[] cont = continuation(zone, lagging, ordinaryUsed);
+                if (P.adaptiveVariety()) cont = varOrder(cont, last.y); else if (P.ropeFallbackSpacing()) cont = ropeAfterRecent(cont, last.y, lagging);
+                if (!ok) for (Kind fb : cont) { if (fb != k && tryModuleBelow(fb, 0.15f, th)) { k = fb; ok = true; if (ordinary(fb)) ordinaryUsed[fb.ordinal()] = ++ordinaryClock; break; } }
                 traceRole = "PICK"; tracePicked = null;
                 if (!ok && !undo.isEmpty() && undoneHere < 2 && backtracks < 6) {
                     int[] u = undo.pop(); rollbackTo(u[0], u[1]); backtracks++; undoneHere++; BACKTRACKS.incrementAndGet(); prev = null; prev2 = null; GenTrace.tally("backtrack");
@@ -779,6 +781,25 @@ public final class CourseGenerator {
         avlCand = -1;
         if (++pl[4] >= AVL_TRIES) { avlPending.remove(0); AVALANCHES_DROPPED.incrementAndGet(); GenTrace.tally("avalanche_dropped"); }
         else pl[0] = c.get(last).y;          // the next suitable deck from here on
+    }
+
+    /**
+     * NORMAL's narrow rope correction (owner 2026-10-27, authorised after measuring: NORMAL seed 1 to 5,000 m had 72% of its rope modules from this
+     * continuation list, and 42% of rope-to-rope spacings under 10 m). When a rope was placed within ROPE_NEAR m below, the continuation tries the rope
+     * after stairs (lagging: stairs climb too) or last, so it is used when nothing else fits rather than first. Nothing else in NORMAL's selection
+     * changes; the rope stays in the list (a refused climb is never left without it).
+     */
+    static final float ROPE_NEAR = 12f;
+    private Kind[] ropeAfterRecent(Kind[] list, float y, boolean lagging) {
+        boolean recent = false;
+        for (int i = c.size() - 1; i >= Math.max(0, c.size() - 40) && !recent; i--) { Element e = c.get(i); if (e.type == Element.Type.ROPE && e.y >= y - ROPE_NEAR) recent = true; }
+        if (!recent) return list;
+        List<Kind> l = new ArrayList<>(List.of(list));
+        if (!l.remove(Kind.ROPE)) return list;
+        int at = lagging && l.contains(Kind.STAIRS) ? l.indexOf(Kind.STAIRS) + 1 : l.size();
+        l.add(at, Kind.ROPE);
+        GenTrace.tally("rope_fallback_after_recent");
+        return l.toArray(new Kind[0]);
     }
 
     // ------------------------------------------------------------------ history-aware variety (PUNISHER; owner 2026-10-27)

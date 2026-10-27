@@ -109,6 +109,8 @@ jobs:
           if [ -n "${{ inputs.campaign }}" ]; then
             python3 tools/ci/campaign_charts.py "${{ inputs.campaign }}" "Campaign ${{ inputs.campaign }} ($(git rev-parse --short HEAD))" baseline/campaign_${{ inputs.campaign }} $(dirname $(find parts -name castle_control.csv | sort))
           fi
+          EXPECT_MODES='${{ inputs.modes || '["0","1","2"]' }}' EXPECT_SEEDS='${{ inputs.seeds || '["1","2"]' }}' python3 -I tools/ci/batch_summary.py baseline/batch $(dirname $(find parts -name gate.json | sort))          # owner 2026-10-28: mode curves, seed spread, reliability
+          cat baseline/batch/BATCH.md >> "$GITHUB_STEP_SUMMARY"
           cat baseline/INDEX.md >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
         if: always()

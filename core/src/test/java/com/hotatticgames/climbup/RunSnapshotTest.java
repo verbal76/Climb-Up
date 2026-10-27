@@ -114,9 +114,15 @@ public class RunSnapshotTest {
     @Test public void aSnapshotThatCannotBeSavedFaithfullyIsRefusedAndNanNeverReachesDisk() throws Exception {
         Tuning t = TestUtil.tuning();
         Tower tw = new Tower(SEED, t); Sim s = simOn(tw, t);
+        // owner correction 2026-10-27 (DC3): a waiting respawn is saved as the respawned climb at its checkpoint (it used to give null, and the run file
+        // was deleted); only a checkpoint outside the world has no faithful state (CheckpointContractTest covers the respawned save end to end)
         s.respawnPending = true;
-        assertNull("a waiting respawn has no faithful state", RunSnapshot.capture(s, tw, SEED));
-        s.respawnPending = false;
+        RunSnapshot pending = RunSnapshot.capture(s, tw, SEED);
+        assertNotNull("a waiting respawn is saved as the respawned climb", pending);
+        assertEquals("at the checkpoint, standing", "GROUND", pending.mode);
+        int cp = s.checkpoint; s.checkpoint = -1;
+        assertNull("a checkpoint outside the world has no faithful state", RunSnapshot.capture(s, tw, SEED));
+        s.checkpoint = cp; s.respawnPending = false;
         RunSnapshot ok = RunSnapshot.capture(s, tw, SEED); assertNotNull(ok);
         File dir = Files.createTempDirectory("climb-snap").toFile(); SaveStore st = new SaveStore(dir);
         assertTrue(st.saveRun(ok));

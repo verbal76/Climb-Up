@@ -1,3 +1,10 @@
+## RESUME HERE (2026-10-27, consolidated owner directive: N/P final validation + NGH three rounds; Build 82 on HOLD)
+
+- NGH ROUND 1 DISPATCHED: Difficulty report run 40549406903 on 27603e40df7004acbd50d7ead27f0967b8f845fd (rules 14), modes ["2"], seeds 1-3, top 5000, solve 1, campaign B, baseline 40480870533. Round 2 and 3 use the same seeds; stop after Round 3 for the owner's GO/NO-GO and release decision.
+- Campaign A (NORMAL + PUNISHER seeds 1-5, campaign A, baseline 40509435937) is dispatched once the local affected-test run (scratchpad aff2.log) passes, since the shared saw fix changes some NORMAL geometry.
+- No Build 82 packaging, APK, release, OTA or Steam until the owner authorises after Round 3.
+- Decisions: docs/DECISIONS.md "NOT GONNA HAPPEN generator modernisation (Rules 14 work)".
+
 ## RESUME HERE (if the session ran out of credits)
 
 **PUNISHER content + owner amendments (2026-10-27, latest; rules 12, NORMAL fingerprint 2b116711a13019934b3f28d8):** order agreed with the owner:

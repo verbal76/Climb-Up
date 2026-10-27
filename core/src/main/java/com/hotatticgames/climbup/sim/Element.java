@@ -32,7 +32,15 @@ public final class Element {
          * {@code len} consecutive route decks (3-5), kicks you off your footing, and - orange and red - jumps to swat you out of the air. After its burst it
          * runs off up the tower and leaps away. skin: tier 0 yellow, 1 orange, 2 red. It obeys gravity and the decks; it can be knocked or fall off.
          */
-        ENFORCER }
+        ENFORCER,
+        /**
+         * Spike-block avalanche (owner 2026-10-27; PUNISHER, and NORMAL castles 9-10): when you land on its deck ({@code anchor}), and the cooldown since
+         * the last avalanche ({@code period} s of simulation time) has passed, a warning shows where {@code len} spiked blocks (2 NORMAL, 4-5 PUNISHER) will
+         * come down from above the screen onto the decks ahead; they fall, bounce, ricochet off the decks and each other, and tumble back down the tower
+         * past you. {@code phase} seeds each block's start (position, delay, speed, spin). Single use: a spot that fires, or is reached during the
+         * cooldown, never fires again. A block that hits you knocks you away like any hazard.
+         */
+        AVALANCHE }
 
     public Type type;
     public int zone;
@@ -109,7 +117,7 @@ public final class Element {
     public float rampSlope(float t) { return spins() ? amp * (float) StrictMath.cos(spinAngle(t)) : amp; }
 
     public boolean isMoving() {
-        switch (type) { case MOVE_H: case MOVE_V: case MOVE_Z: case SWING: case SAW_H: case SAW_V: case PENDULUM: case CANNON: case SPIKE_TRAP: case SPIKE_DROP: case CRAB: case BEE: case MORTAR: case AIMED: case SKULL: case BLOB: case ENFORCER: return true; default: return false; }
+        switch (type) { case MOVE_H: case MOVE_V: case MOVE_Z: case SWING: case SAW_H: case SAW_V: case PENDULUM: case CANNON: case SPIKE_TRAP: case SPIKE_DROP: case CRAB: case BEE: case MORTAR: case AIMED: case SKULL: case BLOB: case ENFORCER: case AVALANCHE: return true; default: return false; }
     }
 
     public static final float CANNON_FLIGHT = 0.7f;      // fraction of the cycle the cycle's ball takes to cross the lane (its launch speed)
@@ -232,6 +240,16 @@ public final class Element {
     /** How long a burst lasts at most (s), then it leaves; a hop between decks (s) and the largest gap / height change it hops. */
     public static final float[] ENF_PURSUE = {6.5f, 7.5f, 8.5f};
     public static final float ENF_HOP_T = 0.5f, ENF_HOP_GAP = 3.6f, ENF_HOP_DY = 2.2f, ENF_HOP_PEAK = 1.0f;
+    // ---- spike-block avalanche (one physics for every mode: only the count and how often differ)
+    /** Most blocks in one avalanche; a block's collision radius (the cube_spikes body, m). */
+    public static final int AVL_MAX = 5;
+    public static final float AVL_R = 0.45f;
+    /** Warning before the first block is released (s), the gap between releases (s), and how far above its target deck a block starts (m: above the screen). */
+    public static final float AVL_WARN = 1.4f, AVL_STAGGER = 0.35f, AVL_DROP = 11f;
+    /** Block physics: gravity (m/s^2), bounce restitution off decks and off each other, tangential friction kept per contact, deck slab thickness (m). */
+    public static final float AVL_G = 24f, AVL_E = 0.42f, AVL_EB = 0.55f, AVL_FRICTION = 0.82f, AVL_SLAB = 0.6f;
+    /** A block is gone when it has fallen this far below the trigger deck (m), after this long (s), or after resting this long (s). */
+    public static final float AVL_FLOOR = 16f, AVL_LIFE = 12f, AVL_REST = 0.6f;
     /** Leaving: it runs up the tower at ENF_EXIT_RUN and leaps away (m/s); once ENF_GONE_Y above its deck (or falling for ENF_FALL_T s) it is gone. */
     public static final float ENF_EXIT_RUN = 7f, ENF_EXIT_VX = 6f, ENF_EXIT_VY = 13f, ENF_GONE_Y = 10f, ENF_FALL_T = 2f;
 

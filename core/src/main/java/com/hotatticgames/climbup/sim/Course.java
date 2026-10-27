@@ -70,6 +70,7 @@ public final class Course {
                 for (int j = Math.max(0, aLo); j <= aHi && j < elements.size() && !take; j++) { float ahead = h.dir * dsWrap(elements.get(j).s, h.s); if (ahead >= -2f && ahead <= reach) take = true; }
             }
             if (!take && h.type == Element.Type.ENFORCER && h.anchor - 1 <= aHi && h.anchor + Math.round(h.len) >= aLo) take = true;      // it chases across its decks: in view for every link of its encounter
+            if (!take && h.type == Element.Type.AVALANCHE && h.anchor - 8 <= aHi && h.anchor + 8 >= aLo) take = true;      // its blocks fall on the decks ahead and tumble back past it
             if (take) { in[i] = true; n++; }
         }
         int[] r = new int[n]; int k = 0;

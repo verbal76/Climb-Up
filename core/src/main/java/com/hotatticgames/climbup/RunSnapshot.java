@@ -40,6 +40,10 @@ public final class RunSnapshot {
     // Build 72: where the hero stood at the start of the last step: ramps and seesaws report their surface there (optional: older files fall back to absS)
     public boolean hasS0;
     public double absS0;
+    // 2026-10-27: spike-block avalanches under way or spent (Sim.AVL_W floats each) and when the last one fired. Optional: older files have none.
+    public long[] aKey = new long[0];
+    public float[] aState = new float[0];
+    public float lastAvlT = -1e9f;
 
     public RunSnapshot() {}
 
@@ -80,6 +84,15 @@ public final class RunSnapshot {
         }
         r.hKey = new long[hk.size()]; r.hState = new float[hk.size() * Sim.HAZ_STATE];
         for (int i = 0; i < hk.size(); i++) { r.hKey[i] = hk.get(i); System.arraycopy(hv.get(i), 0, r.hState, i * Sim.HAZ_STATE, Sim.HAZ_STATE); }
+        java.util.ArrayList<Long> ak = new java.util.ArrayList<>(); java.util.ArrayList<Integer> ai = new java.util.ArrayList<>();
+        for (int i = 0; i < sim.course.hazards.size(); i++) {
+            if (sim.course.hazards.get(i).type != com.hotatticgames.climbup.sim.Element.Type.AVALANCHE || sim.avalancheState(i) == 0) continue;
+            long key = tower.hazKeyAt(i); if (key < 0) continue;
+            ak.add(key); ai.add(i);
+        }
+        r.aKey = new long[ak.size()]; r.aState = new float[ak.size() * Sim.AVL_W];
+        for (int i = 0; i < ak.size(); i++) { r.aKey[i] = ak.get(i); System.arraycopy(sim.avl, ai.get(i) * Sim.AVL_W, r.aState, i * Sim.AVL_W, Sim.AVL_W); }
+        r.lastAvlT = sim.lastAvlT;
         java.util.List<Long> done = tower.doneKeys(sim);
         r.doneKeys = new long[done.size()]; for (int i = 0; i < r.doneKeys.length; i++) r.doneKeys[i] = done.get(i);
         r.maxSlice = Math.max(tower.sliceAtAbs(r.absY), r.cpSlice);
@@ -113,6 +126,8 @@ public final class RunSnapshot {
         for (int i = 0; i < n; i++) if (!fin(eCrumble[i], eGoneT[i], eTilt[i], eOnT[i])) return false;
         if (hKey == null || hState == null || hState.length != hKey.length * Sim.HAZ_STATE || !fin(slipCd)) return false;
         for (float f : hState) if (!fin(f)) return false;
+        if (aKey == null || aState == null || aState.length != aKey.length * Sim.AVL_W || !fin(lastAvlT)) return false;
+        for (float f : aState) if (!fin(f)) return false;
         return true;
     }
 
@@ -165,6 +180,11 @@ public final class RunSnapshot {
         for (int i = 0; i < hKey.length; i++) {
             int w = tower.indexOfHazKey(hKey[i]);
             if (w >= 0) sim.setHazardState(w, java.util.Arrays.copyOfRange(hState, i * Sim.HAZ_STATE, (i + 1) * Sim.HAZ_STATE));
+        }
+        sim.lastAvlT = lastAvlT;
+        for (int i = 0; i < aKey.length; i++) {
+            int w = tower.indexOfHazKey(aKey[i]);
+            if (w >= 0 && (w + 1) * Sim.AVL_W <= sim.avl.length) System.arraycopy(aState, i * Sim.AVL_W, sim.avl, w * Sim.AVL_W, Sim.AVL_W);
         }
         tower.addDone(doneKeys);
         tower.applyDone(sim);

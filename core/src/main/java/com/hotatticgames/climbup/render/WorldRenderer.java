@@ -1053,6 +1053,8 @@ public final class WorldRenderer implements Disposable {
     /** The Enforcer's body paint per tier (yellow, orange, red) and its size: the model is 4.48 units tall, drawn Element.ENF_H (1.6 m) tall at tier 0. */
     private static final float[][] ENF_TINT = {{0.98f, 0.80f, 0.16f}, {1.0f, 0.48f, 0.10f}, {0.86f, 0.13f, 0.11f}};
     private static final float ENF_SCALE = Element.ENF_H / 4.48f;
+    /** cube_spikes is 3.16 units across: drawn at the avalanche block's collision diameter. */
+    private static final float AVL_SCALE = 2f * Element.AVL_R / 3.16f;
     private ModelInstance stone;
     private final Color tmpDoor = new Color();
 
@@ -1386,6 +1388,23 @@ public final class WorldRenderer implements Disposable {
                 drawRig(r, es, ey, 0f, camS, sc, dir >= 0f ? 70f : -70f, spin, st == 2 || st == 6 ? 1.3f + 0.15f * tier : 1f);
                 for (int q = 0; q <= tier; q++) drawBox(es + (q - tier * 0.5f) * 0.18f, ey + Element.ENF_H * (1f + 0.08f * tier) + 0.08f, 0.1f, camS, 0.1f, 0.1f, 0.1f, 1f, 0.95f - 0.3f * tier, 0.4f);
                 if (st == 2 && mt < 0.5f && !reducedMotion && quality > 0 && MathUtils.randomBoolean(0.3f)) { ambCol.set(1f, 0.9f, 0.3f, 1f); particles.spawn(es, ey + Element.ENF_H + 0.4f, 0f, 1.2f, ambCol, 0.08f, 0f, 0.4f); }      // it has seen you
+                break;
+            }
+            case AVALANCHE: {
+                // spike-block avalanche (owner 2026-10-27): during the warning a flashing down arrow (a shape, not only a colour) and falling grit mark
+                // each block's column; then the cube_spikes blocks fall, bounce and tumble, turning as the simulation spins them
+                if (rsim == null) break;
+                for (int b = 0; b < Element.AVL_MAX; b++) {
+                    float[] k = rsim.avalancheBlock(rhz, h, b);
+                    if (k == null) continue;
+                    if (k[3] == 2f) {
+                        float ay = k[1] - Element.AVL_DROP + 3.2f, blink = (time * 6f) % 1f < 0.6f ? 1f : 0.35f;
+                        drawPack("arrow_up", k[0], ay + 1.4f, 0.3f, camS, 0.42f * blink, 0.42f, 0.42f, 0f, 180f);
+                        if (quality > 0 && MathUtils.randomBoolean(0.35f)) { ambCol.set(0.75f, 0.68f, 0.55f, 1f); particles.spawn(k[0] + MathUtils.random(-0.4f, 0.4f), ay + 4.5f, 0f, -3f, ambCol, MathUtils.random(0.05f, 0.1f), -6f, 0.7f); }
+                    } else {
+                        drawPack("cube_spikes", k[0], k[1], 0f, camS, AVL_SCALE, AVL_SCALE, AVL_SCALE, 25f, -k[2]);
+                    }
+                }
                 break;
             }
             case CLUB: {

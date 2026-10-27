@@ -89,6 +89,8 @@ public final class DifficultyProfile {
 
     /** PUNISHER only (owner 2026-10-27): Enforcer robot encounters, one or two between every two castles. NORMAL (frozen) and NGH never get them. */
     public boolean enforcers() { return this == PUNISHER; }
+    /** Spike-block avalanches (owner 2026-10-27): 2 PUNISHER (2-3 a castle interval, 4-5 blocks), 1 NORMAL (castles 9-10 only, rare, 2 blocks), 0 none (NOT GONNA HAPPEN). */
+    public int avalanches() { return this == PUNISHER ? 2 : this == NORMAL ? 1 : 0; }
 
     /** The profile a climb at {@code t.hard} generates with. */
     public static DifficultyProfile of(Tuning t) { return t.hard >= 2 ? NGH : t.hard > 0 ? PUNISHER : NORMAL; }

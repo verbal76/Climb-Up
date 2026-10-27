@@ -14,7 +14,7 @@ public final class Lanes {
         switch (k) {
             case STATIC: case CRUMBLE: case MOVE_H: case MOVE_V: case MOVE_Z: case SWING: case PAD: case ROPE: case CABLE: case SPRING: case SEESAW: case RAMP:
                 return Lane.TERRAIN;
-            case SAW_H: case SAW_V: case PENDULUM: case CANNON: case AIMED: case MORTAR: case SPIKE_TRAP: case SPIKE_BLOCK: case SPIKE_DROP:
+            case SAW_H: case SAW_V: case PENDULUM: case CANNON: case AIMED: case MORTAR: case SPIKE_TRAP: case SPIKE_BLOCK: case SPIKE_DROP: case AVALANCHE:
                 return Lane.HAZARDS;
             case CRAB: case BEE: case SKULL: case BLOB: case ENFORCER:
                 return Lane.ENEMIES;
@@ -49,6 +49,7 @@ public final class Lanes {
             case SPIKE_DROP: return "Falling spike slab (its platform is TERRAIN)";
             case CRAB: return "Crab enemy"; case BEE: return "Bee enemy"; case SKULL: return "Skull enemy"; case BLOB: return "Blob enemy";
             case ENFORCER: return "Enforcer robot (PUNISHER): pursuit across 3-5 decks, kick, air swat (orange/red)";
+            case AVALANCHE: return "Spike-block avalanche: blocks drop from above, bounce and tumble down past you (PUNISHER 4-5, NORMAL castles 9-10: 2)";
             case GOAL: return "Completion/progression marker"; case KEY: return "Progression and route requirement";
             case GATE: return "Progression/access control"; case CLUB: return "Defensive/protective pickup (mitigation, never a negative enemy)";
             default: throw new IllegalStateException("UNCLASSIFIED Element.Type " + k);

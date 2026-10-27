@@ -251,7 +251,11 @@ public final class CourseGenerator {
         // Encounters not built by the end of the climb are dropped, never carried into the next slice's context.
         planEnforcers(startY, startY + 80f);
         if (!enfPending.isEmpty()) extendTo = Math.max(extendTo, enfPending.get(enfPending.size() - 1)[0] + 25f);
+        planAvalanches(startY, startY + 80f);          // claimed the same way; the climb goes on far enough to give the last one its decks ahead
+        if (!avlPending.isEmpty()) extendTo = Math.max(extendTo, avlPending.get(avlPending.size() - 1)[0] + 35f);
         extend(extendTo);
+        for (int k = 0; k < avlPending.size(); k++) { AVALANCHES_DROPPED.incrementAndGet(); GenTrace.tally("avalanche_dropped"); }
+        avlPending.clear(); avlCand = -1;
         for (int k = 0; k < enfPending.size(); k++) { ENFORCERS_DROPPED.incrementAndGet(); GenTrace.tally("enforcer_dropped"); }
         long p1 = GenTrace.now();
         closeSlice(extendTo);
@@ -505,6 +509,7 @@ public final class CourseGenerator {
             }
             undo.push(new int[]{u0, uh0}); undoneHere = 0;
             if (enfQuiet > 0) enfQuiet--;
+            tryAvalanche();
             prev2 = prev; prev = k; sinceRest++;
         }
     }
@@ -693,6 +698,86 @@ public final class CourseGenerator {
         return false;
     }
 
+    // ------------------------------------------------------------------ spike-block avalanches (owner 2026-10-27)
+
+    /**
+     * The avalanches planned for section n (castle n-1 to castle n), fixed by the seed and the section like the keys: {height, blocks, cooldown s, seed}.
+     * PUNISHER: two, sometimes three (more often higher up), never more; 4 or 5 blocks (5 more often higher up). NORMAL: none before castle 9; castle 9
+     * rarely one, castle 10 a little more often; always 2 blocks. NOT GONNA HAPPEN: none. The cooldown (30-90 s of simulation time) only makes an
+     * avalanche eligible; none is ever forced. Guidance, not a quota: a planned avalanche that cannot be proven safe is dropped.
+     */
+    public static float[][] avalanchePlan(long seed, int n, float spacing, int mode) {
+        if (mode == 0 || n < 1) return new float[0][];
+        Random r = new Random(seed * 0x9FB21C651E98DF25L + n * 0xC13FA9A902A6328FL + 71L);
+        int count, blocks;
+        if (mode == 2) { count = 2 + (r.nextFloat() < Math.min(0.85f, 0.25f + 0.07f * (n - 1)) ? 1 : 0); blocks = -1; }
+        else { if (n < 9) return new float[0][]; float u = r.nextFloat(); count = n == 9 ? (u < 0.3f ? 1 : 0) : (u < 0.45f ? 1 : 0) + (u < 0.08f ? 1 : 0); blocks = 2; }
+        float lo = spacing * (n - 1) + 40f, hi = spacing * n - 60f;
+        float[][] out = new float[count][];
+        for (int k = 0; k < count; k++) {
+            float a = lo + (hi - lo) * k / count, b = lo + (hi - lo) * (k + 1) / count, h = a + r.nextFloat() * (b - a);
+            int nb = blocks > 0 ? blocks : 4 + (r.nextFloat() < Math.min(0.9f, 0.3f + 0.07f * (n - 1)) ? 1 : 0);
+            out[k] = new float[]{h, nb, 30f + 60f * r.nextFloat(), r.nextFloat(), 0f};
+        }
+        return out;
+    }
+
+    /** Diagnostics (never read by generation): avalanches placed, and planned ones dropped for want of a provable spot in their slice. */
+    public static final java.util.concurrent.atomic.AtomicInteger AVALANCHES_PLACED = new java.util.concurrent.atomic.AtomicInteger(), AVALANCHES_DROPPED = new java.util.concurrent.atomic.AtomicInteger();
+    /** Trigger decks an avalanche is tried from before it is dropped. */
+    private static final int AVL_TRIES = 4;
+    /** This slice's avalanches still to place ({height above the frame, blocks, cooldown, seed, failed tries}), lowest first; the deck being tried (-1 none). */
+    private final List<float[]> avlPending = new ArrayList<>();
+    private int avlCand = -1;
+    /** Avalanches placed in this slice ({hazard index, plan}), so an undo of their modules plans them again. */
+    private final List<Object[]> avlPlaced = new ArrayList<>();
+
+    private void planAvalanches(float startY, float topY) {
+        avlPending.clear(); avlPlaced.clear(); avlCand = -1;
+        if (!endless || P.avalanches() == 0 || T.castleSpacing <= 0f) return;
+        double sp = T.castleSpacing, startAbs = startY + base, topAbs = topY + base;
+        for (int n = Math.max(1, (int) Math.floor(startAbs / sp) + 1); n <= (int) Math.floor(topAbs / sp) + 1; n++)
+            for (float[] pl : avalanchePlan(c.seed, n, T.castleSpacing, P.avalanches()))
+                if (pl[0] > startAbs && pl[0] <= topAbs) avlPending.add(new float[]{(float) (pl[0] - base), pl[1], pl[2], pl[3], 0f});
+        avlPending.sort((x, y) -> Float.compare(x[0], y[0]));
+    }
+
+    /** A trigger deck: a plain fixed platform on the route with room to stand, nothing anchored on it, not in the castle's approach. */
+    private boolean avlTriggerDeck(int j) {
+        Element d = c.get(j);
+        if (d.type != Element.Type.STATIC || d.wet() || d.w < 2.5f || d.anchor >= 0 || (castleTarget > 0f && !castleDone && d.y > castleTarget - 30f)) return false;
+        for (Element h : c.hazards) if (h.anchor == j) return false;
+        return true;
+    }
+
+    /**
+     * After each accepted module: once the climb reaches the next planned height a trigger deck is chosen, and once four route decks lie beyond it the
+     * avalanche is attached there and kept only if a climber gets from the deck before it to the fourth deck ahead clean, with the blocks falling,
+     * bouncing and tumbling for real (Autopilot.chainClean, every hazard active). Otherwise the next suitable deck is tried, up to AVL_TRIES, then it
+     * is dropped. Nothing about the geometry changes; the generator's random numbers are not touched.
+     */
+    private void tryAvalanche() {
+        if (avlPending.isEmpty()) return;
+        int last = c.size() - 1;
+        if (avlCand < 0) { if (c.get(last).y >= avlPending.get(0)[0] && avlTriggerDeck(last)) avlCand = last; return; }
+        if (last < avlCand + 4) return;
+        float[] pl = avlPending.get(0);
+        Element d = c.get(avlCand), a = new Element(Element.Type.AVALANCHE, d.s, d.y, d.w);
+        a.anchor = avlCand; a.len = pl[1]; a.period = pl[2]; a.phase = pl[3]; a.zone = d.zone;
+        int hi = c.hazards.size(); c.hazards.add(a);
+        long t0 = GenTrace.now();
+        if (Autopilot.chainClean(c, T, avlCand - 1, avlCand + 4)) {
+            avlPending.remove(0); avlPlaced.add(new Object[]{hi, pl}); avlCand = -1;
+            AVALANCHES_PLACED.incrementAndGet(); GenTrace.tally("avalanche_placed_b" + Math.round(pl[1]));
+            GenTrace.tally("avalanche_proof_ms", (int) ((GenTrace.now() - t0) / 1_000_000L));
+            return;
+        }
+        c.hazards.remove(hi); GenTrace.tally("avalanche_unfair");
+        avlCand = -1;
+        if (++pl[4] >= AVL_TRIES) { avlPending.remove(0); AVALANCHES_DROPPED.incrementAndGet(); GenTrace.tally("avalanche_dropped"); }
+        else pl[0] = c.get(last).y;          // the next suitable deck from here on
+    }
+
     /** The key (and gate) colour of castle n is fixed by the run's seed and the castle number, so the key can be placed sections before its gate is built. */
     public static int castleColor(long seed, int n) { return new Random(seed * 0x2545F4914F6CDD1DL + n * 7919L + 5L).nextInt(Element.KEY_COUNT); }
 
@@ -821,6 +906,13 @@ public final class CourseGenerator {
     private void rollbackTo(int n0, int h0) {
         while (c.size() > n0) c.elements.remove(c.size() - 1);
         while (c.hazards.size() > h0) c.hazards.remove(c.hazards.size() - 1);
+        // an avalanche whose hazard went with the undone modules is planned again (it is placed again further on, proven again)
+        for (int i = avlPlaced.size() - 1; i >= 0; i--) {
+            Object[] p = avlPlaced.get(i);
+            if ((Integer) p[0] < c.hazards.size()) continue;
+            avlPlaced.remove(i); float[] pl = (float[]) p[1]; avlPending.add(0, pl); AVALANCHES_PLACED.decrementAndGet();
+        }
+        if (avlCand >= c.size()) avlCand = -1;
     }
 
     private final List<Element[]> builtRooms = new ArrayList<>();     // {key, gate}

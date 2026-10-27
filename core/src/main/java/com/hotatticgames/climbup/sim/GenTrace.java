@@ -45,6 +45,7 @@ public final class GenTrace {
     public final java.util.TreeMap<String, Integer> counts = new java.util.TreeMap<>();
     /** Counts one event on the installed trace; does nothing (and decides nothing) without one. */
     public static void tally(String name) { GenTrace tr = GEN.get(); if (tr != null) tr.counts.merge(name, 1, Integer::sum); }
+    public static void tally(String name, int n) { GenTrace tr = GEN.get(); if (tr != null) tr.counts.merge(name, n, Integer::sum); }
     /** Tallies the refusal reasons a generator diagnostic array gained since {@code before} under {@code prefix} (observe-only). */
     public static void tallyDiff(String prefix, int[] before, int[] now) { GenTrace tr = GEN.get(); if (tr == null) return; for (int i = 0; i < now.length; i++) if (now[i] > before[i]) tr.counts.merge(prefix + i, now[i] - before[i], Integer::sum); }
 

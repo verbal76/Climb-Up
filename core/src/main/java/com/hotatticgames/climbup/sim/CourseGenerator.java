@@ -89,11 +89,30 @@ public final class CourseGenerator {
             g.relaxed = attempt >= 12;       // the previous slice can occasionally leave no room that keeps clear of every older spiral layer: after twelve normal tries, build above it without the shortcut spacing to it (never without body clearance: ghostClash) rather than ever failing
             lastForDebug = g;
             GenTrace tr = GenTrace.GEN.get(); long a0 = tr != null ? GenTrace.now() : 0L; if (tr != null) { tr.attempt = attempt; tr.relaxed = g.relaxed; }      // observe-only (reports)
-            try { g.buildChunk(prev); g.checkIntegrity(); Course out = g.extract(); g.progFinish(out); if (tr != null) { tr.finalAttempt = attempt; tr.attemptNanos.add(new long[]{attempt, GenTrace.now() - a0, 1}); } return out; }
+            try { g.buildChunk(prev); g.checkIntegrity(); g.checkLaunchCorridors(); Course out = g.extract(); continuous(out, t); g.progFinish(out); if (tr != null) { tr.finalAttempt = attempt; tr.attemptNanos.add(new long[]{attempt, GenTrace.now() - a0, 1}); } return out; }
             catch (IllegalStateException e) { last = e; SLICE_FAILURES.incrementAndGet(); if (tr != null) { tr.sliceFailures.add("attempt " + attempt + ": " + e.getMessage()); tr.attemptNanos.add(new long[]{attempt, GenTrace.now() - a0, 0}); } }
         }
         throw last;
     }
+
+    /**
+     * Rules 14 (owner directive 2026-10-27, whole-slice solvability and arrival-state fairness): every link of a slice is proven on its own from a
+     * standing start at time 0, which does not show that the links can be climbed one after another - the landing, speed and hazard phases one move
+     * leaves are where the next starts (PUNISHER seed 5 slice 64 failed this way on rules 13, seeds 1 and 2 on rules 14). A slice is accepted only once
+     * the whole-course solver (Autopilot.run: the real simulation, every hazard live, moves planned from wherever the previous one ended, waiting,
+     * repositioning and recovering like a person) has climbed it from its start to its closing rest; otherwise the attempt fails like any dead end and
+     * the slice is built again with different deterministic choices. Bounded by the solver's own limits; no random numbers drawn.
+     */
+    private static void continuous(Course out, Tuning t) {
+        Autopilot.Report r = Autopilot.run(out, t, CONTINUITY_BUDGET);
+        if (r.completed) return;
+        CONTINUITY_REFUSED.incrementAndGet(); GenTrace.tally("continuity_refused");
+        throw new IllegalStateException("whole-slice traversal failed at link " + r.failedLink + ": " + r.failInfo);
+    }
+    /** Simulated seconds the whole-slice traversal may take (the validation gate's solver uses the same). */
+    static final float CONTINUITY_BUDGET = 4000f;
+    /** Diagnostics: slice attempts refused because the continuous traversal failed. */
+    public static final java.util.concurrent.atomic.AtomicInteger CONTINUITY_REFUSED = new java.util.concurrent.atomic.AtomicInteger();
 
     /** A slice together with its frame: absolute height = yBase + local y, absolute arc = sBase + local s (yBase is a multiple of the castle spacing, sBase a whole number of laps), so every number the simulation touches stays small at any altitude. */
     public static final class Framed {
@@ -1818,26 +1837,74 @@ public final class CourseGenerator {
     }
 
     /** A hazard must not touch standing room on its own spiral layer (except the platform a trap sits in) and must keep clear of other layers. */
+    static boolean launchPad(Element e) { return e.type == Element.Type.PAD || e.type == Element.Type.SPRING; }
+    /** The deck a pad or spring of this slice launches to (its next route element), or null for one off the route (a fork's or dead end's pad: the next element of its structure). */
+    private Element padLanding(int i) {
+        int nx = i < c.routeSize() ? c.nextRoute(i) : i + 1;
+        for (int[] fk : c.forks) if (i >= fk[1] && i < fk[1] + fk[2]) nx = i + 1 < fk[1] + fk[2] ? i + 1 : fk[3];          // a fork branch's last pad lands on the rejoin
+        if (i >= c.routeSize() && nx < c.size() && nx > i && c.get(nx).anchor != c.get(i).anchor && (nx >= c.routeSize())) return null;          // (the next element belongs to another structure)
+        return nx >= 0 && nx != i && nx < c.size() ? c.get(nx) : null;          // (a rejoin lies earlier in the list than the branch)
+    }
+    /**
+     * The launch corridor of pad or spring {@code e} (landing on {@code land}, or null) holds hazard {@code h}. 2026-10-26 (campaign 40270745200, NORMAL
+     * seed 1 at 79.5 m): a launch climbs ~8.5 m (padBounceHeld^2 / 2g), up into the layer above, so no hazard or creature goes in the column above it.
+     * Rules 14 (Campaign A, NORMAL seed 3 slice 53 on cbe6415): the launch drifts forward to the deck it lands on, so the corridor extends over the flight
+     * to that deck; a spiked block one revolution up, 3.65 m ahead of a pad and 9 m above it, caught the launch (the column reached only 2.7 m ahead).
+     * Keys, gates and clubs are not obstacles. Shared by the placement check and the whole-slice audit, so the order things are placed in does not matter.
+     */
+    static boolean corridorBlocked(Course c, Tuning t, Element e, Element land, Element h) {
+        if (h.type == Element.Type.KEY || h.type == Element.Type.GATE || h.type == Element.Type.CLUB) return false;
+        float apex = t.padBounceHeld * t.padBounceHeld / (2f * t.gravity), hs = hzS(h), hh = hzHalf(h), lo = hzLo(h), hi = hzHi(h);
+        float side = e.w / 2f + hh + (e.type == Element.Type.SPRING ? 2.5f : 1.2f), ds = c.dsWrap(hs, e.s);
+        if (Math.abs(ds) < side && lo < e.y + apex + 1.8f && hi > e.y + 0.3f) return true;
+        if (land == null) return false;
+        float to = c.dsWrap(land.s, e.s), reach = Math.abs(to) + land.halfW() + hh + 0.5f;
+        return ds * to > 0f && Math.abs(ds) < reach && lo < Math.max(e.y, land.y) + apex + 1.8f && hi > Math.min(e.y, land.y) + 0.3f;
+    }
+    /**
+     * Rules 14 (owner clarification 2026-10-27: corridor protection wherever the traversal needs it, in every mode): the placement check only sees pads
+     * that exist when a hazard is placed, but forks' and dead ends' pads are built after the route's hazards above them, and the previous slice's pads
+     * were never consulted. Every pad and spring of this slice and of the previous one is audited against every hazard of both before the slice is
+     * accepted; one blocked corridor fails the attempt (the slice is built again), like the geometry integrity check.
+     */
+    private void checkLaunchCorridors() {
+        for (int i = 0; i < c.size(); i++) {
+            Element e = c.get(i);
+            if (!launchPad(e)) continue;
+            Element land = padLanding(i);
+            for (Element h : c.hazards) if (h.anchor != i && otherRevolution(c, e, h) && corridorBlocked(c, T, e, land, h)) corridorFail(e, h);
+            for (Element h : ghostHaz) if (otherRevolution(c, e, h) && corridorBlocked(c, T, e, land, h)) corridorFail(e, h);
+        }
+        for (int i = 0; i < ghostElems.size(); i++) {
+            Element e = ghostElems.get(i);
+            if (!launchPad(e)) continue;
+            Element land = i + 1 < ghostElems.size() ? ghostElems.get(i + 1) : null;
+            for (Element h : c.hazards) if (otherRevolution(c, e, h) && corridorBlocked(c, T, e, land, h)) corridorFail(e, h);
+        }
+    }
+    /**
+     * The audit's scope: hazards of another spiral revolution (the layer rule's convention, a raw arc difference of half a lap or more). Those are the
+     * ones a launch meets without any proof seeing them - the planner sizes a move up among nearby elements, so the hazards on the landing deck itself
+     * (a crab, a spike drop, the next challenge) are already in the move's proof and stay legitimate (a first audit over every hazard refused NGH seed 2
+     * slice 1 in all 24 attempts on exactly those).
+     */
+    private static boolean otherRevolution(Course c, Element pad, Element h) { return Math.abs(hzS(h) - pad.s) >= c.circumference * 0.5f; }
+    private static void corridorFail(Element e, Element h) {
+        CORRIDOR_REFUSED.incrementAndGet(); GenTrace.tally("corridor_refused");
+        throw new IllegalStateException(String.format(java.util.Locale.ROOT, "launch corridor of the %s at s=%.2f y=%.2f holds a %s at s=%.2f y=%.2f", e.type, e.s, e.y, h.type, h.s, h.y));
+    }
+    /** Diagnostics: slice attempts refused by the launch-corridor audit. */
+    public static final java.util.concurrent.atomic.AtomicInteger CORRIDOR_REFUSED = new java.util.concurrent.atomic.AtomicInteger();
     private boolean hazardOk(Element h, int ownerIdx) {
         float hs = hzS(h), hh = hzHalf(h), lo = hzLo(h), hi = hzHi(h);
         if (h.type != Element.Type.KEY && h.type != Element.Type.GATE && h.type != Element.Type.CLUB) {
             // 2026-10-26 (campaign 40270745200, NORMAL seed 1 at 79.5 m): a pad or spring launch climbs ~8.5 m (padBounceHeld^2 / 2g), up into the layer above,
             // and a later module put a spike block right in that column: the pad link had been proven before the block existed and is never re-proven.
             // No hazard or creature goes in the launch column above a pad or spring.
-            float apex = T.padBounceHeld * T.padBounceHeld / (2f * T.gravity);
             for (int i = 0; i < c.size(); i++) {
                 Element e = c.get(i);
-                if (i == ownerIdx || (e.type != Element.Type.PAD && e.type != Element.Type.SPRING)) continue;
-                float side = e.w / 2f + hh + (e.type == Element.Type.SPRING ? 2.5f : 1.2f), ds = c.dsWrap(hs, e.s);
-                if (Math.abs(ds) < side && lo < e.y + apex + 1.8f && hi > e.y + 0.3f) return false;
-                // rules 14 (Campaign A, NORMAL seed 3 slice 53 on cbe6415): the launch drifts forward to the deck it lands on, so the column extends
-                // over the flight to that deck; a spiked block one revolution up, 3.65 m ahead of a pad and 9 m above it, caught the launch (the
-                // straight-up column above reached only 2.7 m ahead)
-                int nx = i < c.routeSize() ? c.nextRoute(i) : -1;
-                if (nx > i && nx < c.size()) {
-                    Element land = c.get(nx); float to = c.dsWrap(land.s, e.s), reach = Math.abs(to) + land.halfW() + hh + 0.5f;
-                    if (ds * to > 0f && Math.abs(ds) < reach && lo < Math.max(e.y, land.y) + apex + 1.8f && hi > Math.min(e.y, land.y) + 0.3f) return false;
-                }
+                if (i == ownerIdx || !launchPad(e)) continue;
+                if (corridorBlocked(c, T, e, padLanding(i), h)) return false;
             }
         }
         for (int pass = 0; pass < 2; pass++) {

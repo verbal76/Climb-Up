@@ -619,9 +619,55 @@ public final class Autopilot {
         for (int i = 0; i < (int) (20f / Sim.DT); i++) {
             in.clear(); p.act(s, in); s.step(in);
             if (s.setbacks() != sb) return false;
-            if (succeeded(s, a)) return true;
+            if (succeeded(s, a)) {
+                if (s.mode == Sim.Mode.AIR && launcher(s.course, s.lastPad)) return launchClear(s, s.lastPad, sb);
+                int on = s.onElem;          // caught its ledge (seed 1 slice 45: crumbling mover 48 was reached by a ledge catch): pull up first, as the run does
+                for (int q = 0; q < 120 && (s.mode == Sim.Mode.LEDGE || s.mode == Sim.Mode.PULLUP) && on >= 0 && s.course.get(on).crumbles(); q++) { in.clear(); in.moveY = 1f; s.step(in); if (s.setbacks() != sb) return false; }
+                if (s.mode == Sim.Mode.GROUND && s.onElem >= 0 && s.course.get(s.onElem).crumbles() && onRoute(s.course, s.onElem)) return crumbleClear(s, s.onElem, sb);
+                return true;
+            }
         }
         return true;      // undecided within the time: let the real run find out, as before
+    }
+    /** A pad or spring: landing on it launches you at once, so the move onto it is only clear if the launch it forces is too. */
+    static boolean launcher(Course c, int b) { if (b < 0 || b >= c.size()) return false; Element.Type ty = c.get(b).type; return ty == Element.Type.PAD || ty == Element.Type.SPRING; }
+    /**
+     * Rules 14 (owner directive: whole-slice solvability, PUNISHER seed 2 slice 19 on cbe6415): the move onto a launcher is only half the move - the
+     * launch follows without a choice, and an aimed cannon's ball met it right after take-off although waiting on the deck before gave a clean pass
+     * (19 of 31 arrival times). The check follows the launch the way the run plays it (no input at first, a plan for the next link from the air every
+     * 6 steps, then that plan) until the next link is reached, and the move is clear only without a setback on the way. Bounded like the run's own loop.
+     */
+    static boolean launchClear(Sim s, int b, int sb) {
+        InputState in = new InputState(); Result r = null;
+        for (int q = 0; q < 150 && s.mode == Sim.Mode.AIR && (r == null || !r.ok); q++) {
+            in.clear(); s.step(in);
+            if (s.setbacks() != sb) return false;
+            if (succeeded(s, b)) return true;
+            if (q % 6 == 5 && s.mode == Sim.Mode.AIR) r = plan(s, b, false, false);
+        }
+        if (r == null || !r.ok) return true;          // landed without a plan, or none found: the run decides from there, as before
+        return playClear(s, b, r, sb);
+    }
+    /**
+     * The same for a crumbling deck (or crumbling mover): you cannot wait on it, so the move onto it is clear only if a move off it works from the
+     * landing it makes, sized up there and up to 0.3 s later (PUNISHER seed 1 slice 45 on cbe6415: the solver jumped onto crumbling mover 48 the moment
+     * it reached deck 47, found no move to deck 49 in that phase, and fell when the mover crumbled).
+     */
+    static boolean crumbleClear(Sim s, int b, int sb) {
+        InputState in = new InputState(); Result r = null;
+        for (int q = 0; q <= 18 && s.mode == Sim.Mode.GROUND && s.onElem == b; q++) {
+            if (q % 6 == 0) { r = plan(s, b, false, true); if (!r.ok) r = plan(s, b, false, false); if (r.ok) break; }
+            in.clear(); s.step(in);
+            if (s.setbacks() != sb) return false;
+        }
+        if (r == null || !r.ok) return false;          // nothing leaves it before it goes: the move onto it is not clear now
+        return playClear(s, b, r, sb);
+    }
+    private static boolean playClear(Sim s, int b, Result r, int sb) {
+        InputState in = new InputState();
+        Policy p = make(r.factory);
+        for (int i = 0; i < (int) (10f / Sim.DT) && !succeeded(s, b); i++) { in.clear(); p.act(s, in); s.step(in); if (s.setbacks() != sb) return false; }
+        return true;
     }
 
     static boolean crabDeck(Course c, int a) { for (Element h : c.hazards) if (h.anchor == a && h.type == Element.Type.CRAB) return true; return false; }
@@ -729,7 +775,33 @@ public final class Autopilot {
             real.step(in);
             if (real.falls != f0) return false;
         }
-        return real.mode == Sim.Mode.GROUND && onRoute(c, real.onElem);
+        return real.mode == Sim.Mode.GROUND && (onRoute(c, real.onElem) || branchOf(c, real.onElem) != null);
+    }
+    /** The fork whose branch holds element {@code i} ({start, first branch element, count, rejoin}), or null. */
+    static int[] branchOf(Course c, int i) { if (i < 0) return null; for (int[] fk : c.forks) if (i >= fk[1] && i < fk[1] + fk[2]) return fk; return null; }
+    /** Carries on from a branch element along fork {@code fk}'s branch to its rejoin (planned pair moves, as the key detours make); true if back on the route clean. */
+    static boolean followBranch(Sim real, int[] fk, InputState in) {
+        Course c = real.course; int f0 = real.setbacks();
+        for (int g = 0; g < fk[2] + 2; g++) {
+            int at = real.mode == Sim.Mode.AIR ? real.lastPad : real.onElem;          // (a branch pad has just launched us: the next move is planned from it)
+            if (real.setbacks() != f0) return false;
+            if (branchOf(c, at) != fk) return onRoute(c, at) && real.mode != Sim.Mode.AIR;
+            if (real.mode == Sim.Mode.GROUND) { settle(real, at, in); if (real.onElem != at) continue; }
+            int next = at + 1 < fk[1] + fk[2] ? at + 1 : fk[3];
+            if (real.mode == Sim.Mode.AIR && launcher(c, at)) {          // just launched by a branch pad: let it carry us, then steer for the next one (as the run does)
+                Result r = null;
+                for (int q = 0; q < 150 && real.mode == Sim.Mode.AIR; q++) {
+                    if (q % 6 == 0) { r = planPair(real, at, next, false); if (r.ok) break; }          // at once first, as the run does: the launch is where the steering starts
+                    in.clear(); real.step(in);
+                    if (real.setbacks() != f0) return false;
+                }
+                if (r != null && r.ok) { Policy p = make(r.factory); for (int i = 0; i < (int) (10f / Sim.DT) && !succeededTo(real, next); i++) { in.clear(); p.act(real, in); real.step(in); if (real.setbacks() != f0) return false; } }
+                for (int q = 0; q < 120 && (real.mode == Sim.Mode.LEDGE || real.mode == Sim.Mode.PULLUP); q++) { in.clear(); in.moveY = 1f; real.step(in); }
+                continue;
+            }
+            if (!execLink(real, at, next, in)) return false;
+        }
+        return onRoute(c, real.onElem) && real.setbacks() == f0;
     }
     /** Stops within a few cm of {@code toS} on the platform underfoot the way a person does with a direction-only stick: back off if too close to stop cleanly, run in, let go at the stopping distance. */
     static void standAt(Sim real, float toS, InputState in) {
@@ -786,6 +858,14 @@ public final class Autopilot {
             if (a == lastA) sameA++; else { lastA = a; sameA = 0; GenTrace.Solve st = GenTrace.SOLVE.get(); if (st != null) st.arrive(a, real.time, real.setbacks()); }      // (observe-only trace for reports)
             if (DBG) System.out.printf("loop a=%d same=%d mode=%s on=%d s=%.2f y=%.2f vx=%.2f vy=%.2f t=%.2f%n", a, sameA, real.mode, real.onElem, real.s, real.y, real.vx, real.vy, real.time);
             if (sameA > 30) { rep.failedLink = a; rep.simTime = real.time; rep.failInfo = "stuck at one link: knocked back again and again"; return rep; }
+            int[] br = (real.mode == Sim.Mode.GROUND || real.mode == Sim.Mode.ROPE || real.mode == Sim.Mode.CABLE) ? branchOf(c, real.onElem) : null;
+            if (br != null) {
+                // like a person carried onto a fork's branch (a bee's shove, a pad's launch onto a later fork's branch): carry on along the branch to where it
+                // rejoins the route (rules 14, whole-slice solvability: PUNISHER seed 2 slice 47 on cbe6415, seed 5 slice 64 on rules 13 b06dc71 - the
+                // solver resumed only from route elements and gave up on a forward branch)
+                if (!followBranch(real, br, in)) { rep.failedLink = a; rep.simTime = real.time; rep.failInfo = String.format("lost on a fork branch %d-%d: mode=%s on=%d s=%.2f y=%.2f", br[1], br[1] + br[2] - 1, real.mode, real.onElem, real.s, real.y); return rep; }
+                a = resync(real, real.onElem); continue;
+            }
             if (a < 0 || a >= c.routeSize()) { rep.failedLink = a; rep.simTime = real.time; rep.failInfo = String.format("lost the route: link index %d outside the route (0..%d) mode=%s on=%d slab=%d s=%.2f y=%.2f", a, c.routeSize() - 1, real.mode, real.onElem, real.onSlab, real.s, real.y); return rep; }      // never index with it (2026-10-26: seven IndexOutOfBoundsException -1)
             if (real.mode == Sim.Mode.GROUND && real.onElem < 0 && real.onSlab >= 0) {
                 // like a person: standing on top of a spike slab (a surface: Sim lands on it, onElem -1), so step off it onto its own platform and land; the
@@ -946,7 +1026,7 @@ public final class Autopilot {
                 // like a person: shoved back down onto an earlier route platform mid-move (a crab's shove is no hit and no fall), so stop playing the
                 // move from the wrong place and size it up again from there (2026-10-26 campaign: NORMAL seed 2 slice 50 stood 20 s on platform 8 while
                 // executing link 18). Half a second on that platform: a move never routes back through an earlier platform on purpose
-                back = real.mode == Sim.Mode.GROUND && real.onElem >= 0 && real.onElem < a && onRoute(c, real.onElem) ? back + 1 : 0;
+                back = real.mode == Sim.Mode.GROUND && real.onElem >= 0 && ((real.onElem < a && onRoute(c, real.onElem)) || branchOf(c, real.onElem) != null) ? back + 1 : 0;
                 if (back >= 30) break;
                 if (real.setbacks() != fallsBefore) { rep.failedLink = a; rep.simTime = real.time; rep.failInfo = String.format("setback while executing the move: hits=%d falls=%d mode=%s s=%.2f y=%.2f", real.hits, real.falls, real.mode, real.s, real.y) + (real.hitBy != null ? " lastHazard=" + real.hitBy.type + String.format(" s=%.2f y=%.2f anchor=%d", real.hitBy.s, real.hitBy.y, real.hitBy.anchor) : ""); return rep; }
             }

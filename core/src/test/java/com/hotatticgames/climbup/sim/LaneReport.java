@@ -164,14 +164,19 @@ public final class LaneReport {
     public final List<String[]> integrityViolations = new ArrayList<>();
     void integrity(int k, CourseGenerator.Framed pf, CourseGenerator.Framed f) {
         Course frame = new Course(f.c.seed, f.c.circumference);
-        for (int i = 1; i < f.c.size(); i++) frame.add(abs(f.c.get(i), f));          // (element 0 is the previous slice's closing rest, checked with it)
-        for (Element h : f.c.hazards) frame.hazards.add(abs(h, f));
+        // both slices in one frame anchored at this slice's base, offsets in double (rules 14: an absolute float frame at ~25 km of arc rounds to
+        // ~2 mm and reported NGH seed 1 slice 49 decks 6.0013 m apart, 1.3 mm clear of the 6.0 m limit, as a clash at 5.9998 m)
+        double oS = f.sBase, oY = f.yBase;
+        for (int i = 1; i < f.c.size(); i++) frame.add(abs(f.c.get(i), f, oS, oY));          // (element 0 is the previous slice's closing rest, checked with it)
+        for (Element h : f.c.hazards) frame.hazards.add(abs(h, f, oS, oY));
         List<Element> pe = new ArrayList<>(), ph = new ArrayList<>();
-        if (pf != null) { for (int i = 0; i < pf.c.size(); i++) pe.add(abs(pf.c.get(i), pf)); for (Element h : pf.c.hazards) ph.add(abs(h, pf)); }
+        if (pf != null) { for (int i = 0; i < pf.c.size(); i++) pe.add(abs(pf.c.get(i), pf, oS, oY)); for (Element h : pf.c.hazards) ph.add(abs(h, pf, oS, oY)); }
         for (String v : GeometryIntegrity.check(frame, 0, pe, ph, 20)) integrityViolations.add(new String[]{"" + k, q(v)});
     }
-    static Element abs(Element e, CourseGenerator.Framed f) {
-        Element a = new Element(e.type, (float) (f.sBase + e.s), (float) (f.yBase + e.y), e.w);
+    static Element abs(Element e, CourseGenerator.Framed f) { return abs(e, f, 0.0, 0.0); }
+    /** {@code e} of slice {@code f} placed in a common frame whose origin is ({@code oS}, {@code oY}) in absolute course coordinates (offsets in double, one rounding). */
+    static Element abs(Element e, CourseGenerator.Framed f, double oS, double oY) {
+        Element a = new Element(e.type, (float) ((f.sBase - oS) + e.s), (float) ((f.yBase - oY) + e.y), e.w);
         a.len = e.len; a.amp = e.amp; a.period = e.period; a.phase = e.phase; a.skin = e.skin; a.color = e.color; a.anchor = -1; a.dir = e.dir; a.zone = e.zone;
         return a;
     }

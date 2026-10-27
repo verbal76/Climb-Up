@@ -16,6 +16,8 @@ public final class CourseIO {
         for (int i = 0; i < c.hazards.size(); i++) { row(sb, c.hazards.get(i)); if (i < c.hazards.size() - 1) sb.append(",\n"); }
         sb.append("\n],\"keyRooms\":[");
         for (int i = 0; i < c.keyRooms.size(); i++) { int[] k = c.keyRooms.get(i); sb.append(i > 0 ? "," : "").append('[').append(k[0]).append(',').append(k[1]).append(',').append(k[2]).append(',').append(k[3]).append(',').append(k[4]).append(',').append(k[5]).append(']'); }
+        sb.append("],\"forks\":[");          // (rules 14: forks were not written, so a fixture lost its branches and the solver's fork-branch recovery)
+        for (int i = 0; i < c.forks.size(); i++) { int[] k = c.forks.get(i); sb.append(i > 0 ? "," : "").append('[').append(k[0]).append(',').append(k[1]).append(',').append(k[2]).append(',').append(k[3]).append(']'); }
         return sb.append("]}").toString();
     }
 
@@ -43,6 +45,8 @@ public final class CourseIO {
         if (hz != null) for (JsonValue a = hz.child; a != null; a = a.next) c.hazards.add(read(a));
         JsonValue kr = root.get("keyRooms");
         if (kr != null) for (JsonValue a = kr.child; a != null; a = a.next) c.keyRooms.add(new int[]{a.getInt(0), a.getInt(1), a.getInt(2), a.getInt(3), a.getInt(4), a.getInt(5)});
+        JsonValue fk = root.get("forks");
+        if (fk != null) for (JsonValue a = fk.child; a != null; a = a.next) c.forks.add(new int[]{a.getInt(0), a.getInt(1), a.getInt(2), a.getInt(3)});
         c.routeCount = root.getInt("routeCount", -1);
         c.indexDecoys();
         return c;

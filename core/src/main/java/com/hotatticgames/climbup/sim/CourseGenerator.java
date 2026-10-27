@@ -1900,6 +1900,11 @@ public final class CourseGenerator {
                 if (land != null && land.onElem == i) sim = land;
             }
             Autopilot.Result res = Autopilot.plan(sim, i, true);
+            if (beltSawNow && endless && P.progression() && c.get(i).tiltBelt() && res.ok) {
+                // rules 13 (NORMAL seed 2, 4,415 m): the belt's exit must also hold from a landing a little either side of the proven one - a climber
+                // who landed 2 cm off it a moment later was run off the back (the belt keeps moving, so the exact landing is never repeated)
+                for (float dx : new float[]{-0.3f, 0.3f}) { Sim p = sim.copy(); p.s = c.wrap(p.s + dx); if (!Autopilot.plan(p, i, false).ok) { res = new Autopilot.Result(); GenTrace.tally("belt_exit_fragile"); break; } }
+            }
             prevStart = sim; prevRes = res;
             boolean touched = false;
             for (Element h : hz) if (h.anchor == i || h.anchor + 1 == i || h.anchor == i + 1) touched = true;
@@ -2154,7 +2159,15 @@ public final class CourseGenerator {
             // rules 13 (NORMAL seed 2, 4,415 m): a balance conveyor whose exit holds only from its exact proven landing (margin 0.083: 8% of trials)
             // fails for a climber who lands 2 cm away a moment later - the belt runs them off the back. Its links need a real margin (PROVISIONAL 0.25).
             if (beltSawNow && endless && P.progression()) margin = Math.max(margin, BELT_MARGIN);
+            int cn0 = c.size(), ch0 = c.hazards.size();
             boolean ok = commit(es, hz, margin);
+            // rules 13 (PUNISHER seeds 2 and 3, castles 6-7): a spike-drop row with enemies on its safe platforms was proven link by link, but a climber
+            // crossing it in one go was shoved back under the drops again and again (111 hits). Such a row is kept only if it is crossed clean with
+            // everything active, as the Enforcer encounters are (Autopilot.chainClean); otherwise another arrangement is tried.
+            if (ok && k == Kind.DROPS && endless && P.progression()) {
+                boolean enemies = false; for (Element h : hz) if (Progression.enemy(h.type)) enemies = true;
+                if (enemies && !Autopilot.chainClean(c, T, Math.max(0, cn0 - 1), c.size() - 1)) { rollbackTo(cn0, ch0); ok = false; GenTrace.tally("drops_chain_refused"); }
+            }
             if (k == Kind.WET) { wetTried++; if (ok) wetOk++; }
             if (ok) return true;
         }

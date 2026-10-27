@@ -212,7 +212,7 @@ public final class CourseGenerator {
         if (prev == null) {
             Element start = plat(Element.Type.STATIC, 4f, 0f, 7f, 0);
             start.checkpoint = true;
-            c.add(start); ctx = 1;
+            c.add(start); ctx = 1; varHist.clear();
         } else {
             // context: the tail of the previous slice (so the planner sees the real approach) plus everything else as geometry-only ghosts
             int rs = prev.routeSize(), m = Math.min(8, rs), from = rs - m;
@@ -225,6 +225,7 @@ public final class CourseGenerator {
             for (Element h : prev.hazards) if (h.anchor < from - 2) ghostHaz.add(h);
             ctx = m;
             rests = prev.get(rs - 1).zone * 3 + rs;   // keeps the checkpoint cadence varied between slices
+            varSeed(prev);
         }
         float startY = c.get(ctx - 1).y;
         castleTarget = 0f; castleDone = false; exactCastle = false; keyN = 0; keyY = 0f; gemBest = -1; beltSawY = 0f; beltSawDone = false; beltSawNow = false;
@@ -443,7 +444,7 @@ public final class CourseGenerator {
                     && !(castlePending && last.y > castleTarget - 30f)) {          // PUNISHER: this slice's Enforcer encounter, as soon as the climb reaches its height
                 float[] pl = enfPending.get(0);
                 int n0 = c.size(), h0 = c.hazards.size(); long s0 = GenTrace.now();
-                if (enforcerModule((int) pl[1], (int) pl[2], th)) { enfPending.remove(0); undo.clear(); traceStructure("ENFORCER", n0, h0, last.y, s0); enfQuiet = 2; prev2 = prev; prev = null; sinceRest++; ENFORCERS_PLACED.incrementAndGet(); GenTrace.tally("enforcer_placed_t" + (int) pl[1]); continue; }
+                if (enforcerModule((int) pl[1], (int) pl[2], th)) { enfPending.remove(0); varRecord(n0, h0); undo.clear(); traceStructure("ENFORCER", n0, h0, last.y, s0); enfQuiet = 2; prev2 = prev; prev = null; sinceRest++; ENFORCERS_PLACED.incrementAndGet(); GenTrace.tally("enforcer_placed_t" + (int) pl[1]); continue; }
                 // no fair encounter from this deck: tried again from the next suitable decks (a few modules on), then dropped
                 if (++pl[3] >= ENF_TRIES) { enfPending.remove(0); ENFORCERS_DROPPED.incrementAndGet(); GenTrace.tally("enforcer_dropped"); }
                 else pl[0] = last.y + 6f;
@@ -499,7 +500,7 @@ public final class CourseGenerator {
                 }
                 // then the continuation the climb needs, easiest proofs first: vertical moves with timing before stairs, and ropes and plain hops
                 // last (rope first when the spiral lags its pitch: a hop flattens it), so a section always goes on
-                if (!ok) for (Kind fb : continuation(zone, lagging, ordinaryUsed)) { if (fb != k && tryModuleBelow(fb, 0.15f, th)) { k = fb; ok = true; if (ordinary(fb)) ordinaryUsed[fb.ordinal()] = ++ordinaryClock; break; } }
+                if (!ok) for (Kind fb : P.adaptiveVariety() ? varOrder(continuation(zone, lagging, ordinaryUsed), last.y) : continuation(zone, lagging, ordinaryUsed)) { if (fb != k && tryModuleBelow(fb, 0.15f, th)) { k = fb; ok = true; if (ordinary(fb)) ordinaryUsed[fb.ordinal()] = ++ordinaryClock; break; } }
                 traceRole = "PICK"; tracePicked = null;
                 if (!ok && !undo.isEmpty() && undoneHere < 2 && backtracks < 6) {
                     int[] u = undo.pop(); rollbackTo(u[0], u[1]); backtracks++; undoneHere++; BACKTRACKS.incrementAndGet(); prev = null; prev2 = null; GenTrace.tally("backtrack");
@@ -508,6 +509,7 @@ public final class CourseGenerator {
                 if (!ok) throw new IllegalStateException("cannot extend course (layer=" + failLayer + " haz=" + failHaz + " plan=" + failPlan + " window=" + failWindow + ") at " + c.size() + " last=" + last.type + " s=" + last.s + " y=" + last.y + " below=" + below(last));
             }
             undo.push(new int[]{u0, uh0}); undoneHere = 0;
+            varRecord(u0, uh0);
             if (enfQuiet > 0) enfQuiet--;
             tryAvalanche();
             prev2 = prev; prev = k; sinceRest++;
@@ -768,7 +770,7 @@ public final class CourseGenerator {
         int hi = c.hazards.size(); c.hazards.add(a);
         long t0 = GenTrace.now();
         if (Autopilot.chainClean(c, T, avlCand - 1, avlCand + 4)) {
-            avlPending.remove(0); avlPlaced.add(new Object[]{hi, pl}); avlCand = -1;
+            avlPending.remove(0); avlPlaced.add(new Object[]{hi, pl}); varAdd(hazFam(a), a.y, c.size()); avlCand = -1;
             AVALANCHES_PLACED.incrementAndGet(); GenTrace.tally("avalanche_placed_b" + Math.round(pl[1]));
             GenTrace.tally("avalanche_proof_ms", (int) ((GenTrace.now() - t0) / 1_000_000L));
             return;
@@ -777,6 +779,98 @@ public final class CourseGenerator {
         avlCand = -1;
         if (++pl[4] >= AVL_TRIES) { avlPending.remove(0); AVALANCHES_DROPPED.incrementAndGet(); GenTrace.tally("avalanche_dropped"); }
         else pl[0] = c.get(last).y;          // the next suitable deck from here on
+    }
+
+    // ------------------------------------------------------------------ history-aware variety (PUNISHER; owner 2026-10-27)
+
+    /**
+     * The generator remembers what it has put in the course (accepted placements only: an undone module is forgotten with it) and makes a mechanic
+     * that appeared recently and often less likely, fading with the height climbed since (VarietyMemory: nothing is forbidden, nothing is a quota). The
+     * weight a penalised module loses goes to the other modules of its own class (ordinary traversal, terrain challenges, hazards), so a repeated
+     * challenge gives way to another challenge, not to a plain platform. Families are the variety report's (VarietyReport). The memory carries across
+     * slices: each slice starts with the last VarietyMemory.SPAN m of the one before. Deterministic: heights only, StrictMath.
+     */
+    static final int F_ROPE = 0, F_CABLE = 1, F_TRAMP = 2, F_SPRING = 3, F_SWING = 4, F_MOVING = 5, F_CRUMBLE = 6, F_SEESAW = 7, F_RAMP = 8,
+        F_SAW = 9, F_PENDULUM = 10, F_PROJECTILE = 11, F_SPIKE_MAT = 12, F_SPIKED_BLOCK = 13, F_CRUSHER = 14, F_AVALANCHE = 15, F_CRAB = 16, F_BEE = 17, F_SKULL = 18, F_BLOB = 19, F_ENFORCER = 20;
+    /** buildHaz's roll 0-4 (vertical saw, horizontal saw, spiked block, bee, cannon) and buildMid's roll 0-4 (spike mat, floor saw, spiked block, crusher, crabs). */
+    static final int[] HAZ_ROLL_FAM = {F_SAW, F_SAW, F_SPIKED_BLOCK, F_BEE, F_PROJECTILE}, MID_ROLL_FAM = {F_SPIKE_MAT, F_SAW, F_SPIKED_BLOCK, F_CRUSHER, F_CRAB};
+    /** The memory (VarietyMemory): accepted placements only; an entry's owner is the element count when its module was placed. */
+    final VarietyMemory varHist = new VarietyMemory();
+
+    static int famOf(Element e) {
+        switch (e.type) {
+            case ROPE: return F_ROPE; case CABLE: return F_CABLE; case PAD: return F_TRAMP; case SPRING: return F_SPRING; case SWING: return F_SWING;
+            case MOVE_H: case MOVE_V: case MOVE_Z: return F_MOVING; case CRUMBLE: return F_CRUMBLE; case SEESAW: return F_SEESAW; case RAMP: return F_RAMP;
+            default: return e.holed() ? F_CRUMBLE : -1;          // plain footing: every module lands on it, it is not a mechanic of its own
+        }
+    }
+    static int hazFam(Element h) {
+        switch (h.type) {
+            case SAW_H: case SAW_V: return F_SAW; case PENDULUM: return F_PENDULUM; case CANNON: case AIMED: case MORTAR: return F_PROJECTILE;
+            case SPIKE_TRAP: return F_SPIKE_MAT; case SPIKE_BLOCK: return F_SPIKED_BLOCK; case SPIKE_DROP: return F_CRUSHER; case AVALANCHE: return F_AVALANCHE;
+            case CRAB: return F_CRAB; case BEE: return F_BEE; case SKULL: return F_SKULL; case BLOB: return F_BLOB; case ENFORCER: return F_ENFORCER;
+            default: return -1;
+        }
+    }
+    /** The family a module kind places (its traversal mechanic); -1 when it has none of its own or its hazards are chosen inside it. */
+    static int kindFam(Kind k) {
+        switch (k) {
+            case ROPE: return F_ROPE; case CABLE: return F_CABLE; case PAD: return F_TRAMP; case SPRING: return F_SPRING; case SWING: return F_SWING;
+            case MOVER_H: case MOVER_V: case MOVER_Z: case ELEV_FALL: case SLIDE_FALL: return F_MOVING; case CRUMBLE: return F_CRUMBLE;
+            case SEESAW: case BRIDGE: return F_SEESAW; case RAMP: return F_RAMP; case MORTAR: return F_PROJECTILE; case DROPS: return F_CRUSHER;
+            default: return -1;
+        }
+    }
+    /** 0 ordinary traversal, 1 terrain challenge, 2 hazard module, -1 outside the redistribution. */
+    static int kindClass(Kind k) {
+        switch (k) {
+            case HOP: case STAIRS: case ROPE: return 0;
+            case CRUMBLE: case MOVER_H: case MOVER_V: case PAD: case CABLE: case SWING: case GRAB: case SPRING: case SEESAW: case BRIDGE: case RAMP: case MOVER_Z: case ELEV_FALL: case SLIDE_FALL: return 1;
+            case HAZ: case TRAP: case MORTAR: return 2;
+            default: return -1;
+        }
+    }
+    private void varAdd(int fam, float y, int idx) { if (P.adaptiveVariety()) varHist.add(fam, y, idx); }
+    /** The previous slice's last VAR_SPAN m (already in this slice's frame), so the memory carries over the slice boundary. */
+    private void varSeed(Course prev) {
+        varHist.clear();
+        if (!P.adaptiveVariety()) return;
+        float top = prev.get(prev.routeSize() - 1).y;
+        for (int i = 0; i < prev.routeSize(); i++) { Element e = prev.get(i); if (e.y >= top - VarietyMemory.SPAN) varAdd(famOf(e), e.y, -1); }
+        for (Element h : prev.hazards) if (h.y >= top - VarietyMemory.SPAN) varAdd(hazFam(h), h.y, -1);
+    }
+    /** An accepted module (elements from n0, hazards from h0) enters the memory; entries more than VAR_SPAN m below its top leave it. */
+    private void varRecord(int n0, int h0) {
+        if (!P.adaptiveVariety()) return;
+        for (int i = n0; i < c.size(); i++) varAdd(famOf(c.get(i)), c.get(i).y, n0);
+        for (int i = h0; i < c.hazards.size(); i++) varAdd(hazFam(c.hazards.get(i)), c.hazards.get(i).y, n0);
+        varHist.prune(c.get(c.size() - 1).y);
+    }
+    float varPenalty(int fam, float y) { return P.adaptiveVariety() ? varHist.penalty(fam, y) : 1f; }
+    /** Penalties applied to module weights, each class keeping its total (so repetition control never lowers the challenge mix). */
+    private void varAdapt(float[] w, float y) {
+        double[] before = new double[3], after = new double[3];
+        for (Kind k : Kind.values()) { int cl = kindClass(k); if (cl >= 0) before[cl] += w[k.ordinal()]; }
+        for (Kind k : Kind.values()) { float p = varPenalty(kindFam(k), y); w[k.ordinal()] *= p; int cl = kindClass(k); if (cl >= 0) after[cl] += w[k.ordinal()]; }
+        for (Kind k : Kind.values()) { int cl = kindClass(k); if (cl >= 0 && after[cl] > 0) w[k.ordinal()] = (float) (w[k.ordinal()] * before[cl] / after[cl]); }
+    }
+    /** A module's internal choice among {@code n} options of the given families, weighted by the memory (one random number). */
+    private int varRoll(int[] fams, int n, float y) {
+        float[] p = new float[n]; float sum = 0f;
+        for (int i = 0; i < n; i++) { p[i] = varPenalty(fams[i], y); sum += p[i]; }
+        float x = rnd.nextFloat() * sum;
+        for (int i = 0; i < n; i++) { x -= p[i]; if (x <= 0f) return i; }
+        return n - 1;
+    }
+    /** The continuation list with its ordinary moves reordered by the memory (least penalised first; ties keep the least-recently-used order). */
+    private Kind[] varOrder(Kind[] list, float y) {
+        List<Kind> ord = new ArrayList<>(), head = new ArrayList<>();
+        for (Kind k : list) (ordinary(k) ? ord : head).add(k);
+        ord.sort((a, b) -> Float.compare(varPenalty(kindFam(b), y), varPenalty(kindFam(a), y)));
+        boolean ropeLast = !ord.isEmpty() && ord.get(ord.size() - 1) == Kind.ROPE && list[list.length - 1] != Kind.ROPE;
+        if (ropeLast) GenTrace.tally("adaptive_rope_fallback_demoted");
+        head.addAll(ord);
+        return head.toArray(new Kind[0]);
     }
 
     /** The key (and gate) colour of castle n is fixed by the run's seed and the castle number, so the key can be placed sections before its gate is built. */
@@ -914,6 +1008,7 @@ public final class CourseGenerator {
             avlPlaced.remove(i); float[] pl = (float[]) p[1]; avlPending.add(0, pl); AVALANCHES_PLACED.decrementAndGet();
         }
         if (avlCand >= c.size()) avlCand = -1;
+        varHist.forget(n0);          // the memory holds only what is still in the course
     }
 
     private final List<Element[]> builtRooms = new ArrayList<>();     // {key, gate}
@@ -1814,9 +1909,16 @@ public final class CourseGenerator {
     private Kind pick(int zone, Element last) {
         float[] w = weights(zone, last);
         float sum = 0; for (float f : w) sum += f;
-        float x = rnd.nextFloat() * sum;
-        for (Kind k : Kind.values()) { x -= w[k.ordinal()]; if (x <= 0 && w[k.ordinal()] > 0) return k; }
-        return Kind.HOP;
+        float u = rnd.nextFloat(), x = u * sum;
+        Kind out = Kind.HOP;
+        for (Kind k : Kind.values()) { x -= w[k.ordinal()]; if (x <= 0 && w[k.ordinal()] > 0) { out = k; break; } }
+        if (P.adaptiveVariety()) {          // telemetry only: what the same draw would have picked without the memory
+            float[] wb = weights(zone, last, false); float sb = 0; for (float f : wb) sb += f; float xb = u * sb; Kind would = Kind.HOP;
+            for (Kind k : Kind.values()) { xb -= wb[k.ordinal()]; if (xb <= 0 && wb[k.ordinal()] > 0) { would = k; break; } }
+            GenTrace.tally("adaptive_picks");
+            if (would != out) { GenTrace.tally("adaptive_shift"); if (would == Kind.ROPE) GenTrace.tally("adaptive_rope_avoided"); }
+        }
+        return out;
     }
 
     /** One draw from weights {@code w} (nothing left: null); consumes one random number when anything is left. */
@@ -1851,7 +1953,8 @@ public final class CourseGenerator {
     static boolean climbs(Kind k) { return k == Kind.PAD || k == Kind.ROPE || k == Kind.MOVER_V || k == Kind.STAIRS || k == Kind.ELEV_FALL; }
 
     /** The module weights {@link #pick} draws from: the mix of this tier and height, the spiral pitch controller and the repetition damping. */
-    private float[] weights(int zone, Element last) {
+    private float[] weights(int zone, Element last) { return weights(zone, last, true); }
+    private float[] weights(int zone, Element last, boolean adaptive) {
         float[] w = new float[Kind.values().length];
         switch (zone) {
             case 0: w[Kind.HOP.ordinal()] = 3; w[Kind.STAIRS.ordinal()] = 2; w[Kind.CRUMBLE.ordinal()] = 1; w[Kind.PAD.ordinal()] = 1.5f; w[Kind.ROPE.ordinal()] = 1.5f;
@@ -1874,6 +1977,7 @@ public final class CourseGenerator {
         if (zone >= 1) { w[Kind.SEESAW.ordinal()] = 4f; w[Kind.BRIDGE.ordinal()] = 4f; }
         else w[Kind.BRIDGE.ordinal()] = 2f;
         if (inten > 0f || (!endless && last.y > T.courseHeight * 0.18f)) { w[Kind.HAZ.ordinal()] = 3f + 9f * inten + LATE_HAZ * P.lateHazScale * lt; if (zone >= 1) w[Kind.SPRING.ordinal()] = 2f + 2f * inten; w[Kind.TRAP.ordinal()] = 2f + 5f * inten + LATE_TRAP * P.lateHazScale * lt; }
+        if (adaptive && P.adaptiveVariety()) varAdapt(w, last.y);          // PUNISHER: recent mechanics less likely, within their own class (before the pitch controller)
         // spiral pitch controller: keep successive revolutions a healthy distance apart. Until 2026-10-26 it compared the height with
         // pitch x (arc / circumference) in the slice's own frame, whose arc restarts every slice (whole laps) but whose height only every 500 m:
         // past a slice's first ~60 m of a 500 m frame it always read "rushing" and damped the vertical modules, so the route could wind round
@@ -1995,7 +2099,9 @@ public final class CourseGenerator {
      */
     private List<Element> buildCreature(Element last, float d, int z, int attempt, List<Element> hzOut) {
         float uR = last.s + last.w / 2f;
-        int roll = rnd.nextFloat() < 0.3f + 0.7f * Math.min(1f, level(last.y)) ? (rnd.nextBoolean() ? 0 : 1 + rnd.nextInt(2)) : 0;      // (blobs from Level 1 on, more often higher up; were world 3 on)          // 0 skull (half), 1 blob on a platform, 2 blob on a tipping bridge
+        float pSkull = 0.5f;
+        if (P.adaptiveVariety()) { float ps = varPenalty(F_SKULL, last.y), pb = varPenalty(F_BLOB, last.y); pSkull = ps / (ps + pb); }
+        int roll = rnd.nextFloat() < 0.3f + 0.7f * Math.min(1f, level(last.y)) ? ((P.adaptiveVariety() ? rnd.nextFloat() < pSkull : rnd.nextBoolean()) ? 0 : 1 + rnd.nextInt(2)) : 0;      // (blobs from Level 1 on, more often higher up; were world 3 on)          // 0 skull (half), 1 blob on a platform, 2 blob on a tipping bridge
         List<Element> es = new ArrayList<>();
         if (roll == 2) {
             float w = 7f + rnd.nextInt(2), dyIn = r(-0.4f, 0.3f);
@@ -2117,7 +2223,7 @@ public final class CourseGenerator {
         for (int j = 0; j < n; j++) {
             float uR = cur.s + cur.w / 2f, dy = r(-0.3f, 0.6f);
             boolean cannonOk = cur.w >= 3f && cur.type == Element.Type.STATIC;
-            int roll = wantCreature && j == 0 ? 3 : rnd.nextInt(cannonOk ? 5 : 4);
+            int roll = wantCreature && j == 0 ? 3 : P.adaptiveVariety() ? varRoll(HAZ_ROLL_FAM, cannonOk ? 5 : 4, cur.y) : rnd.nextInt(cannonOk ? 5 : 4);
             if ((roll == 1 && prevRoll == 3) || (roll == 3 && prevRoll == 1)) roll = 2;      // Build 71: the bee now homes in and bumps you, so it never sits next to a saw you must time (it cut the saw's window to 0.2 s; SawFairnessTest)
             if ((roll == 1 && prevRoll == 4) || (roll == 4 && prevRoll == 1)) roll = 2;      // Build 79: nor a cannon lane right before or after it (a cannon across the landing cut a saw's window from its whole cycle to 0.36; SawFairnessTest, seed 3)
             if (roll == 3 && enfCalm()) roll = 2;          // PUNISHER: no bee next to an Enforcer encounter (the draw is kept, so NORMAL is unchanged)
@@ -2171,7 +2277,7 @@ public final class CourseGenerator {
         float inten = intensity(last.y);
         float uR = last.s + last.w / 2f, dy = r(0f, 0.6f);
         float gapIn = reach(dy) * lerp(0.5f, 0.85f, d) * (1f - 0.03f * attempt);
-        int roll = wantCreature ? 4 : rnd.nextInt(5);
+        int roll = wantCreature ? 4 : P.adaptiveVariety() ? varRoll(MID_ROLL_FAM, 5, last.y) : rnd.nextInt(5);
         if (roll == 4 && enfCalm()) roll = 2;          // PUNISHER: no crab deck next to an Enforcer encounter
         if (roll == 1 && creatureReaches(c.size())) roll = 2;      // Build 79: no floor saw where a skull, blob or crab can roam onto it (see sawsClearOfCreatures)
         int crabs = roll == 4 ? 2 + (rnd.nextFloat() < inten * 0.7f ? 1 : 0) + (rnd.nextFloat() < late(last.y) * 0.6f ? 1 : 0) + T.hard : 0;      // (PUNISHER one more, NEVER GONNA HAPPEN two)      // Build 79 (owner): never fewer than two crabs, more higher up

@@ -9,6 +9,7 @@ on:
     inputs:
       seeds: { description: 'JSON list of seeds for every mode (push runs use ["1","2"])', required: false, default: '["1","2"]' }
       include_run: { description: 'Earlier Difficulty report run of the SAME commit whose lanes-mode-* artifacts join this consolidation (staged campaigns)', required: false, default: '' }
+      include_pattern: { description: 'Which lanes-mode-* artifacts of include_run join (e.g. lanes-mode-2-* for courses a later fix does not touch)', required: false, default: 'lanes-mode-*' }
       modes: { description: 'JSON list of modes (0 NORMAL, 1 PUNISHER, 2 NGH)', required: false, default: '["0","1","2"]' }
       top: { description: 'Climb height in metres', required: false, default: '5000' }
       solve: { description: '1 = run the slice solver on every slice, 0 = generation only (targeted generation checks)', required: false, default: '1' }
@@ -88,7 +89,7 @@ jobs:
       - uses: actions/download-artifact@v4          # a staged campaign: the earlier stage's courses (same commit) are part of this dataset, not run twice
         if: ${{ inputs.include_run != '' && inputs.include_run != null }}
         with:
-          pattern: lanes-mode-*
+          pattern: ${{ inputs.include_pattern || 'lanes-mode-*' }}
           run-id: ${{ inputs.include_run }}
           github-token: ${{ github.token }}
           path: parts

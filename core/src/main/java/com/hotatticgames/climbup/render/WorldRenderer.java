@@ -1405,7 +1405,8 @@ public final class WorldRenderer implements Disposable {
                         drawPack("arrow_up", k[0], ay + 1.4f, 0.3f, camS, 0.42f * blink, 0.42f, 0.42f, 0f, 180f);
                         if (quality > 0 && MathUtils.randomBoolean(0.35f)) { ambCol.set(0.75f, 0.68f, 0.55f, 1f); particles.spawn(k[0] + MathUtils.random(-0.4f, 0.4f), ay + 4.5f, 0f, -3f, ambCol, MathUtils.random(0.05f, 0.1f), -6f, 0.7f); }
                     } else {
-                        drawPack("cube_spikes", k[0], k[1], 0f, camS, AVL_SCALE, AVL_SCALE, AVL_SCALE, 25f, -k[2]);
+                        float sc = AVL_SCALE * k[4] / Element.AVL_R;          // (NOT GONNA HAPPEN blocks each have their own size: drawn at their collision radius)
+                        drawPack("cube_spikes", k[0], k[1], 0f, camS, sc, sc, sc, 25f, -k[2]);
                     }
                 }
                 break;

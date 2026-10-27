@@ -88,31 +88,40 @@ public final class DifficultyProfile {
         false, EncounterModel.THREAT_BASE, EncounterModel.THREAT_PER_LEVEL, EncounterModel.THREAT_CRAMPED, false, 1, 0.18f, 0.04f, 1.15f, 1667.0, 2.5f,
         0.3f, 0.4f, 0.5f, 0.4f, 2f);
 
-    /** PUNISHER only (owner 2026-10-27): Enforcer robot encounters, one or two between every two castles. NORMAL (frozen) and NGH never get them. */
-    public boolean enforcers() { return this == PUNISHER; }
-    /** Spike-block avalanches (owner 2026-10-27): 2 PUNISHER (2-3 a castle interval, 4-5 blocks), 1 NORMAL (castles 9-10 only, rare, 2 blocks), 0 none (NOT GONNA HAPPEN). */
+    /**
+     * Enforcer robot encounters: PUNISHER (owner 2026-10-27, one or two between every two castles, tiers by height) and, since rules 14, NOT GONNA
+     * HAPPEN (owner 2026-10-27: RED Enforcers only, from castle 1, two a castle interval and at most three). NORMAL never gets them.
+     */
+    public boolean enforcers() { return this == PUNISHER || this == NGH; }
+    /**
+     * Spike-block avalanches: 2 PUNISHER (2-3 a castle interval, 4-5 blocks), 1 NORMAL (castles 9-10 only, rare, 2 blocks), 3 NOT GONNA HAPPEN (rules
+     * 14, owner 2026-10-27: 3-4 a castle interval, at most 4, 5-7 blocks each with its own seeded size and physics, 15-45 s cooldown).
+     */
     /** History-aware variety weighting (owner 2026-10-27): PUNISHER (rules 12) and, since rules 13, NORMAL with a lighter strength; NOT GONNA HAPPEN keeps its selection. */
     public boolean adaptiveVariety() { return varietyStrength() > 0f; }
     /** NORMAL's narrow rope correction (owner 2026-10-27, authorised on measured clustering): see CourseGenerator.ropeAfterRecent. */
     public boolean ropeFallbackSpacing() { return this == NORMAL; }
-    public int avalanches() { return this == PUNISHER ? 2 : this == NORMAL ? 1 : 0; }
+    public int avalanches() { return this == PUNISHER ? 2 : this == NORMAL ? 1 : this == NGH ? 3 : 0; }
 
     // ------------------------------------------------------------------ castle-to-castle progression (owner directive 2026-10-27, rules 13)
-    /** NORMAL and PUNISHER; NOT GONNA HAPPEN is regression-monitored only and keeps its rules-12 selection. */
-    public boolean progression() { return this == NORMAL || this == PUNISHER; }
+    /** Every mode since rules 14 (NOT GONNA HAPPEN joined with its own calibration, owner 2026-10-27; NORMAL and PUNISHER since rules 13). */
+    public boolean progression() { return true; }
     /**
      * Intended castle totals in the lane report's units (terrain + hazards + enemies + interaction - mitigation), PROVISIONAL engineering values for
      * owner review. NORMAL: castle 1 where it is (rules 12 measured 628), rising evenly to 870 at castle 10 (rules 12: 829, with plateaus at castles
      * 5-6 and 9-10). PUNISHER (owner 2026-10-27): castle 1 at NORMAL castles 3-4 (700), castle 10 about 20% above NORMAL castle 10 (1,045).
-     * Castles beyond 10 (the endless climb) keep castle 10's target.
+     * NOT GONNA HAPPEN (rules 14, owner 2026-10-27): castle 1 at PUNISHER castles 3-4 as measured in rules 13 (783-863: 850), castle 10 about 20% above
+     * PUNISHER castle 10 as measured (mean 1,007: 1,210; 16% above PUNISHER's 1,045 target). Castles beyond 10 (the endless climb) keep castle 10's target.
      */
-    private float[] totals() { return this == PUNISHER ? new float[]{700f, 1045f} : new float[]{630f, 870f}; }
+    private float[] totals() { return this == NGH ? new float[]{850f, 1210f} : this == PUNISHER ? new float[]{700f, 1045f} : new float[]{630f, 870f}; }
     /**
      * Category shares {terrain, hazards, enemies, interaction} at castle 1 and castle 10, interpolated between (PROVISIONAL, from the rules-12 lane
      * means): NORMAL opens terrain-led (castle 1 measured 0.81 / 0.12 / 0.05 / 0.02) and hazards and enemies take a larger part as it rises; PUNISHER's
-     * enemy share is held near 0.10-0.12 (rules 12 reached 0.14) so its difficulty comes from terrain and hazards, not enemy counts (owner).
+     * enemy share is held near 0.10-0.12 (rules 12 reached 0.14) so its difficulty comes from terrain and hazards, not enemy counts (owner). NOT GONNA
+     * HAPPEN (rules 14) carries more hazards (avalanches) and its red Enforcers: 0.58 / 0.21 / 0.17 / 0.04 rising to 0.55 / 0.25 / 0.16 / 0.04.
      */
     private float[][] shares() {
+        if (this == NGH) return new float[][]{{0.58f, 0.21f, 0.17f, 0.04f}, {0.55f, 0.25f, 0.16f, 0.04f}};
         return this == PUNISHER ? new float[][]{{0.66f, 0.20f, 0.10f, 0.04f}, {0.62f, 0.22f, 0.12f, 0.04f}}
                                 : new float[][]{{0.80f, 0.13f, 0.05f, 0.02f}, {0.64f, 0.23f, 0.09f, 0.04f}};
     }
@@ -128,12 +137,13 @@ public final class DifficultyProfile {
     public float factorHi(int k) { return k == 1 ? 1.35f : k == 2 ? 1.1f : 1.3f; }
     /**
      * Castle 1's factors before any of it is measured (PROVISIONAL): PUNISHER opens 8-11% above its castle-1 target with neutral factors (rules 13
-     * iteration 1, seeds 1-2: 755-778 against 700) because its approved Enforcer and avalanche encounters start there; it opens with lighter hazard and
-     * enemy selection instead, and its terrain eased slightly. NORMAL opens neutral (it met its target).
+     * iteration 1, seeds 1-2: 755-778 against 700; its Enforcer and avalanche encounters contribute only 2-7 points of that, the surplus is ordinary
+     * terrain and hazard selection under its 1,250 m head start); it opens with lighter hazard and enemy selection instead, and its terrain eased
+     * slightly. NORMAL and NOT GONNA HAPPEN open neutral (NGH rules 13 measured about 784 against 850).
      */
     public float[] initialFactors() { return this == PUNISHER ? new float[]{0.9f, 0.8f, 0.8f, 0.9f} : new float[]{1f, 1f, 1f, 1f}; }
-    /** History-aware variety strength (VarietyMemory.A): PUNISHER 0.45 (rules 12), NORMAL 0.25 (rules 13: a lighter touch), NGH 0 (unchanged). */
-    public float varietyStrength() { return this == PUNISHER ? 0.45f : this == NORMAL ? 0.25f : 0f; }
+    /** History-aware variety strength (VarietyMemory.A): PUNISHER 0.45 (rules 12), NORMAL 0.25 (rules 13: a lighter touch), NGH 0.35 (rules 14). */
+    public float varietyStrength() { return this == PUNISHER ? 0.45f : this == NORMAL ? 0.25f : 0.35f; }
 
     /** The profile a climb at {@code t.hard} generates with. */
     public static DifficultyProfile of(Tuning t) { return t.hard >= 2 ? NGH : t.hard > 0 ? PUNISHER : NORMAL; }

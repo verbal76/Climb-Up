@@ -55,7 +55,7 @@ public final class CourseGenerator {
      * generator (the crab rules of Build 63 changed what a seed produced, so runs from earlier builds carry version 0, "old rules", and are not compared).
      * {@code GeneratorFingerprintTest} fails when generation changes without a bump.
      */
-    public static final int RULES_VERSION = 13;     // 13 = (unreleased) owner directive 2026-10-27: castle-to-castle progression controller (Progression: measured castles steer the next castle's terrain, hazard, enemy and interaction selection within fixed bounds; a 25 m spike guard), continuations at the castle's own demand first, NORMAL shares the history-aware variety at a lighter strength, PUNISHER's head start 1,250 m (castle 1 at NORMAL castles 3-4); NGH unchanged; 12 = (unreleased) owner amendments 2026-10-27: PUNISHER Enforcer robots (crabs, bees, skulls and blobs kept clear of them), spike-block avalanches (PUNISHER 2-3 a castle; NORMAL castles 9-10, two blocks), PUNISHER history-aware variety, NORMAL narrow rope-fallback correction; 11 = Build 82 (owner directive 2026-10-27, NORMAL seed 2 stopped at 881 m): while the spiral lags its pitch a refused pick falls back only to challenges that climb, and a slice ending must leave the next slice two ordinary steps (rises a hop or stair makes), climbing out first when it does not; 10 = (unreleased) Build 82 draft (owner release requirements 2026-10-26): spiral pitch measured above the revolution below, slice endings that leave the next slice room, relaxed attempts keep body clearance, geometry integrity enforced on every slice, challenges before ropes in the fallbacks; 9 = (unreleased) Build 82 draft (owner correction directive 2026-10-26): terrain difficulty rises over the whole climb with each mode's head start, NGH has its own profile, no enemies on spike-drop platforms (rare ones on intermediate safe platforms instead), the solver hops a skull at its real dash speed; 8 = Build 81 (owner decisions 2026-10-25): keys lie on a main-route platform (no rooms, branches or perches); 7 = Build 80 (owner directive 2026-10-24): no level gates, PUNISHER on its own curve, encounter-conflict rule, splits with reconnecting branches instead of dead ends; 6 = Build 79: skulls, blobs and crabs reach the platforms either side (crabs follow up to three, fall with crumbling decks), faster skull, no blob wobble, two to four crabs a deck, bee pairs, creatures on spike-drop rows, bridges that drop planks, flat-turning aimed cannons, an always-running balance conveyor, decoys kept off ropes, a slightly harder first world; 5 = Build 77: faster skull with loop+swoop, key detours proved with the skull at either end, one balance conveyor per section from Castle 6 to 10; 4 = Build 76: faster plank conveyor bridges; 3 = Build 72: flush ramps, faster crumbling, a wilder shaking ramp, the spinning ramp; 2 = Build 71: the bee homes in, skulls and green blobs, mortars out of step at random
+    public static final int RULES_VERSION = 14;     // 14 = (unreleased) owner directive 2026-10-27, NOT GONNA HAPPEN modernisation: NGH joins the progression controller with its own curve (850 to 1,210), history-aware variety (0.35), a looser 25 m guard (4x), RED Enforcers from castle 1 (2-3 a castle), avalanches of 5-7 blocks each with its own seeded size and physics (3-4 a castle, 15-45 s cooldown); NORMAL and PUNISHER generate exactly as in rules 13 (same fingerprint: a metadata-only version change for them); 13 = (unreleased) owner directive 2026-10-27: castle-to-castle progression controller (Progression: measured castles steer the next castle's terrain, hazard, enemy and interaction selection within fixed bounds; a 25 m spike guard), continuations at the castle's own demand first, NORMAL shares the history-aware variety at a lighter strength, PUNISHER's head start 1,250 m (castle 1 at NORMAL castles 3-4); NGH unchanged; 12 = (unreleased) owner amendments 2026-10-27: PUNISHER Enforcer robots (crabs, bees, skulls and blobs kept clear of them), spike-block avalanches (PUNISHER 2-3 a castle; NORMAL castles 9-10, two blocks), PUNISHER history-aware variety, NORMAL narrow rope-fallback correction; 11 = Build 82 (owner directive 2026-10-27, NORMAL seed 2 stopped at 881 m): while the spiral lags its pitch a refused pick falls back only to challenges that climb, and a slice ending must leave the next slice two ordinary steps (rises a hop or stair makes), climbing out first when it does not; 10 = (unreleased) Build 82 draft (owner release requirements 2026-10-26): spiral pitch measured above the revolution below, slice endings that leave the next slice room, relaxed attempts keep body clearance, geometry integrity enforced on every slice, challenges before ropes in the fallbacks; 9 = (unreleased) Build 82 draft (owner correction directive 2026-10-26): terrain difficulty rises over the whole climb with each mode's head start, NGH has its own profile, no enemies on spike-drop platforms (rare ones on intermediate safe platforms instead), the solver hops a skull at its real dash speed; 8 = Build 81 (owner decisions 2026-10-25): keys lie on a main-route platform (no rooms, branches or perches); 7 = Build 80 (owner directive 2026-10-24): no level gates, PUNISHER on its own curve, encounter-conflict rule, splits with reconnecting branches instead of dead ends; 6 = Build 79: skulls, blobs and crabs reach the platforms either side (crabs follow up to three, fall with crumbling decks), faster skull, no blob wobble, two to four crabs a deck, bee pairs, creatures on spike-drop rows, bridges that drop planks, flat-turning aimed cannons, an always-running balance conveyor, decoys kept off ropes, a slightly harder first world; 5 = Build 77: faster skull with loop+swoop, key detours proved with the skull at either end, one balance conveyor per section from Castle 6 to 10; 4 = Build 76: faster plank conveyor bridges; 3 = Build 72: flush ramps, faster crumbling, a wilder shaking ramp, the spinning ramp; 2 = Build 71: the bee homes in, skulls and green blobs, mortars out of step at random
     /** The rules version a climb started on a given build used (0 = unknown or before the stamps: not comparable). */
     public static int rulesOfBuild(int build) { return build >= 82 ? 9 : build >= 81 ? 8 : build >= 80 ? 7 : build >= 79 ? 6 : build >= 77 ? 5 : build >= 76 ? 4 : build >= 72 ? 3 : build >= 71 ? 2 : build >= 63 ? 1 : 0; }
 
@@ -676,6 +676,26 @@ public final class CourseGenerator {
         return out;
     }
 
+    /**
+     * NOT GONNA HAPPEN's Enforcer encounters for section n (rules 14, owner 2026-10-27): RED Enforcers only (tier 2, the existing robot AI), possible
+     * from castle 1, two a castle interval and sometimes three (more often higher up), never more, 3-5 decks each. Its own random stream (a different
+     * salt), so PUNISHER's plan is untouched. Guidance, not a quota: an encounter that cannot be proven clean is dropped. Returns {height, 2, decks}.
+     */
+    public static float[][] nghEnforcerPlan(long seed, int n, float spacing) {
+        Random r = new Random(seed * 0xA0761D6478BD642FL + n * 0xE7037ED1A0B428DBL + 59L);
+        float lo = spacing * (n - 1) + 45f, hi = spacing * n - 70f, mid = spacing * (n - 1) + spacing * 0.5f;
+        int count = 2 + (r.nextFloat() < Math.min(0.5f, 0.2f + 0.035f * (n - 1)) ? 1 : 0);
+        float[][] out = new float[count][];
+        for (int k = 0; k < count; k++) {
+            float a = lo + (hi - lo) * k / count, b = lo + (hi - lo) * (k + 1) / count, h = a;
+            for (int i = 0; i < 16; i++) { h = a + r.nextFloat() * (b - a); if (Math.abs(h - mid) >= 25f) break; }
+            out[k] = new float[]{h, 2, 3 + r.nextInt(3)};
+        }
+        return out;
+    }
+    /** The plan the current mode uses (NGH red-only, PUNISHER tiered). */
+    private float[][] enforcerPlanFor(int n) { return P == DifficultyProfile.NGH ? nghEnforcerPlan(c.seed, n, T.castleSpacing) : enforcerPlan(c.seed, n, T.castleSpacing, P.curveShift); }
+
     /** Diagnostics (never read by generation): encounters placed, and planned encounters dropped for want of a fair window in their slice. */
     public static final java.util.concurrent.atomic.AtomicInteger ENFORCERS_PLACED = new java.util.concurrent.atomic.AtomicInteger(), ENFORCERS_DROPPED = new java.util.concurrent.atomic.AtomicInteger();
 
@@ -688,7 +708,7 @@ public final class CourseGenerator {
 
     /**
      * PUNISHER (owner directive 2026-10-27): crabs, bees, skulls and blobs do not clutter an Enforcer encounter, so none are drawn in the two modules
-     * after one or within ENF_CALM m of it. Always false in NORMAL and NOT GONNA HAPPEN (no Enforcers), so their draws are untouched.
+     * after one or within ENF_CALM m of it (NOT GONNA HAPPEN too since rules 14). Always false in NORMAL (no Enforcers), so its draws are untouched.
      */
     private boolean enfCalm() {
         float y = c.get(c.size() - 1).y;
@@ -706,7 +726,7 @@ public final class CourseGenerator {
         if (!endless || !P.enforcers() || T.castleSpacing <= 0f) return;
         double sp = T.castleSpacing, startAbs = startY + base, topAbs = topY + base;
         for (int n = Math.max(1, (int) Math.floor(startAbs / sp) + 1); n <= (int) Math.floor(topAbs / sp) + 1; n++)
-            for (float[] pl : enforcerPlan(c.seed, n, T.castleSpacing, P.curveShift))
+            for (float[] pl : enforcerPlanFor(n))
                 if (pl[0] > startAbs && pl[0] <= topAbs) enfPending.add(new float[]{(float) (pl[0] - base), pl[1], pl[2], 0f});
         enfPending.sort((x, y) -> Float.compare(x[0], y[0]));
     }
@@ -742,11 +762,24 @@ public final class CourseGenerator {
     /**
      * The avalanches planned for section n (castle n-1 to castle n), fixed by the seed and the section like the keys: {height, blocks, cooldown s, seed}.
      * PUNISHER: two, sometimes three (more often higher up), never more; 4 or 5 blocks (5 more often higher up). NORMAL: none before castle 9; castle 9
-     * rarely one, castle 10 a little more often, none past castle 10; always 2 blocks. NOT GONNA HAPPEN: none. The cooldown (30-90 s of simulation time) only makes an
-     * avalanche eligible; none is ever forced. Guidance, not a quota: a planned avalanche that cannot be proven safe is dropped.
+     * rarely one, castle 10 a little more often, none past castle 10; always 2 blocks. The cooldown (30-90 s of simulation time) only makes an
+     * avalanche eligible; none is ever forced. Guidance, not a quota: a planned avalanche that cannot be proven safe is dropped. NOT GONNA HAPPEN (mode
+     * 3, rules 14, owner 2026-10-27): three, sometimes four (more often higher up), never more, from castle 1; 5-7 blocks; cooldown 15-45 s; its own
+     * random stream, so the other modes' plans are untouched.
      */
     public static float[][] avalanchePlan(long seed, int n, float spacing, int mode) {
         if (mode == 0 || n < 1) return new float[0][];
+        if (mode == 3) {
+            Random q = new Random(seed * 0xD1B54A32D192ED03L + n * 0x8CB92BA72F3D8DD7L + 73L);
+            int cnt = 3 + (q.nextFloat() < Math.min(0.6f, 0.3f + 0.035f * (n - 1)) ? 1 : 0);
+            float lo = spacing * (n - 1) + 40f, hi = spacing * n - 60f;
+            float[][] out = new float[cnt][];
+            for (int k = 0; k < cnt; k++) {
+                float a = lo + (hi - lo) * k / cnt, b = lo + (hi - lo) * (k + 1) / cnt, h = a + q.nextFloat() * (b - a);
+                out[k] = new float[]{h, 5 + q.nextInt(3), 15f + 30f * q.nextFloat(), q.nextFloat(), 0f};
+            }
+            return out;
+        }
         Random r = new Random(seed * 0x9FB21C651E98DF25L + n * 0xC13FA9A902A6328FL + 71L);
         int count, blocks;
         if (mode == 2) { count = 2 + (r.nextFloat() < Math.min(0.85f, 0.25f + 0.07f * (n - 1)) ? 1 : 0); blocks = -1; }
@@ -803,7 +836,7 @@ public final class CourseGenerator {
         if (last < avlCand + 4) return;
         float[] pl = avlPending.get(0);
         Element d = c.get(avlCand), a = new Element(Element.Type.AVALANCHE, d.s, d.y, d.w);
-        a.anchor = avlCand; a.len = pl[1]; a.period = pl[2]; a.phase = pl[3]; a.zone = d.zone;
+        a.anchor = avlCand; a.len = pl[1]; a.period = pl[2]; a.phase = pl[3]; a.zone = d.zone; if (P == DifficultyProfile.NGH) a.skin = 1;          // NOT GONNA HAPPEN's blocks: each its own size and physics (Sim.stepChaos)
         int hi = c.hazards.size(); c.hazards.add(a);
         long t0 = GenTrace.now();
         if (Autopilot.chainClean(c, T, avlCand - 1, avlCand + 4)) {
@@ -849,8 +882,12 @@ public final class CourseGenerator {
     static final float FALLBACK_DEMAND = 0.7f;
     /** How strongly the terrain factor moves the terrain demand d (precision: gaps, landings, mover spans), and its ceiling (PROVISIONAL). */
     static final float DEMAND_GAIN = 0.6f, DEMAND_MAX = 1.1f;
-    /** A 25 m window whose route hazards and enemies already weigh this many times the castle's per-window hazard + enemy target is a spike. */
-    static final float HOT = 3f;
+    /**
+     * A 25 m window whose route hazards and enemies already weigh this many times the castle's per-window hazard + enemy target is a spike (NORMAL,
+     * PUNISHER). NOT GONNA HAPPEN (rules 14) allows HOT_NGH: brutal stretches are its point; the guard only stops a pile-up that no longer reads as a
+     * sequence (unfair), and every intervention is counted (progression_hot_window).
+     */
+    static final float HOT = 3f, HOT_NGH = 4f;
     /** The proof margin a balance conveyor's links need (NORMAL, PUNISHER; PROVISIONAL). */
     static final float BELT_MARGIN = 0.25f;
 
@@ -884,7 +921,7 @@ public final class CourseGenerator {
     private boolean hotWindow(float y) {
         if (!endless || !P.progression() || T.castleSpacing <= 0f) return false;
         int n = Progression.castleOf(y + base, T.castleSpacing);
-        float cap = HOT * (P.target(n, Progression.H) + P.target(n, Progression.E)) / (T.castleSpacing / Progression.WINDOW);
+        float cap = (P == DifficultyProfile.NGH ? HOT_NGH : HOT) * (P.target(n, Progression.H) + P.target(n, Progression.E)) / (T.castleSpacing / Progression.WINDOW);
         boolean hot = windowLoad(y) > cap; if (hot) GenTrace.tally("progression_hot_window");
         return hot;
     }
@@ -2133,6 +2170,8 @@ public final class CourseGenerator {
     }
 
     private Kind deferredHaz;
+    /** The narrowest deck a gap saw is timed from (m): the climber needs room to stand back and wait for the blade. */
+    static final float SAW_TAKEOFF_W = 1.5f;
     private static boolean hazardKind(Kind k) { return k == Kind.HAZ || k == Kind.TRAP || k == Kind.MORTAR || k == Kind.CREATURE || k == Kind.DROPS; }
 
     public static volatile int wetTried, wetOk;
@@ -2358,6 +2397,7 @@ public final class CourseGenerator {
             if (roll == 3 && enfCalm()) roll = 2;          // PUNISHER: no bee next to an Enforcer encounter (the draw is kept, so NORMAL is unchanged)
             prevRoll = roll;
             if (roll == 1 && creatureReaches(j == 0 ? c.size() - 1 : base + j - 1)) roll = 2;      // Build 79: nor next to a skull, blob or crab that can roam onto its decks (a skull there cut the window to 0.36; SawFairnessTest)
+            if (roll == 1 && cur.w < SAW_TAKEOFF_W) roll = 2;      // rules 14: nor from a narrow foothold (NORMAL seed 3 slice 7 under rules 13: a gap saw from a 1.0 m ledge left no spot to wait for it; SawFairnessTest)
             if (roll == 1) dy = Math.min(dy, 0.1f);      // a saw never guards an uphill jump: the blade would sit higher than the take-off
             float g = Math.min(3.05f, Math.max(2.3f, reach(Math.max(0f, dy)) * lerp(0.68f, 0.90f, d) * r(0.95f, 1f) * (1f - 0.03f * attempt)));
             if (roll == 1) g = Math.min(g, 2.6f);      // a saw hangs in the gap: keep the gap well short of a full-length jump so there is room to time the arc over the blade

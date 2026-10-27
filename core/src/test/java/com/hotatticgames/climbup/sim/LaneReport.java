@@ -116,7 +116,7 @@ public final class LaneReport {
      *  and what happened when the solver climbed the slice (Sim's report-only counters). Columns: see encounters.csv's header. */
     final List<String[]> encounterRows = new ArrayList<>();
     static final String ENCOUNTER_HEADER = "run,slice,y0,castle,enforcers_yellow,enforcers_orange,enforcers_red,enforcer_decks,enforcer_unfair,enforcer_dropped,avalanches,avalanche_blocks,avalanche_unfair,avalanche_dropped,"
-        + "solved,enf_kick_tries,enf_kick_hits,enf_swat_tries,enf_swat_hits,enf_retreats,enf_falls,avl_fired,avl_skipped_cooldown,avl_blocks_released,avl_blocks_near_player,avl_blocks_in_traversal_area,avl_block_knocks,avl_hits,setbacks";
+        + "solved,enf_kick_tries,enf_kick_hits,enf_swat_tries,enf_swat_hits,enf_retreats,enf_falls,avl_fired,avl_skipped_cooldown,avl_blocks_released,avl_blocks_near_player,avl_blocks_in_traversal_area,avl_block_knocks,avl_hits,setbacks,enforcers_planned,avalanches_planned,avl_ricochets,avl_peak_active,avl_blocks_5,avl_blocks_6,avl_blocks_7,hot_window_guard";
     void encounterTelemetry(int k, CourseGenerator.Framed f, GenTrace tr, Autopilot.Report rep) {
         int[] tiers = new int[3]; int decks = 0, avl = 0, blocks = 0;
         for (Element h : f.c.hazards) {
@@ -128,10 +128,14 @@ public final class LaneReport {
         String[] o = s == null ? new String[15] : new String[]{"" + rep.completed, "" + s.enfKickTries, "" + s.enfKickHits, "" + s.enfSwatTries, "" + s.enfSwatHits, "" + s.enfRetreats, "" + s.enfFalls,
             "" + s.avlFired, "" + s.avlSkipped, "" + s.avlReleased, "" + s.avlNear, "" + s.avlArea, "" + s.avlKnocks, "" + s.avlHits, "" + s.setbacks()};
         if (s == null) java.util.Arrays.fill(o, "");
+        int[] bn = new int[8]; for (Element h : f.c.hazards) if (h.type == Element.Type.AVALANCHE) bn[Math.max(0, Math.min(7, Math.round(h.len)))]++;
+        // rules 14: planned vs placed (the slice's planned encounters are the placed ones plus those refused for good), ricochets, the most blocks in the air at once
+        String[] o2 = {"" + (tiers[0] + tiers[1] + tiers[2] + tr.counts.getOrDefault("enforcer_dropped", 0)), "" + (avl + tr.counts.getOrDefault("avalanche_dropped", 0)),
+            s == null ? "" : "" + s.avlRicochets, s == null ? "" : "" + s.avlPeak, "" + bn[5], "" + bn[6], "" + bn[7], "" + tr.counts.getOrDefault("progression_hot_window", 0)};
         String[] row = {MODE[mode] + "-s" + seed, "" + k, f3(y0), "" + castleOf(y0), "" + tiers[0], "" + tiers[1], "" + tiers[2], "" + decks,
             "" + tr.counts.getOrDefault("enforcer_unfair", 0), "" + tr.counts.getOrDefault("enforcer_dropped", 0), "" + avl, "" + blocks,
             "" + tr.counts.getOrDefault("avalanche_unfair", 0), "" + tr.counts.getOrDefault("avalanche_dropped", 0)};
-        String[] all = java.util.Arrays.copyOf(row, row.length + o.length); System.arraycopy(o, 0, all, row.length, o.length);
+        String[] all = java.util.Arrays.copyOf(row, row.length + o.length + o2.length); System.arraycopy(o, 0, all, row.length, o.length); System.arraycopy(o2, 0, all, row.length + o.length, o2.length);
         encounterRows.add(all);
     }
     public float reached; public int slices; public String stopped; public double genSeconds, solveSeconds; public boolean solve;

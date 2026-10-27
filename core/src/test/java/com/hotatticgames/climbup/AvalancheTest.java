@@ -96,14 +96,21 @@ public class AvalancheTest {
         assertTrue("blocks collide with each other (" + knocks + " knocks over ten seeds)", knocks > 0);
     }
 
-    /** The plan per castle interval: NORMAL none before castle 9 and two blocks at most; PUNISHER two or three, of 4-5 blocks; NOT GONNA HAPPEN none. */
+    /** The plan per castle interval: NORMAL none before castle 9 and two blocks at most; PUNISHER two or three, of 4-5 blocks; NOT GONNA HAPPEN (rules 14) three or four of 5-7. */
     @Test public void thePlanKeepsEachModesLimits() throws Exception {
         Tuning t = TestUtil.tuning(); float sp = t.castleSpacing;
         int n9 = 0, n10 = 0;
         for (long seed = 1; seed <= 400; seed++) for (int n = 1; n <= 12; n++) {
             float[][] nor = CourseGenerator.avalanchePlan(seed, n, sp, DifficultyProfile.NORMAL.avalanches());
             float[][] pun = CourseGenerator.avalanchePlan(seed, n, sp, DifficultyProfile.PUNISHER.avalanches());
-            assertEquals("NOT GONNA HAPPEN has none", 0, CourseGenerator.avalanchePlan(seed, n, sp, DifficultyProfile.NGH.avalanches()).length);
+            float[][] ngh = CourseGenerator.avalanchePlan(seed, n, sp, DifficultyProfile.NGH.avalanches());          // rules 14 (owner 2026-10-27)
+            assertTrue("NOT GONNA HAPPEN: three or four a castle interval (" + ngh.length + ")", ngh.length >= 3 && ngh.length <= 4);
+            for (float[] a : ngh) {
+                assertTrue("NGH: 5-7 blocks (" + a[1] + ")", a[1] >= 5f && a[1] <= 7f && a[1] == Math.round(a[1]) && a[1] <= Element.AVL_MAX);
+                assertTrue("NGH cooldown 15-45 s", a[2] >= 15f && a[2] <= 45f);
+                assertTrue("inside its castle interval", a[0] > sp * (n - 1) && a[0] < sp * n);
+            }
+            assertArrayEquals("deterministic", ngh, CourseGenerator.avalanchePlan(seed, n, sp, DifficultyProfile.NGH.avalanches()));
             assertArrayEquals("deterministic", pun, CourseGenerator.avalanchePlan(seed, n, sp, DifficultyProfile.PUNISHER.avalanches()));
             if (n <= 8 || n > 10) assertEquals("NORMAL: none outside castles 9-10 (seed " + seed + ", castle " + n + ")", 0, nor.length);
             if (n == 9) n9 += nor.length; if (n == 10) n10 += nor.length;

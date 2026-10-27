@@ -248,7 +248,7 @@ public final class Sim {
         landSpeed = o.landSpeed; events = o.events; assistForgive = o.assistForgive; ps0 = o.ps0; py0 = o.py0; teleported = o.teleported;
         es0 = o.es0.clone(); ey0 = o.ey0.clone(); es1 = o.es1.clone(); ey1 = o.ey1.clone(); edy = o.edy.clone();
         crumbleT = o.crumbleT.clone(); gone = o.gone.clone(); goneT = o.goneT.clone(); padSquash = o.padSquash.clone(); tilt = o.tilt.clone(); onT = o.onT.clone();
-        clubTime = o.clubTime; swingT = o.swingT; shoveCd = o.shoveCd; crabS = o.crabS; crabY = o.crabY; keys = o.keys; keysFree = o.keysFree; featDone = o.featDone.clone(); aimAng = o.aimAng.clone(); aimFireT = o.aimFireT.clone(); aimArmed = o.aimArmed.clone(); crabPos = o.crabPos.clone(); crabVel = o.crabVel.clone(); crabMode = o.crabMode.clone(); crabStuck = o.crabStuck.clone(); crabCool = o.crabCool.clone(); crabTurn = o.crabTurn.clone(); crabSeen = o.crabSeen.clone(); mobState = o.mobState.clone(); mobT = o.mobT.clone(); mobS = o.mobS.clone(); mobY = o.mobY.clone(); mobDir = o.mobDir.clone(); mobTgt = o.mobTgt.clone(); mobSeen = o.mobSeen.clone(); deckOff = o.deckOff.clone(); crabJump = o.crabJump.clone(); crabFrom = o.crabFrom.clone(); crabFromDeck = o.crabFromDeck.clone(); crabFall = o.crabFall.clone(); aimYaw = o.aimYaw.clone(); avl = o.avl.clone(); lastAvlT = o.lastAvlT; avlImpacts = o.avlImpacts; avlKnocks = o.avlKnocks; enfKickTries = o.enfKickTries; enfKickHits = o.enfKickHits; enfSwatTries = o.enfSwatTries; enfSwatHits = o.enfSwatHits; enfRetreats = o.enfRetreats; enfFalls = o.enfFalls; avlFired = o.avlFired; avlSkipped = o.avlSkipped; avlReleased = o.avlReleased; avlNear = o.avlNear; avlArea = o.avlArea; avlHits = o.avlHits; squashT = o.squashT; slipCd = o.slipCd; finishedRun = o.finishedRun; lastGateNo = o.lastGateNo; lastKeyColor = o.lastKeyColor; lastGateColor = o.lastGateColor;
+        clubTime = o.clubTime; swingT = o.swingT; shoveCd = o.shoveCd; crabS = o.crabS; crabY = o.crabY; keys = o.keys; keysFree = o.keysFree; featDone = o.featDone.clone(); aimAng = o.aimAng.clone(); aimFireT = o.aimFireT.clone(); aimArmed = o.aimArmed.clone(); crabPos = o.crabPos.clone(); crabVel = o.crabVel.clone(); crabMode = o.crabMode.clone(); crabStuck = o.crabStuck.clone(); crabCool = o.crabCool.clone(); crabTurn = o.crabTurn.clone(); crabSeen = o.crabSeen.clone(); mobState = o.mobState.clone(); mobT = o.mobT.clone(); mobS = o.mobS.clone(); mobY = o.mobY.clone(); mobDir = o.mobDir.clone(); mobTgt = o.mobTgt.clone(); mobSeen = o.mobSeen.clone(); deckOff = o.deckOff.clone(); crabJump = o.crabJump.clone(); crabFrom = o.crabFrom.clone(); crabFromDeck = o.crabFromDeck.clone(); crabFall = o.crabFall.clone(); aimYaw = o.aimYaw.clone(); avl = o.avl.clone(); lastAvlT = o.lastAvlT; avlImpacts = o.avlImpacts; avlKnocks = o.avlKnocks; enfKickTries = o.enfKickTries; enfKickHits = o.enfKickHits; enfSwatTries = o.enfSwatTries; enfSwatHits = o.enfSwatHits; enfRetreats = o.enfRetreats; enfFalls = o.enfFalls; avlFired = o.avlFired; avlSkipped = o.avlSkipped; avlReleased = o.avlReleased; avlNear = o.avlNear; avlArea = o.avlArea; avlHits = o.avlHits; avlRicochets = o.avlRicochets; avlPeak = o.avlPeak; squashT = o.squashT; slipCd = o.slipCd; finishedRun = o.finishedRun; lastGateNo = o.lastGateNo; lastKeyColor = o.lastKeyColor; lastGateColor = o.lastGateColor;
         act = o.act; hz = o.hz; winLo = o.winLo; winHi = o.winHi; invuln = o.invuln; hits = o.hits; hitS = o.hitS; hitY = o.hitY;
         humanHold = o.humanHold; heldX = o.heldX; heldY = o.heldY; heldXT = o.heldXT; heldYT = o.heldYT;
         motion = o.motion; motionGen = o.motionGen; mstep = o.mstep;
@@ -908,6 +908,7 @@ public final class Sim {
     private float avlTop(int j, float x) { Element d = course.get(j); return d.type == Element.Type.RAMP ? d.y + d.rampSlope(time) * Math.max(-d.halfW(), Math.min(d.halfW(), x)) : deckY(j); }
 
     private void stepAvalanche(Element e, int idx) {
+        if (e.skin == 1) { stepChaos(e, idx); return; }          // NOT GONNA HAPPEN's own blocks (rules 14); the code below is NORMAL's and PUNISHER's, unchanged
         int o = idx * AVL_W, a0 = e.anchor;
         if (o + AVL_W > avl.length || a0 < 0 || a0 >= course.size()) return;
         float st = avl[o];
@@ -991,6 +992,119 @@ public final class Sim {
         if (live == 0) avl[o] = 2f;
     }
 
+    // ---- NOT GONNA HAPPEN avalanche (rules 14, owner 2026-10-27): every block its own size, bounce, friction, launch, spin and ricochet, all seeded
+    /** Block b's collision radius (m): AVL_R for NORMAL/PUNISHER avalanches; NGH blocks 0.32-0.62 m from the avalanche's seed. */
+    public static float avlRadius(Element e, int b) { return e.skin == 1 ? Element.AVL_CR0 + Element.AVL_CR1 * avlRand(e, b, 10) : Element.AVL_R; }
+    /** NGH block b: restitution off decks, tangential friction kept per contact, ricochet kick (m/s, signed). */
+    private static float chaosE(Element e, int b) { return 0.28f + 0.34f * avlRand(e, b, 11); }
+    private static float chaosF(Element e, int b) { return 0.66f + 0.28f * avlRand(e, b, 12); }
+    private static float chaosKick(Element e, int b) { return (avlRand(e, b, 16) < 0.5f ? -1f : 1f) * (0.4f + 1.2f * avlRand(e, b, 15)); }
+    /** NGH ricochets so far (a hard deck impact that also kicked the block sideways; reports and tests only) and the most blocks falling at once. */
+    public int avlRicochets, avlPeak;
+
+    /**
+     * NOT GONNA HAPPEN's avalanche: the same trigger, cooldown, warning and scoring as every avalanche, then 5-7 blocks released AVL_SPACE0-AVL_SPACE1 s
+     * apart (each gap seeded), each with its own radius, mass (radius cubed), restitution, friction, launch velocity (either way along the tower),
+     * spin direction and speed, and ricochet response; blocks collide with the decks (ramps on their slope), with each other (mass-weighted, momentum
+     * conserving) and the body (avalancheHits, per-block radius). Each step is split into AVL_SUB sub-steps so no block moves more than a fraction of its
+     * radius per sub-step at the speeds it can reach (no tunnelling through a 0.6 m deck slab or another block). Pure simulation state: deterministic.
+     */
+    private void stepChaos(Element e, int idx) {
+        int o = idx * AVL_W, a0 = e.anchor;
+        if (o + AVL_W > avl.length || a0 < 0 || a0 >= course.size()) return;
+        float st = avl[o];
+        if (st == 2f) return;
+        if (st == 0f) {
+            if (!(mode == Mode.GROUND && onElem == a0)) return;
+            if (time - lastAvlT < e.period) { avl[o] = 2f; avlSkipped++; return; }
+            avl[o] = 1f; avl[o + 1] = 0f; lastAvlT = time; events |= EV_AVL_WARN; avlFired++;
+            int n = Math.max(1, Math.min(Element.AVL_MAX, Math.round(e.len)));
+            float ay = course.get(a0).y, rel = Element.AVL_WARN;
+            for (int b = 0; b < Element.AVL_MAX; b++) {
+                int p = o + 2 + b * AVL_B;
+                for (int q = 0; q < AVL_B; q++) avl[p + q] = 0f;
+                if (b >= n) continue;
+                int j = a0 + 1 + (int) (avlRand(e, b, 0) * 3.99f); while (j > a0 + 1 && !avlDeck(j)) j--;
+                if (!avlDeck(j)) j = a0;
+                Element d = course.get(j);
+                float ds = course.dsWrap(es1[j], es1[a0]) + (avlRand(e, b, 1) - 0.5f) * Math.max(0.4f, d.w - 0.8f);
+                avl[p] = ds; avl[p + 1] = deckY(j) - ay + Element.AVL_DROP + 2.5f * avlRand(e, b, 2);
+                avl[p + 2] = (avlRand(e, b, 3) < 0.7f ? -1f : 1f) * (0.4f + 3.0f * avlRand(e, b, 13)); avl[p + 3] = -2.5f * avlRand(e, b, 4);
+                avl[p + 4] = 90f * avlRand(e, b, 5); avl[p + 5] = (avlRand(e, b, 6) < 0.5f ? -1f : 1f) * (200f + 500f * avlRand(e, b, 14));
+                avl[p + 6] = 2f; avl[p + 7] = rel;
+                rel += Element.AVL_SPACE0 + (Element.AVL_SPACE1 - Element.AVL_SPACE0) * avlRand(e, b, 7);
+            }
+            return;
+        }
+        avl[o + 1] += DT;
+        float clock = avl[o + 1], ay = course.get(a0).y, as = es1[a0], g = Element.AVL_G, h = DT / Element.AVL_SUB;
+        int live = 0, falling = 0;
+        for (int b = 0; b < Element.AVL_MAX; b++) {
+            int p = o + 2 + b * AVL_B;
+            if (avl[p + 6] == 2f && clock >= avl[p + 7]) { avl[p + 6] = 1f; avl[p + 7] = 0f; avlReleased++; }
+            if (avl[p + 6] == 1f) falling++;
+        }
+        avlPeak = Math.max(avlPeak, falling);
+        for (int sub = 0; sub < Element.AVL_SUB; sub++) {
+            for (int b = 0; b < Element.AVL_MAX; b++) {
+                int p = o + 2 + b * AVL_B;
+                if (avl[p + 6] != 1f) continue;
+                float R = avlRadius(e, b), E = chaosE(e, b), F = chaosF(e, b);
+                avl[p + 3] -= g * h; avl[p] += avl[p + 2] * h; avl[p + 1] += avl[p + 3] * h; avl[p + 4] += avl[p + 5] * h;
+                for (int j = Math.max(0, a0 - 8); j <= Math.min(course.routeSize() - 1, a0 + 8); j++) {
+                    if (!avlDeck(j)) continue;
+                    Element d = course.get(j);
+                    float hw = d.halfW(), x = course.dsWrap(as + avl[p], es1[j]), by = ay + avl[p + 1];
+                    float cx = Math.max(-hw, Math.min(hw, x)), top = avlTop(j, cx), cy = Math.max(top - Element.AVL_SLAB, Math.min(top, by));
+                    float dx = x - cx, dy = by - cy, d2 = dx * dx + dy * dy;
+                    if (d2 >= R * R) continue;
+                    float dist = (float) Math.sqrt(d2), nx, ny;
+                    if (dist > 1e-5f) { nx = dx / dist; ny = dy / dist; } else { nx = 0f; ny = 1f; dist = 0f; }
+                    if (d.type == Element.Type.RAMP && ny > 0.5f) { float sl = d.rampSlope(time), l = (float) Math.sqrt(1f + sl * sl); nx = -sl / l; ny = 1f / l; }
+                    float push = R - dist; avl[p] += nx * push; avl[p + 1] += ny * push;
+                    int fl = (int) avl[p + 8]; if ((fl & 2) == 0 && j >= a0 - 1 && j <= a0 + 4) { avl[p + 8] = fl | 2; avlArea++; }
+                    float vn = avl[p + 2] * nx + avl[p + 3] * ny;
+                    if (vn < 0f) {
+                        if (vn < -3f) avlImpacts++;
+                        avl[p + 2] -= (1f + E) * vn * nx; avl[p + 3] -= (1f + E) * vn * ny;
+                        float tx = -ny, vt = avl[p + 2] * tx + avl[p + 3] * nx, keep = vt * (F - 1f);
+                        avl[p + 2] += keep * tx; avl[p + 3] += keep * nx;
+                        if (vn < -Element.AVL_RICOCHET) { float k = chaosKick(e, b) * Math.min(1f, -vn / 12f); avl[p + 2] += k * tx; avl[p + 3] += k * nx; avlRicochets++; }          // a hard hit throws it off line: each block its own way
+                        avl[p + 5] = -(avl[p + 2] * tx + avl[p + 3] * nx) / R * 57.29578f;
+                    }
+                }
+                for (int c = b + 1; c < Element.AVL_MAX; c++) {          // block on block: mass ~ radius cubed, momentum conserved
+                    int q = o + 2 + c * AVL_B;
+                    if (avl[q + 6] != 1f) continue;
+                    float Rc = avlRadius(e, c), rr = R + Rc;
+                    float dx = avl[p] - avl[q], dy = avl[p + 1] - avl[q + 1], d2 = dx * dx + dy * dy;
+                    if (d2 >= rr * rr || d2 < 1e-10f) continue;
+                    float mb = R * R * R, mc = Rc * Rc * Rc, wb = mc / (mb + mc), wc = mb / (mb + mc);
+                    float dist = (float) Math.sqrt(d2), nx = dx / dist, ny = dy / dist, pen = rr - dist;
+                    avl[p] += nx * pen * wb; avl[p + 1] += ny * pen * wb; avl[q] -= nx * pen * wc; avl[q + 1] -= ny * pen * wc;
+                    float vn = (avl[p + 2] - avl[q + 2]) * nx + (avl[p + 3] - avl[q + 3]) * ny;
+                    if (vn < 0f) {
+                        float eb = 0.5f * (chaosE(e, b) + chaosE(e, c)) + 0.12f, jn = -(1f + eb) * vn;
+                        avl[p + 2] += jn * wb * nx; avl[p + 3] += jn * wb * ny; avl[q + 2] -= jn * wc * nx; avl[q + 3] -= jn * wc * ny;
+                        avlKnocks++; if (vn < -3f) avlImpacts++;
+                    }
+                }
+            }
+        }
+        for (int b = 0; b < Element.AVL_MAX; b++) {
+            int p = o + 2 + b * AVL_B;
+            if (avl[p + 6] == 2f) { live++; continue; }
+            if (avl[p + 6] != 1f) continue;
+            int fl = (int) avl[p + 8];
+            if ((fl & 1) == 0) { float nx = Math.abs(course.dsWrap(as + avl[p], s)), ny = Math.abs(ay + avl[p + 1] - (y + T.height * 0.5f)); if (nx < 2.5f && ny < 2.5f) { avl[p + 8] = fl | 1; avlNear++; } }
+            float sp2 = avl[p + 2] * avl[p + 2] + avl[p + 3] * avl[p + 3];
+            avl[p + 7] = sp2 < 0.09f ? avl[p + 7] + DT : 0f;
+            if (avl[p + 1] < -Element.AVL_FLOOR || clock > Element.AVL_LIFE || avl[p + 7] > Element.AVL_REST || Math.abs(avl[p]) > 30f) { avl[p + 6] = 0f; continue; }
+            live++;
+        }
+        if (live == 0) avl[o] = 2f;
+    }
+
     /** A falling block overlaps the body (a disc against the body's box). */
     private boolean avalancheHits(int idx, Element e, float hw, float lo, float hi) {
         int o = idx * AVL_W, a0 = e.anchor;
@@ -999,6 +1113,7 @@ public final class Sim {
         for (int b = 0; b < Element.AVL_MAX; b++) {
             int p = o + 2 + b * AVL_B;
             if (avl[p + 6] != 1f) continue;
+            if (e.skin == 1) R = avlRadius(e, b);
             float dx = Math.max(0f, Math.abs(course.dsWrap(es1[a0] + avl[p], s)) - hw), by = ay + avl[p + 1];
             float dy = by < lo ? lo - by : (by > hi ? by - hi : 0f);
             if (dx * dx + dy * dy < R * R) return true;
@@ -1008,11 +1123,11 @@ public final class Sim {
 
     /** Avalanche state for the renderer and reports: 0 not reached, 1 under way, 2 spent. */
     public int avalancheState(int hi) { return (hi + 1) * AVL_W <= avl.length ? (int) avl[hi * AVL_W] : 0; }
-    /** Block b: {arc, height, angle (deg), status (1 falling, 2 about to drop)} in world terms, or null when it is not there. */
+    /** Block b: {arc, height, angle (deg), status (1 falling, 2 about to drop), collision radius} in world terms, or null when it is not there. */
     public float[] avalancheBlock(int hi, Element e, int b) {
         int o = hi * AVL_W, p = o + 2 + b * AVL_B;
         if ((hi + 1) * AVL_W > avl.length || avl[o] != 1f || e.anchor < 0 || e.anchor >= course.size() || avl[p + 6] == 0f) return null;
-        return new float[]{course.wrap(es1[e.anchor] + avl[p]), course.get(e.anchor).y + avl[p + 1], avl[p + 4], avl[p + 6]};
+        return new float[]{course.wrap(es1[e.anchor] + avl[p]), course.get(e.anchor).y + avl[p + 1], avl[p + 4], avl[p + 6], avlRadius(e, b)};
     }
 
     /** Enforcer state for the renderer and reports (0 not started, 1 waiting, 2 chasing, 3 kicking, 4 swatting, 5 hopping, 6 leaving, 7 falling, 8 leaping away). */

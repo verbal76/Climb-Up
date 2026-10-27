@@ -66,7 +66,7 @@ public class AdaptiveVarietyTest {
         assertTrue("but not most of them: no forced alternation (" + p[1] + " of " + p[0] + ")", p[1] < p[0] / 2);
         int[] n = tally(base, 3L, 3, null), g = tally(base.hardCopy(2), 3L, 3, null);
         assertTrue("rules 13 (owner directive 2026-10-27): NORMAL consults it too, at a lighter strength (" + n[0] + ")", n[0] > 0 && DifficultyProfile.NORMAL.varietyStrength() < DifficultyProfile.PUNISHER.varietyStrength());
-        assertEquals("NOT GONNA HAPPEN never consults it", 0, g[0]);
+        assertTrue("rules 14 (owner directive 2026-10-27): NOT GONNA HAPPEN consults it too (" + g[0] + ")", g[0] > 0 && DifficultyProfile.NGH.varietyStrength() > 0f);
         System.out.println("adaptive: PUNISHER seed 3, 5 slices: " + p[0] + " picks, " + p[1] + " changed, " + p[2] + " ropes avoided");
     }
 }

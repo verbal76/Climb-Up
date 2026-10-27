@@ -242,8 +242,12 @@ public final class Element {
     public static final float ENF_HOP_T = 0.5f, ENF_HOP_GAP = 3.6f, ENF_HOP_DY = 2.2f, ENF_HOP_PEAK = 1.0f;
     // ---- spike-block avalanche (one physics for every mode: only the count and how often differ)
     /** Most blocks in one avalanche; a block's collision radius (the cube_spikes body, m). */
-    public static final int AVL_MAX = 5;
+    public static final int AVL_MAX = 7;          // (5 until rules 14: NORMAL and PUNISHER still drop at most 5; NOT GONNA HAPPEN 5-7)
     public static final float AVL_R = 0.45f;
+    /** NOT GONNA HAPPEN blocks (rules 14): radius AVL_CR0 + AVL_CR1 x seed (0.32-0.62 m); release gaps AVL_SPACE0-AVL_SPACE1 s; physics sub-steps per
+     *  simulation step; deck impacts faster than AVL_RICOCHET m/s also throw the block sideways (its seeded ricochet). */
+    public static final float AVL_CR0 = 0.32f, AVL_CR1 = 0.30f, AVL_SPACE0 = 0.20f, AVL_SPACE1 = 0.30f, AVL_RICOCHET = 5f;
+    public static final int AVL_SUB = 3;
     /** Warning before the first block is released (s), the gap between releases (s), and how far above its target deck a block starts (m: above the screen). */
     public static final float AVL_WARN = 1.4f, AVL_STAGGER = 0.35f, AVL_DROP = 11f;
     /** Block physics: gravity (m/s^2), bounce restitution off decks and off each other, tangential friction kept per contact, deck slab thickness (m). */

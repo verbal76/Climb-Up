@@ -10,12 +10,12 @@ import org.junit.Test;
 /**
  * Castle-to-castle progression (owner directive 2026-10-27, rules 13): the estimator uses the lane report's own weights and classes; the feedback
  * factors stay inside their bounds, cannot escalate on their own, ease off after a castle that came out too hard, and treat each category on its own;
- * the intended curves rise and PUNISHER ends above NORMAL; NOT GONNA HAPPEN has no controller; the state travels inside the slices, so a slice made
+ * the intended curves rise and PUNISHER ends above NORMAL, NOT GONNA HAPPEN (rules 14) above PUNISHER; the state travels inside the slices, so a slice made
  * from a stored (decoded) slice is the same as one made in memory, and generation stays deterministic.
  */
 public class ProgressionTest {
     static Tuning tuning() throws Exception { return Tuning.parse(new String(Files.readAllBytes(Paths.get("../assets/data/tuning.json")))); }
-    static final DifficultyProfile N = DifficultyProfile.NORMAL, P = DifficultyProfile.PUNISHER;
+    static final DifficultyProfile N = DifficultyProfile.NORMAL, P = DifficultyProfile.PUNISHER, G = DifficultyProfile.NGH;
     static final float SP = 500f;
 
     /** A state whose castle n-1 measured {T, H, E, X} = scale x its targets (castle n not started). */
@@ -39,7 +39,7 @@ public class ProgressionTest {
     }
 
     @Test public void factorsStayInsideTheirBounds() {
-        for (DifficultyProfile p : new DifficultyProfile[]{N, P}) for (int n = 2; n <= 11; n++) for (float s : new float[]{0f, 0.01f, 0.5f, 1f, 2f, 100f}) {
+        for (DifficultyProfile p : new DifficultyProfile[]{N, P, G}) for (int n = 2; n <= 11; n++) for (float s : new float[]{0f, 0.01f, 0.5f, 1f, 2f, 100f}) {
             float[] f = after(p, n, all(s)).factors(n, p, SP);
             for (int k = 0; k < 4; k++) {
                 assertFalse(Float.isNaN(f[k]));
@@ -50,7 +50,7 @@ public class ProgressionTest {
     }
 
     @Test public void aHardCastleEasesTheNextAndAnEasyOneRaisesIt() {
-        for (DifficultyProfile p : new DifficultyProfile[]{N, P}) for (int n = 2; n <= 10; n++) {
+        for (DifficultyProfile p : new DifficultyProfile[]{N, P, G}) for (int n = 2; n <= 10; n++) {
             float[] hard = after(p, n, all(1.3f)).factors(n, p, SP), easy = after(p, n, all(0.75f)).factors(n, p, SP), on = after(p, n, all(1f)).factors(n, p, SP);
             for (int k = 0; k < 4; k++) {
                 assertTrue("a castle 30% too hard never makes the next one harder (" + k + ": " + hard[k] + ")", hard[k] < 1f);
@@ -74,7 +74,7 @@ public class ProgressionTest {
      */
     @Test public void theFeedbackCannotRunAway() {
         java.util.Random r = new java.util.Random(7);
-        for (DifficultyProfile p : new DifficultyProfile[]{N, P}) for (int trial = 0; trial < 50; trial++) {
+        for (DifficultyProfile p : new DifficultyProfile[]{N, P, G}) for (int trial = 0; trial < 50; trial++) {
             Progression g = new Progression();
             for (int n = 1; n <= 30; n++) {
                 float[] f = g.factors(n, p, SP);
@@ -92,21 +92,25 @@ public class ProgressionTest {
     }
 
     @Test public void theIntendedCurvesRiseAndPunisherEndsAboveNormal() {
-        for (DifficultyProfile p : new DifficultyProfile[]{N, P}) {
+        for (DifficultyProfile p : new DifficultyProfile[]{N, P, G}) {
             for (int n = 2; n <= 10; n++) assertTrue(p + " rises at castle " + n, p.targetTotal(n) > p.targetTotal(n - 1));
             for (int n = 1; n <= 10; n++) { float sum = 0; for (int k = 0; k < 4; k++) sum += p.target(n, k); assertEquals("categories add up to the total", p.targetTotal(n), sum, 0.01f * p.targetTotal(n)); }
             assertEquals("castles past 10 keep castle 10's target", p.targetTotal(10), p.targetTotal(14), 0f);
         }
         assertTrue("PUNISHER castle 1 sits at NORMAL castles 3-4 (owner)", P.targetTotal(1) >= N.targetTotal(3) && P.targetTotal(1) <= N.targetTotal(4));
         assertEquals("PUNISHER castle 10 about 20% above NORMAL castle 10 (owner, provisional)", 1.2f, P.targetTotal(10) / N.targetTotal(10), 0.01f);
-        assertFalse("NOT GONNA HAPPEN is not balanced (no controller)", DifficultyProfile.NGH.progression());
-        float[] f = after(DifficultyProfile.NGH, 5, all(0.5f)).factors(5, DifficultyProfile.NGH, SP);
-        for (float v : f) assertEquals(1f, v, 0f);
+        // rules 14 (owner 2026-10-27, "PUN C3-4 to +20%"): NOT GONNA HAPPEN has its own calibration, castle 1 at PUNISHER castles 3-4 (rules 13 measured
+        // 783-863 there), castle 10 about 20% above PUNISHER castle 10 (rules 13 measured mean 1,007; target 1,045)
+        assertTrue("NOT GONNA HAPPEN is now controlled", G.progression());
+        assertTrue("NGH castle 1 at PUNISHER castles 3-4 (owner): " + G.targetTotal(1), G.targetTotal(1) >= P.targetTotal(3) && G.targetTotal(1) <= 1.1f * P.targetTotal(4));
+        float r10 = G.targetTotal(10) / P.targetTotal(10);
+        assertTrue("NGH castle 10 about 20% above PUNISHER castle 10 (owner): " + r10, r10 >= 1.1f && r10 <= 1.25f);
+        for (int n = 1; n <= 10; n++) assertTrue("NGH above PUNISHER at castle " + n, G.targetTotal(n) > P.targetTotal(n));
     }
 
     @Test public void theStateTravelsInTheSliceAndAStoredSliceGivesTheSameNextSlice() throws Exception {
         Tuning base = tuning();
-        for (Tuning t : new Tuning[]{base, base.hardCopy(1)}) {
+        for (Tuning t : new Tuning[]{base, base.hardCopy(1), base.hardCopy(2)}) {
             CourseGenerator.Framed f = null; List<byte[]> stored = new ArrayList<>();
             for (int k = 0; k < 9; k++) { f = CourseGenerator.chunkFramed(77L, k, f, t); stored.add(SliceCodec.encode(f)); assertNotNull("slice " + k + " carries the state", f.c.prog); }
             Progression g = Progression.of(f.c.prog);
@@ -118,7 +122,7 @@ public class ProgressionTest {
             assertArrayEquals("deterministic", SliceCodec.encode(f), SliceCodec.encode(again));
         }
         CourseGenerator.Framed ngh = CourseGenerator.chunkFramed(77L, 0, null, base.hardCopy(2));
-        assertNull("NOT GONNA HAPPEN slices carry no controller state", ngh.c.prog);
-        assertTrue("a slice without state decodes without it", SliceCodec.same(ngh.c, SliceCodec.decode(SliceCodec.encode(ngh)).c));
+        assertNotNull("NOT GONNA HAPPEN slices carry the controller state (rules 14)", ngh.c.prog);
+        assertTrue("and decode with it", SliceCodec.same(ngh.c, SliceCodec.decode(SliceCodec.encode(ngh)).c));
     }
 }

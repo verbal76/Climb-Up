@@ -126,9 +126,19 @@ public final class RunSnapshot {
         for (int i = 0; i < n; i++) if (!fin(eCrumble[i], eGoneT[i], eTilt[i], eOnT[i])) return false;
         if (hKey == null || hState == null || hState.length != hKey.length * Sim.HAZ_STATE || !fin(slipCd)) return false;
         for (float f : hState) if (!fin(f)) return false;
-        if (aKey == null || aState == null || aState.length != aKey.length * Sim.AVL_W || !fin(lastAvlT)) return false;
+        if (aKey == null || aState == null || !fin(lastAvlT)) return false;
+        if (aState.length == aKey.length * AVL_W_R13 && AVL_W_R13 != Sim.AVL_W) aState = widenAvl(aState, aKey.length);          // a save from before rules 14 (5 block slots)
+        if (aState.length != aKey.length * Sim.AVL_W) return false;
         for (float f : aState) if (!fin(f)) return false;
         return true;
+    }
+
+    /** Rules 12-13 kept 5 block slots per avalanche (2 + 5 x Sim.AVL_B floats); rules 14 keeps Element.AVL_MAX. The extra slots of an old save are empty. */
+    static final int AVL_W_R13 = 2 + 5 * Sim.AVL_B;
+    static float[] widenAvl(float[] old, int n) {
+        float[] w = new float[n * Sim.AVL_W];
+        for (int i = 0; i < n; i++) System.arraycopy(old, i * AVL_W_R13, w, i * Sim.AVL_W, AVL_W_R13);
+        return w;
     }
 
     public String toJson() { Json j = new Json(JsonWriter.OutputType.json); j.setUsePrototypes(false); return j.toJson(this); }
@@ -151,20 +161,33 @@ public final class RunSnapshot {
      * Writes this state into a simulation built on the tower's (already re-centred) world. Returns false, leaving the caller to resume from the checkpoint instead, if what the hero
      * was holding is not in the world (it can't happen with a matching history, but a damaged file must never produce a hero standing on nothing).
      */
+    /**
+     * An absolute arc in the restoring window's frame, wrapped in double before the one rounding to float (rules 14 fix): wrapping the float difference
+     * lost up to an ulp of the unwrapped value (seed 7 slice 6: -288 m before the wrap, 8e-6 m off), and a skull chasing the restored climber grew that to
+     * 2e-4 m within 183 steps (PlayDeterminismTest). With the window origins a whole number of circumferences apart the restored arc is now exact.
+     */
+    static float localS(Sim sim, Tower tower, double abs) {
+        double c = sim.course.circumference, v = (abs - tower.originS) % c;
+        if (v < 0) v += c;
+        float f = (float) v;
+        return f >= sim.course.circumference ? 0f : f;
+    }
+
     public boolean apply(Sim sim, Tower tower) {
+        if (aKey != null && aState != null && aState.length == aKey.length * AVL_W_R13 && AVL_W_R13 != Sim.AVL_W) aState = widenAvl(aState, aKey.length);
         Sim.Mode m = Sim.Mode.valueOf(mode);
         int on = onKey < 0 ? -1 : tower.indexOfElemKey(onKey);
         boolean attached = m == Sim.Mode.GROUND || m == Sim.Mode.LEDGE || m == Sim.Mode.ROPE || m == Sim.Mode.CABLE || m == Sim.Mode.BEAM || m == Sim.Mode.PULLUP;
         if (attached && on < 0) return false;
         sim.time = time;
         sim.mode = m; sim.onElem = attached ? on : -1;
-        sim.s = sim.course.wrap((float) (absS - tower.originS)); sim.y = tower.local(absY);
+        sim.s = localS(sim, tower, absS); sim.y = tower.local(absY);
         sim.vx = vx; sim.vy = vy; sim.facing = facing == 0 ? 1 : facing; sim.coyote = coyote; sim.jumpBuf = jumpBuf; sim.lockout = lockout; sim.pullT = pullT; sim.ropeTopT = ropeTopT;
         sim.ledgeSide = ledgeSide; sim.jumpedUp = jumpedUp; sim.prevJumpHeld = prevJumpHeld; sim.won = won; sim.finishedRun = finishedRun;
         sim.falls = falls; sim.hits = hits; sim.keys = keys; sim.lastKeyColor = lastKeyColor; sim.invuln = invuln; sim.clubTime = clubTime; sim.swingT = swingT; sim.shoveCd = shoveCd;
         sim.lastGroundY = tower.local(lastGroundAbs); sim.maxHeight = tower.local(maxAbs);
-        sim.pullFromS = sim.course.wrap((float) (pullFromAbsS - tower.originS)); sim.pullFromY = tower.local(pullFromAbsY);
-        sim.pullToS = sim.course.wrap((float) (pullToAbsS - tower.originS)); sim.pullToY = tower.local(pullToAbsY);
+        sim.pullFromS = localS(sim, tower, pullFromAbsS); sim.pullFromY = tower.local(pullFromAbsY);
+        sim.pullToS = localS(sim, tower, pullToAbsS); sim.pullToY = tower.local(pullToAbsY);
         sim.lastPad = lastPadKey < 0 ? -1 : tower.indexOfElemKey(lastPadKey);
         int best = bestKey < 0 ? -1 : tower.indexOfElemKey(bestKey);
         if (best >= 0) sim.bestElem = best;

@@ -91,7 +91,7 @@ public final class CourseGenerator {
             lastForDebug = g;
             GenTrace tr = GenTrace.GEN.get(); long a0 = tr != null ? GenTrace.now() : 0L; if (tr != null) { tr.attempt = attempt; tr.relaxed = g.relaxed; }      // observe-only (reports)
             try { g.buildChunk(prev); g.checkIntegrity(); g.checkLaunchCorridors(); Course out = g.extract(); continuous(out, t); g.progFinish(out); if (tr != null) { tr.finalAttempt = attempt; tr.attemptNanos.add(new long[]{attempt, GenTrace.now() - a0, 1}); } return out; }
-            catch (IllegalStateException e) { last = e; SLICE_FAILURES.incrementAndGet(); if (tr != null) { tr.sliceFailures.add("attempt " + attempt + ": " + e.getMessage()); tr.attemptNanos.add(new long[]{attempt, GenTrace.now() - a0, 0}); } }
+            catch (IllegalStateException e) { last = e; SLICE_FAILURES.incrementAndGet(); GenTrace.tally("attempt_fail_" + failureClass(e.getMessage())); if (tr != null) { tr.sliceFailures.add("attempt " + attempt + " [" + failureClass(e.getMessage()) + "]: " + e.getMessage()); tr.attemptNanos.add(new long[]{attempt, GenTrace.now() - a0, 0}); } }
         }
         throw last;
     }
@@ -106,9 +106,21 @@ public final class CourseGenerator {
      */
     private static void continuous(Course out, Tuning t) {
         Autopilot.Report r = Autopilot.run(out, t, CONTINUITY_BUDGET);
-        if (r.completed) return;
-        CONTINUITY_REFUSED.incrementAndGet(); GenTrace.tally("continuity_refused");
-        throw new IllegalStateException("whole-slice traversal failed at link " + r.failedLink + ": " + r.failInfo);
+        if (r.verdict == Autopilot.Verdict.PROVEN_SOLVABLE) return;          // DC1: only a proven, hit-free witness passes; UNKNOWN never does
+        CONTINUITY_REFUSED.incrementAndGet(); GenTrace.tally("continuity_refused"); GenTrace.tally("continuity_" + r.verdict + "_" + r.cause);
+        throw new IllegalStateException("whole-slice traversal " + r.verdict + " (" + r.cause + ") at link " + r.failedLink + ": " + r.failInfo);
+    }
+    /**
+     * DC1 diagnostics: what kind of failure a refused slice attempt was. FAILED_VALIDATION: a constraint check of the assembled slice was violated
+     * (geometry integrity, launch corridor); UNKNOWN / PROVEN_UNSOLVABLE: the whole-slice witness did not establish a route; GENERATION: the generator
+     * could not place what it wanted (no module fits, no rest, castle approach) and retried. Read from the refusal's message, which every path sets.
+     */
+    public static String failureClass(String msg) {
+        if (msg == null) return "GENERATION";
+        if (msg.startsWith("geometry integrity") || msg.startsWith("launch corridor")) return "FAILED_VALIDATION";
+        if (msg.startsWith("whole-slice traversal PROVEN_UNSOLVABLE")) return "PROVEN_UNSOLVABLE";
+        if (msg.startsWith("whole-slice traversal")) return "UNKNOWN";
+        return "GENERATION";
     }
     /** Simulated seconds the whole-slice traversal may take (the validation gate's solver uses the same). */
     static final float CONTINUITY_BUDGET = 4000f;
@@ -2078,7 +2090,7 @@ public final class CourseGenerator {
         for (int i = from; i < n0 - 1; i++) {
             boolean cannonOnLanding = false; for (Element h : hz) if (h.type == Element.Type.CANNON && h.anchor == i + 1) cannonOnLanding = true;
             if (cannonOnLanding) { heldBefore[i - from] = true; continue; }       // as before Build 79: a cannon's lane across a landing is always proven
-            Sim b = Sim.startOn(c, T, i); quietStart(b, i);
+            Sim b = provenStart(c, T, i);          // (DC2: the start the link was proven from, the belt's landing included, so belt links are judged too)
             Autopilot.Result r0 = Autopilot.plan(b, i, true);
             heldBefore[i - from] = r0.ok && r0.margin() >= linkNeed(i);
         }
@@ -2325,9 +2337,11 @@ public final class CourseGenerator {
     private boolean routeLinkStillOk(int q) {
         boolean gapSaw = false;
         for (Element h : c.hazards) if (h.type == Element.Type.SAW_H && h.anchor == q) { Element p = c.get(q); if (!(p.w >= 7f && Math.abs(h.y - p.y - 0.62f) < 0.01f)) gapSaw = true; }
-        if (!gapSaw) return Autopilot.plan(Sim.startOn(c, T, q), q, false).ok;
-        Autopilot.Result r = Autopilot.plan(Sim.startOn(c, T, q), q, true);
-        return r.ok && r.window >= Math.max(0.5f, windowNeeded(c.get(q).y));
+        // DC2 (owner correction 2026-10-27): the same proof quality as the link's first proof - its proven start (quiet moment, belt landing) and the
+        // margin it was built with - not a bare "one move still works" from a standing start at time 0
+        Autopilot.Result r = Autopilot.plan(provenStart(c, T, q), q, true);
+        if (!r.ok || r.margin() < Math.max(0f, linkNeed(q))) return false;
+        return !gapSaw || r.window >= Math.max(0.5f, windowNeeded(c.get(q).y));
     }
 
     private Kind deferredHaz;

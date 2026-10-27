@@ -37,6 +37,7 @@ public final class CourseGenerator {
     private Kind prev, prev2;
     private int rests;
     private int ctx = 1;                    // leading elements that are context from the previous slice
+    private int ctxHaz = 0;                 // leading hazards that are the previous slice's (copied with the context elements)
     private boolean endless;
     private float rampH;
     private int clubBoost;               // Build 71: modules left that should carry a crab or a bee for the club just placed
@@ -242,7 +243,7 @@ public final class CourseGenerator {
             for (int i = 0; i < rs; i++) if (i < from) ghostElems.add(prev.get(i));
             for (int i = rs; i < prev.size(); i++) ghostElems.add(prev.get(i));
             for (Element h : prev.hazards) if (h.anchor < from - 2) ghostHaz.add(h);
-            ctx = m;
+            ctx = m; ctxHaz = c.hazards.size();
             rests = prev.get(rs - 1).zone * 3 + rs;   // keeps the checkpoint cadence varied between slices
             varSeed(prev);
             lastEnfY = Float.NEGATIVE_INFINITY; for (Element h : prev.hazards) if (h.type == Element.Type.ENFORCER) lastEnfY = Math.max(lastEnfY, h.y);          // (prev is already in this frame)
@@ -1873,18 +1874,22 @@ public final class CourseGenerator {
      * accepted; one blocked corridor fails the attempt (the slice is built again), like the geometry integrity check.
      */
     private void checkLaunchCorridors() {
+        // only pairs with something of this slice in them: a pad and a hazard that both came from the previous slice (its context copy or its
+        // ghosts) were judged when that slice was accepted, and nothing this slice builds can change them (NORMAL seed 2 slice 18 on f4df3f3
+        // failed all 24 attempts on such a pair: a ghost pad and a spike drop copied with the context)
         for (int i = 0; i < c.size(); i++) {
             Element e = c.get(i);
             if (!launchPad(e)) continue;
+            boolean newPad = i >= ctx;
             Element land = padLanding(i);
-            for (Element h : c.hazards) if (h.anchor != i && otherRevolution(c, e, h) && corridorBlocked(c, T, e, land, h)) corridorFail(e, h);
-            for (Element h : ghostHaz) if (otherRevolution(c, e, h) && corridorBlocked(c, T, e, land, h)) corridorFail(e, h);
+            for (int k = 0; k < c.hazards.size(); k++) { Element h = c.hazards.get(k); if ((newPad || k >= ctxHaz) && h.anchor != i && otherRevolution(c, e, h) && corridorBlocked(c, T, e, land, h)) corridorFail(e, h, "pad " + i + (i < ctx ? " ctx" : "") + (i < c.routeSize() ? " route" : " side") + " land " + (land == null ? "-" : land.type) + " / haz " + k + (k < ctxHaz ? " ctx" : "") + " anchor " + h.anchor + " hazardOkNow=" + hazardOk(h, h.anchor)); }
+            if (newPad) for (Element h : ghostHaz) if (otherRevolution(c, e, h) && corridorBlocked(c, T, e, land, h)) corridorFail(e, h, "pad " + i + " / ghost haz");
         }
         for (int i = 0; i < ghostElems.size(); i++) {
             Element e = ghostElems.get(i);
             if (!launchPad(e)) continue;
             Element land = i + 1 < ghostElems.size() ? ghostElems.get(i + 1) : null;
-            for (Element h : c.hazards) if (otherRevolution(c, e, h) && corridorBlocked(c, T, e, land, h)) corridorFail(e, h);
+            for (int k = ctxHaz; k < c.hazards.size(); k++) { Element h = c.hazards.get(k); if (otherRevolution(c, e, h) && corridorBlocked(c, T, e, land, h)) corridorFail(e, h, "ghost pad " + i + " / haz " + k + " anchor " + h.anchor); }
         }
     }
     /**
@@ -1908,9 +1913,9 @@ public final class CourseGenerator {
         for (Element h : ghostHaz) if (otherRevolution(c, e, h) && corridorBlocked(c, T, e, land, h)) return false;
         return true;
     }
-    private static void corridorFail(Element e, Element h) {
+    private static void corridorFail(Element e, Element h, String where) {
         CORRIDOR_REFUSED.incrementAndGet(); GenTrace.tally("corridor_refused");
-        throw new IllegalStateException(String.format(java.util.Locale.ROOT, "launch corridor of the %s at s=%.2f y=%.2f holds a %s at s=%.2f y=%.2f", e.type, e.s, e.y, h.type, h.s, h.y));
+        throw new IllegalStateException(String.format(java.util.Locale.ROOT, "launch corridor of the %s at s=%.2f y=%.2f holds a %s at s=%.2f y=%.2f [%s]", e.type, e.s, e.y, h.type, h.s, h.y, where));
     }
     /** Diagnostics: slice attempts refused by the launch-corridor audit. */
     public static final java.util.concurrent.atomic.AtomicInteger CORRIDOR_REFUSED = new java.util.concurrent.atomic.AtomicInteger();

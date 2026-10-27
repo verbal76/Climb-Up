@@ -1,0 +1,890 @@
+{
+ "schema": 1,
+ "generated_from": "docs/verification (Phase 1 audit, 2026-10-27)",
+ "statuses": [
+  "VERIFIED",
+  "PARTIALLY VERIFIED",
+  "NOT VERIFIED",
+  "NOT APPLICABLE",
+  "BLOCKED"
+ ],
+ "mechanics": [
+  {
+   "id": "MV-01",
+   "name": "Run / accelerate / brake on ground",
+   "source": "Sim.stepGround 1653-1714",
+   "sim_tests": [
+    "SimTest#fuzzNeverProducesInvalidState"
+   ],
+   "sim_status": "PARTIALLY VERIFIED",
+   "solver_status": "PARTIALLY VERIFIED",
+   "proof_status": "PARTIALLY VERIFIED",
+   "note": "Solver walks at run speed or the slow approach speeds 0.5/0.3 (whole-course solver only)."
+  },
+  {
+   "id": "MV-02",
+   "name": "Wet platform grip, lurch and skid",
+   "source": "Sim.stepGround 1665-1672",
+   "sim_tests": [
+    "WetPlatformTest#aWetPlatformIsSlipperyAndADryOneIsAsBefore",
+    "WetPlatformTest#slidingOffTheEdgeKeepsTheMomentumAndFallsUnderTheNormalRules"
+   ],
+   "sim_status": "VERIFIED",
+   "solver_status": "PARTIALLY VERIFIED",
+   "proof_status": "PARTIALLY VERIFIED",
+   "note": "Planned in the real Sim (no approximation); no solver-specific test on wet decks."
+  },
+  {
+   "id": "MV-03",
+   "name": "Jump with variable height (hold / release cut)",
+   "source": "Sim.doJump 1648, stepAir 1725",
+   "sim_tests": [
+    "SimTest#jumpHeightMatchesPhysics",
+    "SimTest#shortHopWhenReleased"
+   ],
+   "sim_status": "VERIFIED",
+   "solver_status": "PARTIALLY VERIFIED",
+   "proof_status": "PARTIALLY VERIFIED",
+   "note": "Solver/proofs use 2 hold durations (0.9, 0.22 s); intermediate heights are not searched."
+  },
+  {
+   "id": "MV-04",
+   "name": "Coyote-time jump after leaving an edge",
+   "source": "Sim.stepAir 1727-1730",
+   "sim_tests": [
+    "SimTest#coyoteAndBufferedJump"
+   ],
+   "sim_status": "VERIFIED",
+   "solver_status": "NOT VERIFIED",
+   "proof_status": "NOT VERIFIED",
+   "note": "Never initiated by any policy."
+  },
+  {
+   "id": "MV-05",
+   "name": "Jump buffer (press before landing)",
+   "source": "Sim.step 537, land 1905",
+   "sim_tests": [
+    "SimTest#coyoteAndBufferedJump"
+   ],
+   "sim_status": "VERIFIED",
+   "solver_status": "NOT VERIFIED",
+   "proof_status": "NOT VERIFIED",
+   "note": "Not deliberately used; a buffered jump on landing never inherits the swing catapult."
+  },
+  {
+   "id": "MV-06",
+   "name": "Stale coyote: mid-air jump after rope bottom release / beam walk-off / shove",
+   "source": "Sim 1727-1730 with 1997, 2004, 2005, 604, 622",
+   "sim_tests": [],
+   "sim_status": "NOT VERIFIED",
+   "solver_status": "NOT VERIFIED",
+   "proof_status": "NOT VERIFIED",
+   "note": "Rare transition found by the audit; no test, no solver use."
+  },
+  {
+   "id": "MV-07",
+   "name": "Buffered jump survives a rope/cable/ledge grab",
+   "source": "Sim.tryGrab 1910-1959 (jumpBuf not cleared), stepRope 1970, stepCable 2015, stepLedge 2028",
+   "sim_tests": [],
+   "sim_status": "NOT VERIFIED",
+   "solver_status": "NOT VERIFIED",
+   "proof_status": "NOT VERIFIED",
+   "note": "Rare transition; no test."
+  },
+  {
+   "id": "MV-08",
+   "name": "Step across onto a fixed neighbour up to 0.2 m higher",
+   "source": "Sim.stepAcross 1809-1824",
+   "sim_tests": [
+    "StepUpTest#walkingOffTowardsACloseHigherPlatformStepsUpOntoIt"
+   ],
+   "sim_status": "VERIFIED",
+   "solver_status": "PARTIALLY VERIFIED",
+   "proof_status": "PARTIALLY VERIFIED",
+   "note": "By-product of walking; solver never targets it."
+  },
+  {
+   "id": "MV-09",
+   "name": "Walk off an edge (no jump)",
+   "source": "Sim.stepGround 1694-1698",
+   "sim_tests": [
+    "MoverSupportTest#walkingOffTheEdgeOfAMovingBlockLeavesItCleanly"
+   ],
+   "sim_status": "VERIFIED",
+   "solver_status": "PARTIALLY VERIFIED",
+   "proof_status": "PARTIALLY VERIFIED",
+   "note": "WalkOffPolicy only towards a target >0.3 m lower."
+  },
+  {
+   "id": "MV-10",
+   "name": "Air control (steer, drag, over-speed)",
+   "source": "Sim.stepAir 1718-1720",
+   "sim_tests": [
+    "SimTest#fuzzNeverProducesInvalidState"
+   ],
+   "sim_status": "PARTIALLY VERIFIED",
+   "solver_status": "PARTIALLY VERIFIED",
+   "proof_status": "PARTIALLY VERIFIED",
+   "note": "Steer modes 0,1,3 (ground) and 0-2 (pads); no deliberate mid-air reversal."
+  },
+  {
+   "id": "MV-11",
+   "name": "Land on a platform top (one-way, highest wins)",
+   "source": "Sim.stepAir 1736-1751, land 1885-1906",
+   "sim_tests": [
+    "MoverSupportTest#landingOnAMovingBlockPutsTheFeetExactlyOnItsSurfaceAtEveryPhase"
+   ],
+   "sim_status": "VERIFIED",
+   "solver_status": "VERIFIED",
+   "proof_status": "VERIFIED",
+   "note": "Arrival = GROUND on a later route element (Autopilot.succeeded)."
+  },
+  {
+   "id": "MV-12",
+   "name": "Land on a slope (ramp) while rising into it",
+   "source": "Sim.landOnSlope 1833-1848",
+   "sim_tests": [
+    "RampTest#rampSurfaceFollowsTheSlope"
+   ],
+   "sim_status": "VERIFIED",
+   "solver_status": "PARTIALLY VERIFIED",
+   "proof_status": "PARTIALLY VERIFIED",
+   "note": ""
+  },
+  {
+   "id": "MV-13",
+   "name": "Ledge hang (fingertip reach 0.4 m outside, 1.0-2.05 m below top, vy<=3.5)",
+   "source": "Sim.tryGrab 1933-1956",
+   "sim_tests": [
+    "SimTest#ledgeGrabSavesAShortJump",
+    "EdgeContactTest#everyPlatformTypeHasEdgesAtEveryHeightSpeedAndDirection"
+   ],
+   "sim_status": "VERIFIED",
+   "solver_status": "PARTIALLY VERIFIED",
+   "proof_status": "PARTIALLY VERIFIED",
+   "note": "LEDGE counts as arrival; no policy targets a catch deliberately; the pull-up is outside per-link proofs."
+  },
+  {
+   "id": "MV-14",
+   "name": "Mantle / step-up (feet 0.05-1.0 m below top) straight to pull-up",
+   "source": "Sim.tryGrab 1949-1952",
+   "sim_tests": [
+    "EdgeContactTest#everyPlatformTypeHasEdgesAtEveryHeightSpeedAndDirection"
+   ],
+   "sim_status": "VERIFIED",
+   "solver_status": "PARTIALLY VERIFIED",
+   "proof_status": "PARTIALLY VERIFIED",
+   "note": ""
+  },
+  {
+   "id": "MV-15",
+   "name": "Side catch (body entered a platform side), no lockout, no stick",
+   "source": "Sim.trackSideEntry 1855-1865, catchInside 1870-1881",
+   "sim_tests": [
+    "EdgeContactTest#theCaseThatWasReportedARisingJumpIntoTheWaistOfAMovingPlatformIsCaught"
+   ],
+   "sim_status": "VERIFIED",
+   "solver_status": "PARTIALLY VERIFIED",
+   "proof_status": "PARTIALLY VERIFIED",
+   "note": ""
+  },
+  {
+   "id": "MV-16",
+   "name": "Hang / pull up / drop from a ledge (also moving and crumbling ledges)",
+   "source": "Sim.stepLedge 2023-2035, stepPull 2037-2055",
+   "sim_tests": [
+    "SimTest#ledgeGrabSavesAShortJump",
+    "WholeSliceSolvabilityTest#aCrumblingMoverIsBoardedOnlyWhenTheMoveOffItWorks"
+   ],
+   "sim_status": "PARTIALLY VERIFIED",
+   "solver_status": "PARTIALLY VERIFIED",
+   "proof_status": "NOT VERIFIED",
+   "note": "Solver always pulls up; never drops deliberately. Pull-up onto a crumbled deck completes then drops (untested)."
+  },
+  {
+   "id": "MV-17",
+   "name": "Rope grab (no vy limit), climb, jump off",
+   "source": "Sim.tryGrab 1916-1920, stepRope 1961-1980",
+   "sim_tests": [
+    "SimTest#ropeClimbAndLeap"
+   ],
+   "sim_status": "VERIFIED",
+   "solver_status": "PARTIALLY VERIFIED",
+   "proof_status": "PARTIALLY VERIFIED",
+   "note": "RopePolicy 6 heights x 2 holds; no waiting on a rope in proofs."
+  },
+  {
+   "id": "MV-18",
+   "name": "Rope let go at the very bottom",
+   "source": "Sim.stepRope 1976",
+   "sim_tests": [],
+   "sim_status": "NOT VERIFIED",
+   "solver_status": "NOT VERIFIED",
+   "proof_status": "NOT VERIFIED",
+   "note": ""
+  },
+  {
+   "id": "MV-19",
+   "name": "Beam (rope top): mount, walk, jump, walk off, back down to the rope",
+   "source": "Sim.stepBeam 1986-2006",
+   "sim_tests": [
+    "RopeTopTest#holdingUpAtTheTopMountsTheBeamAndStandsOnIt",
+    "RopeTopTest#jumpingFromTheBeamLeavesTheGroundAndCanBeSteppedBackDownToTheRope",
+    "RopeTopTest#walkingOffTheEndOfTheBeamDrops"
+   ],
+   "sim_status": "VERIFIED",
+   "solver_status": "PARTIALLY VERIFIED",
+   "proof_status": "NOT VERIFIED",
+   "note": "Run loop climbs back down from a beam (recovery); proofs reject BEAM in chainClean."
+  },
+  {
+   "id": "MV-20",
+   "name": "Cable grab (vy<4), shimmy, jump, drop",
+   "source": "Sim.tryGrab 1922-1929, stepCable 2008-2021",
+   "sim_tests": [],
+   "sim_status": "PARTIALLY VERIFIED",
+   "solver_status": "PARTIALLY VERIFIED",
+   "proof_status": "PARTIALLY VERIFIED",
+   "note": "CablePolicy 4 positions x jump/drop; no waiting on a cable in proofs. No dedicated Sim test."
+  },
+  {
+   "id": "MV-21",
+   "name": "Pad bounce (held 24 / unheld 21, sampled at landing)",
+   "source": "Sim.land 1889-1897",
+   "sim_tests": [
+    "SimTest#padBounces"
+   ],
+   "sim_status": "VERIFIED",
+   "solver_status": "PARTIALLY VERIFIED",
+   "proof_status": "PARTIALLY VERIFIED",
+   "note": "Move onto a pad followed through its launch by the solver look-ahead (launchClear) since b224753."
+  },
+  {
+   "id": "MV-22",
+   "name": "Spring (angled) launch",
+   "source": "Sim.land 1891",
+   "sim_tests": [
+    "PadSideTest#sameForAnAngledSpring",
+    "WholeSliceSolvabilityTest#aForcedSpringLaunchIsTimedFromTheDeckBefore"
+   ],
+   "sim_status": "VERIFIED",
+   "solver_status": "VERIFIED",
+   "proof_status": "PARTIALLY VERIFIED",
+   "note": ""
+  },
+  {
+   "id": "MV-23",
+   "name": "Pad/spring side contact bounces",
+   "source": "Sim.tryGrab 1948, catchInside 1878",
+   "sim_tests": [
+    "PadSideTest#walkingIntoThePadFromTheSideBounces"
+   ],
+   "sim_status": "VERIFIED",
+   "solver_status": "PARTIALLY VERIFIED",
+   "proof_status": "PARTIALLY VERIFIED",
+   "note": ""
+  },
+  {
+   "id": "MV-24",
+   "name": "Swing catapult (standing jump near arc end)",
+   "source": "Sim.stepGround 1682-1686",
+   "sim_tests": [
+    "MoverTest#jumpingAtTheTopOfASwingsArcCatapultsYou"
+   ],
+   "sim_status": "VERIFIED",
+   "solver_status": "PARTIALLY VERIFIED",
+   "proof_status": "PARTIALLY VERIFIED",
+   "note": ""
+  },
+  {
+   "id": "MV-25",
+   "name": "Carried by movers (H, V, Z depth, swing)",
+   "source": "Sim.stepGround 1657, Element.sAt/yAt",
+   "sim_tests": [
+    "MoverSupportTest#aMovingBlockCarriesAndKeepsSupportingThroughReversalsAndASecondCycle",
+    "MoverTest#aDepthMoverCannotBeLandedOnWhileItIsOutOfYourPlane"
+   ],
+   "sim_status": "VERIFIED",
+   "solver_status": "PARTIALLY VERIFIED",
+   "proof_status": "PARTIALLY VERIFIED",
+   "note": "Ground waits only when movingNear; capped at 6.9 s."
+  },
+  {
+   "id": "MV-26",
+   "name": "Crumbling platform / crumbling mover / crumbling ramp",
+   "source": "Sim 528-533, 1701, 1901",
+   "sim_tests": [
+    "SimTest#crumbleFallsAndRespawns",
+    "MoverTest#aFallingMoverDropsAfterTheDelayAndAComeBackLater",
+    "RampTest#crumblingRampFallsApartWhenStoodOn"
+   ],
+   "sim_status": "VERIFIED",
+   "solver_status": "VERIFIED",
+   "proof_status": "PARTIALLY VERIFIED",
+   "note": "Solver look-ahead (crumbleClear) requires a working exit before boarding (b224753)."
+  },
+  {
+   "id": "MV-27",
+   "name": "Holed bridge (planks drop 0.45 s after standing)",
+   "source": "Sim 525-528, 1702, 1744",
+   "sim_tests": [],
+   "sim_status": "NOT VERIFIED",
+   "solver_status": "PARTIALLY VERIFIED",
+   "proof_status": "PARTIALLY VERIFIED",
+   "note": "HoleHopPolicy; no Sim behaviour test."
+  },
+  {
+   "id": "MV-28",
+   "name": "Seesaw tilt, uphill slow, downhill slide",
+   "source": "Sim 509-517, 1661, 1675",
+   "sim_tests": [
+    "BridgeTest#standingStillOnASeesawTipsYouOff",
+    "BridgeTest#runningAcrossMakesIt"
+   ],
+   "sim_status": "VERIFIED",
+   "solver_status": "PARTIALLY VERIFIED",
+   "proof_status": "PARTIALLY VERIFIED",
+   "note": ""
+  },
+  {
+   "id": "MV-29",
+   "name": "Tilt belt (balance conveyor)",
+   "source": "Sim 452, 515",
+   "sim_tests": [
+    "BalanceConveyorTest"
+   ],
+   "sim_status": "PARTIALLY VERIFIED",
+   "solver_status": "PARTIALLY VERIFIED",
+   "proof_status": "PARTIALLY VERIFIED",
+   "note": "Proof from the landing of the proven jump onto it."
+  },
+  {
+   "id": "MV-30",
+   "name": "Conveyors (plank bridge, ramp belt)",
+   "source": "Sim.surfaceCarry 450-454",
+   "sim_tests": [
+    "ConveyorTest#runningBeatsTheBeltAndReachesTheBlockAtTheTop",
+    "ConveyorTest#theConveyorBridgeRollsYouLeftOffItsEndIfYouStandStill"
+   ],
+   "sim_status": "VERIFIED",
+   "solver_status": "PARTIALLY VERIFIED",
+   "proof_status": "PARTIALLY VERIFIED",
+   "note": ""
+  },
+  {
+   "id": "MV-31",
+   "name": "Ramps: plain, shaking (kick every 0.25 s), spinning, downhill",
+   "source": "Sim 518-523, 1703-1708",
+   "sim_tests": [
+    "RampTest#shakingRampThrowsYouAround",
+    "RampTest#plainRampWalksUpToATallerBlock"
+   ],
+   "sim_status": "VERIFIED",
+   "solver_status": "PARTIALLY VERIFIED",
+   "proof_status": "PARTIALLY VERIFIED",
+   "note": "Shaking-ramp kick counter not reset on respawn (untested)."
+  },
+  {
+   "id": "MV-32",
+   "name": "Spike-slab top: ride, slam bounce, step off",
+   "source": "Sim.stepSlab 1778-1796, landOnSlab 1759-1775",
+   "sim_tests": [
+    "SlabTopTest#landingOnTheTopIsSafeAndTheSlabCarriesTheHeroUp",
+    "SlabTopTest#aSlamThrowsAHeroStandingOnTopOffGentlyAndHurtsNoOne"
+   ],
+   "sim_status": "VERIFIED",
+   "solver_status": "PARTIALLY VERIFIED",
+   "proof_status": "PARTIALLY VERIFIED",
+   "note": "Solver steps off a slab top toward its own deck (slabStepOff)."
+  },
+  {
+   "id": "MV-33",
+   "name": "Hazard hit -> knock-back 6.9/6.9, 0.7 s invulnerable (any mode)",
+   "source": "Sim.knockOff 355-359, hazardHit",
+   "sim_tests": [
+    "FallRulesTest#aHazardKnocksYouBackInsteadOfTeleportingYou",
+    "FallRulesTest#aHazardTouchNeverSendsYouToTheCheckpointByItself"
+   ],
+   "sim_status": "VERIFIED",
+   "solver_status": "PARTIALLY VERIFIED",
+   "proof_status": "PARTIALLY VERIFIED",
+   "note": "Solver treats any hit as a failed move (the witness must be hit-free)."
+  },
+  {
+   "id": "MV-34",
+   "name": "Creature shoves (crab, bee) - coyote not cleared",
+   "source": "Sim 602-605, 620-623",
+   "sim_tests": [
+    "CrabChaseTest#theChaseIsDeterministicAndTheShoveComesFromWhereItReallyIs"
+   ],
+   "sim_status": "VERIFIED",
+   "solver_status": "PARTIALLY VERIFIED",
+   "proof_status": "PARTIALLY VERIFIED",
+   "note": "Solver recovers from shoves (recover); a shove is not a setback."
+  },
+  {
+   "id": "MV-35",
+   "name": "Skull dash launch",
+   "source": "Sim 746-748",
+   "sim_tests": [
+    "SolverRecoveryTest"
+   ],
+   "sim_status": "PARTIALLY VERIFIED",
+   "solver_status": "PARTIALLY VERIFIED",
+   "proof_status": "PARTIALLY VERIFIED",
+   "note": "Reflex hops a dashing skull."
+  },
+  {
+   "id": "MV-36",
+   "name": "Enforcer kick and swat (swat drives you down)",
+   "source": "Sim 842-876",
+   "sim_tests": [
+    "EnforcerTest#itChasesKicksAndLeavesDeterministically",
+    "EnforcerJudgmentTest#anEasyJumpIsTakenAndLandsSafely"
+   ],
+   "sim_status": "VERIFIED",
+   "solver_status": "PARTIALLY VERIFIED",
+   "proof_status": "PARTIALLY VERIFIED",
+   "note": "Encounters proven with chainClean (robot live)."
+  },
+  {
+   "id": "MV-37",
+   "name": "Blob squash and seesaw launch (~5.8 m up, ungated)",
+   "source": "Sim 1306-1319",
+   "sim_tests": [],
+   "sim_status": "NOT VERIFIED",
+   "solver_status": "PARTIALLY VERIFIED",
+   "proof_status": "NOT VERIFIED",
+   "note": "Reflex steps out of the shadow; the launch is never used as a route."
+  },
+  {
+   "id": "MV-38",
+   "name": "Avalanche block hit",
+   "source": "Sim 1209-1222",
+   "sim_tests": [
+    "AvalancheTest#aBlockKnocksYouAway",
+    "NghEncounterTest#aBlockKnocksYouAway"
+   ],
+   "sim_status": "VERIFIED",
+   "solver_status": "PARTIALLY VERIFIED",
+   "proof_status": "PARTIALLY VERIFIED",
+   "note": "NGH avalanches proven for 4 arrival times; PUNISHER/NORMAL for one."
+  },
+  {
+   "id": "MV-39",
+   "name": "Closed castle gate = wall; open with key = checkpoint",
+   "source": "Sim 1503-1524",
+   "sim_tests": [
+    "KeyColorsTest",
+    "TowerStreamingTest#keyAndGateStateSurvivesUnloadingAndReloadingASlice"
+   ],
+   "sim_status": "PARTIALLY VERIFIED",
+   "solver_status": "PARTIALLY VERIFIED",
+   "proof_status": "PARTIALLY VERIFIED",
+   "note": "Endless route keys (keyOnRoute) have no generator proof."
+  },
+  {
+   "id": "MV-40",
+   "name": "Gem / checkpoint pickup by touch",
+   "source": "Sim.stepGemPickup 571-581",
+   "sim_tests": [
+    "CheckpointGemTest",
+    "GemCheckpointTest"
+   ],
+   "sim_status": "VERIFIED",
+   "solver_status": "NOT APPLICABLE",
+   "proof_status": "NOT APPLICABLE",
+   "note": ""
+  },
+  {
+   "id": "MV-41",
+   "name": "Fall: endless respawn only below the tower's lowest platform - 6 m; finite: 12 m below last ground",
+   "source": "Sim 564-567",
+   "sim_tests": [
+    "FallRulesTest#youKeepFallingAndLandOnWhatIsBelow",
+    "FullFallTest#floorIsTheLowestPlatformOfTheWholeMap",
+    "TowerStreamingTest#fallingThroughManyUnloadedSlicesLandsExactlyWhereAWholeTowerWould"
+   ],
+   "sim_status": "VERIFIED",
+   "solver_status": "PARTIALLY VERIFIED",
+   "proof_status": "NOT VERIFIED",
+   "note": "A knock-back normally lands on a lower revolution; the solver fails the move (no retry from below)."
+  },
+  {
+   "id": "MV-42",
+   "name": "Respawn resets only crumbles and holes (tilt, creatures, avalanches persist)",
+   "source": "Sim.completeRespawn 370-379",
+   "sim_tests": [
+    "SimTest#fallingFarReturnsToCheckpointAndNeverSoftLocks"
+   ],
+   "sim_status": "PARTIALLY VERIFIED",
+   "solver_status": "NOT VERIFIED",
+   "proof_status": "NOT VERIFIED",
+   "note": "Retry-after-fall state is not part of any proof."
+  },
+  {
+   "id": "MV-43",
+   "name": "Fork branch traversal (carried onto a branch, follow it to the rejoin)",
+   "source": "Autopilot.followBranch",
+   "sim_tests": [
+    "WholeSliceSolvabilityTest#aClimberCarriedOntoAForkBranchFollowsItToTheRejoin",
+    "WholeSliceSolvabilityTest#theRules13BaselineFailureIsTheSameBranchCase"
+   ],
+   "sim_status": "NOT APPLICABLE",
+   "solver_status": "VERIFIED",
+   "proof_status": "PARTIALLY VERIFIED",
+   "note": "Branch pair links are proven at fork placement; earlier branches are not re-proven later."
+  },
+  {
+   "id": "MV-44",
+   "name": "Club pickup and swing (knocks creatures off)",
+   "source": "Sim 553-611",
+   "sim_tests": [],
+   "sim_status": "PARTIALLY VERIFIED",
+   "solver_status": "NOT VERIFIED",
+   "proof_status": "NOT VERIFIED",
+   "note": "Never used by the solver."
+  }
+ ],
+ "transitions": [
+  {
+   "id": "TR-01",
+   "frm": "GROUND",
+   "to": "AIR",
+   "trigger": "jump (stand/run, held or cut)",
+   "mechanic": "MV-03",
+   "solver_initiates": true,
+   "solver_recognises": true
+  },
+  {
+   "id": "TR-02",
+   "frm": "GROUND",
+   "to": "AIR",
+   "trigger": "walk off an edge",
+   "mechanic": "MV-09",
+   "solver_initiates": true,
+   "solver_recognises": true
+  },
+  {
+   "id": "TR-03",
+   "frm": "GROUND",
+   "to": "AIR",
+   "trigger": "platform gone (crumble, hole, depth mover out of plane)",
+   "mechanic": "MV-26",
+   "solver_initiates": false,
+   "solver_recognises": true
+  },
+  {
+   "id": "TR-04",
+   "frm": "GROUND",
+   "to": "AIR",
+   "trigger": "shaking-ramp kick",
+   "mechanic": "MV-31",
+   "solver_initiates": false,
+   "solver_recognises": true
+  },
+  {
+   "id": "TR-05",
+   "frm": "GROUND",
+   "to": "AIR",
+   "trigger": "hazard knock-back / creature shove / blob or seesaw launch",
+   "mechanic": "MV-33",
+   "solver_initiates": false,
+   "solver_recognises": true
+  },
+  {
+   "id": "TR-06",
+   "frm": "GROUND",
+   "to": "GROUND",
+   "trigger": "step across onto a neighbour",
+   "mechanic": "MV-08",
+   "solver_initiates": false,
+   "solver_recognises": true
+  },
+  {
+   "id": "TR-07",
+   "frm": "GROUND",
+   "to": "GROUND",
+   "trigger": "carried by a mover / belt",
+   "mechanic": "MV-25",
+   "solver_initiates": true,
+   "solver_recognises": true
+  },
+  {
+   "id": "TR-08",
+   "frm": "GROUND(slab)",
+   "to": "AIR",
+   "trigger": "slab slam bounce / jump / walk off",
+   "mechanic": "MV-32",
+   "solver_initiates": false,
+   "solver_recognises": true
+  },
+  {
+   "id": "TR-09",
+   "frm": "AIR",
+   "to": "AIR",
+   "trigger": "coyote jump",
+   "mechanic": "MV-04",
+   "solver_initiates": false,
+   "solver_recognises": false
+  },
+  {
+   "id": "TR-10",
+   "frm": "AIR",
+   "to": "AIR",
+   "trigger": "stale-coyote mid-air jump",
+   "mechanic": "MV-06",
+   "solver_initiates": false,
+   "solver_recognises": false
+  },
+  {
+   "id": "TR-11",
+   "frm": "AIR",
+   "to": "GROUND",
+   "trigger": "land on a platform top (static, mover, slope)",
+   "mechanic": "MV-11",
+   "solver_initiates": true,
+   "solver_recognises": true
+  },
+  {
+   "id": "TR-12",
+   "frm": "AIR",
+   "to": "GROUND(slab)",
+   "trigger": "land on a spike-slab top",
+   "mechanic": "MV-32",
+   "solver_initiates": false,
+   "solver_recognises": true
+  },
+  {
+   "id": "TR-13",
+   "frm": "AIR",
+   "to": "AIR",
+   "trigger": "pad / spring bounce (landing, side contact, ledge contact)",
+   "mechanic": "MV-21",
+   "solver_initiates": true,
+   "solver_recognises": true
+  },
+  {
+   "id": "TR-14",
+   "frm": "AIR",
+   "to": "ROPE",
+   "trigger": "rope grab (also while rising)",
+   "mechanic": "MV-17",
+   "solver_initiates": true,
+   "solver_recognises": true
+  },
+  {
+   "id": "TR-15",
+   "frm": "AIR",
+   "to": "CABLE",
+   "trigger": "cable grab (vy<4)",
+   "mechanic": "MV-20",
+   "solver_initiates": true,
+   "solver_recognises": true
+  },
+  {
+   "id": "TR-16",
+   "frm": "AIR",
+   "to": "LEDGE",
+   "trigger": "ledge hang",
+   "mechanic": "MV-13",
+   "solver_initiates": false,
+   "solver_recognises": true
+  },
+  {
+   "id": "TR-17",
+   "frm": "AIR",
+   "to": "PULLUP",
+   "trigger": "mantle / step-up",
+   "mechanic": "MV-14",
+   "solver_initiates": false,
+   "solver_recognises": true
+  },
+  {
+   "id": "TR-18",
+   "frm": "AIR",
+   "to": "PULLUP",
+   "trigger": "side catch",
+   "mechanic": "MV-15",
+   "solver_initiates": false,
+   "solver_recognises": true
+  },
+  {
+   "id": "TR-19",
+   "frm": "AIR",
+   "to": "AIR",
+   "trigger": "hazard knock-back / shove / swat in flight",
+   "mechanic": "MV-33",
+   "solver_initiates": false,
+   "solver_recognises": true
+  },
+  {
+   "id": "TR-20",
+   "frm": "LEDGE",
+   "to": "PULLUP",
+   "trigger": "push up or jump",
+   "mechanic": "MV-16",
+   "solver_initiates": true,
+   "solver_recognises": true
+  },
+  {
+   "id": "TR-21",
+   "frm": "LEDGE",
+   "to": "AIR",
+   "trigger": "drop (down or away) / ledge gone",
+   "mechanic": "MV-16",
+   "solver_initiates": false,
+   "solver_recognises": false
+  },
+  {
+   "id": "TR-22",
+   "frm": "PULLUP",
+   "to": "GROUND",
+   "trigger": "pull completes (also onto a crumbled deck)",
+   "mechanic": "MV-16",
+   "solver_initiates": true,
+   "solver_recognises": true
+  },
+  {
+   "id": "TR-23",
+   "frm": "ROPE",
+   "to": "AIR",
+   "trigger": "jump off",
+   "mechanic": "MV-17",
+   "solver_initiates": true,
+   "solver_recognises": true
+  },
+  {
+   "id": "TR-24",
+   "frm": "ROPE",
+   "to": "AIR",
+   "trigger": "let go at the bottom",
+   "mechanic": "MV-18",
+   "solver_initiates": false,
+   "solver_recognises": false
+  },
+  {
+   "id": "TR-25",
+   "frm": "ROPE",
+   "to": "BEAM",
+   "trigger": "hold up at the top",
+   "mechanic": "MV-19",
+   "solver_initiates": false,
+   "solver_recognises": true
+  },
+  {
+   "id": "TR-26",
+   "frm": "ROPE",
+   "to": "ROPE",
+   "trigger": "climb",
+   "mechanic": "MV-17",
+   "solver_initiates": true,
+   "solver_recognises": true
+  },
+  {
+   "id": "TR-27",
+   "frm": "BEAM",
+   "to": "AIR",
+   "trigger": "jump / walk off",
+   "mechanic": "MV-19",
+   "solver_initiates": false,
+   "solver_recognises": false
+  },
+  {
+   "id": "TR-28",
+   "frm": "BEAM",
+   "to": "ROPE",
+   "trigger": "climb back down",
+   "mechanic": "MV-19",
+   "solver_initiates": true,
+   "solver_recognises": true
+  },
+  {
+   "id": "TR-29",
+   "frm": "CABLE",
+   "to": "AIR",
+   "trigger": "jump off",
+   "mechanic": "MV-20",
+   "solver_initiates": true,
+   "solver_recognises": true
+  },
+  {
+   "id": "TR-30",
+   "frm": "CABLE",
+   "to": "AIR",
+   "trigger": "drop / shimmy past the end",
+   "mechanic": "MV-20",
+   "solver_initiates": true,
+   "solver_recognises": true
+  },
+  {
+   "id": "TR-31",
+   "frm": "CABLE",
+   "to": "CABLE",
+   "trigger": "shimmy",
+   "mechanic": "MV-20",
+   "solver_initiates": true,
+   "solver_recognises": true
+  },
+  {
+   "id": "TR-32",
+   "frm": "ANY",
+   "to": "AIR",
+   "trigger": "hazard knock-back (any mode incl. rope, cable, ledge, pull-up, beam)",
+   "mechanic": "MV-33",
+   "solver_initiates": false,
+   "solver_recognises": true
+  },
+  {
+   "id": "TR-33",
+   "frm": "ANY",
+   "to": "GROUND(checkpoint)",
+   "trigger": "fall below the floor -> respawn",
+   "mechanic": "MV-41",
+   "solver_initiates": false,
+   "solver_recognises": false
+  }
+ ],
+ "modes": [
+  "GROUND",
+  "AIR",
+  "ROPE",
+  "CABLE",
+  "LEDGE",
+  "PULLUP",
+  "BEAM"
+ ],
+ "element_types": [
+  "STATIC",
+  "CRUMBLE",
+  "MOVE_H",
+  "MOVE_V",
+  "MOVE_Z",
+  "SWING",
+  "PAD",
+  "SPRING",
+  "ROPE",
+  "CABLE",
+  "GOAL",
+  "SEESAW",
+  "RAMP",
+  "SAW_H",
+  "SAW_V",
+  "PENDULUM",
+  "CANNON",
+  "MORTAR",
+  "AIMED",
+  "SPIKE_TRAP",
+  "SPIKE_BLOCK",
+  "SPIKE_DROP",
+  "KEY",
+  "GATE",
+  "CLUB",
+  "CRAB",
+  "BEE",
+  "SKULL",
+  "BLOB",
+  "ENFORCER",
+  "AVALANCHE"
+ ]
+}

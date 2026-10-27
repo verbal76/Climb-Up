@@ -134,12 +134,13 @@ public final class DifficultyProfile {
      * number), the others 30-35%; any category may be eased by 20-30%.
      */
     public float factorLo(int k) { return k == 1 ? 0.7f : k == 2 ? 0.7f : 0.8f; }
-    public float factorHi(int k) { return k == 1 ? (this == NGH ? NGH_HAZARD_HI : 1.35f) : k == 2 ? 1.1f : 1.3f; }
+    public float factorHi(int k) { return k == 1 ? 1.35f : k == 2 ? 1.1f : 1.3f; }
     /**
-     * NOT GONNA HAPPEN round 2 correction (owner directive 2026-10-27): in round 1 the hazard factor sat at the 1.35 ceiling from castle 4 to castle 10
-     * on every seed while castle 10's hazards measured ~197 against ~303; the controller could not ask for more. NGH's ceiling only (PROVISIONAL).
+     * NOT GONNA HAPPEN (owner amendment 2026-10-27): no fixed hazard ceiling; its hazard factor escalates as far as the generator can place hazards
+     * (Progression.hazardControl: step-limited, held while acceptance is low, a computational bound) and its hazard kinds are re-weighted by what they
+     * actually deliver (Progression.capMultipliers). NORMAL and PUNISHER keep factorHi's 1.35.
      */
-    static final float NGH_HAZARD_HI = 1.7f;
+    public boolean capacityControl() { return this == NGH; }
     /**
      * Castle 1's factors before any of it is measured (PROVISIONAL): PUNISHER opens 8-11% above its castle-1 target with neutral factors (rules 13
      * iteration 1, seeds 1-2: 755-778 against 700; its Enforcer and avalanche encounters contribute only 2-7 points of that, the surplus is ordinary

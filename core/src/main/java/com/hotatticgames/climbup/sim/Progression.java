@@ -56,24 +56,58 @@ public final class Progression {
     /** The factors the latest slice was generated with (diagnostics; also stored with each completed castle). */
     final float[] lastF = {1f, 1f, 1f, 1f};
 
+    // ------------------------------------------------------------------ hazard capacity (NOT GONNA HAPPEN only; rules 14, owner amendment 2026-10-27)
+    /**
+     * NGH has no fixed hazard ceiling: its hazard selection may escalate as far as the generator can place hazards. The capacity it measures, per
+     * hazard module kind ({@link #CAP_KINDS}): attempts, accepted modules, and the hazard points the accepted modules actually added (the estimator's
+     * weights). Kept for the castle in progress and the castle before it, with a record per completed castle for the reports. Written into the slice
+     * only when present (NGH), so NORMAL and PUNISHER slices are byte-for-byte what they were.
+     */
+    public static final String[] CAP_KINDS = {"HAZ", "TRAP", "MORTAR", "DROPS"};
+    public static final int CAP_K = 4, CAP_W = 3 * CAP_K, CAP_REC = 1 + CAP_W + 3;
+    /** Hazard control result codes: applied = requested, step-limited, held for low acceptance, computational bound. */
+    public static final int HC_NONE = 0, HC_RATE = 1, HC_ACCEPTANCE = 2, HC_BOUND = 3;
+    public static final String[] HC_NAMES = {"none", "escalation_rate", "low_acceptance", "computational_bound"};
+    boolean cap;
+    final float[] capCur = new float[CAP_W], capPrev = new float[CAP_W];
+    /** {requested, applied, constraint} of the hazard factor for the castle in progress (as the latest slice was generated). */
+    final float[] hcNow = {1f, 1f, HC_NONE};
+    final float[][] capRec = new float[KEEP][]; int capRecN;
+    private java.util.Map<Integer, float[]> capPending;
+    static final int FORMAT_CAP = 2;
+
     public Progression copy() {
         Progression p = new Progression(); p.castle = castle; System.arraycopy(cur, 0, p.cur, 0, ACC);
-        for (int i = 0; i < doneN; i++) p.done[i] = done[i].clone(); p.doneN = doneN; System.arraycopy(lastF, 0, p.lastF, 0, 4); return p;
+        for (int i = 0; i < doneN; i++) p.done[i] = done[i].clone(); p.doneN = doneN; System.arraycopy(lastF, 0, p.lastF, 0, 4);
+        p.cap = cap; System.arraycopy(capCur, 0, p.capCur, 0, CAP_W); System.arraycopy(capPrev, 0, p.capPrev, 0, CAP_W); System.arraycopy(hcNow, 0, p.hcNow, 0, 3);
+        for (int i = 0; i < capRecN; i++) p.capRec[i] = capRec[i].clone(); p.capRecN = capRecN;
+        return p;
     }
     public float[] toArray() {
-        float[] a = new float[3 + ACC + 4 + doneN * REC]; int k = 0;
-        a[k++] = FORMAT; a[k++] = castle; a[k++] = doneN;
+        int extra = cap ? 2 * CAP_W + 3 + 1 + capRecN * CAP_REC : 0;
+        float[] a = new float[3 + ACC + 4 + doneN * REC + extra]; int k = 0;
+        a[k++] = cap ? FORMAT_CAP : FORMAT; a[k++] = castle; a[k++] = doneN;
         for (float v : cur) a[k++] = v; for (float v : lastF) a[k++] = v;
         for (int i = 0; i < doneN; i++) for (float v : done[i]) a[k++] = v;
+        if (cap) {
+            for (float v : capCur) a[k++] = v; for (float v : capPrev) a[k++] = v; for (float v : hcNow) a[k++] = v;
+            a[k++] = capRecN; for (int i = 0; i < capRecN; i++) for (float v : capRec[i]) a[k++] = v;
+        }
         return a;
     }
     /** The state stored in a slice (null or unknown: a fresh climb, no feedback yet). */
     public static Progression of(float[] a) {
         Progression p = new Progression();
-        if (a == null || a.length < 3 + ACC + 4 || (int) a[0] != FORMAT) return p;
+        if (a == null || a.length < 3 + ACC + 4 || ((int) a[0] != FORMAT && (int) a[0] != FORMAT_CAP)) return p;
         int k = 1; p.castle = (int) a[k++]; int n = (int) a[k++];
         for (int i = 0; i < ACC; i++) p.cur[i] = a[k++]; for (int i = 0; i < 4; i++) p.lastF[i] = a[k++];
         for (int i = 0; i < n && k + REC <= a.length; i++) { p.done[i] = new float[REC]; System.arraycopy(a, k, p.done[i], 0, REC); k += REC; p.doneN++; }
+        if ((int) a[0] == FORMAT_CAP && k + 2 * CAP_W + 4 <= a.length) {
+            p.cap = true;
+            for (int i = 0; i < CAP_W; i++) p.capCur[i] = a[k++]; for (int i = 0; i < CAP_W; i++) p.capPrev[i] = a[k++]; for (int i = 0; i < 3; i++) p.hcNow[i] = a[k++];
+            int m = (int) a[k++];
+            for (int i = 0; i < m && k + CAP_REC <= a.length && i < KEEP; i++) { p.capRec[i] = new float[CAP_REC]; System.arraycopy(a, k, p.capRec[i], 0, CAP_REC); k += CAP_REC; p.capRecN++; }
+        }
         return p;
     }
     /** The completed record of castle n (null if not kept). */
@@ -88,7 +122,30 @@ public final class Progression {
     private void complete() {
         float[] r = new float[REC]; r[0] = castle; System.arraycopy(cur, 0, r, 1, ACC); System.arraycopy(lastF, 0, r, 1 + ACC, 4);
         if (doneN == KEEP) { System.arraycopy(done, 1, done, 0, KEEP - 1); doneN--; }
-        done[doneN++] = r; castle++; java.util.Arrays.fill(cur, 0f);
+        done[doneN++] = r;
+        if (cap) {
+            float[] cr = new float[CAP_REC]; cr[0] = castle; System.arraycopy(capCur, 0, cr, 1, CAP_W); System.arraycopy(hcNow, 0, cr, 1 + CAP_W, 3);
+            if (capRecN == KEEP) { System.arraycopy(capRec, 1, capRec, 0, KEEP - 1); capRecN--; }
+            capRec[capRecN++] = cr; System.arraycopy(capCur, 0, capPrev, 0, CAP_W); java.util.Arrays.fill(capCur, 0f);
+        }
+        castle++; java.util.Arrays.fill(cur, 0f);
+        if (cap && capPending != null) addCap(capPending.get(castle));
+    }
+    private void addCap(float[] v) { if (v != null) for (int i = 0; i < CAP_W; i++) capCur[i] += v[i]; }
+    /** The completed capacity records (NGH): {castle, attempts/accepted/points per kind, requested, applied, constraint}. */
+    public int capRecordCount() { return capRecN; }
+    public float[] capRecord(int i) { return capRec[i]; }
+    public float[] capCurrent() { return capCur.clone(); }
+    public float[] hazardControlNow() { return hcNow.clone(); }
+    public boolean hasCapacity() { return cap; }
+
+    /**
+     * NGH: the slice's hazard-module attempts by castle ({@code capByCastle}: castle -> CAP_W counts) and the hazard control it was generated with
+     * ({@code hc}), folded in with {@link #addSlice}. Call before addSlice.
+     */
+    public void addCapacity(java.util.Map<Integer, float[]> capByCastle, float[] hc) {
+        cap = true; capPending = capByCastle; if (hc != null) System.arraycopy(hc, 0, hcNow, 0, 3);
+        addCap(capByCastle.get(castle));
     }
 
     // ------------------------------------------------------------------ measurement
@@ -170,6 +227,7 @@ public final class Progression {
             if (cs < castle) continue;          // (cannot happen: a slice never reaches below the castle being measured)
             for (int i = 0; i < ACC; i++) cur[i] = i == A_TOP ? (float) Math.max(cur[i], add[k][i]) : cur[i] + (float) add[k][i];
         }
+        capPending = null;
     }
     private static double[] acc(double[][] add, int base, int cs) { int k = Math.max(0, Math.min(add.length - 1, cs - base)); if (add[k] == null) add[k] = new double[ACC]; return add[k]; }
     private static long key(double yAbs, float sp) { long w = (long) Math.floor(yAbs / WINDOW); return ((long) castleOf(yAbs, sp) << 32) | (w & 0xffffffffL); }
@@ -205,8 +263,75 @@ public final class Progression {
             if (partial != null) { double tg = P.target(n, k) * frac; if (tg > 0) { double w = prevAcc != null ? PARTIAL_WEIGHT : 1; e += w * (tg - partial[k]) / tg; wsum += w; } }
             if (wsum <= 0) continue;
             e /= wsum;
+            if (k == H && P.capacityControl()) { f[k] = hazardControl(n, P, (float) (1 + GAIN * e))[1]; continue; }
             f[k] = (float) Math.max(P.factorLo(k), Math.min(P.factorHi(k), 1 + GAIN * e));
         }
         return f;
+    }
+
+    // ------------------------------------------------------------------ capacity-aware hazard escalation (NGH)
+    /** Escalation per castle above the previous castle's applied factor, while acceptance holds (PROVISIONAL). */
+    public static final float CAP_STEP = 0.25f;
+    /** Hazard-module acceptance (accepted / attempted, last castle and this one so far) below which NGH does not escalate further (PROVISIONAL). */
+    public static final float CAP_ACCEPT_OK = 0.55f;
+    /**
+     * Computational bound, not a balancing value: at 3x the hazard modules' weights outweigh every other module class at castle 10 several times over,
+     * after which more weight only means more refused attempts (generation time) without more placed hazards.
+     */
+    public static final float CAP_BOUND = 3.0f;
+    /** Prior attempts (with the pooled yield) that steady the per-kind capacity estimate early in a climb. */
+    static final float CAP_PRIOR = 6f;
+
+    /** Pooled hazard-module counts of the castle before and the castle in progress: {attempts, accepted, points} per kind. */
+    float[] capPool() { float[] v = new float[CAP_W]; for (int i = 0; i < CAP_W; i++) v[i] = capPrev[i] + capCur[i]; return v; }
+    /** Acceptance over all hazard kinds (pooled), with a weak prior of one in two. */
+    public float capAcceptance() { float[] v = capPool(); float at = 0, ok = 0; for (int q = 0; q < CAP_K; q++) { at += v[3 * q]; ok += v[3 * q + 1]; } return (ok + 1f) / (at + 2f); }
+
+    /**
+     * NGH's hazard factor for castle {@code n} from the controller's request: {requested, applied, constraint}. No fixed ceiling: up to the
+     * request, but never more than CAP_STEP above the factor the previous castle was built with, never above it while acceptance is below
+     * CAP_ACCEPT_OK (more weight would only mean more refused attempts), and never past CAP_BOUND. The static 1.35 of NORMAL/PUNISHER stays available
+     * as the floor of the escalation room, so NGH is never held below what the other modes may ask.
+     */
+    public float[] hazardControl(int n, DifficultyProfile P, float requested) {
+        float req = Math.max(P.factorLo(H), requested), base = P.factorHi(H);
+        float[] r = record(n - 1); float prevApplied = r != null ? r[1 + ACC + H] : lastF[H];
+        boolean accepting = capAcceptance() >= CAP_ACCEPT_OK;
+        float room = accepting ? Math.max(base, prevApplied + CAP_STEP) : Math.max(base, prevApplied);
+        float applied = Math.min(req, Math.min(room, CAP_BOUND));
+        int code = applied >= req - 1e-6f ? HC_NONE : room >= CAP_BOUND ? HC_BOUND : accepting ? HC_RATE : HC_ACCEPTANCE;
+        return new float[]{req, applied, code};
+    }
+    /** The requested (unconstrained) hazard factor for castle {@code n}, as {@link #factors} computes it before the capacity rule. */
+    public float[] hazardControlFor(int n, DifficultyProfile P, float spacing) {
+        if (!P.capacityControl()) { float[] f = factors(n, P, spacing); return new float[]{f[H], f[H], HC_NONE}; }
+        float[] f = factors(n, P, spacing);          // applied value (capacity rule inside)
+        // recompute the request the same way factors does, for the report
+        float[] prevAcc = null; int prevN = n - 1; float[] partial = null; float frac = 0f;
+        if (n == castle) { float[] rr = record(prevN); if (rr != null) { prevAcc = new float[ACC]; System.arraycopy(rr, 1, prevAcc, 0, ACC); } frac = progress(spacing); if (frac >= PARTIAL_FROM) partial = cur; }
+        else if (n == castle + 1) { if (progress(spacing) >= 0.5f) prevAcc = cur; }
+        if (prevAcc == null && partial == null) return new float[]{f[H], f[H], HC_NONE};
+        double e = 0, wsum = 0;
+        if (prevAcc != null) { double tg = P.target(prevN, H); if (tg > 0) { double w = 1 - PARTIAL_WEIGHT * (partial != null ? 1 : 0); e += w * (tg - prevAcc[H]) / tg; wsum += w; } }
+        if (partial != null) { double tg = P.target(n, H) * frac; if (tg > 0) { double w = prevAcc != null ? PARTIAL_WEIGHT : 1; e += w * (tg - partial[H]) / tg; wsum += w; } }
+        if (wsum <= 0) return new float[]{f[H], f[H], HC_NONE};
+        return hazardControl(n, P, (float) (1 + GAIN * e / wsum));
+    }
+
+    /**
+     * Per-kind selection multipliers (NGH): each hazard module kind's measured yield (hazard points actually placed per attempt) relative to the pooled
+     * yield, clamped to [CAP_MULT_LO, CAP_MULT_HI]. A kind the generator keeps refusing is drawn less, one that places reliably is drawn more; the
+     * generator rescales the hazard class to its previous total, so this changes the arrangement of hazards, not how many are asked for.
+     */
+    public static final float CAP_MULT_LO = 0.4f, CAP_MULT_HI = 1.6f;
+    public float[] capMultipliers(float[] extra) {
+        float[] v = capPool(); if (extra != null) for (int i = 0; i < CAP_W; i++) v[i] += extra[i];
+        float at = 0, pts = 0; for (int q = 0; q < CAP_K; q++) { at += v[3 * q]; pts += v[3 * q + 2]; }
+        float pooled = at > 0 ? pts / at : 1f, m[] = new float[CAP_K];
+        for (int q = 0; q < CAP_K; q++) {
+            float y = (v[3 * q + 2] + CAP_PRIOR * pooled) / (v[3 * q] + CAP_PRIOR);
+            m[q] = pooled > 0 ? Math.max(CAP_MULT_LO, Math.min(CAP_MULT_HI, y / pooled)) : 1f;
+        }
+        return m;
     }
 }

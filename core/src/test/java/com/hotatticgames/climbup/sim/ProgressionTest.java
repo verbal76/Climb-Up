@@ -43,7 +43,8 @@ public class ProgressionTest {
             float[] f = after(p, n, all(s)).factors(n, p, SP);
             for (int k = 0; k < 4; k++) {
                 assertFalse(Float.isNaN(f[k]));
-                assertTrue(p + " castle " + n + " x" + s + " factor " + k + " = " + f[k], f[k] >= p.factorLo(k) - 1e-6f && f[k] <= p.factorHi(k) + 1e-6f);
+                float hi = k == Progression.H && p.capacityControl() ? Progression.CAP_BOUND : p.factorHi(k);          // NGH hazards: no fixed ceiling, only the computational bound (owner amendment)
+                assertTrue(p + " castle " + n + " x" + s + " factor " + k + " = " + f[k], f[k] >= p.factorLo(k) - 1e-6f && f[k] <= hi + 1e-6f);
             }
         }
         assertTrue("enemies may be raised only a little (no enemy spam)", N.factorHi(Progression.E) <= 1.1f + 1e-6f && P.factorHi(Progression.E) <= 1.1f + 1e-6f);
@@ -84,7 +85,7 @@ public class ProgressionTest {
                 g.castle = n + 1; if (g.doneN == Progression.KEEP) { System.arraycopy(g.done, 1, g.done, 0, Progression.KEEP - 1); g.doneN--; } g.done[g.doneN++] = rec;
                 float[] next = g.factors(n + 1, p, SP);
                 for (int k = 0; k < 4; k++) {
-                    assertTrue(next[k] >= p.factorLo(k) - 1e-6f && next[k] <= p.factorHi(k) + 1e-6f);
+                    assertTrue(next[k] >= p.factorLo(k) - 1e-6f && next[k] <= (k == Progression.H && p.capacityControl() ? Progression.CAP_BOUND : p.factorHi(k)) + 1e-6f);
                     if (rec[1 + k] > 1.05f * p.target(n, k)) assertTrue("after a castle that came out hard the next factor is below 1", next[k] < 1f);
                 }
             }
@@ -106,6 +107,58 @@ public class ProgressionTest {
         float r10 = G.targetTotal(10) / P.targetTotal(10);
         assertTrue("NGH castle 10 about 20% above PUNISHER castle 10 (owner): " + r10, r10 >= 1.1f && r10 <= 1.25f);
         for (int n = 1; n <= 10; n++) assertTrue("NGH above PUNISHER at castle " + n, G.targetTotal(n) > P.targetTotal(n));
+    }
+
+    /** A state whose castle n-1 measured hazards at {@code hScale} of target, was built with hazard factor {@code fPrev}, and placed hazards at {@code acc}. */
+    static Progression capState(int n, float hScale, float fPrev, float acc) {
+        Progression g = after(G, n, new float[]{1f, hScale, 1f, 1f});
+        g.done[0][1 + Progression.ACC + Progression.H] = fPrev;
+        g.cap = true; for (int q = 0; q < Progression.CAP_K; q++) { g.capPrev[3 * q] = 100; g.capPrev[3 * q + 1] = 100 * acc; g.capPrev[3 * q + 2] = 150 * acc; }
+        return g;
+    }
+
+    /** Owner amendment 2026-10-27: NGH's hazard factor has no fixed ceiling; it escalates one bounded step a castle while hazards are being placed. */
+    @Test public void nghHazardsEscalatePastTheOldCeilingWhileTheyArePlaced() {
+        float f = capState(8, 0.5f, 1.35f, 0.7f).factors(8, G, SP)[Progression.H];
+        assertEquals("one step above the previous castle's 1.35", 1.35f + Progression.CAP_STEP, f, 1e-5f);
+        float[] hc = capState(8, 0.5f, 1.35f, 0.7f).hazardControlFor(8, G, SP);
+        assertEquals("constrained by the escalation rate", Progression.HC_RATE, (int) hc[2]);
+        assertTrue("and the request is recorded above what was applied (" + hc[0] + ")", hc[0] > hc[1]);
+        float[] big = capState(9, 0.5f, 2.9f, 0.7f).hazardControl(9, G, 5f);
+        assertEquals("never past the computational bound", Progression.CAP_BOUND, big[1], 1e-5f);
+        assertEquals(Progression.HC_BOUND, (int) big[2]);
+        for (DifficultyProfile p : new DifficultyProfile[]{N, P}) {
+            Progression q = after(p, 8, new float[]{1f, 0.5f, 1f, 1f}); q.done[0][1 + Progression.ACC + Progression.H] = 1.35f;
+            assertEquals(p + " keeps its 1.35 ceiling", 1.35f, q.factors(8, p, SP)[Progression.H], 1e-6f);
+        }
+    }
+
+    @Test public void nghDoesNotEscalateIntoPlacementResistance() {
+        Progression g = capState(8, 0.5f, 1.6f, 0.3f);
+        assertEquals("held at the previous castle's factor while acceptance is low", 1.6f, g.factors(8, G, SP)[Progression.H], 1e-5f);
+        assertEquals(Progression.HC_ACCEPTANCE, (int) g.hazardControlFor(8, G, SP)[2]);
+        Progression ok = capState(8, 1.0f, 1.6f, 0.3f);
+        assertEquals("on target: no correction requested, none withheld", Progression.HC_NONE, (int) ok.hazardControlFor(8, G, SP)[2]);
+    }
+
+    @Test public void kindsThatPlaceAreDrawnMoreAndKindsThatAreRefusedLess() {
+        Progression g = new Progression(); g.cap = true;
+        g.capPrev[0] = 100; g.capPrev[1] = 80; g.capPrev[2] = 160;          // hazard rows: placed, 1.6 points an attempt
+        g.capPrev[6] = 100; g.capPrev[7] = 8; g.capPrev[8] = 12;            // mortar rows: mostly refused
+        float[] m = g.capMultipliers(null);
+        assertTrue("rows that place are drawn more (" + m[0] + ")", m[0] > 1f);
+        assertTrue("refused mortar rows less (" + m[2] + ")", m[2] < 1f && m[2] >= Progression.CAP_MULT_LO);
+        for (float v : m) assertTrue(v >= Progression.CAP_MULT_LO && v <= Progression.CAP_MULT_HI);
+    }
+
+    @Test public void capacityStateTravelsInTheSliceOnlyForNgh() {
+        Progression g = capState(5, 0.6f, 1.5f, 0.6f); g.hcNow[0] = 1.9f; g.hcNow[1] = 1.75f; g.hcNow[2] = Progression.HC_RATE;
+        Progression back = Progression.of(g.toArray());
+        assertArrayEquals(g.toArray(), back.toArray(), 0f);
+        assertTrue(back.hasCapacity());
+        Progression n = after(N, 5, all(1f));
+        assertEquals("NORMAL/PUNISHER state keeps its rules-13 layout", 3 + Progression.ACC + 4 + Progression.REC, n.toArray().length);
+        assertFalse(Progression.of(n.toArray()).hasCapacity());
     }
 
     @Test public void theStateTravelsInTheSliceAndAStoredSliceGivesTheSameNextSlice() throws Exception {

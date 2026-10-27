@@ -482,7 +482,7 @@ public final class CourseGenerator {
             if (hazOk && k != Kind.WET && prev != Kind.CREATURE && !last.wet() && !enfCalm() && rnd.nextFloat() < (0.025f + 0.045f * lv + 0.05f * late(last.y)) * P.creatureScale * (hotNow ? 0f : pf[Progression.E])) k = Kind.CREATURE;      // owner directive 2026-10-24: creature decks from Level 1 on, more as the levels rise (was world 2 on)
             else if (prev == Kind.CREATURE && !last.wet() && rnd.nextFloat() < 0.35f * late(last.y) * (hotNow ? 0f : pf[Progression.X])) k = rnd.nextBoolean() ? Kind.HAZ : Kind.TRAP;      // Build 71: higher up, a creature deck runs straight into a trap      // Build 71: a skull's deck (world 2 on), or a green blob's (world 3 on)
             boolean secondHalf = endless && th == 0 && ((last.y + base) % T.zoneHeight) >= 0.5f * T.zoneHeight - 15f;      // castle 1 to castle 2: the Meadow's second, harder half (owner, Build 71)
-            if (hazOk && k != Kind.WET && k != Kind.CREATURE && !last.wet() && prev != Kind.DROPS && (secondHalf ? rnd.nextFloat() < 0.10f * (hotNow ? 0f : pf[Progression.H]) : rnd.nextFloat() < (0.015f + 0.025f * lv) * (hotNow ? 0f : pf[Progression.H]))) k = Kind.DROPS;      // (spike-drop rows anywhere, more higher up; was world 2 on)
+            if (hazOk && k != Kind.WET && k != Kind.CREATURE && !last.wet() && prev != Kind.DROPS && (secondHalf ? rnd.nextFloat() < 0.10f * (hotNow ? 0f : pf[Progression.H]) : rnd.nextFloat() < (0.015f + 0.025f * lv) * (hotNow ? 0f : pf[Progression.H]) * capDrops(last.y))) k = Kind.DROPS;      // (spike-drop rows anywhere, more higher up; was world 2 on)
             // a little rougher than the first half, and (Phase 1, 2026-10-26) from then on: it applied to castle 2 alone, so castle 2 stood out as a hazard
             // spike and castle 3 fell back to the first half's mix (the chained spike drops above stay castle 2's own)
             else if (hazOk && (k == Kind.HOP || (k == Kind.STAIRS && !lagging)) && rnd.nextFloat() < Math.max((secondHalf || (endless && last.y + base >= T.zoneHeight)) ? 0.3f : 0f, endless ? P.pressure(level(last.y)) : 0f) * (hotNow ? 0f : Math.min(1.25f, pf[Progression.H])))
@@ -570,6 +570,10 @@ public final class CourseGenerator {
     // ---- observe-only generation trace (reports, 2026-10-26): reads sizes and refusal counters, never the random stream or any decision
     private String traceRole = "PICK", tracePicked;
     private boolean tryModuleBelow(Kind k, float d, int zone) {
+        if (capOn() && capKind(k) >= 0) { int h0 = c.hazards.size(); float y = c.get(c.size() - 1).y; boolean ok = tryModuleBelowT(k, d, zone); capCount(k, y, h0, ok); return ok; }
+        return tryModuleBelowT(k, d, zone);
+    }
+    private boolean tryModuleBelowT(Kind k, float d, int zone) {
         GenTrace tr = GenTrace.GEN.get();
         if (tr == null) return tryModuleBelow0(k, d, zone);
         GenTrace.Module m = new GenTrace.Module();
@@ -897,15 +901,45 @@ public final class CourseGenerator {
 
     private void progStart(Course prev) {
         progIn = prev == null ? new Progression() : Progression.of(prev.prog);
+        capAdd.clear(); hcCur = null;
         if (!endless || !P.progression() || T.castleSpacing <= 0f) { facCur = facNext = ONE; return; }
         facCur = progIn.factors(progIn.castle(), P, T.castleSpacing);
         facNext = progIn.factors(progIn.castle() + 1, P, T.castleSpacing);
+        if (capOn()) { hcCur = progIn.hazardControlFor(progIn.castle(), P, T.castleSpacing); if (hcCur[2] != Progression.HC_NONE) GenTrace.tally("capacity_constrained_" + Progression.HC_NAMES[(int) hcCur[2]]); }
     }
     /** Measures the finished slice into the state it hands to the next one. */
     private void progFinish(Course out) {
         if (!endless || !P.progression() || T.castleSpacing <= 0f) return;
-        Progression p = progIn.copy(); p.addSlice(out, base, T, facCur); out.prog = p.toArray();
+        Progression p = progIn.copy(); if (capOn()) p.addCapacity(capAdd, hcCur); p.addSlice(out, base, T, facCur); out.prog = p.toArray();
     }
+
+    // ------------------------------------------------------------------ capacity-aware hazard escalation (NOT GONNA HAPPEN; owner amendment 2026-10-27)
+    /** This slice's hazard-module attempts by castle ({attempts, accepted, hazard points added} per Progression.CAP_KINDS kind), and its hazard control. */
+    private final java.util.TreeMap<Integer, float[]> capAdd = new java.util.TreeMap<>();
+    private float[] hcCur;
+    private boolean capOn() { return endless && P.capacityControl() && T.castleSpacing > 0f; }
+    private static int capKind(Kind k) { switch (k) { case HAZ: return 0; case TRAP: return 1; case MORTAR: return 2; case DROPS: return 3; default: return -1; } }
+    /** Records a hazard-module attempt: whether it was placed and the hazard points it added (Progression's weights). */
+    private void capCount(Kind k, float y, int h0, boolean ok) {
+        int q = capKind(k); if (q < 0) return;
+        float[] a = capAdd.computeIfAbsent(Progression.castleOf(y + base, T.castleSpacing), x -> new float[Progression.CAP_W]);
+        a[3 * q] += 1f;
+        if (!ok) return;
+        a[3 * q + 1] += 1f;
+        for (int i = h0; i < c.hazards.size(); i++) if (Progression.hazard(c.hazards.get(i).type)) a[3 * q + 2] += Progression.points(c.hazards.get(i).type);
+    }
+    /** Per-kind multipliers at height y: the measured capacity of the castle before and this one, this slice's attempts included. */
+    private float[] capMult(float y) { return progIn.capMultipliers(capAdd.get(Progression.castleOf(y + base, T.castleSpacing))); }
+    /** The hazard row, trap and mortar weights re-weighted by their measured yield, the hazard class keeping its total (the arrangement adapts, not the amount). */
+    private void capAdapt(float[] w, float y) {
+        float[] m = capMult(y); Kind[] ks = {Kind.HAZ, Kind.TRAP, Kind.MORTAR}; float before = 0, after = 0;
+        for (Kind k : ks) before += w[k.ordinal()];
+        if (before <= 0f) return;
+        for (Kind k : ks) { w[k.ordinal()] *= m[capKind(k)]; after += w[k.ordinal()]; }
+        if (after > 0f) for (Kind k : ks) w[k.ordinal()] *= before / after;
+    }
+    /** The spike-drop row chance's capacity multiplier (1 outside NGH). */
+    private float capDrops(float y) { return capOn() ? capMult(y)[3] : 1f; }
     /** The selection factors {terrain, hazards, enemies, interaction} at height y. */
     private float[] fac(float y) {
         if (!endless || !P.progression() || T.castleSpacing <= 0f) return ONE;
@@ -2135,6 +2169,7 @@ public final class CourseGenerator {
             float[] f = fac(last.y);
             for (Kind q : Kind.values()) { int cl = kindClass(q); if (cl == 1) w[q.ordinal()] *= f[Progression.T]; else if (cl == 2) w[q.ordinal()] *= hotNow ? 0.3f * Math.min(1f, f[Progression.H]) : f[Progression.H]; }
         }
+        if (capOn()) capAdapt(w, last.y);          // NGH: hazard kinds by what they actually place (owner amendment 2026-10-27)
         if (adaptive && P.adaptiveVariety()) varAdapt(w, last.y);          // PUNISHER and (rules 13, lighter) NORMAL: recent mechanics less likely, within their own class (before the pitch controller)
         // spiral pitch controller: keep successive revolutions a healthy distance apart. Until 2026-10-26 it compared the height with
         // pitch x (arc / circumference) in the slice's own frame, whose arc restarts every slice (whole laps) but whose height only every 500 m:

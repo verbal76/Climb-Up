@@ -117,6 +117,22 @@ public final class LaneReport {
     final List<String[]> encounterRows = new ArrayList<>();
     static final String ENCOUNTER_HEADER = "run,slice,y0,castle,enforcers_yellow,enforcers_orange,enforcers_red,enforcer_decks,enforcer_unfair,enforcer_dropped,avalanches,avalanche_blocks,avalanche_unfair,avalanche_dropped,"
         + "solved,enf_kick_tries,enf_kick_hits,enf_swat_tries,enf_swat_hits,enf_retreats,enf_falls,avl_fired,avl_skipped_cooldown,avl_blocks_released,avl_blocks_near_player,avl_blocks_in_traversal_area,avl_block_knocks,avl_hits,setbacks,enforcers_planned,avalanches_planned,avl_ricochets,avl_peak_active,avl_blocks_5,avl_blocks_6,avl_blocks_7,hot_window_guard";
+    /**
+     * NGH capacity-aware hazard control per castle (owner amendment 2026-10-27): hazard-module attempts and acceptance, the hazard points the accepted
+     * modules added, acceptance per kind ("accepted/attempted"), the factor the controller requested and the one applied, how much was withheld and why,
+     * and how far the castle's measured hazards fell short of its target. Empty for modes without the capacity control.
+     */
+    static String capacityColumns(Progression pr, int n, boolean partial, double short_) {
+        float[] counts = null, hc = null;
+        if (partial) { if (pr.hasCapacity()) { counts = pr.capCurrent(); hc = pr.hazardControlNow(); } }
+        else for (int i = 0; i < pr.capRecordCount(); i++) { float[] r = pr.capRecord(i); if ((int) r[0] == n) { counts = java.util.Arrays.copyOfRange(r, 1, 1 + Progression.CAP_W); hc = java.util.Arrays.copyOfRange(r, 1 + Progression.CAP_W, 4 + Progression.CAP_W); } }
+        if (counts == null) return ",,,,,,,,,,,,,";
+        float at = 0, ok = 0, pts = 0; String[] kind = new String[Progression.CAP_K];
+        for (int q = 0; q < Progression.CAP_K; q++) { at += counts[3 * q]; ok += counts[3 * q + 1]; pts += counts[3 * q + 2]; kind[q] = (int) counts[3 * q + 1] + "/" + (int) counts[3 * q]; }
+        return String.join(",", "" + (int) at, "" + (int) ok, f3(at > 0 ? ok / at : Double.NaN), f3(pts), f3(at > 0 ? pts / at : Double.NaN), kind[0], kind[1], kind[2], kind[3],
+            f3(hc[0]), f3(hc[1]), f3(hc[0] - hc[1]), Progression.HC_NAMES[Math.max(0, Math.min(3, (int) hc[2]))], f3(short_));
+    }
+
     void encounterTelemetry(int k, CourseGenerator.Framed f, GenTrace tr, Autopilot.Report rep) {
         int[] tiers = new int[3]; int decks = 0, avl = 0, blocks = 0;
         for (Element h : f.c.hazards) {
@@ -617,7 +633,9 @@ public final class LaneReport {
         try (PrintWriter w = pw(out, "fallbacks.csv")) { w.println("slice,y0,castle," + String.join(",", FALLBACK_KEYS)); for (String[] r : fallbackRows) w.println(String.join(",", r)); }
         try (PrintWriter w = pw(out, "castle_control.csv")) {          // rules 13: what the generator's progression controller saw and did, per castle, beside this report's own lane totals
             w.println("run,castle,status,target_total,target_terrain,target_hazards,target_enemies,target_interaction,est_terrain,est_hazards,est_enemies,est_interaction,est_mitigation,est_total,est_links,est_challenge_links,est_recovery,"
-                + "factor_terrain,factor_hazards,factor_enemies,factor_interaction,lane_terrain,lane_hazards,lane_enemies,lane_interaction,lane_mitigation,lane_total,deviation_from_target");
+                + "factor_terrain,factor_hazards,factor_enemies,factor_interaction,lane_terrain,lane_hazards,lane_enemies,lane_interaction,lane_mitigation,lane_total,deviation_from_target,"
+                + "hazard_attempts,hazard_accepted,hazard_acceptance,hazard_points_placed,hazard_points_per_attempt,haz_rows,traps,mortar_rows,drop_rows,"
+                + "hazard_factor_requested,hazard_factor_applied,hazard_factor_lost,hazard_constraint,hazard_short_of_target");
             DifficultyProfile P = DifficultyProfile.of(t); Progression pr = Progression.of(lastProg);
             double[][] lane = new double[12][6];
             for (Win x : windows.values()) { int cs = castleOf(x.index * WINDOW); lane[cs][0] += x.adj[0]; lane[cs][1] += x.adj[1]; lane[cs][2] += x.adj[2]; lane[cs][3] += x.interaction; lane[cs][4] += x.mitigation; lane[cs][5] += x.total(); }
@@ -629,7 +647,8 @@ public final class LaneReport {
                 w.println(String.join(",", MODE[mode] + "-s" + seed, "" + n, partial ? "in_progress" : "complete", f3(tgt), f3(P.progression() ? P.target(n, 0) : Double.NaN), f3(P.progression() ? P.target(n, 1) : Double.NaN), f3(P.progression() ? P.target(n, 2) : Double.NaN), f3(P.progression() ? P.target(n, 3) : Double.NaN),
                     f3(r[1]), f3(r[2]), f3(r[3]), f3(r[4]), f3(r[5]), f3(est), f3(r[1 + Progression.A_LINKS]), f3(r[1 + Progression.A_CHALL]), f3(r[1 + Progression.A_REC]),
                     f3(r[1 + Progression.ACC]), f3(r[2 + Progression.ACC]), f3(r[3 + Progression.ACC]), f3(r[4 + Progression.ACC]),
-                    f3(lane[n][0]), f3(lane[n][1]), f3(lane[n][2]), f3(lane[n][3]), f3(lane[n][4]), f3(lane[n][5]), f3(P.progression() ? (lane[n][5] - tgt) / tgt : Double.NaN)));
+                    f3(lane[n][0]), f3(lane[n][1]), f3(lane[n][2]), f3(lane[n][3]), f3(lane[n][4]), f3(lane[n][5]), f3(P.progression() ? (lane[n][5] - tgt) / tgt : Double.NaN),
+                    capacityColumns(pr, n, partial, P.progression() ? P.target(n, 1) - lane[n][1] : Double.NaN)));
             }
         }
         try (PrintWriter w = pw(out, "encounters.csv")) { w.println(ENCOUNTER_HEADER); for (String[] r : encounterRows) w.println(String.join(",", r)); }

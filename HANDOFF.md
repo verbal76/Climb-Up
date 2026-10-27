@@ -1,3 +1,15 @@
+## RESUME HERE (2026-10-27 evening: whole-slice solvability + Enforcer judgment; Build 82 on HOLD)
+
+- Done on build-74-determinism (see docs/DECISIONS.md "Enforcer jump judgment" and "Whole-slice solvability and arrival-state fairness"):
+  Enforcer jump judgment (8152d90, EnforcerJudgmentTest 15/15); solver look-ahead through forced launches / crumbling decks and fork-branch
+  following; generator accepts a slice only after a continuous traversal (CourseGenerator.continuous); launch-corridor audit for other-revolution
+  hazards incl. previous-slice pads (b224753, 78292a7); LaneReport integrity frame precision (NGH s1 slice 49 was a 1.3 mm rounding false alarm).
+  All four PUNISHER whole-slice failures (s1k45, s2k19, s2k47 on cbe6415; s5k64 on rules 13) solve on their original geometry (fixtures).
+- Campaign A rerun dispatched: Difficulty report run 40575843419 on 78292a7 (modes 0,1; seeds 1-5; campaign A; baseline 40554080512).
+- Generation fingerprint moved (969bd1cc... on b224753; refresh DeterminismTest once frozen). BundledReplayTest needs a re-record on the final source.
+- Next: Campaign A green -> freeze -> NGH Round 2 (mode 2, seeds 1-5, campaign B, baseline Round 1 run 40549406903) -> report -> STOP.
+- No Build 82 packaging, APK, release, OTA, Steam or merge until the owner authorises.
+
 ## RESUME HERE (2026-10-27, consolidated owner directive: N/P final validation + NGH three rounds; Build 82 on HOLD)
 
 - NGH ROUND 1 DISPATCHED: Difficulty report run 40549406903 on 27603e40df7004acbd50d7ead27f0967b8f845fd (rules 14), modes ["2"], seeds 1-3, top 5000, solve 1, campaign B, baseline 40480870533. Round 2 and 3 use the same seeds; stop after Round 3 for the owner's GO/NO-GO and release decision.

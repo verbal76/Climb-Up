@@ -1,3 +1,12 @@
+## RESUME HERE (2026-10-27 late: OWNER CLARIFICATION - AUDIT FIRST, CORRECTIONS SECOND)
+
+- No further corrections during the audit unless an issue blocks the investigation itself. Finish discovery + coverage mapping, independently
+  verify the three investigations (A movement, B solver/proofs, C environment/timing/serialization), then present ONE consolidated engineering
+  report: every confirmed finding, cause, effect, severity, related problems sharing the cause (grouped into defect classes), surgical correction,
+  scope and regression risk. The owner reviews it BEFORE authorising the broad correction phase. No campaigns, no audit restart, Build 82 on hold.
+- Corrections already made and kept: ctxHaz scoping of the slice audit (4478d7d) and fork pads re-checked once the fork is registered
+  (c9aa5ae; NORMAL s2 slices 0-40 build with no failed attempt, PUNISHER s2 0-40 with no corridor refusal).
+
 ## RESUME HERE (2026-10-27 ~20:50: COMPLETE PLAYER-CAPABILITY / SOLVER / GENERATION VERIFICATION directive - ACTIVE)
 
 - The owner directive (full text: docs/verification/OWNER_DIRECTIVE_2026-10-27_capability_verification.txt) was queued 19:45 but only reached the

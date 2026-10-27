@@ -1,3 +1,13 @@
+## RESUME HERE (2026-10-27 ~20:50: COMPLETE PLAYER-CAPABILITY / SOLVER / GENERATION VERIFICATION directive - ACTIVE)
+
+- The owner directive (full text: docs/verification/OWNER_DIRECTIVE_2026-10-27_capability_verification.txt) was queued 19:45 but only reached the
+  session at ~20:45. It supersedes running campaigns now: Campaign A CI run 40575843419 (78292a7) was CANCELLED and the local NGH pre-check stopped
+  (section 29: no expensive full-course campaigns while foundational verification gaps are open).
+- Phase 1 (discovery) in progress: three read-only investigations write evidence to the scratchpad audit/ folder (A player movement/physics,
+  B solver + generator proofs, C environment/timing/serialization); the docs/verification/*.md deliverables are built from verified evidence.
+- Everything earlier (Enforcer judgment, whole-slice solvability fixes, corridor audit, integrity frame, fork serialization, fixtures) stays and is
+  incorporated as evidence (section 24). NGH Round 2 remains the next authorised campaign after Phase 6. Build 82 on HOLD.
+
 ## RESUME HERE (2026-10-27 evening: whole-slice solvability + Enforcer judgment; Build 82 on HOLD)
 
 - Done on build-74-determinism (see docs/DECISIONS.md "Enforcer jump judgment" and "Whole-slice solvability and arrival-state fairness"):

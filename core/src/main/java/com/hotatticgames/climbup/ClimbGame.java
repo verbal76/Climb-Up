@@ -233,7 +233,7 @@ public class ClimbGame extends Game {
                     int idx = r.tower.worldIndex(ref);
                     if (idx >= 0) {
                         r.tower.setCheckpointRef(ref); r.startIdx = idx; r.resumed = true;
-                        if (snap != null) { r.tower.windowAroundAbs(snap.centreAbs()); r.snapshot = snap; }
+                        if (snap != null) { snap.restoreWindow(r.tower); r.snapshot = snap; }
                         return r;
                     }
                 }

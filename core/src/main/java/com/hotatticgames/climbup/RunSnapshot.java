@@ -41,6 +41,9 @@ public final class RunSnapshot {
     public boolean hasS0;
     public double absS0;
     // 2026-10-27: spike-block avalanches under way or spent (Sim.AVL_W floats each) and when the last one fired. Optional: older files have none.
+    // rules 14: the floating origin the climb was captured in (restoreWindow rebuilds with it). Optional: older files restore around their own height.
+    public boolean hasOrigin;
+    public double originAbsY, originAbsS;
     public long[] aKey = new long[0];
     public float[] aState = new float[0];
     public float lastAvlT = -1e9f;
@@ -59,7 +62,7 @@ public final class RunSnapshot {
         r.facing = sim.facing; r.ledgeSide = sim.ledgeSide; r.falls = sim.falls; r.hits = sim.hits; r.keys = sim.keys; r.lastKeyColor = sim.lastKeyColor;
         r.mode = (sim.mode == Sim.Mode.GROUND && sim.onElem < 0) ? Sim.Mode.AIR.name() : sim.mode.name();      // standing on a spike slab's top: restored just above it, it lands again at once
         r.jumpedUp = sim.jumpedUp; r.prevJumpHeld = sim.prevJumpHeld; r.won = sim.won; r.finishedRun = sim.finishedRun;
-        r.absS = tower.originS + sim.s; r.hasS0 = true; r.absS0 = tower.originS + sim.ps0; r.absY = tower.absY(sim.y); r.lastGroundAbs = tower.absY(sim.lastGroundY); r.maxAbs = tower.absY(sim.maxHeight);
+        r.hasOrigin = true; r.originAbsY = tower.originY; r.originAbsS = tower.originS; r.absS = tower.originS + sim.s; r.hasS0 = true; r.absS0 = tower.originS + sim.ps0; r.absY = tower.absY(sim.y); r.lastGroundAbs = tower.absY(sim.lastGroundY); r.maxAbs = tower.absY(sim.maxHeight);
         r.pullFromAbsS = tower.originS + sim.pullFromS; r.pullFromAbsY = tower.absY(sim.pullFromY); r.pullToAbsS = tower.originS + sim.pullToS; r.pullToAbsY = tower.absY(sim.pullToY);
         r.onKey = tower.elemKeyAt(sim.onElem); r.lastPadKey = tower.elemKeyAt(sim.lastPad); r.bestKey = tower.elemKeyAt(sim.bestElem);
         Tower.Ref cp = sim.checkpoint >= 0 && sim.checkpoint < sim.course.size() ? tower.refOf(sim.checkpoint) : tower.checkpointRef();
@@ -156,6 +159,11 @@ public final class RunSnapshot {
 
     /** The slice the window should open around: the one holding the hero. */
     public double centreAbs() { return absY; }
+    /** Moves the tower's resident window to this climb before {@link #apply}: around its height, in the floating origin it was saved in (when the file has it). */
+    public void restoreWindow(Tower tower) {
+        if (hasOrigin && Double.isFinite(originAbsY) && Double.isFinite(originAbsS)) tower.windowAroundAbs(centreAbs(), originAbsY, originAbsS);
+        else tower.windowAroundAbs(centreAbs());
+    }
 
     /**
      * Writes this state into a simulation built on the tower's (already re-centred) world. Returns false, leaving the caller to resume from the checkpoint instead, if what the hero
@@ -211,7 +219,7 @@ public final class RunSnapshot {
         }
         tower.addDone(doneKeys);
         tower.applyDone(sim);
-        sim.syncElements(hasS0 ? sim.course.wrap((float) (absS0 - tower.originS)) : sim.s);
+        sim.syncElements(hasS0 ? localS(sim, tower, absS0) : sim.s);
         return true;
     }
 }

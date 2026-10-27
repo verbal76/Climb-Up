@@ -167,7 +167,7 @@ public class PlayDeterminismTest {
             RunSnapshot back = RunSnapshot.fromJson(snap.toJson());
             assertNotNull("the stored text parses", back);
             assertTrue("the moving creature is in the save", back.hKey.length > 0);
-            Tower tb = new Tower(SEED, t, blobs, 0); tb.setCheckpointRef(new Tower.Ref(back.cpSlice, back.cpLocal)); tb.windowAroundAbs(back.centreAbs());
+            Tower tb = new Tower(SEED, t, blobs, 0); tb.setCheckpointRef(new Tower.Ref(back.cpSlice, back.cpLocal)); back.restoreWindow(tb);
             Sim b = new Sim(tb.world, t); b.keysFree = false; b.deferRespawn = true; b.floorOverride = tb.floorLocal(); b.setRange(0, tb.world.size() - 1);
             assertTrue("applies", back.apply(b, tb));
             for (int j = 0; j < 600; j++) {

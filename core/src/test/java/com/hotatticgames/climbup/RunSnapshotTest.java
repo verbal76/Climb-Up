@@ -70,7 +70,7 @@ public class RunSnapshotTest {
             assertNotNull("capture at " + k, snap);
             RunSnapshot back = RunSnapshot.fromJson(snap.toJson());                 // through the file format
             assertNotNull("the stored text parses at " + k, back);
-            Tower tb = towerFrom(blobs, t); tb.setCheckpointRef(new Tower.Ref(back.cpSlice, back.cpLocal)); tb.windowAroundAbs(back.centreAbs());
+            Tower tb = towerFrom(blobs, t); tb.setCheckpointRef(new Tower.Ref(back.cpSlice, back.cpLocal)); back.restoreWindow(tb);
             Sim b = simOn(tb, t);
             assertTrue("applies at " + k, back.apply(b, tb));
             assertSame("right after restoring at " + k, a, ta, b, tb);
@@ -95,7 +95,7 @@ public class RunSnapshotTest {
             boolean shaking = false; for (int i = 0; i < a.course.size(); i++) if (a.crumbleT[i] > 0.2f || a.gone[i]) shaking = true;
             if (!shaking) continue;
             RunSnapshot snap = RunSnapshot.capture(a, ta, SEED);
-            Tower tb = towerFrom(blobs, t); tb.windowAroundAbs(snap.centreAbs()); Sim b = simOn(tb, t);
+            Tower tb = towerFrom(blobs, t); snap.restoreWindow(tb); Sim b = simOn(tb, t);
             assertTrue(snap.apply(b, tb));
             assertEquals("world clock", a.time, b.time, 0f);
             for (int i = 0; i < a.course.size(); i++) {

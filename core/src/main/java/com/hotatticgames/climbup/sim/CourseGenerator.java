@@ -2171,7 +2171,9 @@ public final class CourseGenerator {
 
     private Kind deferredHaz;
     /** The narrowest deck a gap saw is timed from (m): the climber needs room to stand back and wait for the blade. */
-    static final float SAW_TAKEOFF_W = 1.5f;
+    static final float SAW_TAKEOFF_W = 2.5f;          // (the hazard row's own decks are 2.5 m; 1.5 still let a 2.0 m take-off through: NORMAL seed 3 slice 3, hit walking back to wait)
+    /** True if a hazard already stands on deck j (a trap or spiked block anchored to it), so the climber has no clear spot there to wait for a saw. */
+    private boolean deckHasHazard(int j) { for (Element h : c.hazards) if (h.anchor == j) return true; return false; }
     private static boolean hazardKind(Kind k) { return k == Kind.HAZ || k == Kind.TRAP || k == Kind.MORTAR || k == Kind.CREATURE || k == Kind.DROPS; }
 
     public static volatile int wetTried, wetOk;
@@ -2398,6 +2400,7 @@ public final class CourseGenerator {
             prevRoll = roll;
             if (roll == 1 && creatureReaches(j == 0 ? c.size() - 1 : base + j - 1)) roll = 2;      // Build 79: nor next to a skull, blob or crab that can roam onto its decks (a skull there cut the window to 0.36; SawFairnessTest)
             if (roll == 1 && cur.w < SAW_TAKEOFF_W) roll = 2;      // rules 14: nor from a narrow foothold (NORMAL seed 3 slice 7 under rules 13: a gap saw from a 1.0 m ledge left no spot to wait for it; SawFairnessTest)
+            if (roll == 1 && j == 0 && deckHasHazard(c.size() - 1)) roll = 2;      // rules 14: nor from a deck that already carries its own trap (NORMAL seeds 2 and 4 under rules 13: a spike trap / spiked block on the take-off deck cut the saw's window to 0.40-0.46 of its cycle; SawFairnessTest)
             if (roll == 1) dy = Math.min(dy, 0.1f);      // a saw never guards an uphill jump: the blade would sit higher than the take-off
             float g = Math.min(3.05f, Math.max(2.3f, reach(Math.max(0f, dy)) * lerp(0.68f, 0.90f, d) * r(0.95f, 1f) * (1f - 0.03f * attempt)));
             if (roll == 1) g = Math.min(g, 2.6f);      // a saw hangs in the gap: keep the gap well short of a full-length jump so there is room to time the arc over the blade

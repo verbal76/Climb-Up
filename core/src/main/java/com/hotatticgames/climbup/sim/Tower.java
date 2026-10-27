@@ -301,6 +301,15 @@ public final class Tower {
         int[] r = rangeFor(centreAbs);
         rebuild(r[0], r[1], originFor(centreAbs), sBase[r[0]]);
     }
+    /**
+     * As {@link #windowAroundAbs(double)}, but with the floating origin a saved climb was captured with (rules 14 fix): arcs are held as floats relative
+     * to the origin, and a window built around another slice sits a few micrometres out of phase with the one the climb was saved in (seed 7: 1.1e-5 m),
+     * which a creature chasing the climber grew to 2e-4 m (PlayDeterminismTest). With the saved origin every resident element is placed exactly as it was.
+     */
+    public void windowAroundAbs(double centreAbs, double originYAt, double originSAt) {
+        int[] r = rangeFor(centreAbs);
+        rebuild(r[0], r[1], originYAt, originSAt);
+    }
     public int sliceAtAbs(double abs) { return sliceAt(abs); }
 
     public Ref checkpointRef() { return cpRef; }

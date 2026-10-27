@@ -343,7 +343,7 @@ public final class Tower {
     private Remap rebuild(int lo, int hi, double newOriginY, double newOriginS) {
         rebuilds++;
         long[] oldE = elemKey, oldH = hazKey; int oldN = world.size(), oldHn = world.hazards.size(); double oldOrigin = originY;
-        world.elements.clear(); world.hazards.clear(); world.keyRooms.clear(); world.routeCount = -1;
+        world.elements.clear(); world.hazards.clear(); world.keyRooms.clear(); world.forks.clear(); world.routeCount = -1;
         res.clear(); originY = newOriginY; originS = newOriginS;
         elemKey = new long[0]; hazKey = new long[0];
         for (int k = lo; k <= hi; k++) stitch(k, slice(k));
@@ -373,6 +373,7 @@ public final class Tower {
             Element h = d.hazards.get(i), e = copy(h, r.toWorld(h.anchor), dy, ds);
             world.hazards.add(e); hazKey[hn + i] = (long) k * 65536L + i;
         }
+        for (int[] fk : d.forks) world.forks.add(new int[]{r.toWorld(fk[0]), r.toWorld(fk[1]), fk[2], r.toWorld(fk[3])});          // (DC6: the live tower knows its forks, as each slice does)
         for (int[] kr : d.keyRooms) world.keyRooms.add(new int[]{r.toWorld(kr[0]), kr[1] < 0 ? -1 : r.toWorld(kr[1]), kr[2], kr[3], r.hzBase + kr[4], kr[5] < 0 ? -1 : r.hzBase + kr[5]});
         r.lastRouteWorld = r.toWorld(d.routeSize() - 1);
         res.add(r);

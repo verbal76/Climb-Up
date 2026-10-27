@@ -28,6 +28,16 @@ public final class Course {
     /** False for a streaming tower's world, whose decoys sit among the route elements (each slice's route, then its decoys) rather than after them. */
     public boolean routeFinished() { return routeCount >= 0; }
     /** The route element after route element i: i + 1, or in a streaming tower's world the next one past any decoys in between (each slice's decoys follow its route). size() if none. */
+    /**
+     * DC6: the k-th route element from route element {@code a} (k < 0: before it), skipping side structures (elements with an anchor), or -1 outside the
+     * course: the same deck on a generated slice (route contiguous) and on the live tower (each slice's side structures listed after its route).
+     */
+    public int deck(int a, int k) {
+        if (a < 0 || a >= size()) return -1;
+        int step = k > 0 ? 1 : -1, n = Math.abs(k), j = a;
+        while (n > 0) { j += step; if (j < 0 || j >= size()) return -1; if (get(j).anchor < 0) n--; }
+        return j;
+    }
     public int nextRoute(int i) { if (routeFinished()) return i + 1; int j = i + 1; while (j < elements.size() && elements.get(j).anchor >= 0) j++; return j; }
 
     public void indexDecoys() {
@@ -72,6 +82,12 @@ public final class Course {
                 for (int j = Math.max(0, aLo); j <= aHi && j < elements.size() && !take; j++) { float ahead = h.dir * dsWrap(elements.get(j).s, h.s); if (ahead >= -2f && ahead <= reach) take = true; }
             }
             if (!take && h.type == Element.Type.ENFORCER && h.anchor - 1 <= aHi && h.anchor + Math.round(h.len) >= aLo) take = true;      // it chases across its decks: in view for every link of its encounter
+            // DC7: an aimed cannon wakes within AIM_RANGE in any direction, a bee seeks within BEE_SEEK and drifts BEE_REACH, a mortar's shells drop
+            // over its column: in view for every link whose decks they reach, not only the links of their own anchor
+            if (!take && (h.type == Element.Type.AIMED || h.type == Element.Type.BEE || h.type == Element.Type.MORTAR)) {
+                float R = h.type == Element.Type.AIMED ? Element.AIM_RANGE + 2f : h.type == Element.Type.BEE ? Element.BEE_SEEK + Element.BEE_REACH : 2.5f;
+                for (int j = Math.max(0, aLo); j <= aHi && j < elements.size() && !take; j++) { Element d = elements.get(j); if (Math.abs(dsWrap(d.s, h.s)) < R + d.halfW() && Math.abs(d.y - h.y) < R) take = true; }
+            }
             if (!take && h.type == Element.Type.AVALANCHE && h.anchor - 8 <= aHi && h.anchor + 8 >= aLo) take = true;      // its blocks fall on the decks ahead and tumble back past it
             if (take) { in[i] = true; n++; }
         }

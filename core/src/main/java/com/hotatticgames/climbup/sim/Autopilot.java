@@ -45,6 +45,10 @@ public final class Autopilot {
     }
 
     static final float[] OFFSETS = {0f, 0.45f, 0.95f, 1.5f};
+    /** Move-style id ranges for the timing-window metric (DC7): ground 32 (offset x hold x steer), walk-off 4, hole hop 6, mid hop 8, rope 12, cable 8. */
+    static final int G_GROUND = 0, G_WALKOFF = 32, G_HOLEHOP = 36, G_MIDHOP = 42, G_ROPE = 50, G_CABLE = 62, G_COUNT = 70;
+    /** Waits tried on a rope or a cable beside something that moves (DC7), spread over its period. */
+    static final int ROPE_WAITS = 6;
     static final float[] HOLDS = {0.9f, 0.22f};
 
     // ------------------------------------------------------------------ policies
@@ -152,6 +156,13 @@ public final class Autopilot {
             }
             holdT += Sim.DT; in.jumpHeld = holdT < 0.3f; in.moveX = steer(s, b, 0);
         }
+    }
+
+    /** DC7: hangs on (no input) for {@code wait} seconds, then plays {@code inner}: waiting for a gap on a rope or a cable, as a person does. */
+    static final class WaitFirst implements Policy {
+        final Policy inner; final float wait; float t;
+        WaitFirst(Policy inner, float wait) { this.inner = inner; this.wait = wait; }
+        public void act(Sim s, InputState in) { if (t < wait && (s.mode == Sim.Mode.ROPE || s.mode == Sim.Mode.CABLE)) { t += Sim.DT; return; } inner.act(s, in); }
     }
 
     /** Waits, then simply walks off the edge (no jump) and steers toward the target: the way down to a lower platform. */
@@ -311,14 +322,14 @@ public final class Autopilot {
     // ------------------------------------------------------------------ planning
 
     static boolean movingNear(Course c, int a) {
-        for (int i = a; i <= Math.min(c.routeSize() - 1, a + 2); i++) if (c.get(i).isMoving() || c.get(i).spins()) return true;
+        for (int k = 0; k <= 2; k++) { int i = c.deck(a, k); if (i >= 0 && (c.get(i).isMoving() || c.get(i).spins())) return true; }          // (DC6: route decks, the live tower's too)
         int a0 = anchorIdx(c, a); for (Element h : c.hazards) if (h.anchor >= a0 - (firesAhead(h) ? 1 : 0) && h.anchor <= a0 + 2 && h.isMoving()) return true;
         return false;
     }
 
     static float maxPeriod(Course c, int a) {
         float p = 0;
-        for (int i = a; i <= Math.min(c.routeSize() - 1, a + 2); i++) if (c.get(i).isMoving() || c.get(i).spins()) p = Math.max(p, c.get(i).period);
+        for (int k = 0; k <= 2; k++) { int i = c.deck(a, k); if (i >= 0 && (c.get(i).isMoving() || c.get(i).spins())) p = Math.max(p, c.get(i).period); }
         int a0 = anchorIdx(c, a); for (Element h : c.hazards) if (h.anchor >= a0 - (firesAhead(h) ? 1 : 0) && h.anchor <= a0 + 2 && h.isMoving()) p = Math.max(p, h.period);
         return p;
     }
@@ -379,7 +390,7 @@ public final class Autopilot {
     private static Sim trialStart(Sim base, int a, int tgt, MotionCache mc) {
         Sim s = base.copy(); s.humanHold = HUMAN_HOLD; s.deferRespawn = false;          // (a trial's fall is a setback at once, never a respawn waiting for its window)
         s.motion = mc; s.motionGen = mc == null ? 0 : mc.gen(); s.mstep = 0;
-        if (tgt >= 0) s.setWindowNear(anchorIdx(s.course, a) - 2, anchorIdx(s.course, a) + 6, a, tgt);     // plus earlier route platforms the climb passed that hang over a side branch
+        if (tgt >= 0) s.setWindowNear(anchorIdx(s.course, a) - 2, Math.max(anchorIdx(s.course, a) + 6, anchorIdx(s.course, tgt) + 1), a, tgt);     // plus earlier route platforms the climb passed that hang over a side branch (DC7: and the target, a fork's rejoin up to 9 ahead)
         else s.setWindow(a - 1, a + 6);
         return s;
     }
@@ -495,14 +506,22 @@ public final class Autopilot {
         if (!pair && b >= c.routeSize()) { r.ok = true; return r; }
         List<PolicyFactory> cands = new ArrayList<>(), slowCands = null;
         List<Integer> group = new ArrayList<>();      // move-style id per candidate (offset x hold x steering), for the timing-window metric
-        int[] groupWins = new int[32]; int nWaits = 1;
+        // move-style ids for the timing-window metric (DC7: each physically distinct style its own id; ids used to collide across families)
+        int[] groupWins = new int[G_COUNT]; int nWaits = 1;
         int dir = c.dsWrap(base.es1[b], base.es1[a]) >= 0 ? 1 : -1;
+        boolean hangWaits = (base.mode == Sim.Mode.ROPE || base.mode == Sim.Mode.CABLE) && movingNear(c, a);
+        int hw = hangWaits ? ROPE_WAITS : 1; float hstep = hangWaits ? maxPeriod(c, a) / ROPE_WAITS : 0f;
         if (c.get(a).type == Element.Type.ROPE) {
+            // DC7: on a rope next to something that moves, the move is also tried after waiting there (sampled over the period), as the run does
             float[] deltas = {0f, 0.5f, 1.0f, 1.6f, 2.4f, 3.4f};
-            for (float d : deltas) for (float h : HOLDS) cands.add(() -> new RopePolicy(a, b, dir, d, h));
+            nWaits = hw;
+            for (int w = 0; w < hw; w++) { final float wt = w * hstep; int st = 0;
+                for (float d : deltas) for (float h : HOLDS) { cands.add(wt == 0f ? () -> new RopePolicy(a, b, dir, d, h) : () -> new WaitFirst(new RopePolicy(a, b, dir, d, h), wt)); group.add(G_ROPE + st++); } }
         } else if (c.get(a).type == Element.Type.CABLE) {
             float[] ks = {0f, 0.6f, 1.4f, 2.4f};
-            for (float k : ks) { cands.add(() -> new CablePolicy(a, b, dir, k, false)); cands.add(() -> new CablePolicy(a, b, dir, k, true)); }
+            nWaits = hw;
+            for (int w = 0; w < hw; w++) { final float wt = w * hstep; int st = 0;
+                for (float k : ks) for (boolean drop : new boolean[]{false, true}) { cands.add(wt == 0f ? () -> new CablePolicy(a, b, dir, k, drop) : () -> new WaitFirst(new CablePolicy(a, b, dir, k, drop), wt)); group.add(G_CABLE + st++); } }
         } else if (base.mode == Sim.Mode.AIR && (c.get(a).type == Element.Type.PAD || c.get(a).type == Element.Type.SPRING)) {
             for (int m = 0; m < 3; m++) for (int h = 0; h < 2; h++) { final int mm = m; final boolean hh = h == 0; cands.add(() -> new AirPolicy(b, mm, hh)); }
         } else {
@@ -515,7 +534,7 @@ public final class Autopilot {
                     if (sm == 2) continue;
                     final float fo = OFFSETS[oi], fh = HOLDS[hi]; final int fsm = sm;
                     cands.add(() -> new GroundPolicy(a, b, dir, wt, fo, fh, fsm));
-                    group.add(oi * 8 + hi * 4 + sm);
+                    group.add(G_GROUND + oi * 8 + hi * 4 + sm);
                 }
             }
         }
@@ -523,12 +542,13 @@ public final class Autopilot {
             for (int w = 0; w < nWaits; w++) for (int sm : new int[]{0, 1, 3}) {
                 final float wt = w * 0.3f; final int fsm = sm;
                 cands.add(() -> new WalkOffPolicy(b, dir, wt, fsm));
-                group.add(24 + sm);
+                group.add(G_WALKOFF + sm);
             }
         }
         if (base.mode == Sim.Mode.GROUND && c.get(a).holed()) {           // Build 79: a bridge that drops planks: hop the holes (tried first: a plain run falls through)
             int at = 0;
-            for (float hd : new float[]{0.15f, 0.45f, 0.8f}) for (int sm : new int[]{0, 3}) { final float fhd = hd; final int fsm = sm; cands.add(at, () -> new HoleHopPolicy(a, b, dir, fhd, fsm)); group.add(at++, 16); }
+            int hh = 0;
+            for (float hd : new float[]{0.15f, 0.45f, 0.8f}) for (int sm : new int[]{0, 3}) { final float fhd = hd; final int fsm = sm; cands.add(at, () -> new HoleHopPolicy(a, b, dir, fhd, fsm)); group.add(at++, G_HOLEHOP + hh++); }
         }
         if (base.mode == Sim.Mode.GROUND && c.get(a).isPlatform()) {      // a hazard in the middle of this platform: hop-over moves
             for (int hi = 0; hi < c.hazards.size(); hi++) {
@@ -538,10 +558,10 @@ public final class Autopilot {
                 final float hx = base.es1[a] + c.dsWrap(h.s, base.es1[a]);
                 final int crab = h.type == Element.Type.CRAB ? hi : -1;
                 float[] hops = {1.0f, 1.5f, 2.0f, 2.5f};
-                for (int w = 0; w < nWaits; w++) for (float hd : hops) for (int sm = 0; sm < 2; sm++) {
-                    final float wt = w * 0.3f, fhd = hd; final int fsm = sm == 0 ? 0 : 3;
+                for (int w = 0; w < nWaits; w++) for (int hdi = 0; hdi < hops.length; hdi++) for (int sm = 0; sm < 2; sm++) {
+                    final float wt = w * 0.3f, fhd = hops[hdi]; final int fsm = sm == 0 ? 0 : 3;
                     cands.add(() -> new MidHopPolicy(a, b, dir, wt, fhd, hx, 0f, fsm, crab));
-                    group.add(16 + (int) (hd * 2f) % 8 + sm * 0);
+                    group.add(G_MIDHOP + hdi * 2 + sm);          // (each steer variant its own style)
                 }
                 break;
             }

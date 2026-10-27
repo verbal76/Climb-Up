@@ -18,7 +18,9 @@ public final class CourseIO {
         for (int i = 0; i < c.keyRooms.size(); i++) { int[] k = c.keyRooms.get(i); sb.append(i > 0 ? "," : "").append('[').append(k[0]).append(',').append(k[1]).append(',').append(k[2]).append(',').append(k[3]).append(',').append(k[4]).append(',').append(k[5]).append(']'); }
         sb.append("],\"forks\":[");          // (rules 14: forks were not written, so a fixture lost its branches and the solver's fork-branch recovery)
         for (int i = 0; i < c.forks.size(); i++) { int[] k = c.forks.get(i); sb.append(i > 0 ? "," : "").append('[').append(k[0]).append(',').append(k[1]).append(',').append(k[2]).append(',').append(k[3]).append(']'); }
-        return sb.append("]}").toString();
+        sb.append("],\"gemCheckpoints\":").append(c.gemCheckpoints);          // (DC9: a fixture keeps everything the slice codec keeps)
+        if (c.prog != null) { sb.append(",\"prog\":["); for (int i = 0; i < c.prog.length; i++) sb.append(i > 0 ? "," : "").append(f(c.prog[i])); sb.append(']'); }
+        return sb.append("}").toString();
     }
 
     private static void row(StringBuilder sb, Element e) {
@@ -47,6 +49,9 @@ public final class CourseIO {
         if (kr != null) for (JsonValue a = kr.child; a != null; a = a.next) c.keyRooms.add(new int[]{a.getInt(0), a.getInt(1), a.getInt(2), a.getInt(3), a.getInt(4), a.getInt(5)});
         JsonValue fk = root.get("forks");
         if (fk != null) for (JsonValue a = fk.child; a != null; a = a.next) c.forks.add(new int[]{a.getInt(0), a.getInt(1), a.getInt(2), a.getInt(3)});
+        c.gemCheckpoints = root.getBoolean("gemCheckpoints", false);
+        JsonValue pg = root.get("prog");
+        if (pg != null) { c.prog = new float[pg.size]; int i = 0; for (JsonValue a = pg.child; a != null; a = a.next) c.prog[i++] = a.asFloat(); }
         c.routeCount = root.getInt("routeCount", -1);
         c.indexDecoys();
         return c;

@@ -1052,4 +1052,11 @@ rope clustering investigation, traverse-bar colour) and answered:
   colour in every mode, (8) integrated validation, (9) ONE final campaign (NORMAL + PUNISHER, seeds 1-2, to 5,000 m; NGH only if affected),
   (10) comparison report, then STOP for owner review. No speculative balancing campaigns, no scoring-weight changes without an independent
   justification. Build 82 on hold.
+- **Final campaign amended (owner, 2026-10-27): NINE courses**, NORMAL, PUNISHER and NOT GONNA HAPPEN, seeds 1, 2, 3, each to 5,000 m, all from the
+  same final commit and rules version; seeds fixed in advance. Each must generate completely AND be completed by the solver (generation alone is
+  not a pass), with fairness, integrity, determinism, performance, difficulty (terrain, hazard, enemy, interaction) and variety (25 m, rolling
+  100 m, castle, full run) measured. NGH gets no Enforcers or avalanches; shared changes that alter NGH courses are documented and evaluated.
+  Mechanics that do not occur naturally in the nine are verified by focused scenario tests, never forced into the nine. The traverse-bar colour is
+  verified visually (day, night, dark blue sky, space). Fix release blockers with focused checks, rerun only invalidated courses, then one report
+  and STOP. Build 82 on hold.
 

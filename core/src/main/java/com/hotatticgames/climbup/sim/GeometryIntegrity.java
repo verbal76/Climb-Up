@@ -48,6 +48,23 @@ public final class GeometryIntegrity {
         return out;
     }
 
+    /** DC5: hazard {@code h} passes I4 against everything of {@code c} and of the earlier slices - the same rule as {@link #check}, for one hazard at its placement. */
+    static boolean hazardClear(Course c, Element h, List<Element> otherElems, List<Element> otherHaz) {
+        if (!physical(h)) return true;
+        for (Element f : c.elements) if (otherRevolution(c, CourseGenerator.hzS(h), f.s) && hazardInBody(c, h, f)) return false;
+        for (Element f : otherElems) if (otherRevolution(c, CourseGenerator.hzS(h), f.s) && hazardInBody(c, h, f)) return false;
+        for (Element g : c.hazards) if (g != h && physical(g) && otherRevolution(c, CourseGenerator.hzS(h), CourseGenerator.hzS(g)) && hazardsMeet(c, h, g)) return false;
+        for (Element g : otherHaz) if (g != h && physical(g) && otherRevolution(c, CourseGenerator.hzS(h), CourseGenerator.hzS(g)) && hazardsMeet(c, h, g)) return false;
+        return true;
+    }
+
+    /** DC5: element {@code e} lies in no hazard's lethal box of another revolution (I4 seen from the element: a deck placed after the hazard). */
+    static boolean elementClear(Course c, Element e, List<Element> hz, List<Element> otherHaz) {
+        for (Element h : hz) if (physical(h) && otherRevolution(c, CourseGenerator.hzS(h), e.s) && hazardInBody(c, h, e)) return false;
+        for (Element h : otherHaz) if (physical(h) && otherRevolution(c, CourseGenerator.hzS(h), e.s) && hazardInBody(c, h, e)) return false;
+        return true;
+    }
+
     /** The violation between two elements, or null. */
     static String pair(Course c, Element e, Element f) {
         if (otherRevolution(c, e.s, f.s)) return CourseGenerator.layersBodiesClash(c, e, f) ? "I1 bodies of two revolutions intersect" : null;

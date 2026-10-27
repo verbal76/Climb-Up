@@ -46,6 +46,12 @@ public final class CourseGenerator {
     private double base;                    // framed generation: absolute height = base + local y (a multiple of the castle spacing); 0 for the classic absolute-frame slices
     private List<Element> ghostElems = new ArrayList<>();   // earlier-slice elements, only consulted for spiral-layer clearance
     private List<Element> ghostHaz = new ArrayList<>();
+    /** DC5: where each ghost pad or spring really lands (resolved on the previous slice, with its forks and structures), parallel to ghostElems. */
+    private List<Element> ghostLand = new ArrayList<>();
+    /** DC5: a fork being built ({from, first, count, rejoin}), so its pads' landings are known to every check before it is registered. */
+    private int[] pendingFork;
+    /** DC5: encounters proven by playing them through (Autopilot.chainClean): {from, to, ngh avalanche 1/0}. Re-played when a later module's hazards reach into them. */
+    private final List<int[]> encounters = new ArrayList<>();
     public StringBuilder trace = new StringBuilder();
     public int hazardsPlaced, hazardTried, failLayer, failHaz, failPlan, failWindow;
 
@@ -247,14 +253,16 @@ public final class CourseGenerator {
             c.add(start); ctx = 1; varHist.clear(); lastEnfY = Float.NEGATIVE_INFINITY;
         } else {
             // context: the tail of the previous slice (so the planner sees the real approach) plus everything else as geometry-only ghosts
-            int rs = prev.routeSize(), m = Math.min(8, rs), from = rs - m;
+            // DC5: two more decks than the hazards reach back to, so no copied hazard keeps a negative anchor (its deck absent); a hazard anchored on
+            // the previous slice's side structures is kept as a ghost (it used to be dropped altogether)
+            int rs = prev.routeSize(), m = Math.min(10, rs), from = rs - m;
             for (int i = from; i < rs; i++) c.add(copyOf(prev.get(i), -1));
-            for (Element h : prev.hazards) if (h.anchor >= from - 2 && h.anchor < rs) c.hazards.add(copyOf(h, h.anchor - from));
+            for (Element h : prev.hazards) if (h.anchor >= from && h.anchor < rs) c.hazards.add(copyOf(h, h.anchor - from));
             // (2026-10-26 audit: the relaxed attempts left the previous slice out altogether, so nothing kept their platforms and hazards from
             // overlapping its earlier route, branches and hazards one revolution down; now they only waive the shortcut spacing to it, see ghostClash)
-            for (int i = 0; i < rs; i++) if (i < from) ghostElems.add(prev.get(i));
-            for (int i = rs; i < prev.size(); i++) ghostElems.add(prev.get(i));
-            for (Element h : prev.hazards) if (h.anchor < from - 2) ghostHaz.add(h);
+            for (int i = 0; i < rs; i++) if (i < from) { ghostElems.add(prev.get(i)); ghostLand.add(landingOf(prev, i)); }
+            for (int i = rs; i < prev.size(); i++) { ghostElems.add(prev.get(i)); ghostLand.add(landingOf(prev, i)); }
+            for (Element h : prev.hazards) if (h.anchor < from || h.anchor >= rs) ghostHaz.add(h);
             ctx = m; ctxHaz = c.hazards.size();
             rests = prev.get(rs - 1).zone * 3 + rs;   // keeps the checkpoint cadence varied between slices
             varSeed(prev);
@@ -787,7 +795,8 @@ public final class CourseGenerator {
             Element d = c.get(n0), r = new Element(Element.Type.ENFORCER, d.s, d.y, d.w);
             r.anchor = n0; r.len = len; r.skin = tier; r.zone = zone; r.phase = 0.01f + 0.98f * rnd.nextFloat();          // its own seed: where it waits, how soon it notices you, how it leaps away
             c.hazards.add(r);
-            if (Autopilot.chainClean(c, T, n0 - 1, n0 + len)) return true;
+            if (!insertionClear(r)) { rollbackTo(n0, h0); GenTrace.tally("enforcer_insertion_refused"); continue; }          // (DC5: the checks every hazard gets)
+            if (Autopilot.chainClean(c, T, n0 - 1, n0 + len)) { encounters.add(new int[]{n0 - 1, n0 + len, 0}); return true; }
             rollbackTo(n0, h0); GenTrace.tally("enforcer_unfair");
         }
         return false;
@@ -872,15 +881,16 @@ public final class CourseGenerator {
         int last = c.size() - 1;
         if (avlCand < 0) { if (c.get(last).y >= avlPending.get(0)[0] && avlTriggerDeck(last)) avlCand = last; return; }
         if (last < avlCand + 4) return;
+        if (!avlTriggerDeck(avlCand)) { avlCand = -1; GenTrace.tally("avalanche_trigger_taken"); return; }          // (DC5: something was anchored on it since it was chosen: choose again)
         float[] pl = avlPending.get(0);
         Element d = c.get(avlCand), a = new Element(Element.Type.AVALANCHE, d.s, d.y, d.w);
         a.anchor = avlCand; a.len = pl[1]; a.period = pl[2]; a.phase = pl[3]; a.zone = d.zone; if (P == DifficultyProfile.NGH) a.skin = 1;          // NOT GONNA HAPPEN's blocks: each its own size and physics (Sim.stepChaos)
         int hi = c.hazards.size(); c.hazards.add(a);
         long t0 = GenTrace.now();
-        boolean proven = Autopilot.chainClean(c, T, avlCand - 1, avlCand + 4);
+        boolean proven = insertionClear(a) && Autopilot.chainClean(c, T, avlCand - 1, avlCand + 4);          // (DC5: the checks every hazard gets)
         if (proven && a.skin == 1) for (float w : AVL_NGH_WAITS) if (!Autopilot.chainClean(c, T, avlCand - 1, avlCand + 4, w)) { proven = false; GenTrace.tally("avalanche_arrival_unfair"); break; }      // NGH: every arrival time
         if (proven) {
-            avlPending.remove(0); avlPlaced.add(new Object[]{hi, pl}); varAdd(hazFam(a), a.y, c.size()); avlCand = -1;
+            avlPending.remove(0); avlPlaced.add(new Object[]{hi, pl}); varAdd(hazFam(a), a.y, c.size()); encounters.add(new int[]{avlCand - 1, avlCand + 4, a.skin == 1 ? 1 : 0}); avlCand = -1;
             AVALANCHES_PLACED.incrementAndGet(); GenTrace.tally("avalanche_placed_b" + Math.round(pl[1]));
             GenTrace.tally("avalanche_proof_ms", (int) ((GenTrace.now() - t0) / 1_000_000L));
             return;
@@ -1122,7 +1132,7 @@ public final class CourseGenerator {
             float old = e.w; e.w = GEM_MIN_W;
             boolean ok = clearOfOtherLayers(i);
             for (int k = i - 1; k <= i + 1 && ok; k += 2) { Element n = c.get(k); ok = Math.abs(n.y - e.y) > 1.0f || Math.abs(c.dsWrap(e.s, n.s)) - e.halfW() - n.halfW() > 0.2f; }      // never into a neighbour
-            for (int j = i - 1; j <= i && ok; j++) { Sim sim = Sim.startOn(c, T, j); quietStart(sim, j); Autopilot.Result res = Autopilot.plan(sim, j, true); ok = res.ok && res.margin() >= 0.12f; }
+            for (int j = Math.max(0, i - 2); j <= Math.min(c.routeSize() - 2, i + 1) && ok; j++) { Autopilot.Result res = Autopilot.plan(provenStart(c, T, j), j, true); ok = res.ok && res.margin() >= Math.min(0.12f, linkNeed(j)); }          // (DC5: every link whose take-off or landing the wider deck changes, from its proven start)
             e.w = old;
             if (ok) { best = i; bestDev = d; }
         }
@@ -1214,6 +1224,7 @@ public final class CourseGenerator {
     }
 
     private void rollbackTo(int n0, int h0) {
+        for (int i = encounters.size() - 1; i >= 0; i--) if (encounters.get(i)[1] >= n0) encounters.remove(i);          // (their decks went with the undone modules)
         while (c.size() > n0) c.elements.remove(c.size() - 1);
         while (c.hazards.size() > h0) c.hazards.remove(c.hazards.size() - 1);
         // an avalanche whose hazard went with the undone modules is planned again (it is placed again further on, proven again)
@@ -1416,7 +1427,9 @@ public final class CourseGenerator {
         Element pad = plat(Element.Type.PAD, padC, padY, 2f, J.zone); pad.anchor = e; es.add(pad);
         int n0 = c.size(), h0 = c.hazards.size();
         boolean ok = true;
+        pendingFork = new int[]{e, n0, es.size(), j};
         for (Element b : es) { c.add(b); if (!decoyOk(b, e, true)) { ok = false; FORKWHY[2 + decoyWhy]++; break; } }
+        pendingFork = null;
         if (ok) {
             c.indexDecoys();
             ok = pairOkAir(c.size() - 1, j); if (!ok) FORKWHY[12]++;          // (order changes no result; the bounce is refused most)
@@ -1448,7 +1461,9 @@ public final class CourseGenerator {
             Element pad = plat(Element.Type.PAD, x, y, 2f, start.zone); pad.anchor = a;
             int n0 = c.size(), h0 = c.hazards.size();
             c.add(pad);
+            pendingFork = new int[]{a, n0, 1, t};
             boolean ok = decoyOk(pad, a, true);
+            pendingFork = null;
             if (!ok) FORKWHY[2 + decoyWhy]++;
             if (ok) {
                 c.indexDecoys();
@@ -1486,12 +1501,21 @@ public final class CourseGenerator {
      * the next candidate. Returns false after rolling the fork back.
      */
     private boolean forkCorridorsClear(int n0, int h0) {
-        for (int i = n0; i < c.size(); i++) if (!padCorridorClear(i)) {
-            GenTrace.tally("pad_corridor_refused"); FORKWHY[13]++;
-            c.forks.remove(c.forks.size() - 1); rollbackTo(n0, h0); c.indexDecoys();
-            return false;
+        boolean ok = true;
+        for (int i = n0; i < c.size() && ok; i++) if (!padCorridorClear(i)) { ok = false; GenTrace.tally("pad_corridor_refused"); FORKWHY[13]++; }
+        // DC5: an earlier fork's branch near the new one is proven again with it there (its bounce and hops were proven before it existed)
+        for (int f = 0; ok && f < c.forks.size() - 1; f++) {
+            int[] fk = c.forks.get(f); boolean near = false;
+            for (int i = fk[1]; i < fk[1] + fk[2] && !near; i++) for (int q = n0; q < c.size() && !near; q++) near = Math.abs(c.dsWrap(c.get(i).s, c.get(q).s)) < 15f && Math.abs(c.get(i).y - c.get(q).y) < 12f;
+            if (!near) continue;
+            ok = pairOk(fk[0], fk[1]);
+            for (int k = fk[1]; ok && k < fk[1] + fk[2] - 1; k++) ok = pairOk(k, k + 1);
+            if (ok) ok = pairOkAir(fk[1] + fk[2] - 1, fk[3]);
+            if (!ok) { GenTrace.tally("fork_earlier_branch_refused"); FORKWHY[13]++; }
         }
-        return true;
+        if (ok) return true;
+        c.forks.remove(c.forks.size() - 1); rollbackTo(n0, h0); c.indexDecoys();
+        return false;
     }
     private boolean hazOn(int i) { for (Element h : c.hazards) if (h.anchor == i) return true; return false; }
     private int tryFork(int a, int from, Random dr, int maxAhead) {
@@ -1541,7 +1565,9 @@ public final class CourseGenerator {
             Element pad = plat(Element.Type.PAD, padS, padY, 2f, tg.zone); pad.anchor = a; es.add(pad);
             int n0 = c.size(), h0 = c.hazards.size();
             boolean ok = true;
+            pendingFork = new int[]{from, n0, es.size(), t};
             for (Element e : es) { c.add(e); if (!decoyOk(e, a, true)) { ok = false; FORKWHY[2 + decoyWhy]++; break; } }
+            pendingFork = null;
             if (ok) {
                 c.indexDecoys();
                 GenTrace tr = GenTrace.GEN.get(); long q0 = GenTrace.now();      // (observe-only timing for reports)
@@ -1665,6 +1691,7 @@ public final class CourseGenerator {
             } else if (fork ? forkLayersClash(d, e) : layersClash(c, d, e)) { decoyWhy = 2; return false; }
         }
         for (Element g : ghostElems) if (ghostClash(d, g)) { decoyWhy = 3; return false; }
+        if (!GeometryIntegrity.elementClear(c, d, c.hazards, ghostHaz)) { decoyWhy = 2; return false; }          // (DC5: never inside a placed hazard's box of another revolution)
         if (contReserve != null) for (Element p : contReserve) if (layersClash(c, p, d)) { decoyWhy = 6; return false; }      // the next slice's first step stays clear (closeSlice)
         // never in the flight corridor of any route pad or spring, in this revolution or another: a launch rises up to ~8.5 m and drifts up to
         // ~9 m with the run-up it was reached at, so a branch, dead end or key-room platform there catches the climber (OfficialRunTest seed 7
@@ -1674,9 +1701,10 @@ public final class CourseGenerator {
         // branch 10.2 m over a pad take the climber's head on the way up: NORMAL seed 2 slice 77, castle 10, beyond the planner's element window so the
         // proof never saw it)
         float top = T.padBounceHeld * T.padBounceHeld / (2f * T.gravity) + 2.8f;
-        for (int j = 0; j < rs; j++) {
+        for (int j = 0; j < c.size(); j++) {          // (DC5: every pad and spring, the branches' too, not only the route's)
             Element e = c.get(j);
-            if ((e.type == Element.Type.PAD || e.type == Element.Type.SPRING) && e.anchor < 0 && Math.abs(c.dsWrap(d.s, e.s)) < 10f + d.w / 2f && d.y > e.y - 1.5f && d.y < e.y + top) { decoyWhy = 5; return false; }
+            if (e == d || (pendingFork != null && j >= pendingFork[1])) continue;          // (the structure being built is proven by its own links)
+            if ((e.type == Element.Type.PAD || e.type == Element.Type.SPRING) && Math.abs(c.dsWrap(d.s, e.s)) < 10f + d.w / 2f && d.y > e.y - 1.5f && d.y < e.y + top) { decoyWhy = 5; return false; }
         }
         if (!fork) for (int j = a + 2; j < rs; j++) {                 // never a stepping stone toward later route
             Element e = c.get(j);
@@ -1873,10 +1901,22 @@ public final class CourseGenerator {
     static boolean launchPad(Element e) { return e.type == Element.Type.PAD || e.type == Element.Type.SPRING; }
     /** The deck a pad or spring of this slice launches to (its next route element), or null for one off the route (a fork's or dead end's pad: the next element of its structure). */
     private Element padLanding(int i) {
-        int nx = i < c.routeSize() ? c.nextRoute(i) : i + 1;
-        for (int[] fk : c.forks) if (i >= fk[1] && i < fk[1] + fk[2]) nx = i + 1 < fk[1] + fk[2] ? i + 1 : fk[3];          // a fork branch's last pad lands on the rejoin
-        if (i >= c.routeSize() && nx < c.size() && nx > i && c.get(nx).anchor != c.get(i).anchor && (nx >= c.routeSize())) return null;          // (the next element belongs to another structure)
-        return nx >= 0 && nx != i && nx < c.size() ? c.get(nx) : null;          // (a rejoin lies earlier in the list than the branch)
+        int[] pf = pendingFork;          // (a fork being built: its landings are known before it is registered)
+        if (pf != null && i >= pf[1] && i < pf[1] + pf[2]) { int nx = i + 1 < pf[1] + pf[2] ? i + 1 : pf[3]; return nx < c.size() ? c.get(nx) : null; }
+        return landingOf(c, i);
+    }
+    /**
+     * DC5 (owner correction 2026-10-27): the one rule for where a pad or spring at element {@code i} of {@code c} lands, used by every check (placement,
+     * slice audit, previous-slice ghosts): a route pad on the next route element; a fork branch's pad on the next branch element, or on the rejoin
+     * after the last; any other side structure's (a key room's) on its next element of the same structure, else back on the route deck it hangs from.
+     */
+    static Element landingOf(Course c, int i) {
+        int rs = c.routeSize();
+        if (i < rs) { int nx = c.nextRoute(i); return nx > i && nx < c.size() ? c.get(nx) : null; }
+        for (int[] fk : c.forks) if (i >= fk[1] && i < fk[1] + fk[2]) { int nx = i + 1 < fk[1] + fk[2] ? i + 1 : fk[3]; return nx < c.size() ? c.get(nx) : null; }
+        Element e = c.get(i);
+        if (i + 1 < c.size() && c.get(i + 1).anchor == e.anchor && e.anchor >= 0) return c.get(i + 1);
+        return e.anchor >= 0 && e.anchor < c.size() ? c.get(e.anchor) : null;
     }
     /**
      * The launch corridor of pad or spring {@code e} (landing on {@code land}, or null) holds hazard {@code h}. 2026-10-26 (campaign 40270745200, NORMAL
@@ -1918,7 +1958,7 @@ public final class CourseGenerator {
         for (int i = 0; i < ghostElems.size(); i++) {
             Element e = ghostElems.get(i);
             if (!launchPad(e)) continue;
-            Element land = i + 1 < ghostElems.size() ? ghostElems.get(i + 1) : null;
+            Element land = ghostLand.get(i);
             for (int k = ctxHaz; k < c.hazards.size(); k++) { Element h = c.hazards.get(k); if (otherRevolution(c, e, h) && corridorBlocked(c, T, e, land, h)) corridorFail(e, h, "ghost pad " + i + " / haz " + k + " anchor " + h.anchor); }
         }
     }
@@ -1949,6 +1989,26 @@ public final class CourseGenerator {
     }
     /** Diagnostics: slice attempts refused by the launch-corridor audit. */
     public static final java.util.concurrent.atomic.AtomicInteger CORRIDOR_REFUSED = new java.util.concurrent.atomic.AtomicInteger();
+    /**
+     * DC5 (owner correction 2026-10-27): the checks every hazard gets at placement, for the hazards placed outside a module (an Enforcer, an avalanche):
+     * no launch corridor of another revolution holds it (this slice's pads and the previous slice's), and it keeps clear of every other spiral layer.
+     * Its own decks are its encounter's, proven by playing it (chainClean), so the same-layer standing-room rule does not apply. Refused here, the
+     * generator tries the next geometry or deck instead of losing the whole slice at the audit.
+     */
+    private boolean insertionClear(Element h) {
+        for (int i = 0; i < c.size(); i++) { Element e = c.get(i); if (launchPad(e) && otherRevolution(c, e, h) && corridorBlocked(c, T, e, padLanding(i), h)) return false; }
+        for (int i = 0; i < ghostElems.size(); i++) { Element e = ghostElems.get(i); if (launchPad(e) && otherRevolution(c, e, h) && corridorBlocked(c, T, e, ghostLand.get(i), h)) return false; }
+        if (!GeometryIntegrity.hazardClear(c, h, ghostElems, ghostHaz)) return false;          // the slice audit's own I4 rule, so placement and audit agree
+        float hs = hzS(h), hh = hzHalf(h), lo = hzLo(h), hi = hzHi(h);
+        for (int pass = 0; pass < 2; pass++) {
+            int n = pass == 0 ? c.size() : ghostElems.size();
+            for (int i = 0; i < n; i++) {
+                Element e = pass == 0 ? c.get(i) : ghostElems.get(i);
+                if (Math.abs(hs - e.s) >= c.circumference * 0.5f && Math.abs(c.dsWrap(hs, e.s)) < hh + arcHalf(e) + 2.0f && lo - 1.5f < vHi(e) && hi + 1.5f > vLo(e)) return false;
+            }
+        }
+        return true;
+    }
     private boolean hazardOk(Element h, int ownerIdx) {
         float hs = hzS(h), hh = hzHalf(h), lo = hzLo(h), hi = hzHi(h);
         if (h.type != Element.Type.KEY && h.type != Element.Type.GATE && h.type != Element.Type.CLUB) {
@@ -1962,7 +2022,7 @@ public final class CourseGenerator {
             }
             for (int i = 0; i < ghostElems.size(); i++) {          // (rules 14: the previous slice's pads and springs as well)
                 Element e = ghostElems.get(i);
-                if (launchPad(e) && otherRevolution(c, e, h) && corridorBlocked(c, T, e, i + 1 < ghostElems.size() ? ghostElems.get(i + 1) : null, h)) return false;
+                if (launchPad(e) && otherRevolution(c, e, h) && corridorBlocked(c, T, e, ghostLand.get(i), h)) return false;
             }
         }
         for (int pass = 0; pass < 2; pass++) {
@@ -1994,6 +2054,24 @@ public final class CourseGenerator {
 
     /** How many decks either side of its own a creature can reach (skulls, blobs and, since rules 8, bees a neighbour; crabs follow up to CRAB_FOLLOW); -1 for anything else. One definition, EncounterModel.roamReach. */
     private static int roamReach(Element h) { return EncounterModel.roamReach(h); }
+    /**
+     * DC5 (owner correction 2026-10-27): the first route link hazard {@code h} can touch, from what it really reaches - an aimed cannon wakes and fires
+     * within AIM_RANGE in any direction, a bee seeks within BEE_SEEK and drifts BEE_REACH, a cannon's balls fly its lane and 14 m past it - as well as
+     * the decks a creature roams onto. Links before it were proven before the hazard existed and are proven again with it (they used to start at the
+     * anchor or one or two decks before it).
+     */
+    private int reachFrom(Element h) {
+        int a = h.anchor; if (a < 0) return Integer.MAX_VALUE;
+        int from = a - 1 - Math.max(0, roamReach(h));
+        float R = h.type == Element.Type.AIMED ? Element.AIM_RANGE + 1f : h.type == Element.Type.BEE ? Element.BEE_SEEK + Element.BEE_REACH : 0f;
+        int top = Math.min(a, c.routeSize()) - 1;
+        if (R > 0f) for (int k = top; k >= 0; k--) { Element d = c.get(k); if (Math.abs(c.dsWrap(d.s, hzS(h))) < R + d.halfW() && Math.abs(d.y - h.y) < R) from = Math.min(from, k - 1); }
+        if (h.type == Element.Type.CANNON) for (int k = top; k >= 0; k--) {
+            Element d = c.get(k); float along = c.dsWrap(d.s, h.s) * (h.dir >= 0 ? 1f : -1f);
+            if (along > -d.halfW() - 1f && along < h.len + 14f + d.halfW() && Math.abs(d.y - h.y) < 3f) from = Math.min(from, k - 1);
+        }
+        return Math.max(0, from);
+    }
     /** True if a creature already on the course can roam onto the link from deck a (onto a or a + 1). */
     private boolean creatureReaches(int a) {
         for (Element o : c.hazards) { int r = roamReach(o); if (r >= 0 && a >= o.anchor - r - 1 && a <= o.anchor + r) return true; }
@@ -2073,7 +2151,7 @@ public final class CourseGenerator {
         // Every link a new hazard can touch is proven with it there: a hazard on the platform the previous link lands on touches that link too (a cannon
         // fires across it; a saw on it sweeps the landing: seed 3 slice 16, a saw from the next module cut a saw link to 0.36), and a creature also the
         // links into the decks it roams onto (framed seed 5 slice 17: a skull from the next module jumped the pad link before its deck).
-        for (Element h : hz) if (h.anchor >= 0) from = Math.min(from, h.anchor - 1 - Math.max(0, roamReach(h)));
+        for (Element h : hz) if (h.anchor >= 0) from = Math.min(from, reachFrom(h));          // (DC5: from the hazard's real reach, not only its roaming decks)
         if (n0 >= 2 && !es.isEmpty()) from = Math.min(from, n0 - 2);       // and the link onto the platform the module starts from: what comes next can crowd its landing (tower 3: a slider just past it cut a ramp link from 0.25 to 0.017)
         from = Math.max(0, from);
         // An earlier link is held against the module only if it held before it: some earlier links are proven from a start a plain re-check does not
@@ -2139,6 +2217,14 @@ public final class CourseGenerator {
         // jump also has to wait for a cycle from a cramped take-off. Such a module is not dropped from the game; this arrangement of it is refused and the
         // generator tries another (different spacing, placement or module), so the mechanics stay and meet elsewhere.
         for (int i = Math.max(0, from); ok && i < c.size() - 1; i++) if (EncounterModel.link(c, T, i).conflict) { ok = false; failConflict++; }
+        // DC5: an encounter proven by playing it through (Enforcer, avalanche, spike drops with enemies) is played again when this module's hazards
+        // reach into it: it was proven before they existed
+        if (ok && !hz.isEmpty()) for (int[] en : encounters) {
+            if (en[1] < from || en[1] >= n0) continue;
+            boolean clean = Autopilot.chainClean(c, T, en[0], en[1]);
+            if (clean && en[2] == 1) for (float w : AVL_NGH_WAITS) if (!Autopilot.chainClean(c, T, en[0], en[1], w)) { clean = false; break; }
+            if (!clean) { ok = false; failPlan++; GenTrace.tally("encounter_reproof_refused"); break; }
+        }
         // NORMAL (Build 80 diagnostics, seed 34 at 512 m: four crabs and two bees could all reach a spiked take-off two platforms on): the creatures that
         // can really reach a link's take-off or landing - crabs that follow, skulls and blobs from the next platform, bees within their seeking range - stay
         // within a budget that grows with the level, smaller from a cramped take-off. A module is refused only where it pushes a link over the budget;
@@ -2157,6 +2243,8 @@ public final class CourseGenerator {
         return ok;
     }
 
+    /** The hazards already placed before this module's own (its hazards are the last {@code hz.size()} of the course's). */
+    private int h0Of(List<Element> hz) { return c.hazards.size() - hz.size(); }
     /** The module's geometry, with it added from element {@code n0}: clear of other spiral layers, hazards placed clear, saws out of creatures' reach, protected rows kept (counts its refusal). */
     private boolean geometryOk(int n0, List<Element> hz) {
         boolean ok = true;
@@ -2168,6 +2256,9 @@ public final class CourseGenerator {
         if (!ok) { boolean cr = false; for (Element h : hz) if (h.type == Element.Type.CRAB) cr = true;
             if (cr) { Element e = c.get(clashAt), f = lastClash; boolean body = vLo(e) - 1.5f < vHi(f) && vHi(e) + 1.5f > vLo(f);
                 CRABCLASH[(f.anchor >= 0 ? 2 : 0) + (body ? 0 : 1) + (lastClashGhost ? 4 : 0)]++; } }
+        // DC5: a new deck never lies in the lethal box of a hazard of another revolution placed before it (an avalanche's fall, a cannon's lane):
+        // the slice audit's I4 rule, applied here so the generator places something else instead of losing the attempt
+        for (int i = n0; i < c.size() && ok; i++) if (!GeometryIntegrity.elementClear(c, c.get(i), c.hazards.subList(0, Math.min(c.hazards.size(), h0Of(hz))), ghostHaz)) { ok = false; failHaz++; GenTrace.tally("deck_in_hazard_refused"); }
         for (Element h : hz) { if (!ok) break; if (h.type == Element.Type.CLUB) continue; ok = hazardOk(h, ownerOf(h)); if (!ok) failHaz++; }
         for (int i = n0; i < c.size() && ok; i++) if (!padCorridorClear(i)) { ok = false; failHaz++; GenTrace.tally("pad_corridor_refused"); }
         if (ok && !sawsClearOfCreatures(hz)) { ok = false; failHaz++; }
@@ -2383,6 +2474,7 @@ public final class CourseGenerator {
             if (ok && k == Kind.DROPS && endless && P.progression()) {
                 boolean enemies = false; for (Element h : hz) if (Progression.enemy(h.type)) enemies = true;
                 if (enemies && !Autopilot.chainClean(c, T, Math.max(0, cn0 - 1), c.size() - 1)) { rollbackTo(cn0, ch0); ok = false; GenTrace.tally("drops_chain_refused"); }
+                else if (enemies) encounters.add(new int[]{Math.max(0, cn0 - 1), c.size() - 1, 0});
             }
             if (k == Kind.WET) { wetTried++; if (ok) wetOk++; }
             if (ok) return true;

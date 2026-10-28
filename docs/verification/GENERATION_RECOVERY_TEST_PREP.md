@@ -16,8 +16,8 @@ New file: `core/src/test/java/com/hotatticgames/climbup/GenerationRecoveryTest.j
 | ResumeTest | OK (1 test), 724 s |
 | RunSnapshotTest | OK (5 tests), 799 s |
 | StreamingReplayTest | **FAIL** (1 test), 716 s. The same tower replays bit-exactly. The streaming tower first differs at step 400 (1.8e-3 m) and grows to 0.114 m, and the climber skips surface 262181 (slice 4, element 37) that the recording stood on. This is on frozen source 093b6bb; it is not caused by this preparation, which changed no production code. See "Smoke-gate relevance" below. |
-| TowerStreamingTest | still running when this was written (more than 28 min) |
-| DeterminismTest | still running when this was written (more than 28 min) |
+| TowerStreamingTest | NOT COMPLETED: stopped by the local 40 min limit (exit 124) after its first test started; no failure was reported before the cut-off. Inconclusive. CI (no limit) is the authoritative run |
+| DeterminismTest | NOT COMPLETED: stopped by the local 40 min limit (exit 124) after two tests had started; no failure was reported before the cut-off. Inconclusive. CI is the authoritative run |
 
 ### New tests
 

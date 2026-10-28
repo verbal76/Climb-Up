@@ -1276,3 +1276,9 @@ Source: docs/verification/CONSOLIDATED_AUDIT_REPORT.md (DC1-DC10) and docs/verif
   conveyor first, by the existing placement and proof (tally `belt_claimed_below_start`). Nothing changes where every height was claimed.
   Duplicates are impossible: a conveyor built by an older slice lies below the previous slice.
 - **Not changed.** The test, the conveyor's own rules and proofs, and the seed 1 fingerprint (conveyors start at castle 6).
+
+## Build 82 difficulty separation accepted (owner decision 2026-10-28)
+
+The owner accepted the measured erosion of the mode separation for Build 82: 29.7% PUNISHER/NORMAL and 61.4% NGH/PUNISHER, against the 25%
+standard. Next build: NGH castles 9-10 and the separation erosion, as a generation change with its own rules version, CI run and campaign. The
+playtest build is on hold at the owner's request.

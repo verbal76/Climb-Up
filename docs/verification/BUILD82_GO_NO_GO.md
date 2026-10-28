@@ -89,3 +89,13 @@ network blocks GitHub's artifact storage. The flag and the KPI detail still need
   - **(b)** Accept the measured separation for Build 82 and schedule the curve correction for the next build.
 
 Build 82 stays on HOLD: nothing merged, packaged or published; PR #12 is a draft.
+
+## 5. Owner decision (2026-10-28)
+
+- **The owner accepts the measured difficulty separation for Build 82** (option b). The separation item is closed.
+- **Why no quick NGH castle 9-10 boost (reviewed with the owner).** NGH already undershoots its castle-10 target: it measures 1,108 against
+  1,210. The fairness and proof constraints cap it there, so raising the target alone would most likely not change the courses. A real increase
+  would mean more or harder encounters at the top of the hardest mode. That is a generation change needing a rules bump, a CI run and an NGH
+  campaign. It is scheduled for the next build, together with the separation erosion.
+- **Status.** Engineering GO; separation accepted. The playtest build is ON HOLD at the owner's request while another report is in progress.
+  Nothing is merged, packaged or published.

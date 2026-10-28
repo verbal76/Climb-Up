@@ -183,3 +183,61 @@ None is a refused traversal module.
 | NGH | 3,529 m | 0.045 |
 
 The intervals are already consistent (NORMAL 2,766-3,424 m), so there is little room for a soft preference to help.
+
+**P3c, why creature decks thin out at NGH castle 10.**
+
+| NGH castle | creature modules tried / accepted per course | layer refusals |
+|---|---|---|
+| 8 | 77 / 43.5 | 26% |
+| 9 | 76 / 43.6 | 31% |
+| 10 | 74 / 39.4 | 34% |
+
+- Confirmed from the stored courses: fewer skull and blob decks are accepted at castle 10, mostly on the layer check.
+- The crab count per crab deck rises with height (the generator's crab formula). Crabs fill the gap and score low.
+- Supported hypothesis: the rules 17 layer change helps creature decks too (a blob's tipping bridge launches). It must be measured at castles 9-10, which only full-height courses reach.
+
+## Priority 2 change: Enforcer-barred bees and crab decks (rules 17)
+
+The Enforcer rule bars a creature next to an Enforcer encounter, not a hazard. Such a draw is now drawn again by the variety memory:
+- a barred bee becomes a vertical saw or a cannon (a gap saw there would fail the creature-reach rule);
+- a barred crab deck becomes a spike mat, a floor saw or a crusher.
+
+A spiked block remains only where nothing else fits. NORMAL (no Enforcers) is unchanged. Saw-protection conversions keep the spiked block, which needs no timing window.
+
+NGH seeds 7311-7313, 0-600 m, generation only, same code before and after:
+
+| | before | after |
+|---|---|---|
+| spiked blocks, share of on-route hazards | 34.7% (158) | 31.4% (139) |
+| total on-route hazards | 455 | 442 |
+| vertical saws | 16.7% | 19.9% (watch) |
+| cannons | 2.9% | 4.3% |
+| geometric integrity | 6 of 6 runs clean | 6 of 6 runs clean |
+
+A first version that also re-drew to gap saws raised NGH spiked blocks in a 600 m sample. Those saws were converted back by the creature-reach rule. It was narrowed (commit 1096c78).
+
+## Priority 4: recommendation
+
+- Build 82 castle intervals already vary by 4.1-4.5% (CV of route travel). NORMAL runs 2,766-3,424 m.
+- No soft preference is proposed. Its benefit would be small against the risk of more generation refusals.
+- The integrated comparison checks that the other changes do not widen the spread.
+
+## Nine-course comparison campaign (prepared; NOT dispatched: needs the owner's authorisation after the final CI)
+
+**Dispatch:**
+- workflow `difficulty-report.yml`, ref `experiment/pendulums` at the final candidate SHA;
+- seeds `["7321","7322","7323"]` (fresh: not in the Build 82 campaign), modes `["0","1","2"]`;
+- `top` 5000, `solve` 1, `baseline_run` 40752227771.
+
+The consolidate job prints `tools/ci/diag_summary.py` (P1-P4, P2b dominance, KPI 16, P3b ledger, P3c modules per castle) beside the existing lane, variety and batch reports.
+
+**Comparison against the Build 82 30-course baseline, reported separately per category:**
+
+| category | measures |
+|---|---|
+| difficulty quality | lanes per castle, combined progression, separation erosion (25% standard) |
+| gameplay variety | KPI 16, hazard family dominance, entropy, repetition, castle travel CV |
+| generator efficiency | module tries, acceptance, refusal causes, discarded attempts, fallbacks, generation time |
+| engineering reliability | PROVEN_SOLVABLE slices, integrity violations, generation failures, solver time, heap |
+
+Three seeds per mode are indicative, not statistical. Differences are reported against the baseline's spread, never as a verdict on their own.

@@ -631,6 +631,18 @@ public final class Autopilot {
         return r;
     }
 
+    /** Walks to {@code toS} on the platform underfoot and lets go to stop (at most {@code brake} steps), as the recovery walks do. */
+    static void walkAndBrake(Sim sim, float toS, int brake) {
+        Course c = sim.course; InputState in = new InputState();
+        for (int q = 0; q < 240 && sim.mode == Sim.Mode.GROUND; q++) {
+            float d = c.dsWrap(toS, sim.s);
+            if (Math.abs(d) < 0.45f && Math.abs(sim.vx) < 0.4f) break;
+            in.clear(); in.moveX = walkTo(d); sim.step(in);
+        }
+        for (int q = 0; q < brake && sim.mode == Sim.Mode.GROUND && Math.abs(sim.vx) > 0.05f; q++) { in.clear(); sim.step(in); }
+    }
+    /** Stands still for {@code n} steps (no input), stopping at a setback. */
+    static void idle(Sim sim, int n) { InputState in = new InputState(); int sb = sim.setbacks(); for (int q = 0; q < n && sim.setbacks() == sb; q++) { in.clear(); sim.step(in); } }
     /** Waits {@code waitTicks} (hazard timing), walks to {@code toS} on platform a and brakes, then plans the next link from there; null if that leaves the platform or costs a setback. */
     static Result repositionPlan(Sim sim, int a, float toS, int waitTicks) {
         Course c = sim.course; InputState in = new InputState(); int sb = sim.setbacks();
@@ -869,6 +881,67 @@ public final class Autopilot {
         }
         return onRoute(c, real.onElem) && real.setbacks() == f0;
     }
+    /**
+     * Solver recovery repair (owner authorisation 2026-10-28, SolverRecoveryTest conveyor fixture): a repositioning (a brake, a walk, a lineup, a wait)
+     * is first played on an exact copy of the live climb, every hazard of the course active, the way a planned move is checked ({@link #clearOfEverything});
+     * it is played for real only if the copy takes no hit and no fall, so a recovery never walks or stands into a hazard. Otherwise the climber stays
+     * where it is and the next option is tried. The copy is exact, so a recovery played for real is the one that was rehearsed (a run that recovered
+     * cleanly before plays exactly as before; one that did not was already a failed witness). True if it was played.
+     */
+    static boolean rehearsed(Sim real, java.util.function.Consumer<Sim> move) {
+        Sim s = real.copy(); int sb = s.setbacks();
+        move.accept(s);
+        if (s.setbacks() != sb) return false;
+        move.accept(real);
+        return true;
+    }
+    /** True if, from this state, a plan for link {@code a} exists and it reaches the link clean with every hazard active (on a copy; the climb is not moved). */
+    static boolean cleanMoveFrom(Sim at, int a) {
+        Sim s = at.copy(); Result r = planRun(s, a);
+        return r.ok && clearOfEverything(s, a, r.factory);
+    }
+    /** True where the run lines the climber up before the balance conveyor that follows platform {@code b} (the same test as the run's lineup). */
+    static boolean lineupAhead(Course c, int b) {
+        if (b < 0 || b >= c.size()) return false;
+        int nx = c.nextRoute(b);
+        return nx < c.size() && c.get(nx).tiltBelt() && c.get(b).isPlatform() && !c.get(b).isMoving() && !hasMidHazard(c, b);
+    }
+    /**
+     * The move for link {@code a}, played on a copy as {@link #clearOfEverything} plays it, lands on platform {@code b} where the run lines up for a
+     * balance conveyor: true if from that landing either the lineup is clean and leaves a clean move, or the move straight from the landing is clean
+     * (the choice the run makes there). A landing anywhere else is not judged here (true).
+     */
+    static boolean continuationClean(Sim real, int a, PolicyFactory f) {
+        Sim s = real.copy(); s.act = null; s.hz = null; s.humanHold = HUMAN_HOLD;
+        s = arrival(s, a, f);
+        if (s == null) return false;
+        int b = s.onElem;
+        if (s.mode != Sim.Mode.GROUND || b < 0 || b != s.course.nextRoute(a) || !lineupAhead(s.course, b)) return true;
+        Sim lined = s.copy(); int sb = lined.setbacks(); lined.restartHold();
+        standAt(lined, lined.es1[b], new InputState()); if (lined.mode == Sim.Mode.GROUND && lined.onElem == b) lined.restartHold();
+        if (lined.setbacks() == sb && lined.mode == Sim.Mode.GROUND && lined.onElem == b && beltReady(lined, b)) return true;
+        return beltReady(s, b);
+    }
+    /** Plays the move for link {@code a} on {@code s} (in place) to its arrival, a caught ledge pulled up; null if it takes a setback or never arrives within 20 s. */
+    static Sim arrival(Sim s, int a, PolicyFactory f) {
+        Policy p = make(f); InputState in = new InputState(); int sb = s.setbacks();
+        for (int i = 0; i < (int) (20f / Sim.DT) && !succeeded(s, a); i++) { in.clear(); p.act(s, in); s.step(in); if (s.setbacks() != sb) return null; }
+        if (!succeeded(s, a)) return null;
+        for (int q = 0; q < 120 && (s.mode == Sim.Mode.LEDGE || s.mode == Sim.Mode.PULLUP); q++) { in.clear(); in.moveY = 1f; s.step(in); if (s.setbacks() != sb) return null; }
+        return s.setbacks() == sb ? s : null;
+    }
+    /**
+     * From standing on platform {@code b} before a balance conveyor: the move onto the conveyor is clean and lands where the conveyor's own move is
+     * clean too (landing on the conveyor is not enough: on its near end it tips down and slides you off, the reason for the lineup).
+     */
+    static boolean beltReady(Sim at, int b) {
+        Sim s = at.copy(); Result r = planRun(s, b);
+        if (!r.ok || !clearOfEverything(s, b, r.factory)) return false;
+        s.act = null; s.hz = null; s.humanHold = HUMAN_HOLD;
+        Sim on = arrival(s, b, r.factory);
+        int nx = s.course.nextRoute(b);
+        return on != null && on.mode == Sim.Mode.GROUND && on.onElem == nx && cleanMoveFrom(on, nx);
+    }
     /** Stops within a few cm of {@code toS} on the platform underfoot the way a person does with a direction-only stick: back off if too close to stop cleanly, run in, let go at the stopping distance. */
     static void standAt(Sim real, float toS, InputState in) {
         Course c = real.course; int a = real.onElem; Element el = c.get(a);
@@ -985,8 +1058,14 @@ public final class Autopilot {
                 // like a person: line up for the balance conveyor where its proven jump starts (the platform's middle, standing, CourseGenerator.provenStart).
                 // Its exit is proven only from the landing that jump makes; jumping on from wherever we arrived (a rope top, at speed) can land at the near end,
                 // which tips down and slides you off it again and again (2026-10-27, NORMAL seed 1 slices 55 and 75)
-                standAt(real, real.es1[a], in);
-                if (real.mode == Sim.Mode.GROUND && real.onElem == a) real.restartHold();
+                // (solver recovery repair 2026-10-28: the lineup is rehearsed with every hazard active; at NORMAL seed 1 slice 55 deck 88 the aimed cannon by
+                // platform 85 hits whoever stands in the middle, at every wait, while the move from where the climber arrived is clean. The lineup is skipped
+                // only when it gives no clean crossing and the arrival does (beltReady); otherwise it is played as before)
+                final int la = a;
+                java.util.function.Consumer<Sim> lineup = x -> { standAt(x, x.es1[la], new InputState()); if (x.mode == Sim.Mode.GROUND && x.onElem == la) x.restartHold(); };
+                Sim lined = real.copy(); int lsb = lined.setbacks(); lineup.accept(lined);
+                boolean lineupClean = lined.setbacks() == lsb && lined.mode == Sim.Mode.GROUND && lined.onElem == a && beltReady(lined, a);
+                if (lineupClean || !beltReady(real, a)) rehearsed(real, lineup);
             }
             phase = "plan";
             Result r = planRun(real, a);        // no move leaves a state that suits the next link: take any that works and sort the next link out from there
@@ -994,19 +1073,14 @@ public final class Autopilot {
             if (!r.ok) { GenTrace.Solve st = GenTrace.SOLVE.get(); if (st != null) st.planFail(a); }      // (observe-only trace for reports)
             if (!r.ok && Boolean.getBoolean("dbg")) System.out.printf("first plan failed at %d: mode=%s on=%d s=%.2f y=%.2f vx=%.2f vy=%.2f t=%.2f%n", a, real.mode, real.onElem, real.s, real.y, real.vx, real.vy, real.time);
             if (!r.ok && real.mode == Sim.Mode.GROUND && real.onElem == a && !hasMidHazard(c, a)) {      // like a person: arrived still moving, so brake, line up in the middle and size the jump up from a standstill
-                settle(real, a, in);
+                final int sa = a; rehearsed(real, x -> settle(x, sa, new InputState()));
                 if (real.mode == Sim.Mode.GROUND && real.onElem == a) r = planRun(real, a);
             }
             for (int tryBack = 0; !r.ok && tryBack < 2 && real.mode == Sim.Mode.GROUND && real.onElem == a && !hasMidHazard(c, a); tryBack++) {
                 // like a person: walk back along the platform for a longer run-up, settle, and size up the jump again
                 Element el = c.get(a);
                 float toS = c.wrap(real.es1[a] - el.halfW() + (tryBack == 0 ? 0.35f : 0.8f));
-                for (int q = 0; q < 240 && real.mode == Sim.Mode.GROUND; q++) {
-                    float d = c.dsWrap(toS, real.s);
-                    if (Math.abs(d) < 0.45f && Math.abs(real.vx) < 0.4f) break;
-                    in.clear(); in.moveX = walkTo(d); real.step(in);
-                }
-                for (int q = 0; q < 30 && real.mode == Sim.Mode.GROUND && Math.abs(real.vx) > 0.05f; q++) { in.clear(); real.step(in); }
+                if (!rehearsed(real, x -> walkAndBrake(x, toS, 30))) break;          // (a walk back into a hazard is no run-up)
                 if (real.mode != Sim.Mode.GROUND || real.onElem != a) break;
                 r = planRun(real, a);
             }
@@ -1016,12 +1090,7 @@ public final class Autopilot {
                 for (float off : new float[]{0f, 0.5f, 1.0f, -0.5f, 1.3f, -1.0f}) {
                     if (Math.abs(off) > room) continue;
                     float toS = c.wrap(real.es1[a] + off);
-                    for (int q = 0; q < 240 && real.mode == Sim.Mode.GROUND; q++) {
-                        float d = c.dsWrap(toS, real.s);
-                        if (Math.abs(d) < 0.45f && Math.abs(real.vx) < 0.4f) break;
-                        in.clear(); in.moveX = walkTo(d); real.step(in);
-                    }
-                    for (int q = 0; q < 40 && real.mode == Sim.Mode.GROUND && Math.abs(real.vx) > 0.05f; q++) { in.clear(); real.step(in); }
+                    if (!rehearsed(real, x -> walkAndBrake(x, toS, 40))) continue;      // (that spot is not reached clean: try the next)
                     if (real.mode != Sim.Mode.GROUND || real.onElem != a) break;
                     r = plan(real, a, false, false);
                     if (r.ok) break;
@@ -1031,8 +1100,8 @@ public final class Autopilot {
                 // like a person: stand right where the jump was proven (the platform's middle) and repeat it as proven. The walks above stop anywhere within 0.45 m of
                 // a spot, and a standing jump off a short step can need ~0.35 m and the proof's exact start timing (Build 77, seed 3 slice 54: castle 7's staircase,
                 // a 2.5 m step that works from -0.2..+0.15 m; proofs start with the stick just let go, a long-idle solver moved 0.1 s sooner and missed)
-                standAt(real, real.es1[a], in);
-                if (real.mode == Sim.Mode.GROUND && real.onElem == a) { real.restartHold(); r = planRun(real, a); }      // and from the stick state the proof started in
+                final int ma = a;
+                if (rehearsed(real, x -> standAt(x, x.es1[ma], new InputState())) && real.mode == Sim.Mode.GROUND && real.onElem == a) { real.restartHold(); r = planRun(real, a); }      // and from the stick state the proof started in
             }
             if (!r.ok && real.mode == Sim.Mode.GROUND && real.onElem == a && hasMidHazard(c, a) && c.get(a).isPlatform()) {
                 // like a person: a hazard in the middle of this platform, and the spot we arrived at gives no clean hop. Wait for a better moment, step to another spot on the near side and size it up again (tried on a copy first: the stand-in never walks into the hazard)
@@ -1065,9 +1134,12 @@ public final class Autopilot {
             if (!r.ok && (held == Sim.Mode.GROUND || held == Sim.Mode.CABLE || held == Sim.Mode.ROPE) && real.onElem == a && !c.get(a).crumbles()) {
                 // like a person: nothing works from here right now (a crab in the way, a slider on the far side of its run, a cannonball due along the cable), so stay put, watch for a few seconds and size it up again
                 int before = real.setbacks(); phase = "wait"; rep.waits++;
-                for (int q = 0; q < 300 && !r.ok && real.mode == held && real.onElem == a && real.setbacks() == before; q++) {
-                    in.clear(); real.step(in);
-                    if (q % 12 == 11) r = planRun(real, a);
+                final int wa = a;
+                final int[] watched = new int[1];
+                java.util.function.Consumer<Sim> watch = x -> { InputState wi = new InputState(); int k = 0; for (; k < 12 && x.mode == held && x.onElem == wa && x.setbacks() == before; k++) { wi.clear(); x.step(wi); } watched[0] = k; };
+                for (int q = 0; q < 300 && !r.ok && real.mode == held && real.onElem == a && real.setbacks() == before; q += 12) {
+                    if (!rehearsed(real, watch)) break;          // (staying put would be hit: no clean wait here)
+                    if (watched[0] == 12) r = planRun(real, a);          // (as before: the next look comes after 12 steps of watching)
                 }
                 if (!r.ok && (real.mode != held || real.onElem != a)) continue;      // bumped off the spot while waiting: recover and size it up again (the loop's own limits still apply)
             }
@@ -1082,10 +1154,25 @@ public final class Autopilot {
             for (int look = 0; look < 25 && !(clear = clearOfEverything(real, a, r.factory)); look++) {
                 if ((holdAt != Sim.Mode.GROUND && holdAt != Sim.Mode.ROPE && holdAt != Sim.Mode.CABLE) || real.mode != holdAt || real.onElem != a) break;
                 int before = real.setbacks();
-                for (int q = 0; q < 12 && real.setbacks() == before; q++) { in.clear(); real.step(in); }
+                if (!rehearsed(real, x -> idle(x, 12))) break;          // (holding on would be hit: execute the move as planned and let the witness judge it)
                 if (real.setbacks() != before || real.mode != holdAt || real.onElem != a) break;
                 Result again = planRun(real, a);
                 if (again.ok) r = again;
+            }
+            if (clear && lineupAhead(c, c.nextRoute(a)) && !continuationClean(real, a, r.factory) && (holdAt == Sim.Mode.GROUND || holdAt == Sim.Mode.ROPE || holdAt == Sim.Mode.CABLE)) {
+                // like a person, who sees the whole screen: the move is clear, but the platform it lands on is where the balance conveyor's jump has to be
+                // lined up, and neither lining up there nor jumping on from the landing would be clean right then (solver recovery repair 2026-10-28,
+                // NORMAL seed 1 slice 55: the aimed cannon by platform 85 hits whoever lines up on deck 88 just after the rope's move lands; holding on to
+                // rope 87 for 0.5 to 4.8 s first gives a clean crossing). Hold on for the first wait that gives a clean move AND a clean continuation,
+                // found on a copy; if none does within the look's 5 s, nothing changes
+                Sim w = real.copy(); Result wr = r; int found = -1;
+                for (int k = 1; k <= 24 && found < 0; k++) {
+                    int before = w.setbacks(); idle(w, 12);
+                    if (w.setbacks() != before || w.mode != holdAt || w.onElem != a) break;
+                    Result again = planRun(w, a); if (again.ok) wr = again;
+                    if (clearOfEverything(w, a, wr.factory) && continuationClean(w, a, wr.factory)) found = k;
+                }
+                for (int k = 0; k < found; k++) { rehearsed(real, x -> idle(x, 12)); Result again = planRun(real, a); if (again.ok) r = again; }
             }
             if (!clear) rep.unclearMoves++;          // (executed with a hazard still on it: a hit fails the witness, so it is never counted as proven)
             if (r.fallback != null && r.factory == r.fallback) rep.fallbackMoves++;

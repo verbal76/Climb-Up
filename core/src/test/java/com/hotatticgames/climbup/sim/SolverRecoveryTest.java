@@ -78,6 +78,36 @@ public class SolverRecoveryTest {
         assertTrue("NORMAL seed 1 slice 55 (5c09272) completes (link " + r.failedLink + ": " + r.failInfo + ")", r.completed);
     }
 
+    /** The same slice, deck 88 before balance conveyor 89 under aimed cannon 26 (anchor 85). The lineup in the middle of deck 88, right when the move off
+     *  rope 87 lands, is hit at every wait (two hits, which the hit-free witness rightly refused, 2026-10-28 smoke gate); jumping on from the landing
+     *  reaches the conveyor's near end, which slides you off. Holding on to rope 87 for 0.5-4.8 s first gives a clean crossing. The solver must find
+     *  that: a proven, hit-free witness (no hit or fall anywhere, the repositionings included), never a completion with hits. */
+    @Test public void theLineupUnderTheAimedCannonIsTimedFromTheRopeAndTheWitnessIsHitFree() throws Exception {
+        Course c = CourseIO.fromJson(new String(Files.readAllBytes(Paths.get("src/test/resources/fixtures/normal_seed1_slice55_5c09272.json"))));
+        Tuning t = tuning();
+        assertTrue("deck 88 is lined up for balance conveyor 89", Autopilot.lineupAhead(c, 88) && c.get(89).tiltBelt());
+        assertEquals("aimed cannon 26 watches deck 88", Element.Type.AIMED, c.hazards.get(26).type);
+        Autopilot.Report r = Autopilot.run(c, t, 4000f);
+        Sim real = Autopilot.lastReal;
+        assertEquals("proven solvable (" + r.failInfo + ")", Autopilot.Verdict.PROVEN_SOLVABLE, r.verdict);
+        assertEquals("no hit anywhere in the witness", 0, real.hits);
+        assertEquals("no fall anywhere in the witness", 0, real.falls);
+        assertTrue("and it reached the end of the slice", r.completed);
+    }
+
+    /** A repositioning is played for real only after a clean rehearsal on an exact copy; a rehearsal that is hit leaves the climber untouched. */
+    @Test public void aRecoveryRehearsalThatIsHitLeavesTheClimbUntouched() throws Exception {
+        Course c = CourseIO.fromJson(new String(Files.readAllBytes(Paths.get("src/test/resources/fixtures/normal_seed1_slice55_5c09272.json"))));
+        Tuning t = tuning();
+        Sim s = Sim.startOn(c, t, 0);
+        Sim before = s.copy();
+        assertFalse("a move that is hit is not played", Autopilot.rehearsed(s, x -> x.hits++));
+        assertEquals(before.time, s.time, 0f); assertEquals(before.s, s.s, 0f); assertEquals(0, s.hits);
+        assertTrue("a clean one is played", Autopilot.rehearsed(s, x -> Autopilot.idle(x, 12)));
+        Sim ref = before.copy(); Autopilot.idle(ref, 12);
+        assertEquals("exactly as rehearsed", ref.time, s.time, 0f); assertEquals(ref.s, s.s, 0f); assertEquals(ref.y, s.y, 0f);
+    }
+
     /** Before a move the solver checks it against every hazard on screen (the planner only sees nearby ones) and waits if one would catch it; that check
      *  ran only on a platform, so the move off rope 11 walked into a ball from the aimed cannon by platform 10 (2026-10-27, Difficulty report 40422375969:
      *  PUNISHER seed 2 slice 57 on 5c09272). It now holds on to ropes and cables as well. */

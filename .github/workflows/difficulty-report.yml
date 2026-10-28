@@ -15,6 +15,7 @@ on:
       solve: { description: '1 = run the slice solver on every slice, 0 = generation only (targeted generation checks)', required: false, default: '1' }
       bench: { description: '1 = GenBench instead of the report: untraced generation time per slice and a streaming-wait estimate', required: false, default: '0' }
       baseline_run: { description: 'Earlier Difficulty report run (any commit) to compare variety, ropes and difficulty against (its lanes-mode-* artifacts)', required: false, default: '' }
+      consolidate_only: { description: '1 = rebuild only the report from include_run''s stored courses (no gate, no course jobs; for a consolidation that failed after its courses passed)', required: false, default: '0' }
       campaign: { description: 'Campaign charts tag (A = NORMAL+PUNISHER, B = NGH; owner 2026-10-27): A1-A9 or B1-B9 from this run''s courses', required: false, default: '' }
   push:
     branches: [build-74-determinism]
@@ -34,6 +35,7 @@ permissions:
   actions: read
 jobs:
   gate:          # one shared validation gate for every course job (was repeated in each)
+    if: inputs.consolidate_only != '1'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -109,7 +111,7 @@ jobs:
           if [ -n "${{ inputs.campaign }}" ]; then
             python3 tools/ci/campaign_charts.py "${{ inputs.campaign }}" "Campaign ${{ inputs.campaign }} ($(git rev-parse --short HEAD))" baseline/campaign_${{ inputs.campaign }} $(dirname $(find parts -name castle_control.csv | sort))
           fi
-          EXPECT_MODES='${{ inputs.modes || '["0","1","2"]' }}' EXPECT_SEEDS='${{ inputs.seeds || '["1","2"]' }}' python3 -I tools/ci/batch_summary.py baseline/batch $(dirname $(find parts -name gate.json | sort))          # owner 2026-10-28: mode curves, seed spread, reliability
+          EXPECT_MODES='${{ inputs.modes || '["0","1","2"]' }}' EXPECT_SEEDS='${{ inputs.seeds || '["1","2"]' }}' python3 tools/ci/batch_summary.py baseline/batch $(dirname $(find parts -name gate.json | sort))          # owner 2026-10-28: mode curves, seed spread, reliability
           cat baseline/batch/BATCH.md >> "$GITHUB_STEP_SUMMARY"
           cat baseline/INDEX.md >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4

@@ -93,6 +93,85 @@ def main():
         table(L, ["take-off type", "links", "share"], [[k, v, pct(v, n)] for k, v in by_type.most_common()])
         table(L, ["building module", "links", "share"], [[k, v, pct(v, n)] for k, v in by_kind.most_common()])
 
+    # ---- KPI 16: Advanced Movement Utilization (owner amendment 2026-10-28), measured from elements, links and the solver witness, independently of scoring
+    MECH = ["PAD", "SPRING", "SEESAW", "RAMP", "SWING", "MOVE_H", "MOVE_V", "MOVE_Z", "ROPE", "CABLE", "CRUMBLE"]
+    KIND_TYPE = {"PAD": {"PAD"}, "SPRING": {"SPRING"}, "SEESAW": {"SEESAW"}, "RAMP": {"RAMP"}, "SWING": {"SWING"}, "MOVER_H": {"MOVE_H"}, "SLIDE_FALL": {"MOVE_H"},
+                 "MOVER_V": {"MOVE_V"}, "ELEV_FALL": {"MOVE_V"}, "MOVER_Z": {"MOVE_Z"}, "ROPE": {"ROPE"}, "CABLE": {"CABLE"}, "CRUMBLE": {"CRUMBLE"}}
+    L.append("## KPI 16. Advanced Movement Utilization"); L.append("")
+    L.append("Distinct elements (a mechanic on several links counts once). placed = in the final course; main route / optional = route flag; on route links = "
+             "a take-off or landing of a main-route link; witness = on a link the solver's hit-free witness traversed (TRAVERSED or TRAVERSED_IN_PASSING). "
+             "Main-route links are all required (the route is one path); fork branches are optional and carry no witness. Ordinary link = both ends STATIC; "
+             "unknown = an end missing from elements.csv (never counted as ordinary).")
+    L.append("")
+    for mode in order:
+        placed, main, opt, onlink, wit = Counter(), Counter(), Counter(), Counter(), Counter()
+        per_castle = defaultdict(Counter); win_has = Counter(); nwin = 0; ncourse = 0
+        links_tot = links_ord = links_mech = links_unk = 0
+        unattr = Counter(); route_el = 0; kind_owns = Counter(); kind_mods = Counter(); type_orphan = Counter()
+        for m, seed, d in cs:
+            if m != mode: continue
+            ncourse += 1
+            el = {r["id"]: r for r in rows(os.path.join(d, "elements.csv")) if re.fullmatch(r"\d+:\d+", r["id"])}          # course elements (hazards are k:hN)
+            mods = defaultdict(set)
+            for r in el.values():
+                ty = r["type"]
+                if truthy(r["route"]):
+                    route_el += 1
+                    if r["module_kind"] in ("UNATTRIBUTED", ""): unattr[ty] += 1
+                if r.get("module"): mods[r["module"]].add((r["module_kind"], ty))
+                if ty in MECH:
+                    placed[ty] += 1
+                    if truthy(r["route"]): main[ty] += 1
+                    else: opt[ty] += 1
+                    mk = r["module_kind"]
+                    if truthy(r["route"]) and not any(ty in v for k_, v in KIND_TYPE.items() if k_ == mk) and mk not in ("BRIDGE", "REST", "CASTLE", "FORK", "STAIRS", "HOP", "GRAB", "LONG"):
+                        type_orphan[ty + " in " + (mk or "none")] += 1
+            for mid, s_ in mods.items():
+                kinds = {k_ for k_, _ in s_}
+                for k_ in kinds:
+                    if k_ in KIND_TYPE:
+                        kind_mods[k_] += 1
+                        if any(ty in KIND_TYPE[k_] for _, ty in s_): kind_owns[k_] += 1
+            seen_link, seen_wit = set(), set(); wins = defaultdict(set)
+            last_route = {}          # a later slice's element 0 is the previous slice's last route platform, written once (LaneReport): resolve "k:0" to it
+            for r in el.values():
+                if truthy(r["route"]):
+                    k_, i_ = r["id"].split(":"); k_, i_ = int(k_), int(i_)
+                    if i_ >= last_route.get(k_, (-1, ""))[0]: last_route[k_] = (i_, r["id"])
+            for k_ in list(last_route):
+                if f"{k_ + 1}:0" not in el: el[f"{k_ + 1}:0"] = el[last_route[k_][1]]
+            for r in rows(os.path.join(d, "links.csv")):
+                links_tot += 1
+                a_, b_ = el.get(r["from"]), el.get(r["to"])
+                if a_ is None or b_ is None: links_unk += 1; continue
+                tys = {a_["type"], b_["type"]}
+                if tys & set(MECH): links_mech += 1
+                elif tys == {"STATIC"}: links_ord += 1
+                for e_ in (a_, b_):
+                    if e_["type"] not in MECH: continue
+                    seen_link.add(e_["id"])
+                    if r["solver_status"].startswith("TRAVERSED"):
+                        if e_["id"] not in seen_wit:
+                            seen_wit.add(e_["id"]); per_castle[int(num(e_["castle"]))][e_["type"]] += 1; wins[int(num(e_["window"]))].add(e_["type"])
+            for i in seen_link: onlink[el[i]["type"]] += 1
+            for i in seen_wit: wit[el[i]["type"]] += 1
+            wmax = max([int(num(r["window"])) for r in el.values()] or [0]); nwin += wmax + 1
+            for w, s_ in wins.items(): win_has["any"] += 1
+        L.append(f"### {mode} ({ncourse} courses, {links_tot} main-route links)")
+        body = [[ty, placed[ty], main[ty], opt[ty], onlink[ty], wit[ty], pct(wit[ty], placed[ty]), f"{wit[ty] / max(1, ncourse):.1f}"] for ty in MECH if placed[ty]]
+        table(L, ["mechanic", "placed", "main route", "optional", "on route links", "witness-traversed", "traversed / placed", "traversed per course"], body)
+        L.append(f"Links: ordinary (STATIC-STATIC) {links_ord} ({pct(links_ord, links_tot)}), with a mechanic {links_mech} ({pct(links_mech, links_tot)}), "
+                 f"other (castle, gem, ledge-only) {links_tot - links_ord - links_mech - links_unk}, unknown {links_unk}. "
+                 f"25 m windows with a witness-traversed mechanic: {pct(win_has['any'], nwin)} of {nwin}.")
+        L.append("")
+        if per_castle:
+            table(L, ["castle"] + [ty for ty in MECH if placed[ty]], [[c] + [f"{per_castle[c][ty] / max(1, ncourse):.1f}" for ty in MECH if placed[ty]] for c in sorted(per_castle)])
+        L.append(f"Attribution: {sum(unattr.values())} of {route_el} main-route elements carry no module ({pct(sum(unattr.values()), route_el)}): "
+                 + ", ".join(f"{k} {v}" for k, v in unattr.most_common(8)) + ". Modules owning an element of their defining type: "
+                 + ", ".join(f"{k} {kind_owns[k]}/{kind_mods[k]}" for k in sorted(kind_mods)) + ". Main-route mechanics in a module of another kind: "
+                 + (", ".join(f"{k} {v}" for k, v in type_orphan.most_common(8)) or "none") + ".")
+        L.append("")
+
     # ---- P2: on-route hazard families
     L.append("## P2. Hazard families (on or reaching the route)"); L.append("")
     body, fams = [], set()

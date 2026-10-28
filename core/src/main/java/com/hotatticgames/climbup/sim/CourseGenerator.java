@@ -668,6 +668,9 @@ public final class CourseGenerator {
 
     // ---- observe-only generation trace (reports, 2026-10-26): reads sizes and refusal counters, never the random stream or any decision
     private String traceRole = "PICK", tracePicked;
+    /** Experiment diagnostics (owner directive 2026-10-28, priority 1): the module being tried while a report trace runs, and which check refused it. Observe-only. */
+    private String traceKind;
+    private void why(String s) { if (traceKind != null && GenTrace.GEN.get() != null) GenTrace.tally("why_" + traceKind + "_" + s); }
     private boolean tryModuleBelow(Kind k, float d, int zone) {
         if (capOn() && capKind(k) >= 0) { int h0 = c.hazards.size(); float y = c.get(c.size() - 1).y; boolean ok = tryModuleBelowT(k, d, zone); capCount(k, y, h0, ok); return ok; }
         return tryModuleBelowT(k, d, zone);
@@ -680,7 +683,9 @@ public final class CourseGenerator {
         m.e0 = c.size(); m.h0 = c.hazards.size();
         int[] f0 = {failLayer, failHaz, failPlan, failWindow, failConflict, failThreat};
         long t0 = GenTrace.now();
-        boolean ok = tryModuleBelow0(k, d, zone);
+        traceKind = k.name();
+        boolean ok;
+        try { ok = tryModuleBelow0(k, d, zone); } finally { traceKind = null; }
         m.nanos = GenTrace.now() - t0;
         int[] f1 = {failLayer, failHaz, failPlan, failWindow, failConflict, failThreat};
         for (int i = 0; i < 6; i++) m.fails[i] = f1[i] - f0[i];
@@ -1863,13 +1868,18 @@ public final class CourseGenerator {
      * jumpVel^2 / 2g = 1.95 m and a ledge is caught up to handHeight + ledgeReachAbove = 1.3 m above them, 3.25 m in all (3.6 m with a skull's
      * launch at the start of a jump), so 4 m leaves a margin. Where their arcs come within 2.5 m the body clearance above (2.8 m standing room + 0.8 m deck
      * + 1.5 m) keeps them 5.1 m apart anyway. Validated with the planner itself (docs/probes/ShortcutProbe): no plain pair of revolutions reachable.
+     * Experiment (owner decision 2026-10-28, branch experiment/pendulums, rules 17): the 9.5 m applies where the LOWER platform launches or carries the
+     * climber, as {@link #forkLayersClash} already does. A launcher above a plain platform is no shortcut: the plain platform's 3.25-3.6 m reach falls short
+     * of it, and it throws the climber further up its own revolution; when the revolution above it is built, it is the lower one and keeps its 9.5 m.
+     * (Under "either platform", pads, elevators and falling elevators lost about 99% of their tries to plain platforms below them: NGH seed 7301 to 600 m.)
      */
     public static boolean layersClash(Course c, Element e, Element f) {
         if (Math.abs(e.s - f.s) < c.circumference * 0.5f) return false;     // same revolution: handled by route order
         if (Math.abs(c.dsWrap(e.s, f.s)) > arcHalf(e) + arcHalf(f) + 2.5f) return false;
         if (vLo(e) - 1.5f < vHi(f) && vHi(e) + 1.5f > vLo(f)) return true;
         if (!e.isPlatform() || !f.isPlatform()) return false;
-        return Math.abs(e.y - f.y) < (launches(e) || launches(f) ? 9.5f : PLAIN_LAYER_DY);   // no trampoline shortcuts between layers
+        Element lower = e.y < f.y ? e : f;
+        return Math.abs(e.y - f.y) < (launches(lower) ? 9.5f : PLAIN_LAYER_DY);   // no trampoline shortcuts between layers
     }
     /**
      * The layer rule against the previous slice ({@link #ghostElems}). The relaxed attempts of a slice (see chunkIn) waive only its shortcut spacing
@@ -1884,7 +1894,7 @@ public final class CourseGenerator {
     }
     /** Shortcut spacing between plain fixed platforms of different revolutions (see {@link #layersClash}). */
     static final float PLAIN_LAYER_DY = 4f;
-    /** A platform that can throw the climber well above a jump, or carry them: these keep the full 9.5 m between revolutions. */
+    /** A platform that can throw the climber well above a jump, or carry them: these keep the full 9.5 m to the revolution above them. */
     static boolean launches(Element e) {
         switch (e.type) { case PAD: case SPRING: case SEESAW: case RAMP: case SWING: return true; default: return e.isMoving(); }
     }
@@ -2315,17 +2325,18 @@ public final class CourseGenerator {
         for (int i = n0; i < c.size() && ok; i++) { ok = clearOfOtherLayers(i); if (!ok) clashAt = i; }
         if (!ok) failLayer++;
         if (!ok && GenTrace.GEN.get() != null) { Element e = c.get(clashAt), f = lastClash;          // (observe-only: what a layer refusal ran into, for reports)
-            GenTrace.tally("clash_" + (lastClashGhost ? "ghost_" : "slice_") + (layersBodiesClash(c, e, f) ? "body_" : "spacing_") + f.type + (f.anchor >= 0 ? "_side" : "")); }
+            GenTrace.tally("clash_" + (lastClashGhost ? "ghost_" : "slice_") + (layersBodiesClash(c, e, f) ? "body_" : "spacing_") + f.type + (f.anchor >= 0 ? "_side" : ""));
+            why("layer_" + (lastClashGhost ? "ghost_" : "slice_") + (layersBodiesClash(c, e, f) ? "body_" : "spacing_") + e.type + "_vs_" + f.type); }
         if (!ok) { boolean cr = false; for (Element h : hz) if (h.type == Element.Type.CRAB) cr = true;
             if (cr) { Element e = c.get(clashAt), f = lastClash; boolean body = vLo(e) - 1.5f < vHi(f) && vHi(e) + 1.5f > vLo(f);
                 CRABCLASH[(f.anchor >= 0 ? 2 : 0) + (body ? 0 : 1) + (lastClashGhost ? 4 : 0)]++; } }
         // DC5: a new deck never lies in the lethal box of a hazard of another revolution placed before it (an avalanche's fall, a cannon's lane):
         // the slice audit's I4 rule, applied here so the generator places something else instead of losing the attempt
-        for (int i = n0; i < c.size() && ok; i++) if (!GeometryIntegrity.elementClear(c, c.get(i), c.hazards.subList(0, Math.min(c.hazards.size(), h0Of(hz))), ghostHaz)) { ok = false; failHaz++; GenTrace.tally("deck_in_hazard_refused"); }
-        for (Element h : hz) { if (!ok) break; if (h.type == Element.Type.CLUB) continue; ok = hazardOk(h, ownerOf(h)) && GeometryIntegrity.hazardClear(c, h, ghostElems, ghostHaz); if (!ok) failHaz++; }          // (DC5: and the slice audit's own I4 rule, hazards of two revolutions included)
-        for (int i = n0; i < c.size() && ok; i++) if (!padCorridorClear(i)) { ok = false; failHaz++; GenTrace.tally("pad_corridor_refused"); }
-        if (ok && !sawsClearOfCreatures(hz)) { ok = false; failHaz++; }
-        if (ok && !protectedRowsOk(n0)) { ok = false; failHaz++; }
+        for (int i = n0; i < c.size() && ok; i++) if (!GeometryIntegrity.elementClear(c, c.get(i), c.hazards.subList(0, Math.min(c.hazards.size(), h0Of(hz))), ghostHaz)) { ok = false; failHaz++; GenTrace.tally("deck_in_hazard_refused"); why("hazard_deck_in_hazard_box"); }
+        for (Element h : hz) { if (!ok) break; if (h.type == Element.Type.CLUB) continue; ok = hazardOk(h, ownerOf(h)); if (!ok) why("hazard_box_" + h.type); else { ok = GeometryIntegrity.hazardClear(c, h, ghostElems, ghostHaz); if (!ok) why("hazard_other_layer_" + h.type); } if (!ok) failHaz++; }          // (DC5: and the slice audit's own I4 rule, hazards of two revolutions included)
+        for (int i = n0; i < c.size() && ok; i++) if (!padCorridorClear(i)) { ok = false; failHaz++; GenTrace.tally("pad_corridor_refused"); why("hazard_launch_corridor"); }
+        if (ok && !sawsClearOfCreatures(hz)) { ok = false; failHaz++; why("hazard_saw_creature"); }
+        if (ok && !protectedRowsOk(n0)) { ok = false; failHaz++; why("hazard_protected_rows"); }
         return ok;
     }
 

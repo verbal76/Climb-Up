@@ -62,7 +62,7 @@ public final class CourseGenerator {
      * generator (the crab rules of Build 63 changed what a seed produced, so runs from earlier builds carry version 0, "old rules", and are not compared).
      * {@code GeneratorFingerprintTest} fails when generation changes without a bump.
      */
-    public static final int RULES_VERSION = 16;     // 16 = (unreleased) owner repair authorisations 2026-10-28: saw fairness enforced at slice acceptance from the real arrival (SafeStart), solver recovery repositionings rehearsed with every hazard (the whole-slice witness), retries reset only encounters ahead of the checkpoint, a jump on the frame a deck vanishes is a plain jump; 15 = (unreleased) owner correction directive 2026-10-28 (consolidated audit DC1-DC10): physics corrections (pad bounce wins, no stale coyote or buffered leap across grabs/shoves, knock-off locks grabs and pushes from the contact, pull-ups let go of vanished or out-of-plane decks), proven, hit-free whole-slice witness with explicit verdicts, ledge catches proven through the pull-up, re-proofs from hazards' real reach and of encounters, insertion checks, route-aware creature decks; every mode's generation changes; 14 = (unreleased) owner directive 2026-10-27, NOT GONNA HAPPEN modernisation: NGH joins the progression controller with its own curve (850 to 1,210), history-aware variety (0.35), a looser 25 m guard (4x), RED Enforcers from castle 1 (2-3 a castle), avalanches of 5-7 blocks each with its own seeded size and physics (3-4 a castle, 15-45 s cooldown); NORMAL and PUNISHER generate exactly as in rules 13 (same fingerprint: a metadata-only version change for them); 13 = (unreleased) owner directive 2026-10-27: castle-to-castle progression controller (Progression: measured castles steer the next castle's terrain, hazard, enemy and interaction selection within fixed bounds; a 25 m spike guard), continuations at the castle's own demand first, NORMAL shares the history-aware variety at a lighter strength, PUNISHER's head start 1,250 m (castle 1 at NORMAL castles 3-4); NGH unchanged; 12 = (unreleased) owner amendments 2026-10-27: PUNISHER Enforcer robots (crabs, bees, skulls and blobs kept clear of them), spike-block avalanches (PUNISHER 2-3 a castle; NORMAL castles 9-10, two blocks), PUNISHER history-aware variety, NORMAL narrow rope-fallback correction; 11 = Build 82 (owner directive 2026-10-27, NORMAL seed 2 stopped at 881 m): while the spiral lags its pitch a refused pick falls back only to challenges that climb, and a slice ending must leave the next slice two ordinary steps (rises a hop or stair makes), climbing out first when it does not; 10 = (unreleased) Build 82 draft (owner release requirements 2026-10-26): spiral pitch measured above the revolution below, slice endings that leave the next slice room, relaxed attempts keep body clearance, geometry integrity enforced on every slice, challenges before ropes in the fallbacks; 9 = (unreleased) Build 82 draft (owner correction directive 2026-10-26): terrain difficulty rises over the whole climb with each mode's head start, NGH has its own profile, no enemies on spike-drop platforms (rare ones on intermediate safe platforms instead), the solver hops a skull at its real dash speed; 8 = Build 81 (owner decisions 2026-10-25): keys lie on a main-route platform (no rooms, branches or perches); 7 = Build 80 (owner directive 2026-10-24): no level gates, PUNISHER on its own curve, encounter-conflict rule, splits with reconnecting branches instead of dead ends; 6 = Build 79: skulls, blobs and crabs reach the platforms either side (crabs follow up to three, fall with crumbling decks), faster skull, no blob wobble, two to four crabs a deck, bee pairs, creatures on spike-drop rows, bridges that drop planks, flat-turning aimed cannons, an always-running balance conveyor, decoys kept off ropes, a slightly harder first world; 5 = Build 77: faster skull with loop+swoop, key detours proved with the skull at either end, one balance conveyor per section from Castle 6 to 10; 4 = Build 76: faster plank conveyor bridges; 3 = Build 72: flush ramps, faster crumbling, a wilder shaking ramp, the spinning ramp; 2 = Build 71: the bee homes in, skulls and green blobs, mortars out of step at random
+    public static final int RULES_VERSION = 17;     // 17 = EXPERIMENT (branch experiment/pendulums, owner directive 2026-10-28, not for release): spiked pendulums take 40% of the gap-saw slots; 16 = 16 = (unreleased) owner repair authorisations 2026-10-28: saw fairness enforced at slice acceptance from the real arrival (SafeStart), solver recovery repositionings rehearsed with every hazard (the whole-slice witness), retries reset only encounters ahead of the checkpoint, a jump on the frame a deck vanishes is a plain jump; 15 = (unreleased) owner correction directive 2026-10-28 (consolidated audit DC1-DC10): physics corrections (pad bounce wins, no stale coyote or buffered leap across grabs/shoves, knock-off locks grabs and pushes from the contact, pull-ups let go of vanished or out-of-plane decks), proven, hit-free whole-slice witness with explicit verdicts, ledge catches proven through the pull-up, re-proofs from hazards' real reach and of encounters, insertion checks, route-aware creature decks; every mode's generation changes; 14 = (unreleased) owner directive 2026-10-27, NOT GONNA HAPPEN modernisation: NGH joins the progression controller with its own curve (850 to 1,210), history-aware variety (0.35), a looser 25 m guard (4x), RED Enforcers from castle 1 (2-3 a castle), avalanches of 5-7 blocks each with its own seeded size and physics (3-4 a castle, 15-45 s cooldown); NORMAL and PUNISHER generate exactly as in rules 13 (same fingerprint: a metadata-only version change for them); 13 = (unreleased) owner directive 2026-10-27: castle-to-castle progression controller (Progression: measured castles steer the next castle's terrain, hazard, enemy and interaction selection within fixed bounds; a 25 m spike guard), continuations at the castle's own demand first, NORMAL shares the history-aware variety at a lighter strength, PUNISHER's head start 1,250 m (castle 1 at NORMAL castles 3-4); NGH unchanged; 12 = (unreleased) owner amendments 2026-10-27: PUNISHER Enforcer robots (crabs, bees, skulls and blobs kept clear of them), spike-block avalanches (PUNISHER 2-3 a castle; NORMAL castles 9-10, two blocks), PUNISHER history-aware variety, NORMAL narrow rope-fallback correction; 11 = Build 82 (owner directive 2026-10-27, NORMAL seed 2 stopped at 881 m): while the spiral lags its pitch a refused pick falls back only to challenges that climb, and a slice ending must leave the next slice two ordinary steps (rises a hop or stair makes), climbing out first when it does not; 10 = (unreleased) Build 82 draft (owner release requirements 2026-10-26): spiral pitch measured above the revolution below, slice endings that leave the next slice room, relaxed attempts keep body clearance, geometry integrity enforced on every slice, challenges before ropes in the fallbacks; 9 = (unreleased) Build 82 draft (owner correction directive 2026-10-26): terrain difficulty rises over the whole climb with each mode's head start, NGH has its own profile, no enemies on spike-drop platforms (rare ones on intermediate safe platforms instead), the solver hops a skull at its real dash speed; 8 = Build 81 (owner decisions 2026-10-25): keys lie on a main-route platform (no rooms, branches or perches); 7 = Build 80 (owner directive 2026-10-24): no level gates, PUNISHER on its own curve, encounter-conflict rule, splits with reconnecting branches instead of dead ends; 6 = Build 79: skulls, blobs and crabs reach the platforms either side (crabs follow up to three, fall with crumbling decks), faster skull, no blob wobble, two to four crabs a deck, bee pairs, creatures on spike-drop rows, bridges that drop planks, flat-turning aimed cannons, an always-running balance conveyor, decoys kept off ropes, a slightly harder first world; 5 = Build 77: faster skull with loop+swoop, key detours proved with the skull at either end, one balance conveyor per section from Castle 6 to 10; 4 = Build 76: faster plank conveyor bridges; 3 = Build 72: flush ramps, faster crumbling, a wilder shaking ramp, the spinning ramp; 2 = Build 71: the bee homes in, skulls and green blobs, mortars out of step at random
     /** The rules version a climb started on a given build used (0 = unknown or before the stamps: not comparable). */
     public static int rulesOfBuild(int build) { return build >= 82 ? 9 : build >= 81 ? 8 : build >= 80 ? 7 : build >= 79 ? 6 : build >= 77 ? 5 : build >= 76 ? 4 : build >= 72 ? 3 : build >= 71 ? 2 : build >= 63 ? 1 : 0; }
 
@@ -134,13 +134,15 @@ public final class CourseGenerator {
      */
     private static void sawsFair(Course out, Tuning t) {
         for (Element h : out.hazards) {
-            if (h.type != Element.Type.SAW_H || h.anchor < 0 || h.anchor >= out.routeSize() - 1) continue;
+            if ((h.type != Element.Type.SAW_H && h.type != Element.Type.PENDULUM) || h.anchor < 0 || h.anchor >= out.routeSize() - 1) continue;      // (pendulum experiment: a gap pendulum keeps the saw's half cycle)
             SafeStart.Result ss = SafeStart.evaluate(out, t, h.anchor);
             if (ss.ok && ss.window >= SAW_MIN_WINDOW) continue;
             GenTrace.tally("saw_window_refused");
             throw new IllegalStateException("saw fairness: saw on link " + h.anchor + " leaves too short a window from the real arrival (" + ss + ")");
         }
     }
+    /** Pendulum experiment (2026-10-28): the share of gap-saw slots that hang a spiked pendulum instead. */
+    static final float PENDULUM_SHARE = 0.4f;
     /** The share of a saw's cycle that must stay open to time the move past it (SawFairnessTest). */
     static final float SAW_MIN_WINDOW = 0.5f;
     private static void continuous(Course out, Tuning t) {
@@ -2199,7 +2201,7 @@ public final class CourseGenerator {
         if (!geometryOk(n0, hz)) {
             rollbackTo(n0, h0);
             hazardTried += hz.isEmpty() ? 0 : 1;
-            crabWhy(hz, false, w0);
+            crabWhy(hz, false, w0); pendulumWhy(hz, false, w0);
             PRECHECK_REFUSED.incrementAndGet();
             return false;
         }
@@ -2256,7 +2258,7 @@ public final class CourseGenerator {
             boolean touched = false;
             for (Element h : hz) if (h.anchor == i || h.anchor + 1 == i || h.anchor == i + 1) touched = true;
             float need = i >= n0 - 1 ? minMargin : linkNeed(i);       // a link proven again keeps the margin it was proven with (a ledge grab 0.05), not this module's
-            boolean sawLink = false; for (Element h : c.hazards) if (h.type == Element.Type.SAW_H && h.anchor == i) sawLink = true;
+            boolean sawLink = false; for (Element h : c.hazards) if ((h.type == Element.Type.SAW_H || h.type == Element.Type.PENDULUM) && h.anchor == i) sawLink = true;
             if (!res.ok || res.margin() < Math.max(need, 0f)) { ok = false; failPlan++; if (trace.length() < 600) trace.append(String.format("[link %d %s->%s ok=%b %d/%d need %.3f]", i, c.get(i).type, c.get(i + 1).type, res.ok, res.successes, res.trials, minMargin)); }
             else if ((touched || sawLink) && res.window < (sawLink ? Math.max(0.5f, windowNeeded(c.get(i).y)) : windowNeeded(c.get(i).y))) { ok = false; failWindow++; }      // a saw leaves at least half its cycle to time the jump (SawFairnessTest), whatever else shares the link
             else if (Autopilot.hasMidHazard(c, i)) {       // a person never stands on the exact spot the planner starts from: the move must work from nearby too
@@ -2300,7 +2302,7 @@ public final class CourseGenerator {
         if (!ok) { while (c.size() > n0) c.elements.remove(c.size() - 1); while (c.hazards.size() > h0) c.hazards.remove(c.hazards.size() - 1); }
         else { for (int i = Math.max(0, n0 - 1); i < c.size() - 1; i++) setLinkNeed(i, minMargin); if (!hz.isEmpty()) hazardsPlaced += hz.size(); }
         hazardTried += hz.isEmpty() ? 0 : 1;
-        crabWhy(hz, ok, w0);
+        crabWhy(hz, ok, w0); pendulumWhy(hz, ok, w0);
         return ok;
     }
 
@@ -2327,6 +2329,13 @@ public final class CourseGenerator {
         return ok;
     }
 
+    /** Pendulum experiment diagnostics (observe-only): each module carrying a pendulum, accepted or refused, and the first check that refused it. */
+    private void pendulumWhy(List<Element> hz, boolean ok, int[] w0) {
+        boolean pend = false; for (Element h : hz) if (h.type == Element.Type.PENDULUM) pend = true;
+        if (!pend) return;
+        GenTrace.tally(ok ? "pendulum_module_accepted" : "pendulum_module_refused_" + (failLayer != w0[0] ? "layer" : failHaz != w0[1] ? "hazard_placement"
+            : failPlan != w0[2] ? "plan" : failWindow != w0[3] ? "timing_window" : failConflict != w0[4] ? "conflict" : failThreat != w0[5] ? "threat" : "other"));
+    }
     private void crabWhy(List<Element> hz, boolean ok, int[] w0) {
         boolean crabs = false; for (Element h : hz) if (h.type == Element.Type.CRAB) crabs = true;
         if (crabs) {          // diagnostics only: why modules carrying crabs are refused
@@ -2488,6 +2497,7 @@ public final class CourseGenerator {
      */
     private boolean routeLinkStillOk(int q) {
         boolean gapSaw = false;
+        for (Element h : c.hazards) if (h.type == Element.Type.PENDULUM && h.anchor == q) gapSaw = true;          // (pendulum experiment: pendulums hang only in gaps)
         for (Element h : c.hazards) if (h.type == Element.Type.SAW_H && h.anchor == q) { Element p = c.get(q); if (!(p.w >= 7f && Math.abs(h.y - p.y - 0.62f) < 0.01f)) gapSaw = true; }
         // DC2 (owner correction 2026-10-27): the same proof quality as the link's first proof - its proven start (quiet moment, belt landing) and the
         // margin it was built with - not a bare "one move still works" from a standing start at time 0
@@ -2716,7 +2726,7 @@ public final class CourseGenerator {
         return es;
     }
 
-    /** One or two hazard-guarded gaps: a saw blade, a spiked pendulum-free blade, a cannon lane, or a spiked block you must clear. */
+    /** One or two hazard-guarded gaps: a saw blade, a spiked pendulum (pendulum experiment 2026-10-28), a cannon lane, or a spiked block you must clear. */
     private List<Element> buildHaz(Element last, float d, int z, int attempt, List<Element> hzOut) {
         float inten = intensity(last.y);
         float fh = hotNow ? Math.min(1f, fac(last.y)[Progression.H]) : fac(last.y)[Progression.H];          // rules 13: the castle's hazard factor lengthens or shortens the chain (1 for NGH)
@@ -2750,6 +2760,17 @@ public final class CourseGenerator {
             if (roll == 0) {
                 h = hz(Element.Type.SAW_V, mid + r(-0.1f, 0.1f), top + 0.35f, 0f, z);
                 h.amp = r(1.5f, 2.3f); h.period = r(2.6f, 3.6f) - 0.5f * inten;
+            } else if (roll == 1 && rnd.nextFloat() < PENDULUM_SHARE) {
+                // pendulum experiment (owner directive 2026-10-28): a spiked ball on a chain swings across the gap in place of a saw blade. It takes the saw's
+                // place with every one of the saw's guards (no uphill gap, wide take-off deck, no bee, cannon or roaming creature beside it, the gap kept
+                // short), and the same proofs: the link's timing window, the whole-slice hit-free witness and the hazard boxes. Its lowest point sits where
+                // the saw blade rides, so a normal jump arc clears it there; the ball rises at the ends of its swing and also covers the gap's edges,
+                // so the move is timed to the ball, not to a spot. Its sweep is the saw's own travel for this gap, so its lethal box is the saw's and never
+                // reaches over the decks either side (hazardOk); a short chain keeps the swing visible, shorter (and so faster) higher up, at its natural period.
+                h = hz(Element.Type.PENDULUM, mid, top + 0.65f + r(0f, 0.15f), 0f, z);
+                float sweep = Math.max(0.2f, Math.min(0.45f, g / 2f - 0.92f)) + Element.SAW_R - Element.BALL_R;
+                h.len = r(1.1f, 1.4f) - 0.15f * inten; h.amp = (float) StrictMath.asin(sweep / h.len); h.period = (float) (2.0 * StrictMath.PI * StrictMath.sqrt(h.len / 9.81));
+                GenTrace.tally("pendulum_offered");
             } else if (roll == 1) {
                 h = hz(Element.Type.SAW_H, mid, top + 0.62f + r(0f, 0.2f), 0f, z);      // blade top 1.17-1.37 m above the higher ledge: a normal jump arc clears it near its top
                 h.amp = Math.max(0.2f, Math.min(0.45f, g / 2f - 0.92f)); h.period = r(2.6f, 3.4f) - 0.4f * inten;

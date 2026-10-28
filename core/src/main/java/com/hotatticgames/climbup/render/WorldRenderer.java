@@ -1142,7 +1142,7 @@ public final class WorldRenderer implements Disposable {
     private void drawHazard(Element h, float t, float camS, float time, boolean done) {
         float dipY = h.ridesAnchor() || h.type == Element.Type.BLOB ? anchorDip(h) : 0f;
         float cs = h.type == Element.Type.CANNON ? h.s + h.dir * h.len * 0.5f : h.s;
-        float half = h.type == Element.Type.AIMED ? 17f : h.type == Element.Type.CANNON ? h.len * 0.5f + 1.5f + CANNON_OFFSCREEN : (h.type == Element.Type.SAW_H ? h.amp + 1.5f : h.type == Element.Type.SKULL || h.type == Element.Type.BLOB ? h.w * 0.5f + 1.5f : 2f);
+        float half = h.type == Element.Type.AIMED ? 17f : h.type == Element.Type.CANNON ? h.len * 0.5f + 1.5f + CANNON_OFFSCREEN : (h.type == Element.Type.SAW_H ? h.amp + 1.5f : h.type == Element.Type.PENDULUM ? h.len + 1.5f : h.type == Element.Type.SKULL || h.type == Element.Type.BLOB ? h.w * 0.5f + 1.5f : 2f);
         float cy = h.type == Element.Type.SAW_V ? h.y + h.amp * 0.5f : h.y;
         if (rsim != null && rhz >= 0 && rhz < rsim.mobState.length) {       // Build 79: creatures roam to the decks either side of their own: cull them where they are
             if (h.type == Element.Type.CRAB) { cs = rsim.crabAt(rhz, h); cy = rsim.crabY(rhz, h); half = 2f; }
@@ -1153,6 +1153,16 @@ public final class WorldRenderer implements Disposable {
             case SAW_H: {
                 drawBox(h.s, h.y - 0.05f - dipY, 0.25f, camS, h.amp * 2f + 1.2f, 0.1f, 0.14f, 0.3f, 0.32f, 0.4f);
                 drawPack("hazard_saw", h.sAt(t), h.yAt(t) - dipY, 0.25f, camS, PK, PK, PK, 0f, -time * 600f);
+                break;
+            }
+            case PENDULUM: {
+                // pendulum experiment (2026-10-28): a spiked ball on a chain from a beam above the gap; the ball is drawn exactly where the simulation's
+                // hit disc is (Element.sAt/yAt, BALL_R), the chain is drawn as short links from the pivot to the ball, all at the play plane's depth
+                float px = h.s, py = h.y + h.len, bx = h.sAt(t), by = h.yAt(t);
+                drawBox(px, py, 0.25f, camS, 1.6f, 0.18f, 0.5f, 0.14f, 0.3f, 0.32f);
+                drawBox(px, py - 0.1f, 0.25f, camS, 0.22f, 0.22f, 0.22f, 0.3f, 0.32f, 0.4f);
+                for (int k = 1; k <= 7; k++) { float f = k / 8f; drawBox(px + (bx - px) * f, py + (by - py) * f - 0.05f, 0.25f, camS, 0.09f, 0.09f, 0.09f, 0.42f, 0.42f, 0.48f); }
+                drawPack("spikyball", bx, by, 0.25f, camS, 0.6f, 0.6f, 0.6f, 0f, -bx * 160f);
                 break;
             }
             case SAW_V: {

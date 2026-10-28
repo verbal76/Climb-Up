@@ -177,6 +177,8 @@ public class ClimbGame extends Game {
     public volatile Run preparedRun;
 
     public HistoryStore history;
+    /** Save repair H2: a message for the player about their saved climb (shown once by the next play screen), or null. */
+    public String saveNotice;
     /** True if there is a climb in progress whose history is on disk and complete up to its checkpoint. */
     public boolean climbValid() {
         if (save.seed == 0 || history == null) return false;
@@ -223,7 +225,7 @@ public class ClimbGame extends Game {
         Run r = new Run();
         if (!fresh && save.seed != 0) {
             try {
-                java.util.List<byte[]> hist = history.read(save.seed);
+                java.util.List<byte[]> hist = readableHistory(save.seed);
                 RunSnapshot snap = store.loadRun();          // SAVE & EXIT: the exact moment of the climb (fits only the climb it was taken in)
                 if (snap != null && (snap.seed != save.seed || hist == null || hist.size() <= snap.maxSlice)) { store.deleteRun(); snap = null; }
                 if (snap != null) { save.cpSlice = snap.cpSlice; save.cpLocal = snap.cpLocal; }
@@ -232,13 +234,14 @@ public class ClimbGame extends Game {
                     Tower.Ref ref = new Tower.Ref(save.cpSlice, save.cpLocal);
                     int idx = r.tower.worldIndex(ref);
                     if (idx >= 0) {
+                        try { repairHistory(save.seed, hist); } catch (java.io.IOException e) { /* the climb still resumes; the next resume cuts at the same record again */ }          // (H2: only now, once the climb really resumes from the readable start)
                         r.tower.setCheckpointRef(ref); r.startIdx = idx; r.resumed = true;
                         if (snap != null) { snap.restoreWindow(r.tower); r.snapshot = snap; }
                         return r;
                     }
                 }
-            } catch (Exception e) { /* unreadable: fall through to a new climb */ }
-            save.seed = 0;
+            } catch (Exception e) { /* unreadable: kept below, then a new climb */ }
+            keepUnresumableClimb();
         }
         String sd = System.getProperty("climb.seed");
         long seed = pendingSeed != null ? pendingSeed : sd != null ? Long.parseLong(sd) : takeRandomSeed();   // Build 64: a typed course code wins; the random draw is unchanged (Build 71: drawn ahead, see prepareNextClimb)
@@ -250,6 +253,46 @@ public class ClimbGame extends Game {
         save.seed = seed; save.cpSlice = 0; save.cpLocal = 0;
         try { history.reset(seed); syncHistory(r.tower); } catch (java.io.IOException e) { /* cannot store the climb: it still plays, it just cannot be resumed */ save.seed = 0; }
         return r;
+    }
+
+    /**
+     * Save repair H2 (2026-10-28): the stored slices of the climb, cut at the first one that does not decode (a damaged record; {@link #historyCut}
+     * then says so). Every slice after it is a pure function of the slices before it, so the climb can resume from the readable start and the tower
+     * makes the rest again exactly as it was. Nothing on disk is changed here: {@link #repairHistory} does that once the climb has really resumed.
+     */
+    private java.util.List<byte[]> readableHistory(long seed) {
+        historyCut = false;
+        java.util.List<byte[]> hist = history.read(seed);
+        if (hist == null) return null;
+        int good = 0;
+        for (byte[] b : hist) { try { com.hotatticgames.climbup.sim.SliceCodec.decode(b); } catch (RuntimeException e) { break; } good++; }
+        if (good == hist.size()) return hist;
+        historyCut = true;
+        return new java.util.ArrayList<>(hist.subList(0, good));
+    }
+    private boolean historyCut;
+
+    /** Save repair H2: after a resume from the readable start, the damaged file is kept aside (copied) and the history rewritten to that start, so later appends follow good records. */
+    private void repairHistory(long seed, java.util.List<byte[]> readable) throws java.io.IOException {
+        if (!historyCut) return;
+        java.io.File aside = new java.io.File(dataDir, "history-damaged-" + Long.toHexString(seed) + "-" + System.currentTimeMillis() + ".bin");
+        java.nio.file.Files.copy(new java.io.File(dataDir, "history.bin").toPath(), aside.toPath());
+        history.rewrite(seed, readable);
+        historyCut = false;
+    }
+
+    /**
+     * Save repair H2 (2026-10-28): a saved climb that cannot be resumed (its history is missing, unreadable or ends before its checkpoint) is never
+     * silently replaced. Its history file is kept aside (renamed, not deleted), the climb is archived like any ended climb (height, castles, clock,
+     * seed), and the player is told once. Only then does a new climb start.
+     */
+    private void keepUnresumableClimb() {
+        long old = save.seed;
+        java.io.File aside = history != null ? history.keepAside(old, "unresumable") : null;
+        Legacy.archive(save, Legacy.today());
+        save.seed = 0;
+        if (store != null) store.saveGame(save);
+        saveNotice = "SAVED CLIMB " + SeedCode.encode(old) + " COULD NOT BE RESUMED: ARCHIVED" + (aside != null ? ", FILE KEPT" : "");
     }
 
     private Long nextRandomSeed;

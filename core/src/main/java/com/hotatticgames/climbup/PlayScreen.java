@@ -115,6 +115,7 @@ public final class PlayScreen extends ScreenAdapter {
             sim = Sim.startOn(course, g.tuning, 0);
         } else {
             ClimbGame.Run run = g.preparedRun != null ? g.preparedRun : g.openRun(g.runFresh); g.preparedRun = null; g.runFresh = false;
+            if (g.saveNotice != null) { toast = g.saveNotice; toastT = 6f; g.saveNotice = null; }          // (save repair H2: a climb that could not be resumed is never replaced silently)
             tower = run.tower; course = tower.world;
             int hStart = run.startHeight > 0 ? run.startHeight : Integer.getInteger("climb.startHeight", 0);              // test hook / the hidden world picker: begin partway up
             while (hStart > 0 && tower.topAbsY() < hStart + 80f) tower.extend();

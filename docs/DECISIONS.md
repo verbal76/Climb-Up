@@ -1233,3 +1233,17 @@ Source: docs/verification/CONSOLIDATED_AUDIT_REPORT.md (DC1-DC10) and docs/verif
 - **Unchanged.** The hit-free witness, the verdicts and their thresholds, cannon behaviour, physics, generator rules and seeded generation.
 - **Tests.** SolverRecoveryTest: the fixture completes; new `theLineupUnderTheAimedCannonIsTimedFromTheRopeAndTheWitnessIsHitFree` (PROVEN_SOLVABLE,
   0 hits, 0 falls) and `aRecoveryRehearsalThatIsHitLeavesTheClimbUntouched`.
+
+## Saw fairness enforced at slice acceptance (2026-10-28, SawFairnessTest on the smoke gate; rules 16)
+
+- **What failed.** NORMAL seed 1 slice 1: the floor saw on platform 59 (before a swing) leaves 0.40 of its cycle, against the owner's 0.5 rule
+  (2026-10-27), when measured as the test measures it (SafeStart: the real arrival by the previous link's proven move, the walk to the proven spot,
+  waiting with every hazard active).
+- **Why the generator accepted it.** Its link proof measured the window from the proven start at time 0: 0.60. The two measures agree only when
+  nothing else on the link moves. Here the swing's phase at the real arrival differs. DC7's unique move-style ids removed the aliasing that had
+  read 0.6 from the arrival too.
+- **Repair.** SafeStart moved from the tests to the simulation package, unchanged. `CourseGenerator.sawsFair` measures every route saw of an
+  assembled slice with it before the whole-slice witness runs. A saw below half its cycle, or with no clean start, refuses the attempt
+  (FAILED_VALIDATION, tally `saw_window_refused`), and the slice is built again with the next deterministic attempt. The rule itself is unchanged.
+- **Effect.** Generation changes wherever such a saw was accepted: rules 16, seed 1 fingerprint 978eaa5128ad2201d29dabbf (was a7a4dff4...).
+  SawFairnessTest: 162 saws, worst gap saw 0.67, worst floor saw 0.50, every one with a clean start.

@@ -106,3 +106,80 @@ on testing. **Not for release.** Build 82 is the release candidate. Nothing here
   - the 4 m plain spacing;
   - every solver proof.
 - Changes rules 16 behaviour on the experimental branch only.
+
+## Build 82 baseline diagnostics (30 stored courses, no course generated)
+
+Source: runs 40774298627 (P1-P4) and 40780279216 (dominance, KPI 16, enemy ledger), both re-reading the artifacts of campaign 40752227771. The
+full tables are in `baseline82/DIAG_build82_30courses.md`.
+
+**P1, advanced traversal.** The layer check refuses nearly every launcher and carrier.
+
+| NGH | tries | accepted | refused by the layer check |
+|---|---|---|---|
+| MOVER_V | 34,950 | 0.4% | 99.5% |
+| PAD | 34,810 | 0.6% | 99.3% |
+| ELEV_FALL | 34,048 | 0.4% | 99.5% |
+| SWING | 781 | 10.1% | 86.6% |
+| SEESAW | 1,096 | 11.7% | 84.8% |
+| SPRING | 739 | 21.4% | 73.9% |
+
+NORMAL and PUNISHER show the same pattern with somewhat higher acceptance.
+
+**KPI 16, advanced movement utilisation.**
+
+| | NORMAL | PUNISHER | NGH |
+|---|---|---|---|
+| ordinary links (both ends STATIC) | 62.0% | 80.6% | 87.4% |
+| witness-traversed per course: pads | 82.8 | 51.1 | 28.1 |
+| witness-traversed per course: vertical movers | 82.0 | 40.2 | 25.3 |
+| witness-traversed per course: ropes | 351 | 236 | 202 |
+| placed pads off the main route only | 62% | 79% | 86% |
+
+- Every other main-route mechanic was traversed by the witness.
+- Attribution: modules own their defining element types 100% of the time. 1.1-1.5% of main-route elements carry no module, almost all STATIC.
+
+**P2, spike blocks on route.**
+
+| | NORMAL | PUNISHER | NGH |
+|---|---|---|---|
+| spike blocks | 2,669 | 3,870 | 5,385 |
+| share of on-route hazards | 28.5% | 32.8% | 35.7% |
+| hazard entropy (bits) | 2.70 | 2.74 | 2.63 |
+| spike-block share, castle 1 | 27% | 32% | 35% |
+| spike-block share, castle 9-10 | 32% | 35% | 38-40% |
+| 25 m windows with 2 or more spike blocks | 37.5% | 54.4% | 70.2% |
+| avalanche blocks (separate type) | 6 | 232 | 281 |
+
+**P2, spike-block conversions.** Experiment samples only; the baseline never recorded the original draws.
+
+| 600 m sample | conversions | share of spike-block draws |
+|---|---|---|
+| PUNISHER | 89 | 45% |
+| NGH | 79 | 38% |
+
+Leading causes:
+- a bee or crab deck barred near an Enforcer (PUNISHER 36, NGH 26);
+- a gap saw next to a bee (32, 23);
+- a saw a creature can reach (8, 15).
+
+None is a refused traversal module.
+
+**P3, NGH castle 9 to castle 10.**
+- Enemy placements per course rise from 84.2 to 86.9, but the enemy lane falls from 153.6 to 137.2.
+- The ledger shows the mix shifting:
+  - skulls 25 to 22 rows (value -9.8);
+  - blobs 20 to 16 (-7.2);
+  - bees 12 to 9 (-4.1);
+  - crabs 30 to 38 (+3.7).
+- A crab row is worth about 0.55 (repetition factor 0.60), a skull row about 2.9.
+- Lower scored exposure, not fewer placements. Why the creature modules thin out at castle 10 is the next measurement (P3c).
+
+**P4, castle travel.**
+
+| | route travel per castle interval, mean | CV |
+|---|---|---|
+| NORMAL | 2,968 m | 0.041 |
+| PUNISHER | 3,285 m | 0.043 |
+| NGH | 3,529 m | 0.045 |
+
+The intervals are already consistent (NORMAL 2,766-3,424 m), so there is little room for a soft preference to help.

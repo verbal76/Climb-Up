@@ -1264,3 +1264,15 @@ Source: docs/verification/CONSOLIDATED_AUDIT_REPORT.md (DC1-DC10) and docs/verif
   - What the climb achieves must be exactly equal: checkpoints in the order reached, keys, hazard hits, falls, completion.
 - **Unchanged.** The game, the physics, the generator and replay determinism. The game always replays in the streamed frame, and there it is
   bit-exact.
+
+## Balance conveyor claim gap (2026-10-28, CI run 40666755282: BalanceConveyorTest seed 7 section 9)
+
+- **What failed.** NORMAL seed 7 had no balance conveyor between castles 8 and 9; the rule is one per section from castle 6 to castle 10. It
+  passed on 093b6bb. Under rules 16 the slices fall at different heights, which exposed a generator gap that already existed.
+- **Root cause (traced, scratchpad BeltProbe).** A slice claims the conveyor heights within its first 80 m. Slice 67 runs from 4334.7 to 4421.3 m
+  (86.6 m), so it claims up to 4414.7 m. The conveyor height is 4415.2 m, and slice 68 starts at 4421.3 m. No slice owned the height.
+- **Repair (DC5 pass 3).** A slice also claims a conveyor height that lies below its start but more than 75 m above the previous slice's lowest
+  element (so it was outside the previous slice's window, and above anything older), when the previous slice has no conveyor. It builds that
+  conveyor first, by the existing placement and proof (tally `belt_claimed_below_start`). Nothing changes where every height was claimed.
+  Duplicates are impossible: a conveyor built by an older slice lies below the previous slice.
+- **Not changed.** The test, the conveyor's own rules and proofs, and the seed 1 fingerprint (conveyors start at castle 6).

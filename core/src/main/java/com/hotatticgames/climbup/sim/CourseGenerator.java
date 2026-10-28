@@ -330,6 +330,18 @@ public final class CourseGenerator {
                 float hb = (float) (beltSawHeight(c.seed, n, T.castleSpacing) - base);
                 if (hb > startY && hb <= startY + 80f) { beltSawY = hb; break; }
             }
+            // 2026-10-28 (BalanceConveyorTest, NORMAL seed 7 section 9 on rules 16): a slice claims the heights in its first 80 m, so one that climbs
+            // further (slice 67: 4334.7 to 4421.3 m) leaves the heights between its start + 80 m and its top to nobody - the conveyor at 4415.2 m fell
+            // through by 0.5 m. Such a height is claimed by the next slice and built first: it lies above everything the previous slice could claim
+            // (more than 75 m over its lowest element, so nothing older built it either) and the previous slice has no conveyor.
+            if (endless && beltSawY == 0f && prev != null && prev.routeSize() > 0) {
+                boolean prevBelt = false; for (int i = 0; i < prev.size(); i++) if (prev.get(i).tiltBelt()) prevBelt = true;
+                float prevLow = Float.POSITIVE_INFINITY; for (int i = 0; i < prev.routeSize(); i++) prevLow = Math.min(prevLow, prev.get(i).y);
+                for (int n = Math.max(BELT_SAW_FIRST, (int) Math.floor((startAbs - 80.0) / sp) + 1); !prevBelt && n <= Math.min(BELT_SAW_LAST, (int) Math.floor(startAbs / sp) + 1); n++) {
+                    float hb = (float) (beltSawHeight(c.seed, n, T.castleSpacing) - base);
+                    if (hb <= startY && hb > prevLow + 75f) { beltSawY = startY + 0.5f; GenTrace.tally("belt_claimed_below_start"); break; }
+                }
+            }
         }
         float top = keyN > 0 ? Math.max(startY + T.chunkHeight, keyY + 6f) : startY + T.chunkHeight;
         GenTrace tr = GenTrace.GEN.get(); long p0 = GenTrace.now();      // (observe-only phase timing for reports)

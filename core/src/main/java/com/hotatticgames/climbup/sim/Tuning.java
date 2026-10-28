@@ -1,0 +1,77 @@
+package com.hotatticgames.climbup.sim;
+
+import com.badlogic.gdx.utils.Json;
+
+/** All movement, world and generator numbers. Loaded from assets/data/tuning.json (OTA-replaceable data). */
+public class Tuning {
+    public float radius = 10f;
+    public float runSpeed = 5.6f, groundAccel = 48f, groundDecel = 60f, airAccel = 28f, airDrag = 3f;
+    public float gravity = 34f, jumpVel = 11.5f, jumpCutMul = 0.45f, maxFall = 24f;
+    public float wetGrip = 0.08f, wetLurch = 2.2f, wetLurchRate = 5.3f, wetSkid = 1.12f;   // wet / icy platforms: ground acceleration and braking are wetGrip of normal (Build 71: 0.08, was 0.12), the feet lurch about (wetLurch m/s^2 at wetLurchRate rad/s), and braking hard skids you on (speed x wetSkid)
+    public float coyote = 0.12f, jumpBuffer = 0.13f;
+    public float halfWidth = 0.28f, height = 1.25f, handHeight = 1.15f, edgeOverhang = 0.2f;
+    public float padBounce = 21f, padBounceHeld = 24f;
+    public float climbSpeed = 3.4f, ropeGrabRadius = 0.42f, cableShimmy = 3.6f, grabLockout = 0.28f;
+    public float ledgeReachX = 0.4f, ledgeReachBelow = 0.9f, ledgeReachAbove = 0.15f, pullUpTime = 0.32f;
+    public float crumbleDelay = 0.5f, crumbleRespawn = 3.4f;
+    public float castleSpacing = 500f;             // the castles of the endless climb stand at exactly this height apart (500, 1000, 1500 ...): equal for every runner
+    public int finishCastle = 10;                  // walking through this castle's door ends the timed run
+    public float moverCrumbleDelay = 1.6f;       // movers that fall apart (elevators, sliders, swings) hold a little longer than plain crumbling tiles
+    public float swingSuper = 5.5f, swingSuperVx = 3.5f;   // jumping from the top of a swing's arc catapults you: extra upward and outward speed
+    public float fallRespawnDepth = 12f;
+    public float hitKnockSide = 6.9f, hitKnockUp = 6.9f;   // a hazard hit (saw, spikes, pendulum, cannon ball) throws you off: sideways and upward speed (owner: 15 % more than the earlier 6 / 6, nothing kills you)
+    public float seesawMaxTilt = 0.55f, seesawRate = 1.0f, seesawRelax = 1.0f, seesawSlide = 5f, seesawUphill = 0.45f;   // seesaw bridge: slope (height per metre), tip / relax speed, downhill slide, uphill slow-down
+    public float beltSeesawDead = 0.5f;      // Build 77 (owner): the balance conveyor stays level while you are within this many metres of its pivot
+    public float courseHeight = 520f;        // finite test towers only; the shipped game is endless
+    public float zoneHeight = 400f; public int zoneCount = 5; public float gemSpacing = 30f;   // red-gem checkpoints about every gemSpacing metres (+-15%);   // each world (meadow, frost, dusk, night, space) lasts zoneHeight metres, then they repeat
+    public float rampHeight = 520f;          // height over which base difficulty (gap sizes, mover amplitude) ramps up in the endless climb
+    public float chunkHeight = 60f;          // the endless tower is generated in chunks of about this height
+    public float hazardStartY = 90f, hazardRampY = 1400f;   // hazards appear from hazardStartY and reach full frequency hazardRampY later
+    public float minTimingWindow = 0.2f;     // fraction of a hazard's cycle that must leave a workable move at the start of the ramp (relaxes slightly at full intensity)
+    public float spiralPitch = 24f;          // height gained per revolution, enforced by the generator
+    /** The spiral pitch controller (2026-10-26): the height of the route above itself one revolution back, at the same arc, is kept between these
+     *  (below the minimum only vertical modules are favoured, above the maximum vertical ones are damped). 9.5 m keeps a launcher's layer spacing. */
+    public float layerGapMin = 10f, layerGapMax = 16f;
+    public int restEvery = 5, checkpointEveryRests = 1;
+    public float minLinkMargin = 0.07f;
+    public float assistJumpForgiveness = 0.08f, assistSlowFactor = 0.8f;
+
+    /** Sanity check for replacement tuning (OTA payloads): every number finite and non-negative, the core movement/world numbers positive and in a playable range. Returns null if fine. */
+    public String validate() {
+        try {
+            for (java.lang.reflect.Field f : Tuning.class.getFields()) {
+                if (f.getType() == float.class) { float v = f.getFloat(this); if (Float.isNaN(v) || Float.isInfinite(v) || v < 0f) return f.getName() + " out of range"; }
+                else if (f.getType() == int.class && f.getInt(this) < 0) return f.getName() + " out of range";
+            }
+        } catch (IllegalAccessException e) { return "unreadable"; }
+        if (radius < 2f || radius > 100f) return "radius";
+        if (runSpeed <= 0f || runSpeed > 40f || gravity <= 0f || gravity > 200f || jumpVel <= 0f || jumpVel > 60f || maxFall <= 0f) return "movement";
+        if (halfWidth <= 0f || height <= 0f || handHeight <= 0f || handHeight > height + 1f) return "body";
+        if (zoneHeight < 50f || zoneCount < 1 || chunkHeight < 20f || chunkHeight > 200f || restEvery < 1 || gemSpacing < 10f) return "world";
+        if (crumbleDelay < 0.1f || crumbleRespawn < 0.5f || moverCrumbleDelay < 0.1f) return "crumble";
+        return null;
+    }
+
+    public float circumference() { return (float) (2 * Math.PI * radius); }
+
+    /** Build 79 (owner): the climb's difficulty - 0 NORMAL, 1 PUNISHER, 2 NEVER GONNA HAPPEN - set only on the copy such a climb runs with (never in tuning.json).
+     *  Creatures and cannons react REACT[hard] times faster and the generator puts {@code hard} more creatures in each group and more groups in the way. */
+    public int hard;
+    public static final float[] REACT = {1f, 1.25f, 1.5f};
+    public static final String[] HARD_NAMES = {"NORMAL", "PUNISHER", "NEVER GONNA HAPPEN"};
+    /** Owner 2026-10-24: new climbs offer NORMAL and PUNISHER only until the difficulty design infrastructure is in place. NEVER GONNA HAPPEN keeps its code
+     *  and its times board, and a climb already begun on it carries on with it; it is just not offered for new climbs.
+     *  Owner 2026-10-25: Build 81 is a private owner playtest with all three modes selectable (3). Public builds (Steam) must gate PUNISHER and
+     *  NEVER GONNA HAPPEN again until the owner approves them: set this back before any public build. */
+    public static final int PLAYABLE_MODES = 3;
+    /** How much faster creatures and cannons react on this climb (1 on NORMAL). */
+    public float react() { return REACT[Math.max(0, Math.min(REACT.length - 1, hard))]; }
+    /** A copy of this tuning for a climb at difficulty {@code level}. */
+    public Tuning hardCopy(int level) { Tuning c = parse(new Json().toJson(this)); c.hard = level; return c; }
+
+    public static Tuning parse(String json) {
+        Json j = new Json();
+        j.setIgnoreUnknownFields(true);
+        return j.fromJson(Tuning.class, json);
+    }
+}

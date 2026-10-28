@@ -1,0 +1,252 @@
+name: Desktop (Windows + Linux) build + release
+# MANUAL ONLY (studio standard §9: a push must never auto-publish). The owner explicitly triggers this to build the two
+# desktop platforms from the SAME commit the APK is built from (one game, one branch): the self-contained Windows EXE and
+# the native Linux x86-64 app-image (Steam Deck / Steam Machine), published together in ONE GitHub Release. No Steam, no
+# OTA, no signing keystore (sideload builds). Pushes run only the lightweight ci.yml validation, which publishes nothing.
+on:
+  workflow_dispatch:
+    inputs:
+      build_number:
+        description: "Build number for the package names, tag and release title (blank = this run's number). Set it to the Android build's number so all three artifacts of one commit share it."
+        type: string
+        default: ""
+      test_build:
+        description: "Owner test build: attach the packages to a DRAFT GitHub Release (visible to collaborators only, no tag, nothing public). Off = the normal published release."
+        type: boolean
+        default: false
+      publish_public:
+        description: "Make the completed three-platform release public. Off (default, owner 2026-10-24) = the release with all three packages stays a private draft."
+        type: boolean
+        default: false
+      skip_tests:
+        description: "Skip the test job (core, desktop, scenario, limb guard) for an art-only rebuild whose commit already passed them elsewhere. The Windows EXE and Linux launcher smoke checks still run. Default off."
+        type: boolean
+        default: false
+permissions:
+  contents: read
+  actions: read
+
+env:
+  BUILD_NUMBER: ${{ inputs.build_number || github.run_number }}
+
+jobs:
+  tests:
+    if: (github.ref == 'refs/heads/ccr-cb458cd1-w4dh5c' || github.ref == 'refs/heads/build-74-determinism') && !inputs.skip_tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '17' }
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Gameplay regression suite (unmodified core tests)
+        run: ./gradlew :core:test --no-daemon
+      - name: Desktop unit tests (input mapping, bindings, persistence, navigation, display, assets)
+        run: ./gradlew :desktop:test --no-daemon
+      - name: Print test totals
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import glob, xml.etree.ElementTree as ET
+          for mod in ('core','desktop'):
+              t=f=s=0
+              for p in glob.glob(f'{mod}/build/test-results/test/*.xml'):
+                  r=ET.parse(p).getroot(); t+=int(r.get('tests')); f+=int(r.get('failures'))+int(r.get('errors')); s+=int(r.get('skipped'))
+              print(f'TEST_TOTALS {mod}: tests={t} failures={f} skipped={s}')
+          PY
+      - name: Install a virtual display and software OpenGL
+        run: sudo apt-get update && sudo apt-get install -y xvfb libgl1-mesa-dri libglx-mesa0 libopenal1
+      - name: End-to-end desktop scenario (real window, keyboard-only navigation, rebinding, play, controller plug/unplug, resize, fullscreen)
+        run: |
+          set -o pipefail
+          xvfb-run -a -s "-screen 0 3840x2160x24" ./gradlew :desktop:scenario --no-daemon -Dscenario.noaudio=true -Dscenario.ascii=true | tee scenario.log | grep -v "^Picked up"
+          grep -q "SCENARIO_RESULT PASS" scenario.log || { echo "::error::the end-to-end scenario did not pass (see scenario.log)"; exit 1; }
+      - name: Limb-scale regression guard (every character auto-plays ten generated slices; fails if any arm/leg bone shrinks over the run)
+        run: xvfb-run -a -s "-screen 0 320x240x24" ./gradlew :desktop:gripProbe --no-daemon
+      - name: Packaged-jar smoke (assets, natives, save folder) on Linux
+        run: ./gradlew :desktop:run --no-daemon --args=--smoke -Dclimb.assets="$PWD/assets" -Dclimb.data="$RUNNER_TEMP/smoke" | grep SMOKE
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: scenario-screenshots-${{ env.BUILD_NUMBER }}
+          path: desktop/build/scenario/shots
+          retention-days: 7
+
+  windows:
+    if: always() && (github.ref == 'refs/heads/ccr-cb458cd1-w4dh5c' || github.ref == 'refs/heads/build-74-determinism') && (needs.tests.result == 'success' || (inputs.skip_tests && needs.tests.result == 'skipped'))
+    needs: tests
+    runs-on: windows-latest
+    # contents: write ONLY because the sound pack sits on the owner's DRAFT "Sfx" release, which GitHub shows only to a token that can write
+    # (proved by sfx-pack-access.yml: a contents: read token cannot see it); nothing in this job publishes or writes
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '17' }
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - run: pip install pillow
+      - name: Fetch the licensed sound pack (the owner's "Sfx" release in this repository, GITHUB_TOKEN, SHA-256 checked; the build fails if it is missing or corrupted)
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          (command -v ffmpeg >/dev/null 2>&1 || choco install ffmpeg --no-progress -y >/dev/null 2>&1) || true
+          export PATH="$PATH:/c/ProgramData/chocolatey/bin"
+          tools/ci/fetch_pack_sfx.sh --download
+      - name: Package (jar, jlink runtime, EXE, assets, checksums, Steam layout)
+        shell: powershell
+        run: powershell -File tools/windows/package.ps1 -BuildNumber ${{ env.BUILD_NUMBER }} -Channel ${{ inputs.test_build && 'experimental' || 'release' }}
+      - name: Print what was built
+        shell: powershell
+        run: |
+          $app = "build\windows\dist\Upwardly"
+          Get-ChildItem $app | Format-Table Name, Length
+          Get-Content "$app\BUILD_INFO.txt"
+          Get-ChildItem build\windows\*.zip | ForEach-Object { "{0} {1:N1} MB" -f $_.Name, ($_.Length/1MB) }
+          "bundled runtime java.exe present: " + (Test-Path "$app\runtime\bin\java.exe")
+          "app\assets file count: " + (Get-ChildItem -Recurse -File "$app\app\assets" | Measure-Object).Count
+          "du runtime MB: " + [math]::Round(((Get-ChildItem -Recurse -File "$app\runtime" | Measure-Object Length -Sum).Sum/1MB),1)
+          Get-Content build\windows\SHA256SUMS.txt | Select-Object -First 8
+          Get-ChildItem -Recurse build\windows\steam | Select-Object -First 12 FullName
+      - name: Run the packaged EXE without any Java on PATH (--smoke)
+        shell: powershell
+        run: |
+          # remove every Java from this step's environment: the app must use only its bundled runtime
+          $env:JAVA_HOME = ''
+          $env:Path = ($env:Path -split ';' | Where-Object { $_ -notmatch '(?i)java|jdk|temurin|hostedtoolcache' }) -join ';'
+          "java on PATH: " + [bool](Get-Command java -ErrorAction SilentlyContinue)
+          $env:APPDATA = "$env:RUNNER_TEMP\appdata"; New-Item -ItemType Directory -Force $env:APPDATA | Out-Null
+          $p = Start-Process -FilePath "build\windows\dist\Upwardly\Upwardly.exe" -ArgumentList '--smoke' -Wait -PassThru
+          "exit code: " + $p.ExitCode
+          $log = "$env:APPDATA\HotAtticGames\Upwardly\smoke.log"
+          "save folder used: $env:APPDATA\HotAtticGames\Upwardly  exists=" + (Test-Path $log)
+          Get-Content $log
+          if ($p.ExitCode -ne 0) { throw "smoke failed" }
+      - name: Launch the EXE with a software OpenGL driver, run 30 s, require a clean exit (hosted runners have no GPU; the driver is a CI-only helper)
+        continue-on-error: true       # third-party driver download: a failure here is reported, but does not stop the package from being uploaded
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Copy-Item -Recurse build\windows\dist\Upwardly "$env:RUNNER_TEMP\glapp"
+          $rel = Invoke-RestMethod https://api.github.com/repos/pal1000/mesa-dist-win/releases/latest
+          $asset = $rel.assets | Where-Object { $_.name -match 'release-msvc\.7z$' } | Select-Object -First 1
+          "software GL driver: " + $asset.name + " (third-party test helper, used only on this CI runner, never shipped)"
+          Invoke-WebRequest $asset.browser_download_url -OutFile "$env:RUNNER_TEMP\mesa.7z"
+          7z x "$env:RUNNER_TEMP\mesa.7z" "-o$env:RUNNER_TEMP\mesa" -y | Out-Null
+          Get-ChildItem "$env:RUNNER_TEMP\mesa\x64\*.dll" | Where-Object { $_.Name -match 'opengl32|libgallium_wgl|libglapi|libEGL|libGLESv2' } | Copy-Item -Destination "$env:RUNNER_TEMP\glapp"
+          $env:GALLIUM_DRIVER = 'llvmpipe'; $env:MESA_GL_VERSION_OVERRIDE = '4.5'
+          $env:APPDATA = "$env:RUNNER_TEMP\appdata2"; New-Item -ItemType Directory -Force $env:APPDATA | Out-Null
+          $p = Start-Process -FilePath "$env:RUNNER_TEMP\glapp\Upwardly.exe" -ArgumentList '--exit-after=30' -PassThru
+          $done = $p.WaitForExit(150000)
+          "exited by itself within 150 s: $done"
+          if ($done) { "exit code: " + $p.ExitCode } else { $p.Kill() }
+          $log = "$env:APPDATA\HotAtticGames\Upwardly\desktop.log"
+          if (Test-Path $log) { Get-Content $log } else { "no desktop.log was written" }
+          if (-not $done -or $p.ExitCode -ne 0) { throw "the packaged game did not start, run and exit cleanly" }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Upwardly-Windows-build-${{ env.BUILD_NUMBER }}
+          path: |
+            build/windows/*.zip
+            build/windows/SHA256SUMS.txt
+          retention-days: 14
+
+  linux:
+    if: always() && (github.ref == 'refs/heads/ccr-cb458cd1-w4dh5c' || github.ref == 'refs/heads/build-74-determinism') && (needs.tests.result == 'success' || (inputs.skip_tests && needs.tests.result == 'skipped'))
+    needs: tests
+    runs-on: ubuntu-latest
+    # contents: write ONLY because the sound pack sits on the owner's DRAFT "Sfx" release, which GitHub shows only to a token that can write
+    # (proved by sfx-pack-access.yml: a contents: read token cannot see it); nothing in this job publishes or writes
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '17' }
+      - name: Fetch the licensed sound pack (the owner's "Sfx" release in this repository, GITHUB_TOKEN, SHA-256 checked; the build fails if it is missing or corrupted)
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          (command -v ffmpeg >/dev/null 2>&1 || sudo apt-get install -y --no-install-recommends ffmpeg >/dev/null 2>&1) || true
+          tools/ci/fetch_pack_sfx.sh --download
+      - name: Package the native Linux x86-64 app-image + tar.gz (jpackage)
+        run: bash tools/linux/package.sh ${{ env.BUILD_NUMBER }}
+      - name: Smoke the native launcher headless (bundled runtime, no system Java)
+        run: |
+          sudo apt-get update && sudo apt-get install -y xvfb libgl1-mesa-dri libglx-mesa0 libopenal1
+          APP=build/linux/dist/Upwardly
+          file "$APP/bin/Upwardly"
+          test -f "$APP/lib/app/assets/data/tuning.json" || { echo "::error::assets missing from the Linux app-image"; exit 1; }
+          env -u JAVA_HOME PATH=/usr/bin:/bin xvfb-run -a -s "-screen 0 1280x800x24" "$APP/bin/Upwardly" --smoke | tee smoke.txt
+          grep -q "SMOKE_RESULT PASS" smoke.txt || { echo "::error::Linux smoke failed"; exit 1; }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Upwardly-Linux-build-${{ env.BUILD_NUMBER }}
+          path: |
+            build/linux/*.tar.gz
+            build/linux/SHA256SUMS.txt
+          retention-days: 14
+
+  release:
+    if: always() && (github.ref == 'refs/heads/ccr-cb458cd1-w4dh5c' || github.ref == 'refs/heads/build-74-determinism') && needs.windows.result == 'success' && needs.linux.result == 'success'
+    needs: [windows, linux]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency:   # shared with android.yml's release job (Build 78 release gate)
+      group: upwardly-release-publish
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: Upwardly-Windows-build-${{ env.BUILD_NUMBER }}
+          path: dl-win
+      - uses: actions/download-artifact@v4
+        with:
+          name: Upwardly-Linux-build-${{ env.BUILD_NUMBER }}
+          path: dl-linux
+      - name: Publish ONE desktop Release (Windows EXE + Linux tar.gz), standard filenames + manifest + checksums
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          N: ${{ env.BUILD_NUMBER }}
+        run: |
+          set -e
+          VER=$(grep -oP "appVersionName = '\K[^']+" build.gradle)
+          Z=$(find dl-win -maxdepth 2 -name '*.zip' | head -1); T=$(find dl-linux -maxdepth 2 -name '*.tar.gz' | head -1)
+          [ -n "$Z" ] || { echo "::error::no Windows zip"; exit 1; }
+          [ -n "$T" ] || { echo "::error::no Linux tar.gz"; exit 1; }
+          unzip -l "$Z" | grep -qi 'Upwardly.exe' || { echo "::error::no Upwardly.exe in the zip"; exit 1; }
+          tar tzf "$T" | grep -q 'Upwardly/bin/Upwardly' || { echo "::error::no native launcher in the tar.gz"; exit 1; }
+          # standard artifact names (studio standard §7): "Upwardly Build NN <Platform>.<ext>"
+          EXE="Upwardly Build ${N} EXE.zip"; LINUX="Upwardly Build ${N} Linux.tar.gz"
+          cp "$Z" "$EXE"; cp "$T" "$LINUX"
+          SUM_EXE=$(sha256sum "$EXE" | cut -d' ' -f1); SUM_LINUX=$(sha256sum "$LINUX" | cut -d' ' -f1)
+          printf '%s  %s\n%s  %s\n' "$SUM_EXE" "$EXE" "$SUM_LINUX" "$LINUX" > checksums.sha256
+          cat > build-manifest.json <<JSON
+          { "game": "Upwardly", "build": ${N}, "version": "${VER}", "source_sha": "${{ github.sha }}",
+            "built": "$(date -u +%Y-%m-%dT%H:%M:%SZ)", "runtime": "jlink JRE 17 (jpackage app-image)",
+            "artifacts": [
+              { "platform": "windows-x86_64", "file": "${EXE}", "sha256": "${SUM_EXE}" },
+              { "platform": "linux-x86_64",   "file": "${LINUX}", "sha256": "${SUM_LINUX}" }
+            ] }
+          JSON
+          TAG="build-${N}-desktop"
+          NOTES="Upwardly Build ${N} — desktop (Windows EXE + native Linux x86-64). Same game as the Android APK, built from the SAME commit ${{ github.sha }}. Self-contained (no Java needed). Linux is native (Steam Deck / Steam Machine), not Proton.\n\nNot verified on real hardware: controllers, real GPU/fullscreen, audio, Steam Deck."
+          printf '%b' "$NOTES" > notes.md
+          if [ "${{ inputs.test_build }}" = "true" ]; then
+            # owner test build: a DRAFT release (collaborators only, creates no tag, never public) carries the packages, as in the Android workflow
+            gh release create "$TAG" "$EXE" "$LINUX" build-manifest.json checksums.sha256 --repo "$REPO" --target "${{ github.sha }}" --title "Upwardly Build ${N} — Desktop (Windows + Linux) (owner test build, draft)" --notes-file notes.md --draft
+            echo "draft release created for $TAG (visible to collaborators only)"
+          else
+            # owner: one release per build with the APK, EXE and Linux build together, under the Android workflow's tag. The packages join a draft
+            # candidate; it goes public only when the APK from this same commit is on it too, with checksums and a manifest for all three (Build 78)
+            PUBLISH_PUBLIC="${{ inputs.publish_public }}" bash tools/ci/publish_release.sh "v${VER}-build${N}" "$N" notes.md "$EXE" "$LINUX"
+          fi

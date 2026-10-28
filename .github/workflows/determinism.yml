@@ -1,0 +1,132 @@
+name: Cross-platform course generation check
+# VALIDATION ONLY (publishes nothing, builds no release). Build 73/74 (owner): the same seed must build the same course, and the same inputs on the same
+# simulation steps must give the same run (events, finish step, recorded time), on Windows, Linux and Android.
+#  - GenPrint: canonical fingerprints of generated slices (every platform, rope, pad, castle and hazard with its phase) for eight seeds.
+#  - ReplayTool: recorded climbs (core/src/test/resources/replays) played back step by step as PlayScreen plays them; prints the finish step, the run
+#    clock in steps and as shown, an event hash and state fingerprints.
+# Linux (desktop JVM) and Android (ART, API 34 x86_64 emulator) run in one job, Windows (desktop JVM) in another; the last job requires all three to be identical.
+on:
+  workflow_dispatch:
+  push:            # whenever the simulation, generation, the replays, their tuning or this check changes (a manual dispatch needs the file on the default branch)
+    branches: [ccr-cb458cd1-w4dh5c, build-74-determinism]
+    paths:
+      - '.github/workflows/determinism.yml'
+      - 'core/src/main/java/com/hotatticgames/climbup/sim/**'
+      - 'core/src/main/java/com/hotatticgames/climbup/RunRecord.java'
+      - 'core/src/main/java/com/hotatticgames/climbup/ClockText.java'
+      - 'assets/data/tuning.json'
+      - 'core/src/test/java/com/hotatticgames/climbup/GenPrint.java'
+      - 'core/src/test/java/com/hotatticgames/climbup/ReplayTool.java'
+      - 'core/src/test/resources/replays/**'
+permissions:
+  contents: read
+
+jobs:
+  linux-android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '17' }
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Compile the simulation and the tools
+        run: ./gradlew :core:testClasses --no-daemon -q
+      - name: Linux (desktop JVM)
+        run: |
+          set -e
+          GDX=$(find ~/.gradle -name 'gdx-1.14.2.jar' | head -1); CP="core/build/classes/java/main:core/build/classes/java/test:$GDX"
+          java -cp "$CP" com.hotatticgames.climbup.GenPrint assets/data/tuning.json | tee linux.txt
+          for r in core/src/test/resources/replays/*.bin.gz; do
+            n=$(basename "$r" .bin.gz); seed=$(echo "$n" | sed -E 's/seed([0-9]+).*/\1/'); f=nofalls; case "$n" in *falls*) f=falls;; esac
+            java -cp "$CP" com.hotatticgames.climbup.ReplayTool replay assets/data/tuning.json "$seed" "$r" "$f" | tee -a linux.txt
+          done
+      - name: Dex the same classes for Android
+        run: |
+          set -e
+          GDX=$(find ~/.gradle -name 'gdx-1.14.2.jar' | head -1)
+          mkdir -p fp/classes && cp -r core/build/classes/java/main/. fp/classes/
+          mkdir -p fp/classes/com/hotatticgames/climbup && cp core/build/classes/java/test/com/hotatticgames/climbup/GenPrint.class core/build/classes/java/test/com/hotatticgames/climbup/ReplayTool*.class fp/classes/com/hotatticgames/climbup/
+          (cd fp/classes && jar cf ../core.jar .)
+          BT=$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -1)
+          mkdir -p fp/dex && "$BT/d8" --release --min-api 34 --output fp/dex fp/core.jar "$GDX" 2>&1 | grep -v -i "warning" || true
+          (cd fp/dex && zip -q ../fp.jar classes*.dex) && ls -l fp/fp.jar
+          cat > fp/run.sh <<'EOF'
+          cd /data/local/tmp
+          CLASSPATH=/data/local/tmp/fp.jar app_process /data/local/tmp com.hotatticgames.climbup.GenPrint tuning.json
+          for r in replays/*.bin.gz; do
+            n=$(basename "$r" .bin.gz); seed=$(echo "$n" | sed -E 's/seed([0-9]+).*/\1/'); f=nofalls; case "$n" in *falls*) f=falls;; esac
+            CLASSPATH=/data/local/tmp/fp.jar app_process /data/local/tmp com.hotatticgames.climbup.ReplayTool replay tuning.json "$seed" "$r" "$f"
+          done
+          EOF
+      - name: Enable KVM for the emulator
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Android (ART, API 34)
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot
+          script: |
+            adb push fp/fp.jar /data/local/tmp/fp.jar
+            adb push assets/data/tuning.json /data/local/tmp/tuning.json
+            adb push core/src/test/resources/replays /data/local/tmp/
+            adb push fp/run.sh /data/local/tmp/run.sh
+            adb shell sh /data/local/tmp/run.sh | tr -d '\r' | tee android.txt
+            adb shell getprop ro.build.fingerprint
+      - uses: actions/upload-artifact@v4
+        with:
+          name: determinism-linux-android
+          path: |
+            linux.txt
+            android.txt
+
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '17' }
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Compile the simulation and the tools
+        run: ./gradlew.bat :core:testClasses --no-daemon -q
+      - name: Windows (desktop JVM)
+        run: |
+          set -e
+          GDX=$(find "$(cygpath -u "$GRADLE_USER_HOME")" -name 'gdx-1.14.2.jar' | head -1); [ -n "$GDX" ] || { echo "::error::libGDX jar not found under GRADLE_USER_HOME"; exit 1; }
+          CP="core/build/classes/java/main;core/build/classes/java/test;$(cygpath -w "$GDX")"
+          java -cp "$CP" com.hotatticgames.climbup.GenPrint assets/data/tuning.json | tr -d '\r' | tee windows.txt
+          for r in core/src/test/resources/replays/*.bin.gz; do
+            n=$(basename "$r" .bin.gz); seed=$(echo "$n" | sed -E 's/seed([0-9]+).*/\1/'); f=nofalls; case "$n" in *falls*) f=falls;; esac
+            java -cp "$CP" com.hotatticgames.climbup.ReplayTool replay assets/data/tuning.json "$seed" "$r" "$f" | tr -d '\r' | tee -a windows.txt
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: determinism-windows
+          path: windows.txt
+
+  compare:
+    needs: [linux-android, windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { name: determinism-linux-android }
+      - uses: actions/download-artifact@v4
+        with: { name: determinism-windows }
+      - name: Windows, Linux and Android must agree exactly
+        run: |
+          set -e
+          for p in linux android windows; do grep -E "^(GENPRINT|REPLAYPRINT)" $p.txt | sed 's/^REPLAYPRINT replay/REPLAYPRINT/' > $p.cmp; echo "$p: $(wc -l < $p.cmp) lines"; done
+          [ "$(grep -c REPLAYPRINT linux.cmp)" -ge 1 ] || { echo "::error::no replay ran"; exit 1; }
+          diff linux.cmp android.cmp && diff linux.cmp windows.cmp
+          cat linux.cmp
+          echo "WINDOWS, LINUX AND ANDROID: SAME COURSES AND SAME RUNS (finish steps and recorded times identical)"

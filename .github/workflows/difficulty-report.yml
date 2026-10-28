@@ -1,0 +1,121 @@
+name: Difficulty report
+# DIAGNOSTIC ONLY (owner reporting directive + classification amendment, 2026-10-26): generates ten castles of seeded NORMAL, PUNISHER and NEVER
+# GONNA HAPPEN climbs with the CURRENT generator, runs the CURRENT slice solver, and measures every 25 m window in three lanes (terrain, hazards,
+# enemies) with separate interaction and mitigation ledgers (core/src/test/java/.../sim/LaneReport, scoring model 3lane-1; the earlier v2 score is
+# kept as a reference column). Publishes nothing; one job per mode and seed, each uploading its partial results even if it fails or runs out of
+# time; a final job builds the executive and detailed PDFs, per-run 25 m segment PDFs, merged CSV/JSON, validation and an index.
+on:
+  workflow_dispatch:
+    inputs:
+      seeds: { description: 'JSON list of seeds for every mode (push runs use ["1","2"])', required: false, default: '["1","2"]' }
+      include_run: { description: 'Earlier Difficulty report run of the SAME commit whose lanes-mode-* artifacts join this consolidation (staged campaigns)', required: false, default: '' }
+      include_pattern: { description: 'Which lanes-mode-* artifacts of include_run join (e.g. lanes-mode-2-* for courses a later fix does not touch)', required: false, default: 'lanes-mode-*' }
+      modes: { description: 'JSON list of modes (0 NORMAL, 1 PUNISHER, 2 NGH)', required: false, default: '["0","1","2"]' }
+      top: { description: 'Climb height in metres', required: false, default: '5000' }
+      solve: { description: '1 = run the slice solver on every slice, 0 = generation only (targeted generation checks)', required: false, default: '1' }
+      bench: { description: '1 = GenBench instead of the report: untraced generation time per slice and a streaming-wait estimate', required: false, default: '0' }
+      baseline_run: { description: 'Earlier Difficulty report run (any commit) to compare variety, ropes and difficulty against (its lanes-mode-* artifacts)', required: false, default: '' }
+      consolidate_only: { description: '1 = rebuild only the report from include_run''s stored courses (no gate, no course jobs; for a consolidation that failed after its courses passed)', required: false, default: '0' }
+      campaign: { description: 'Campaign charts tag (A = NORMAL+PUNISHER, B = NGH; owner 2026-10-27): A1-A9 or B1-B9 from this run''s courses', required: false, default: '' }
+  push:
+    branches: [build-74-determinism]
+    paths:
+      - '.github/workflows/difficulty-report.yml'
+      - 'core/src/test/java/com/hotatticgames/climbup/sim/LaneReport.java'
+      - 'core/src/test/java/com/hotatticgames/climbup/sim/Lanes.java'
+      - 'core/src/test/java/com/hotatticgames/climbup/sim/DifficultyScore.java'
+      - 'core/src/test/resources/difficulty_weights.properties'
+      - 'tools/ci/lane_report.py'
+      - 'core/src/main/java/com/hotatticgames/climbup/sim/CourseGenerator.java'
+      - 'core/src/main/java/com/hotatticgames/climbup/sim/Autopilot.java'
+      - 'core/src/main/java/com/hotatticgames/climbup/sim/DifficultyProfile.java'
+      - 'core/src/test/java/com/hotatticgames/climbup/sim/SolverRecoveryTest.java'
+permissions:
+  contents: read
+  actions: read
+jobs:
+  gate:          # one shared validation gate for every course job (was repeated in each)
+    if: inputs.consolidate_only != '1'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '17' }
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Reporting validation gate (classification, invariance, ledgers, coverage)
+        run: ./gradlew :core:test --tests 'com.hotatticgames.climbup.sim.LaneReportTest' --tests 'com.hotatticgames.climbup.sim.DifficultyScoreTest' --tests 'com.hotatticgames.climbup.sim.ModeProfileTest' --tests 'com.hotatticgames.climbup.sim.SolverRecoveryTest' --no-daemon -q
+  report:
+    needs: gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: ${{ fromJSON(inputs.modes || '["0","1","2"]') }}
+        seed: ${{ fromJSON(inputs.seeds || '["1","2"]') }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '17' }
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Compile (the gate job ran the tests)
+        run: ./gradlew :core:testClasses --no-daemon -q
+      - name: Generate, solve and measure ten castles
+        timeout-minutes: 270
+        env:
+          RUN_BUDGET: '15000'
+          SOLVE: ${{ inputs.solve || '1' }}
+        run: |
+          set -e
+          GDX=$(find ~/.gradle -name 'gdx-1.14.2.jar' | head -1)
+          mkdir -p report
+          if [ "${{ inputs.bench || '0' }}" = "1" ]; then
+            cd core && java -Xmx3g -cp "build/classes/java/main:build/classes/java/test:$GDX" com.hotatticgames.climbup.sim.GenBench ../assets/data/tuning.json ${{ matrix.mode }} ${{ matrix.seed }} ${{ inputs.top || '5000' }} ../report/genbench-${{ matrix.mode }}-${{ matrix.seed }}.csv | tee ../report/genbench-${{ matrix.mode }}-${{ matrix.seed }}.txt
+            exit 0
+          fi
+          cd core && java -Xmx3g -cp "build/classes/java/main:build/classes/java/test:$GDX" com.hotatticgames.climbup.sim.LaneReport ../assets/data/tuning.json ${{ inputs.top || '5000' }} ${{ matrix.mode }} ${{ matrix.seed }} ../report
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lanes-mode-${{ matrix.mode }}-seed-${{ matrix.seed }}
+          path: report/
+  consolidate:
+    needs: report
+    if: always() && inputs.bench != '1'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: lanes-mode-*
+          path: parts
+      - uses: actions/download-artifact@v4          # a staged campaign: the earlier stage's courses (same commit) are part of this dataset, not run twice
+        if: ${{ inputs.include_run != '' && inputs.include_run != null }}
+        with:
+          pattern: ${{ inputs.include_pattern || 'lanes-mode-*' }}
+          run-id: ${{ inputs.include_run }}
+          github-token: ${{ github.token }}
+          path: parts
+      - uses: actions/download-artifact@v4          # owner 2026-10-27: an earlier campaign to compare against (variety measured from its links.csv)
+        if: ${{ inputs.baseline_run != '' && inputs.baseline_run != null }}
+        with:
+          pattern: lanes-mode-*
+          run-id: ${{ inputs.baseline_run }}
+          github-token: ${{ github.token }}
+          path: baseline_parts
+      - name: Build PDFs, merged CSV/JSON, validation and index
+        run: |
+          pip install --quiet matplotlib
+          python3 tools/ci/lane_report.py parts baseline
+          python3 tools/ci/variety_report.py parts baseline baseline_parts
+          if [ -n "${{ inputs.campaign }}" ]; then
+            python3 tools/ci/campaign_charts.py "${{ inputs.campaign }}" "Campaign ${{ inputs.campaign }} ($(git rev-parse --short HEAD))" baseline/campaign_${{ inputs.campaign }} $(dirname $(find parts -name castle_control.csv | sort))
+          fi
+          EXPECT_MODES='${{ inputs.modes || '["0","1","2"]' }}' EXPECT_SEEDS='${{ inputs.seeds || '["1","2"]' }}' python3 tools/ci/batch_summary.py baseline/batch $(dirname $(find parts -name gate.json | sort))          # owner 2026-10-28: mode curves, seed spread, reliability
+          cat baseline/batch/BATCH.md >> "$GITHUB_STEP_SUMMARY"
+          cat baseline/INDEX.md >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: difficulty-baseline-3lane
+          path: baseline/

@@ -1,2 +1,44 @@
-# Climb-Up
-Climb up
+# Upwardly
+
+(Working title "Climb up": the package id `com.hotatticgames.climbup`, the repository and the `climb.*` developer properties keep that word; everything a player sees says Upwardly.)
+
+A 2.5D skill-platformer by **Hot Attic Games**: climb a spiral tower that doesn't exist. The camera is anchored on the player and the whole
+course rotates around you as you climb. Ropes, cables, swinging and moving platforms, crumbling tiles, bounce pads and fingertip ledge grabs, in
+an **endless**, procedurally generated (and solver-validated) tower that keeps getting harder. Timed sawblades, cannons that fire spiked balls, pop-up spikes, spiked stone blocks and slabs, angled springs, crabs that shove you, a floating spiked club, and coloured castles whose keys are hidden below the path. You play Quaternius' blue bunny-eared "Character", a skinned and animated 3D model. No upgrades: either you can make the jump or you can't.
+
+Status: **version 1.1.5 (the number and build are shown bottom-right of the title screen)** produced from the Climb Up v6 design package (see `design-package/`, `CLAUDE.md`). Android target; desktop build included for testing.
+
+## Install (Android, sideload)
+Every CI build publishes a **GitHub Release** (`v<version>-build<N>`) with the APK attached: open the repo's *Releases* page on your phone and tap the APK.
+The Android APK is built by GitHub Actions (`.github/workflows/android.yml`, run it manually: *Actions -> Android build -> Run workflow*). Download the
+`climb-up-debug-apk-N` artifact, copy the `.apk` to a phone and open it (allow "install unknown apps"). Landscape only; Android 8.0+ (API 26), OpenGL ES 2.0.
+Local APK builds need the Android SDK (`ANDROID_HOME`) and access to Google's Maven; the sandbox this was written in blocks `dl.google.com`, so the APK has **not** been built or installed here.
+
+## Controls (touch)
+* **Left half of the screen: floating stick.** Put a thumb down anywhere on the left; push left/right to run, **up/down to climb ropes, pull up from a ledge, or let go**.
+* **Right half of the screen: JUMP.** Hold for a higher jump, tap for a hop. Jump is buffered and has coyote time. In the air the stick steers.
+* Short of a ledge? Push toward it and you grab it with your fingertips; stick up or JUMP pulls you up. Ropes and cables are grabbed by jumping into them.
+* **SWING** (appears above JUMP only while you carry the floating spiked club): knocks crabs off. Desktop: X or J.
+* Pause: the top-right button on the phone (touch), Esc or P on a keyboard, the pad's Menu button, the phone's back key; the desktop corner plate is gone since Build 67. Settings (volume, text size, haptics, reduced motion, captions with their own size and background, colourblind-safe key colours, left-handed layout, slower-speed and jump-forgiveness assists, tips on/off, erase data) are in the pause menu and on the title screen. Every key colour also carries a shape (red circle, blue square, green triangle, gold diamond) above the key, on its castle and beside the key you carry.
+* REDUCED HUD (Build 67; phone: SETTINGS → CONTROLS + DATA, desktop: SETTINGS → HUD): the height plate goes - only the height, the ten-tower bar and a key you carry stay - and a screenshot taken in that mode shows no HUD at all. The HUD tab also holds SHOW COURSE SEED and SHOW BEST TIMES. The title screen has EXIT beside MORE, and the settings CHARACTER row shows a portrait of the hero you are choosing.
+* Desktop testing keys: A/D or arrows move, W/S climb, Space/Z jump, Esc pause.
+* Screenshots (Build 65): F9 on desktop, or LB + RB together on a controller (Build 66), saves the frame as a PNG to `Pictures/Upwardly/Screenshots` (or the save folder's `Screenshots` if there is no Pictures folder); every platform has TAKE SCREENSHOT in the pause menu, which captures the play view without the menu. Android keeps them in the gallery under `Pictures/Upwardly` (Android 10 and later) or in `Android/data/com.hotatticgames.climbup/files/Pictures/Screenshots`. Steam's own F12 capture is untouched.
+* Streaming (Build 66, desktop): SETTINGS → DISPLAY → STREAMER MODE keeps the run going when another window or monitor has the focus (no auto-pause; the pause menu still pauses). DISPLAY MODE steps with - / +; BORDERLESS is full screen at the monitor's size with the mouse free to reach a second monitor (the game never captures the cursor). The run clock shows days from 24 hours on (`1 DAY 02:03:04.5`).
+* Controllers (desktop): Xbox, PlayStation, Switch and the Steam Deck's own controls work out of the box with their own button glyphs; every menu is reachable on the pad. Unplugging the controller you are playing with pauses the climb; plug it back in and press RESUME.
+
+## Build and run on desktop
+```
+./gradlew :core:test                      # headless unit tests, generator + solver, persistence
+./gradlew :desktop:run                    # run the game in a window (needs OpenGL; xvfb-run works for headless screenshots)
+./gradlew :android:assembleDebug -PwithAndroid   # Android APK (needs the Android SDK)
+```
+Test hooks (system properties): `-Dclimb.demo=true` (autopilot plays), `-Dclimb.start=title|settings|credits|play`, `-Dclimb.seed=N -Dclimb.startHeight=M` (begin partway up), `-Dclimb.hazard=CANNON|SAW_V|SPIKE_TRAP|SPIKE_DROP|SPRING|GATE|KEY|CRAB|CLUB|SEESAW|BRIDGE|RAMP` (`-Dclimb.rampSkin=0..3`, `-Dclimb.spaceFast=true`, `-Dclimb.spaceFreeze=0..1`) (start beside the first one),
+`-Dclimb.shots=DIR -Dclimb.shotCount=N` (numbered PNG screenshots), `-Dclimb.overlay=pause`, `-Dclimb.camDist=4.2` (close-up camera), `-Dclimb.w/-Dclimb.h`.
+
+## Layout
+`core/` game (sim = pure-Java rules, render = libGDX 3D, ui/audio/screens) · `desktop/` LWJGL3 launcher + content tools · `android/` launcher, manifest, icons ·
+`assets/` models, the player model (hero), audio, data (`data/tuning.json` holds every movement/generator number), `pack/` (hazard, castle, key, crab and club models converted from the Quaternius pack) · `tools/` audio/icon generators · `docs/`.
+Credits and licenses: `ASSETS.md`, `assets/licenses/`, in-game Credits screen.
+
+## Updates (family test only)
+Test builds can pull gameplay-number updates (tuning.json) from the public `ota-dev` release; this is a checksum-only, TEST-ONLY updater, see [docs/OTA.md](docs/OTA.md). Builds are signed with the committed debug key so they install over each other (the first build with this key needs the old one uninstalled).

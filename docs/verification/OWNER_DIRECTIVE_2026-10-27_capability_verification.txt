@@ -1,0 +1,1539 @@
+UPWARDLY — MAJOR OWNER DIRECTIVE
+
+COMPLETE PLAYER-CAPABILITY, PHYSICS, SOLVER, AND PROCEDURAL-GENERATION VERIFICATION
+
+DISCOVER THE ENTIRE MOVEMENT SYSTEM. VERIFY EVERY MECHANICALLY DISTINCT OUTCOME. ELIMINATE BLIND SPOTS.
+
+Claude, I want to address a fundamental concern about Upwardly's procedural-generation and solvability-verification architecture.
+
+We have invested substantial development time building a system intended to determine whether a human player can physically traverse a procedurally generated course.
+
+Yet we are still discovering fundamental player abilities and traversal outcomes that the verification system does not consistently account for.
+
+Recent examples include:
+
+- A climber reaching a crumbling moving platform through a ledge catch rather than a conventional landing.
+- Individually solvable route links failing when connected into a continuous sequence.
+- Jump-pad trajectories intersecting hanging hazards one spiral revolution above.
+- Hazards placed before a jump pad not being checked against that subsequently placed pad.
+- Jump pads from neighboring slices being excluded from hazard-corridor checks.
+- Forked routes being omitted from serialized debugging fixtures.
+- Avalanche encounters passing one arrival-time proof but failing at another legitimate arrival time.
+- Moving-platform and hazard interactions changing according to the player's preceding movement state.
+
+These discoveries raise a serious architectural question:
+
+DOES OUR SOLVER ACTUALLY UNDERSTAND THE COMPLETE MOVEMENT AND INTERACTION SYSTEM OF THE GAME IT IS SUPPOSED TO VERIFY?
+
+I no longer want to discover fundamental omissions one failing seed at a time.
+
+I want a comprehensive investigation of the entire system.
+
+This is not a request to make the existing failing seeds pass and declare victory.
+
+This is a request to establish, with evidence, what our verification system actually understands, what it does not understand, and how we will eliminate the gaps.
+
+---
+
+1. THE CENTRAL REQUIREMENT
+
+The solver must understand every movement capability and mechanically distinct traversal outcome that the actual game supports.
+
+For every object, platform, obstacle, or environmental interaction, it must be capable of reasoning about the ways a player can:
+
+1. Approach it.
+2. Reach it.
+3. Contact it.
+4. Land on it.
+5. Catch or grab it.
+6. Attach to it.
+7. Move across or along it.
+8. Leave it.
+9. Jump from it.
+10. Fall from it.
+11. Be launched from it.
+12. Be knocked away from it.
+13. Recover from an interrupted movement.
+14. Interact with surrounding objects.
+15. Continue toward the next reachable destination.
+
+Not every object supports every action.
+
+Your job is to discover which actions actually exist, under what circumstances, and how they interact.
+
+Do not invent mechanics to fill gaps.
+
+The authoritative source is the actual game's implementation.
+
+THE SOLVER MUST MODEL THE GAME THAT EXISTS, NOT AN APPROXIMATION OF THE GAME THAT YOU ASSUME EXISTS.
+
+---
+
+2. FIRST: EXHAUSTIVE SOURCE-CODE DISCOVERY
+
+Before attempting broad modifications, perform a repository-wide investigation.
+
+Do not limit yourself to the files associated with the most recent failures.
+
+Inspect every relevant component involved in:
+
+- Player input.
+- Character movement.
+- Character physics.
+- Collision detection.
+- Collision resolution.
+- Jumping.
+- Falling.
+- Landing.
+- Grabbing.
+- Ledge catching.
+- Climbing.
+- Launching.
+- Bouncing.
+- Momentum.
+- Environmental forces.
+- Moving geometry.
+- Temporary platforms.
+- Hazard interactions.
+- Enemy interactions.
+- Procedural course generation.
+- Local traversal proofs.
+- Whole-slice traversal proofs.
+- Full-course solver execution.
+- Difficulty-specific movement settings.
+- Simulation state.
+- Save/resume behavior.
+- Course serialization.
+- Deterministic replay.
+- Test-fixture construction.
+- Cross-platform numerical behavior.
+
+Known starting points include the relevant implementations in:
+
+- "Sim"
+- "Autopilot"
+- "CourseGenerator"
+- "CourseIO"
+- "RunSnapshot"
+- "Element"
+- "Tuning"
+
+But do not assume those files contain everything.
+
+Search the entire repository for relevant implementations, state transitions, collision branches, input handling, and movement modifiers.
+
+Follow references into additional classes and modules.
+
+Identify the actual gameplay implementations and any duplicated, approximated, or separately maintained equivalents used by the solver.
+
+Required deliverable
+
+Create a version-controlled document:
+
+"docs/verification/PLAYER_MOVEMENT_CAPABILITY_INVENTORY.md"
+
+For every discovered mechanic, include:
+
+- Unique mechanic identifier.
+- Name and description.
+- Source file.
+- Relevant method or implementation.
+- Activation requirements.
+- Valid starting states.
+- Movement or collision behavior.
+- Possible resulting states.
+- Interactions with other mechanics.
+- Applicable characters and difficulty modes.
+- Whether the authoritative solver understands it.
+- Whether generation proofs understand it.
+- Existing test evidence.
+- Missing verification coverage.
+
+Do not mark a mechanic as covered simply because its name appears in solver code.
+
+Coverage requires behavioral evidence.
+
+---
+
+3. BUILD A COMPLETE PLAYER MOVEMENT STATE MODEL
+
+The player is not merely ON or OFF a platform.
+
+The player has a physical and gameplay state.
+
+Identify every state variable that can materially affect traversal.
+
+At minimum, investigate:
+
+Position
+
+- Horizontal position.
+- Vertical position.
+- Position relative to the tower.
+- Position relative to the current platform.
+- Position relative to nearby geometry.
+- Floating-origin representation.
+- Collision-body position.
+
+Motion
+
+- Horizontal velocity.
+- Vertical velocity.
+- Acceleration.
+- Gravity.
+- External impulses.
+- Momentum retention.
+- Movement direction.
+- Direction changes.
+- Jump initiation timing.
+- Jump release or hold behavior, if applicable.
+
+Contact
+
+- Grounded.
+- Airborne.
+- Ledge catching.
+- Hanging.
+- Climbing.
+- Touching moving geometry.
+- Contacting hazards.
+- Being carried by a platform.
+- Recovering from a collision.
+- Any other actual state discovered in source.
+
+Temporary Conditions
+
+- Input lockouts.
+- Invulnerability.
+- Knockback.
+- Jump cooldowns.
+- Coyote time.
+- Temporary movement restrictions.
+- Launch states.
+- Bounce states.
+- Falling recovery.
+- Relevant character-specific abilities.
+
+Environmental State
+
+- Moving-platform position.
+- Moving-platform direction.
+- Moving-platform phase.
+- Platform crumbling status.
+- Hazard timing.
+- Hazard position and velocity.
+- Enemy state.
+- Avalanche state.
+- Physics interactions.
+- Active encounter boundaries.
+- Relevant cooldowns.
+
+Determine which variables genuinely influence future traversal.
+
+Do not unnecessarily multiply solver states using variables that have no effect on reachability.
+
+But do not discard a variable that changes a possible landing, jump, catch, or continuation.
+
+Required deliverable
+
+Create:
+
+"docs/verification/PLAYER_REACHABLE_STATE_MODEL.md"
+
+Document which state variables must be preserved between route transitions and why.
+
+---
+
+4. DISCOVER EVERY ACTUAL MOVEMENT MECHANIC
+
+I want an exhaustive inventory derived from the source.
+
+Include every existing variation and mechanic combination that changes traversal behavior.
+
+Investigate categories such as:
+
+Ordinary Movement
+
+- Standing.
+- Running.
+- Walking.
+- Sprinting, where applicable.
+- Stopping.
+- Reversing direction.
+- Moving toward an edge.
+- Leaving an edge.
+- Midair movement.
+
+Jumping
+
+- Standing jumps.
+- Running jumps.
+- Short and long jumps where supported.
+- Jumping while retaining momentum.
+- Jumping from platform edges.
+- Jumping immediately after landing.
+- Jumping after a moving-platform ride.
+- Jumping from a temporary platform.
+- Jumping after knockback recovery.
+
+Falling and Landing
+
+- Falling directly onto a platform.
+- Falling while moving horizontally.
+- Landing near an edge.
+- Landing on moving geometry.
+- Landing on temporary geometry.
+- Landing after a bounce.
+- Landing after launch-pad propulsion.
+- Landing after enemy knockback.
+- Landing during nearby hazard activity.
+
+Grabbing and Catching
+
+- Ledge catches.
+- Fingertip catches.
+- Catching while falling.
+- Catching with horizontal momentum.
+- Catching from unusual approach angles.
+- Catching moving geometry, if supported.
+- Transitioning from a catch to climbing or standing.
+- Releasing a catch.
+- Reversing or changing movement after a catch.
+
+Launching and Bouncing
+
+- Jump pads.
+- Springs.
+- Trampolines.
+- Cannons.
+- Other launching objects.
+- Momentum before launch.
+- Launch trajectory.
+- Airborne steering.
+- Landing after launch.
+- Secondary contacts during launch.
+- Launch-to-ledge-catch transitions.
+
+Special Geometry
+
+- Moving platforms.
+- Crumbling platforms.
+- Rotating platforms.
+- Tilting surfaces.
+- Conveyor or belt surfaces.
+- Ramps.
+- Narrow footholds.
+- Branches and forks.
+- Other procedural platform types.
+
+Environmental Interactions
+
+- Enemy knockback.
+- Robot kicks.
+- Robot aerial attacks.
+- Other creature attacks.
+- Falling blocks.
+- Avalanche collisions.
+- Sliding objects.
+- Rotating hazards.
+- Timed hazards.
+- Any other environmental impulse that affects player motion.
+
+Climbing and Traversal
+
+- Ropes.
+- Cables.
+- Climbable structures.
+- Horizontal traversal systems.
+- Transfers between climbing and platform movement.
+- Any other implemented traversal capability.
+
+These are discovery categories, not assertions that every mechanic exists.
+
+For each one:
+
+VERIFY IT EXISTS IN THE CURRENT GAME BEFORE INCLUDING IT AS A SUPPORTED ABILITY.
+
+If a mechanic does not exist, record it as not applicable.
+
+If it exists but is not modeled by the solver, record a coverage failure.
+
+---
+
+5. MAP EVERY POSSIBLE TRANSITION TYPE
+
+I want a movement-transition graph.
+
+For every relevant state, identify the other states the player can legally reach.
+
+For example:
+
+GROUND → AIR
+
+AIR → GROUND
+
+AIR → LEDGE CATCH
+
+LEDGE CATCH → GROUND
+
+LEDGE CATCH → AIR
+
+GROUND → LAUNCH
+
+LAUNCH → AIR
+
+AIR → MOVING PLATFORM
+
+AIR → HAZARD KNOCKBACK
+
+KNOCKBACK → AIR
+
+And every other valid transition established by the source.
+
+Do not assume this example list is complete.
+
+Discover the actual transition graph.
+
+Then establish which transitions the solver can:
+
+- Initiate.
+- Simulate.
+- Recognize.
+- Preserve through subsequent movement.
+- Verify during continuous traversal.
+
+A transition is not fully covered merely because a solver can recognize the final position.
+
+It must also preserve relevant momentum, timing, temporary conditions, and environmental state.
+
+Required deliverable
+
+Create:
+
+"docs/verification/MOVEMENT_TRANSITION_GRAPH.md"
+
+Include a machine-readable inventory suitable for automated checks.
+
+---
+
+6. EVERY WAY ONTO AND OFF A PLATFORM
+
+This is the specific weakness I want eliminated.
+
+For each existing platform or traversable object type, discover every supported way a player can reach it and leave it.
+
+For example, a moving platform may be reachable by:
+
+- Jumping onto it.
+- Falling onto it.
+- Catching an edge.
+- Being launched onto it.
+- Being knocked onto it.
+- Walking onto it from adjacent geometry.
+
+Not every method is necessarily supported.
+
+Verify each possibility against the real physics.
+
+Then determine whether the player can subsequently:
+
+- Jump away.
+- Walk off.
+- Fall off.
+- Catch a neighboring platform.
+- Reach another platform through a launch.
+- Recover from a collision.
+- Wait for platform movement.
+- Take another valid route.
+
+For every platform category, build an entry/exit capability matrix.
+
+I WANT THE SOLVER TO UNDERSTAND THE FULL MOVEMENT RELATIONSHIP BETWEEN CONNECTED OBJECTS.
+
+Not simply whether one idealized jump works.
+
+---
+
+7. SOLVABILITY MUST BE CONTINUOUS
+
+An individually possible jump does not prove a continuous course is possible.
+
+The generator must not assume that successfully reaching a platform resets the player to an ideal condition.
+
+Example:
+
+A player completes Jump A with substantial horizontal velocity.
+
+The next jump requires an immediate reversal on a narrow platform.
+
+Jump B may be possible from a stationary centered position.
+
+But if Jump A cannot realistically deliver the player into a state from which Jump B is achievable, the combined sequence may be impossible.
+
+The solver must investigate that continuity.
+
+This applies to:
+
+- Momentum.
+- Landing position.
+- Vertical velocity.
+- Movement lockouts.
+- Moving-platform timing.
+- Hazard timing.
+- Enemy encounters.
+- Temporary platform states.
+- Cross-slice transitions.
+
+Required behavior
+
+The verification system must establish a continuous, physically valid route from the starting state to the destination.
+
+It must not manufacture an ideal state between transitions unless the player can legitimately reach that state through actual game mechanics.
+
+The route's state at the end of one transition must be compatible with the starting state of the next.
+
+If the player can legitimately stop, reposition, wait, or reset momentum, the solver should recognize that.
+
+If they cannot, the solver must not assume they can.
+
+---
+
+8. DO NOT CONFUSE PHYSICAL POSSIBILITY WITH GUARANTEED PLAYER SUCCESS
+
+I want this distinction handled correctly.
+
+A difficult section can be physically solvable even when most players will fail.
+
+That is acceptable, especially in NGH.
+
+We are not trying to guarantee success from every possible player action.
+
+There is a difference between:
+
+A. A legitimate but difficult route.
+
+A skilled player can execute a valid sequence of movements.
+
+B. An unrecoverable player mistake.
+
+The player chooses an incorrect timing or movement and falls.
+
+C. An unavoidable generator-created failure.
+
+The course requires mutually incompatible movements or produces an unavoidable collision during otherwise valid traversal.
+
+D. A solver limitation.
+
+A valid route may exist, but the solver's current search cannot find or verify it.
+
+These must be distinguished.
+
+A solver timeout is not proof that the course is impossible.
+
+A successful isolated jump is not proof that the whole course is possible.
+
+A theoretical path requiring unavailable player controls is not a valid solution.
+
+---
+
+9. USE THE AUTHORITATIVE GAME PHYSICS
+
+Inspect whether the solver and actual game use identical physics.
+
+Check:
+
+- Gravity.
+- Acceleration.
+- Maximum speed.
+- Jump velocity.
+- Air control.
+- Collision body dimensions.
+- Collision tolerances.
+- Landing rules.
+- Ledge-catching rules.
+- Launch impulses.
+- Bounce behavior.
+- Platform movement.
+- Hazard interactions.
+- Knockback.
+- Cooldowns.
+- Floating-point precision.
+- Update ordering.
+- Simulation timestep.
+
+Where possible, use the existing authoritative simulation rather than maintaining separate approximations.
+
+If an approximation is necessary for planning performance, it must be verified against the authoritative simulation before accepting a route.
+
+The final solvability witness must execute in the actual simulation.
+
+DO NOT ALLOW THE SOLVER AND GAME TO DEVELOP DIFFERENT PHYSICAL REALITIES.
+
+---
+
+10. INVESTIGATE THE SOLVER'S SEARCH COMPLETENESS
+
+Examine how "Autopilot" and associated proof systems search possible movements.
+
+Determine whether they consider sufficiently diverse:
+
+- Launch positions.
+- Movement speeds.
+- Jump timings.
+- Release timings.
+- Air-control inputs.
+- Landing positions.
+- Ledge catches.
+- Alternative platform contacts.
+- Waiting periods.
+- Moving-platform phases.
+- Hazard phases.
+- Recovery movements.
+- Route branches.
+- Traversal sequences.
+
+Identify any hardcoded movement templates.
+
+A scripted movement template can be useful, but it must not be mistaken for a complete description of player capabilities.
+
+If the solver only considers three ways to jump, but the player can execute a fourth physically distinct class of jump, that is a coverage gap.
+
+If a valid solution requires a ledge catch, the solver must recognize that possibility.
+
+If a solver rejects a course because its search is incomplete, it must not claim that the course is physically impossible.
+
+---
+
+11. BUILD A BOUNDED REACHABILITY SYSTEM
+
+I understand that continuous positions, velocities, and timings produce effectively infinite mathematical combinations.
+
+I am not asking you to brute-force an infinite state space.
+
+I am requiring systematic coverage of the physically meaningful possibilities.
+
+Investigate a bounded reachability model that can explore representative states using actual gameplay physics.
+
+Consider:
+
+- Reachable-state propagation.
+- Equivalence classes.
+- Bounded search.
+- State dominance.
+- Representative arrival conditions.
+- Alternative movement transitions.
+- Boundary-value exploration.
+- Temporal phase exploration.
+- Relevant event-based state changes.
+
+For example, two arrival states may be equivalent if all future reachable outcomes are effectively identical.
+
+But two arrival states should not be treated as equivalent if one can make the next jump and the other cannot.
+
+Do not collapse states merely because they share the same platform identifier.
+
+Preserve distinctions that affect reachability.
+
+Use bounded computational resources and deterministic traversal ordering.
+
+If you cannot verify a case within those bounds, report it as unresolved rather than pretending it was covered.
+
+---
+
+12. THREE EXPLICIT VERIFICATION OUTCOMES
+
+Every solver evaluation must distinguish:
+
+PROVEN SOLVABLE
+
+A complete, physically valid witness trajectory exists and has been reproduced through the authoritative simulation.
+
+PROVEN UNSOLVABLE
+
+The defined starting-state set and movement model have been exhaustively or soundly analyzed within explicitly documented bounds, with no valid solution.
+
+Do not use this classification merely because the solver timed out or failed to find a route.
+
+UNKNOWN / NOT ESTABLISHED
+
+The solver could not establish solvability or unsolvability.
+
+Reasons may include:
+
+- Search exhaustion.
+- Timeout.
+- Missing mechanic coverage.
+- Insufficient state exploration.
+- Unsupported interactions.
+- Incomplete environmental modeling.
+- Incompatible test fixtures.
+- Other unverified assumptions.
+
+Do not silently convert UNKNOWN into PASS.
+
+Do not silently convert UNKNOWN into IMPOSSIBLE.
+
+The generator's acceptance policy must be explicit, conservative, and traceable.
+
+---
+
+13. AUDIT EVERY COLLISION AND CONTACT OUTCOME
+
+The solver cannot understand traversal without understanding collision behavior.
+
+Inspect every collision category in the actual game.
+
+At minimum:
+
+- Player versus static platform.
+- Player versus moving platform.
+- Player versus rotating or tilting platform.
+- Player versus temporary platform.
+- Player versus narrow ledge.
+- Player versus wall or vertical surface.
+- Player versus jump pad.
+- Player versus spring.
+- Player versus spike block.
+- Player versus moving hazard.
+- Player versus falling hazard.
+- Player versus enemy.
+- Player versus avalanche block.
+- Hazard versus platform.
+- Hazard versus hazard.
+- Moving object versus moving object.
+
+For each actual collision type, establish:
+
+- When collision occurs.
+- What collision normal is used.
+- How velocity changes.
+- Whether the player lands, catches, bounces, falls, or takes damage.
+- Whether contact changes future movement capability.
+- Whether the solver correctly preserves that resulting state.
+- Whether collision ordering can alter the outcome.
+
+Inspect special cases around platform edges and object corners.
+
+Include collision checks across spiral revolutions and neighboring slices.
+
+Do not assume objects separated in route index are physically separated in world space.
+
+---
+
+14. AUDIT THE PROCEDURAL GENERATOR'S COMPLETE PLACEMENT PIPELINE
+
+Now investigate the other side of the architecture.
+
+The solver may understand movement perfectly and still receive impossible geometry from the generator.
+
+Trace the entire placement lifecycle.
+
+For every platform, hazard, or encounter type:
+
+1. Where is the placement proposed?
+2. What geometry is available?
+3. What collision checks run?
+4. What fairness checks run?
+5. What traversal checks run?
+6. Can later placements invalidate earlier proofs?
+7. Can earlier placements invalidate later movement?
+8. Are branch routes checked?
+9. Are neighboring slices checked?
+10. Are previous and future spiral revolutions checked?
+11. Are moving-object trajectories checked?
+12. Are hazard trajectories checked?
+13. Is the final assembled slice audited?
+14. Is the final assembled course verified?
+
+Pay particular attention to placement-order dependence.
+
+A corridor can be clear when a jump pad is placed but obstructed by a hazard added afterward.
+
+Conversely, an earlier hazard may block a jump pad added later.
+
+The final validation must reflect the complete assembled geometry, not merely the conditions that existed when individual objects were created.
+
+Required deliverable
+
+Create:
+
+"docs/verification/GENERATOR_PLACEMENT_AND_PROOF_AUDIT.md"
+
+List every object type and its validation path.
+
+Identify missing or bypassable checks.
+
+---
+
+15. AUDIT ALL HAZARD AND ENCOUNTER TIMING
+
+A course can be physically passable at one moment and impossible at another.
+
+Identify every relevant timing-dependent mechanic.
+
+Examples include:
+
+- Moving platforms.
+- Saw cycles.
+- Cannons.
+- Mortars.
+- Spike-drop rows.
+- Avalanches.
+- Enemy pursuit.
+- Enforcer aerial attacks.
+- Crumbling platforms.
+- Rotating geometry.
+- Temporary obstacles.
+
+For each actual timed mechanic, determine:
+
+- Its initial state.
+- Whether timing depends on the seed.
+- Whether timing depends on player arrival.
+- Whether timing depends on a trigger.
+- Whether the player can wait safely.
+- Whether the player can recover from poor timing.
+- Whether a valid crossing window exists.
+- Whether the solver explores that window.
+- Whether prior movement changes the arrival phase.
+
+Preserve genuine timed challenges.
+
+NGH is allowed to require excellent timing.
+
+However, the solver must not claim success based on a timing assumption the player cannot realistically satisfy.
+
+Use representative, bounded timing exploration and boundary cases.
+
+If a crossing is only verified for some arrival phases, report that explicitly.
+
+Do not describe it as universally safe.
+
+---
+
+16. AUDIT INTERACTIONS BETWEEN MECHANICS
+
+Testing every mechanic individually is insufficient.
+
+Many of our recent failures involve interactions between systems.
+
+I want a systematic interaction inventory.
+
+Examples:
+
+- Moving platform + ledge catch.
+- Jump pad + hanging spike block.
+- Cannon + moving platform.
+- Spring + moving hazard.
+- Ledge catch + crumbling surface.
+- Conveyor + jump.
+- Enemy knockback + platform edge.
+- Avalanche + moving platform.
+- Avalanche + player arrival phase.
+- Enforcer aerial swat + player jump.
+- Rope exit + nearby hazard.
+- Fork branch + jump pad.
+- Previous-slice hazard + current-slice launch.
+- Spiral revolution overlap + moving geometry.
+
+These are examples, not a complete list.
+
+Discover the actual combinations supported by the game.
+
+Build a mechanic-interaction matrix.
+
+Test all meaningful pairs and use targeted higher-order tests where three or more mechanics share state, timing, geometry, or collision behavior.
+
+Include high-risk combinations even if they are uncommon.
+
+Do not attempt meaningless Cartesian-product testing of unrelated systems.
+
+Prioritize interactions based on actual physical dependencies.
+
+---
+
+17. AUDIT ROUTE BRANCHES AND FORKS
+
+The discovery that "CourseIO" omitted fork information is especially concerning.
+
+The solver must not lose part of the generated course when creating a debugging fixture.
+
+Inspect all course serialization and reconstruction paths.
+
+Verify preservation of:
+
+- Main route geometry.
+- Branch geometry.
+- Fork connections.
+- Platform identifiers.
+- Object relationships.
+- Hazard anchors.
+- Moving-platform state.
+- Timing parameters.
+- Seeded variation.
+- Relevant environmental state.
+- Cross-slice references.
+
+Create round-trip equivalence tests.
+
+A course serialized to a fixture and reloaded must retain the physical and logical information necessary to reproduce the same traversal.
+
+If a fixture is missing information, the test should fail loudly.
+
+Do not permit a corrupted or incomplete fixture to produce misleading solver conclusions.
+
+---
+
+18. AUDIT CROSS-SLICE CONTINUITY
+
+A slice is not an isolated universe.
+
+Inspect interactions between:
+
+- Previous slice and current slice.
+- Current slice and next slice.
+- Neighboring spiral revolutions.
+- Overlapping world-space geometry.
+- Active hazards crossing slice boundaries.
+- Moving platforms near boundaries.
+- Persistent enemy state.
+- Persistent avalanche state.
+- Player momentum across boundaries.
+
+The player must retain their legitimate physical state when entering the next slice.
+
+The solver must not silently reset:
+
+- Velocity.
+- Position.
+- Timing.
+- Movement mode.
+- Active collisions.
+- Encounter state.
+- Relevant cooldowns.
+
+Verify these properties against the authoritative simulation.
+
+---
+
+19. AUDIT SAVE/RESUME AND DETERMINISM
+
+We previously found a save/resume issue caused by inconsistent floating-origin reconstruction.
+
+That repair must remain protected.
+
+Now verify whether any other state required for traversal is omitted from save/resume, replay, or test serialization.
+
+Include:
+
+- Player motion.
+- Grounding.
+- Ledge-catching state.
+- Moving-platform phase.
+- Hazard timing.
+- Active encounters.
+- Enemy behavior.
+- Avalanche state.
+- Temporary movement restrictions.
+- RNG state where relevant.
+- World position and floating origin.
+
+A resumed run must behave consistently with an uninterrupted run under identical subsequent inputs.
+
+Establish bit-exact equivalence where the game's deterministic contract requires it.
+
+Document any unavoidable, explicitly permitted differences.
+
+Do not allow incomplete serialization to undermine solver evidence.
+
+---
+
+20. BUILD AUTOMATED COVERAGE TESTS
+
+I do not want this investigation to produce only a document.
+
+It must produce lasting automated verification.
+
+Create focused tests for:
+
+- Every confirmed movement-state transition.
+- Every meaningful platform entry/exit category.
+- Every important collision outcome.
+- Representative mechanic interactions.
+- Continuous-route arrival-state behavior.
+- Cross-slice continuity.
+- Timed-hazard arrival phases.
+- Branch and fork serialization.
+- Save/resume.
+- Determinism.
+- Known historical failures.
+
+Where practical, add:
+
+- Property-based tests.
+- Boundary-condition tests.
+- Seeded fuzzing.
+- Metamorphic tests.
+- Model-based transition testing.
+- Mutation checks demonstrating that tests detect deliberately introduced coverage failures.
+
+Do not merely test successful examples.
+
+Include negative cases that ensure impossible movements are rejected.
+
+A useful test should demonstrate what defect it would catch.
+
+---
+
+21. MAINTAIN A SOLVER-COVERAGE REGISTER
+
+Create:
+
+"docs/verification/SOLVER_COVERAGE_REGISTER.md"
+
+Every mechanic and interaction should have a tracked status:
+
+- VERIFIED.
+- PARTIALLY VERIFIED.
+- NOT VERIFIED.
+- NOT APPLICABLE.
+- BLOCKED.
+
+Include:
+
+- Mechanic or interaction ID.
+- Source implementation.
+- Solver implementation.
+- Test references.
+- Evidence.
+- Known limitations.
+- Responsible correction.
+- Current status.
+
+Use explicit evidence.
+
+Do not declare a mechanic VERIFIED because a few random seeds passed.
+
+A feature is verified only to the extent demonstrated by its tests or sound analysis.
+
+Report both breadth and depth of coverage.
+
+Distinguish code execution coverage from behavioral completeness.
+
+If some reachable outcomes remain unknown, disclose them.
+
+---
+
+22. PREVENT FUTURE COVERAGE REGRESSIONS
+
+This audit must improve our future development process.
+
+Whenever a new movement mechanic is introduced or an existing one changes, require an explicit verification impact review.
+
+The process should determine whether changes affect:
+
+- Player-state modeling.
+- Movement transitions.
+- Collision outcomes.
+- Solver search.
+- Course generation.
+- Placement validation.
+- Difficulty reporting.
+- Replay.
+- Save/resume.
+- Determinism.
+
+Add an automated or review-enforced gate so that new movement types cannot quietly appear without corresponding solver coverage.
+
+Do not rely on a developer remembering to update the solver manually.
+
+Make omissions visible.
+
+---
+
+23. PROTECT EXISTING GAME DESIGN
+
+This is a verification-system project.
+
+It is not permission to redesign Upwardly.
+
+Preserve:
+
+NORMAL
+
+- Approved difficulty progression.
+- Approved terrain and hazard balance.
+- Approved mechanic variety.
+- No Enforcers.
+- Existing approved avalanche behavior.
+
+PUNISHER
+
+- Approved difficulty progression.
+- Approved encounter frequency.
+- Existing robot tier distribution.
+- Existing avalanche rules.
+- Approved terrain and hazard balance.
+
+NOT GONNA HAPPEN
+
+- Capacity-aware hazard progression.
+- NGH-specific placement adaptation.
+- RED-only Enforcers.
+- Chaotic avalanche physics.
+- Intended escalating difficulty.
+- Approved variety objectives.
+
+Shared repairs to genuine physics, collision, solvability, serialization, and fairness defects are authorized when demonstrated necessary.
+
+Do not artificially weaken courses merely to make the solver pass.
+
+Do not alter diagnostic scoring weights to manufacture improvements.
+
+Do not relax validation standards.
+
+Do not introduce unrelated gameplay features.
+
+---
+
+24. INTEGRATE WITH THE CURRENT DEVELOPMENT WORK
+
+This directive applies to the current Rules 14 stabilization work.
+
+It must not erase or discard work already completed.
+
+Known issues currently include:
+
+- PUNISHER whole-slice arrival-state failures.
+- NORMAL pad/hazard corridor validation.
+- Fork serialization.
+- Cross-slice hazard clearance.
+- NGH timed-avalanche arrival proofs.
+- NGH capacity-aware hazard placement.
+- Enforcer jump judgment and landing recovery.
+- Deterministic replay and floating-origin preservation.
+
+Incorporate the confirmed fixes and evidence into the audit.
+
+Do not reproduce work unnecessarily.
+
+Continue active focused debugging where it already supports these requirements.
+
+Do not start conflicting parallel implementations.
+
+Where this audit reveals a genuine new defect, create a reproducible regression case and fix the underlying mechanism.
+
+Prioritize shared architectural defects over seed-specific symptoms.
+
+---
+
+25. VERIFY THE HISTORICAL FAILURES AGAINST THE NEW MODEL
+
+The following historical cases must remain part of regression coverage:
+
+- NORMAL seed 3, slice 53: pad-to-hanging-hazard collision.
+- PUNISHER seed 1, slice 45: continuous-slice failure.
+- PUNISHER seed 2, slice 19: continuous-slice failure.
+- PUNISHER seed 2, slice 47: continuous-slice failure.
+- Original Rules 13 PUNISHER seed 5, slice 64: continuous-slice failure.
+- NGH seed 1, slice 10: avalanche arrival-time failure.
+- NGH seed 1, slice 49: reported spiral geometry issue.
+- RED Enforcer aerial swat: missing landing evaluation and neighboring-platform recovery.
+- Forked-route fixture serialization.
+- Save/resume floating-origin mismatch.
+- Previously identified unfair saw takeoff conditions.
+
+For each, establish:
+
+1. Original failure mechanism.
+2. Applicable correction.
+3. Reproduction before correction.
+4. Verification after correction.
+5. Whether the correction addresses the general class of failure.
+
+If a reported issue was a diagnostic false positive, prove that through the actual geometry and record why the reporting system misclassified it.
+
+Do not silently remove false-positive cases from the test suite.
+
+---
+
+26. PERFORMANCE AND COMPUTATIONAL LIMITS
+
+This investigation must not create an impractical solver.
+
+The game needs to run on Android, Windows, Linux, and Steam Deck.
+
+The reporting and generation system must remain computationally bounded.
+
+Measure:
+
+- Solver execution time.
+- States explored.
+- States pruned.
+- Search branching.
+- Memory consumption.
+- Worst-case slice costs.
+- Timeout frequency.
+- Unknown outcomes.
+- Impact of additional movement transitions.
+- Impact of additional timing exploration.
+
+When state-space growth becomes excessive, investigate principled reductions.
+
+For example:
+
+- Equivalent-state merging.
+- Dominance rules.
+- Reachability bounds.
+- Geometry-based pruning.
+- Event-based simulation.
+- Cached deterministic transitions.
+
+Every reduction must preserve the distinctions necessary for correct reachability conclusions.
+
+Do not silently eliminate valid movement possibilities for performance.
+
+If a computational limit prevents verification, record UNKNOWN.
+
+Performance is a requirement, but correctness comes first.
+
+---
+
+27. DO NOT CLAIM MATHEMATICAL COMPLETENESS WITHOUT PROOF
+
+I want the system to discover and account for every movement outcome that materially affects gameplay.
+
+But I also want accuracy in reporting.
+
+Do not claim that every mathematical trajectory has been examined unless that statement is rigorously justified.
+
+Instead, report:
+
+- All mechanics discovered.
+- All transition categories discovered.
+- All interaction categories identified.
+- All source branches relevant to movement and collision.
+- All verified behavioral classes.
+- All remaining uncovered branches.
+- All known solver limitations.
+- All unknown or unproven outcomes.
+- Exact computational bounds.
+
+Where exhaustive verification is feasible, perform it.
+
+Where continuous-state complexity prevents exhaustive proof, use systematic bounded exploration and clearly state the remaining limits.
+
+I WILL ACCEPT AN HONESTLY IDENTIFIED LIMITATION.
+
+I WILL NOT ACCEPT A FALSE CLAIM OF COMPLETE COVERAGE.
+
+---
+
+28. ESTABLISH A PERMANENT GENERATOR ACCEPTANCE CONTRACT
+
+The generator and solver must have a clearly defined verification contract.
+
+Before a procedural section is accepted, establish that:
+
+1. Required geometry is valid.
+2. Collision constraints are satisfied.
+3. Placement rules are satisfied.
+4. Required movement corridors are clear.
+5. Dynamic hazards have valid timing behavior.
+6. Route connections are physically possible.
+7. A continuous route witness exists where the contract requires one.
+8. The authoritative simulation reproduces that witness.
+9. The relevant player state is preserved between transitions.
+10. Required neighboring-slice interactions are checked.
+11. Route branches and forks are represented correctly.
+12. No necessary proof depends on invented physics.
+13. No UNKNOWN outcome is silently treated as a verified PASS.
+
+The contract must distinguish geometry integrity, physical solvability, timing fairness, human execution difficulty, and search completeness.
+
+These are related but different properties.
+
+Define which properties are mandatory gates for generated courses, and identify any that require owner decisions.
+
+Do not invent new balancing policies.
+
+---
+
+29. REQUIRED IMPLEMENTATION ORDER
+
+Use the following sequence.
+
+PHASE 1 — DISCOVERY
+
+Inventory actual movement, collision, environment, and state behavior.
+
+Inspect the relevant repository implementations.
+
+Identify every solver approximation and missing mechanic.
+
+Produce the capability inventory and transition graph.
+
+PHASE 2 — COVERAGE MAPPING
+
+Build the platform entry/exit matrix and interaction matrix.
+
+Map movement mechanics to solver behavior.
+
+Identify missing checks and unsupported transitions.
+
+PHASE 3 — ARCHITECTURAL CORRECTIONS
+
+Fix confirmed discrepancies.
+
+Reuse authoritative physics.
+
+Correct continuity and serialization gaps.
+
+Strengthen final assembled-course proof where justified.
+
+Preserve previously approved game behavior.
+
+PHASE 4 — TARGETED VERIFICATION
+
+Test the discovered movement classes and relevant combinations.
+
+Verify historical failures.
+
+Exercise boundary conditions.
+
+Verify deterministic behavior.
+
+Demonstrate that tests detect known failure mechanisms.
+
+PHASE 5 — PERFORMANCE AND COMPLETENESS REPORT
+
+Measure the computational cost.
+
+Report verified coverage and unresolved gaps.
+
+Ensure the verification architecture is practical.
+
+PHASE 6 — CAMPAIGN READINESS
+
+Only after the relevant shared defects are resolved, determine whether the corrected source is ready to be frozen.
+
+Then proceed with the already authorized full-course simulation campaigns.
+
+Do not run expensive full-course campaigns repeatedly while known foundational verification defects remain.
+
+---
+
+30. EXISTING CAMPAIGN AND RELEASE RESTRICTIONS
+
+The existing development schedule remains in effect.
+
+Campaign A must provide trustworthy full-course evidence for:
+
+- NORMAL seeds 1–5.
+- PUNISHER seeds 1–5.
+
+NGH Round 2 remains:
+
+Five seeds: 1, 2, 3, 4, and 5.
+
+5,000 meters each.
+
+Full authoritative solver.
+
+This remains Round 2 of the three authorized NGH development rounds.
+
+Do not automatically begin Round 3.
+
+Do not create additional large simulation campaigns without owner authorization.
+
+Reuse valid CI evidence when the source and verification assumptions remain applicable.
+
+Run focused tests rather than redundant whole-suite campaigns where possible.
+
+BUILD 82 RESTRICTION
+
+No packaging.
+
+No APK release.
+
+No desktop release.
+
+No Steam release.
+
+No OTA publication.
+
+No main-branch merge.
+
+Build 82 remains on hold until all three NGH rounds are complete and I expressly authorize packaging.
+
+---
+
+31. REQUIRED FINAL DOCUMENTATION
+
+Create and maintain these repository documents:
+
+1. "docs/verification/PLAYER_MOVEMENT_CAPABILITY_INVENTORY.md"
+2. "docs/verification/PLAYER_REACHABLE_STATE_MODEL.md"
+3. "docs/verification/MOVEMENT_TRANSITION_GRAPH.md"
+4. "docs/verification/GENERATOR_PLACEMENT_AND_PROOF_AUDIT.md"
+5. "docs/verification/SOLVER_COVERAGE_REGISTER.md"
+6. "docs/verification/SOLVER_VERIFICATION_ARCHITECTURE.md"
+7. "docs/verification/VERIFICATION_GAPS_AND_CORRECTIONS.md"
+
+Additionally, maintain machine-readable coverage data suitable for automated testing.
+
+Ensure each major claim links to actual code, test evidence, or a documented limitation.
+
+Do not create impressive-looking documentation without verifying the claims.
+
+---
+
+32. FINAL OWNER REPORT
+
+When the audit and associated corrections reach a meaningful completion point, answer these questions directly.
+
+PLAYER CAPABILITIES
+
+1. How many distinct movement mechanics does Upwardly actually implement?
+2. How many distinct movement-state transitions exist?
+3. Does the solver understand every discovered mechanic?
+4. Which mechanics were previously missing?
+5. Which mechanics are still incompletely covered?
+
+PLATFORMS AND TRAVERSAL
+
+6. Does the solver know every supported way onto each platform type?
+7. Does it know every supported way off?
+8. Does it understand ledge catching?
+9. Does it preserve momentum and timing?
+10. Does it understand combined mechanics?
+11. Does it understand neighboring platforms and spiral revolutions?
+
+COURSE VERIFICATION
+
+12. Can it verify continuous traversal through a full slice?
+13. Can it verify traversal across slice boundaries?
+14. Can it detect when isolated jumps are individually solvable but the complete sequence is not?
+15. Can it distinguish a genuinely impossible course from a search failure?
+16. Does it reproduce its successful routes in authoritative gameplay physics?
+
+ENVIRONMENT
+
+17. Does it account for all relevant hazard interactions?
+18. Does it account for moving platforms and timing?
+19. Does it account for knockback?
+20. Does it account for timed avalanches?
+21. Does it account for branch routes and forks?
+22. Does it verify final geometry after all placements?
+
+RELIABILITY
+
+23. Does serialization preserve all required course information?
+24. Does save/resume preserve all traversal-relevant state?
+25. Does deterministic replay remain valid?
+26. What is the runtime and memory cost of the stronger verification?
+27. Which historical failures are now prevented by general regression tests?
+
+COMPLETENESS
+
+28. What percentage of discovered movement-transition categories has verified behavioral coverage?
+29. What percentage of identified high-risk interaction categories has verified coverage?
+30. What remains UNKNOWN?
+31. What would be required to close those gaps?
+32. Which guarantees are rigorous, and which are based on bounded testing?
+
+Do not combine incomplete and complete coverage into one misleading percentage.
+
+---
+
+33. DEVELOPMENT EFFICIENCY AND CONTEXT PRESERVATION
+
+This is a substantial architectural audit.
+
+Perform the work in organized, verifiable stages.
+
+Use focused parallel investigation where useful, but avoid multiple agents independently rewriting the same systems.
+
+Do not burn development resources on repetitive tests that cannot provide new evidence.
+
+Record findings as they are confirmed.
+
+Commit completed, tested improvements with clear provenance.
+
+Keep active work and unfinished corrections distinguishable from validated code.
+
+Update the project handoff and recovery documentation.
+
+Maintain recovery checkpoints before Claude's observed context-compaction threshold of approximately 80%.
+
+A context reset must not cause completed investigations to be repeated or settled owner decisions to be reopened.
+
+Continue from the documented evidence.
+
+If a major architectural change appears necessary, explain the measured problem, the proposed correction, and its impact before making an unnecessarily broad rewrite.
+
+Do not use this directive as permission for uncontrolled refactoring.
+
+---
+
+FINAL OWNER DIRECTIVE
+
+The procedural-generation system is supposed to determine whether the player can physically traverse the generated course.
+
+That is one of its most important responsibilities.
+
+I do not want to continue discovering that the player can perform another fundamental movement that the verification system never considered.
+
+I want you to inspect the actual game and establish a complete, evidence-backed model of its movement capabilities.
+
+EVERY REAL MOVEMENT MECHANIC.
+
+EVERY MECHANICALLY DISTINCT WAY TO REACH AN OBJECT.
+
+EVERY MECHANICALLY DISTINCT WAY TO LEAVE IT.
+
+EVERY IMPORTANT COLLISION OUTCOME.
+
+EVERY RELEVANT MOVEMENT-STATE TRANSITION.
+
+EVERY INTERACTION THAT CAN CHANGE WHETHER THE NEXT TRANSITION IS POSSIBLE.
+
+EVERY IMPORTANT CONTINUOUS-ROUTE AND CROSS-SLICE DEPENDENCY.
+
+You must demonstrate that the solver accounts for those possibilities—or explicitly document what remains unverified.
+
+Do not confuse passing seeds with complete solver coverage.
+
+Do not confuse isolated solvability with continuous solvability.
+
+Do not confuse a solver timeout with physical impossibility.
+
+Do not weaken the game's difficulty to hide solver deficiencies.
+
+Do not invent physics.
+
+Do not claim exhaustive proof where none exists.
+
+The goal is a verification architecture that understands Upwardly's actual movement system and can provide reproducible evidence that generated routes are physically traversable.
+
+STOP PATCHING INDIVIDUAL SEEDS AS A SUBSTITUTE FOR UNDERSTANDING THE COMPLETE SYSTEM.
+
+Fix the general architectural weaknesses.
+
+Preserve NORMAL and PUNISHER's approved balancing.
+
+Preserve NGH's intended brutality and capacity-aware hazard progression.
+
+Complete the Enforcer intelligence work.
+
+Protect all legitimate fairness repairs.
+
+Establish lasting automated verification.
+
+Then return to the authorized simulation campaigns with a substantially stronger foundation.
+
+I AM EXPECTING A COMPREHENSIVE ENGINEERING INVESTIGATION, NOT ANOTHER ROUND OF GUESSES.
+
+Build 82 remains on hold.
+
+BEGIN THE AUDIT, DOCUMENT THE ACTUAL SYSTEM, CLOSE THE VERIFIED GAPS, AND REPORT THE EVIDENCE.

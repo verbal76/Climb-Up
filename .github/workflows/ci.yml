@@ -1,0 +1,41 @@
+name: CI (validation only)
+# Lightweight push/PR validation (studio standard §9/§16): runs the gameplay + rules + persistence + OTA regression
+# suite on a single Linux runner and PUBLISHES NOTHING - no APK, no EXE, no Linux package, no release, no OTA, no Steam.
+# Numbered releases are produced only by the explicitly owner-triggered android.yml (APK) and windows.yml (Windows+Linux).
+on:
+  push:
+    branches: [ccr-cb458cd1-w4dh5c, build-74-determinism]
+  pull_request:
+    branches: [ccr-cb458cd1-w4dh5c]
+permissions:
+  contents: read
+jobs:
+  validate:
+    # One validation per commit (2026-10-28: a push to build-74-determinism also fired PR #9's pull_request run on the same commit, two identical
+    # ~3 h suites). A pull_request run is skipped when its head branch is one this workflow already validates on push; other PRs still get it.
+    if: github.event_name != 'pull_request' || !contains(fromJSON('["ccr-cb458cd1-w4dh5c","build-74-determinism"]'), github.head_ref)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '17' }
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Core regression suite (sim, generator+solver, persistence, OTA protocol, rig math)
+        run: ./gradlew :core:test --no-daemon
+      - name: Desktop unit tests (input mapping, bindings, persistence, navigation, display)
+        run: ./gradlew :desktop:test --no-daemon
+      - name: Test totals
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import glob, xml.etree.ElementTree as ET
+          for mod in ('core','desktop'):
+              t=f=s=0
+              for p in glob.glob(f'{mod}/build/test-results/test/*.xml'):
+                  r=ET.parse(p).getroot(); t+=int(r.get('tests')); f+=int(r.get('failures'))+int(r.get('errors')); s+=int(r.get('skipped'))
+                  for c in r.iter('testcase'):        # each failed test by name and the first line of its message, at the end of the log where it is easy to read
+                      for bad in list(c.iter('failure')) + list(c.iter('error')):
+                          msg = (bad.get('message') or bad.get('type') or '').splitlines()
+                          print(f"TEST_FAILED {mod} {c.get('classname', '').split('.')[-1]}.{c.get('name')}: {msg[0][:300] if msg else ''}")
+              print(f'TEST_TOTALS {mod}: tests={t} failures={f} skipped={s}')
+          PY

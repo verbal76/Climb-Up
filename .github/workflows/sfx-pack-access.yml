@@ -1,0 +1,224 @@
+name: Sound pack access (verification only)
+# Never builds, packages or publishes the game. Owner (Build 78): the licensed sound pack stays on its "Sfx" release in this repository, made a
+# DRAFT so it is not publicly downloadable, and the build workflows fetch it with their own GITHUB_TOKEN (no personal token).
+# Runs only when this file is pushed to the working branch. MODE below picks what it does:
+#   verify      prove draft-release access with a THROWAWAY draft (a small random file): a contents: read token must not see it, a contents: write
+#               token must fetch it on Linux and Windows with tools/ci/fetch_pack_sfx.sh; the throwaway draft is deleted at the end
+#   make-draft  turn the owner's existing "Sfx" release into a draft (nothing deleted or moved), prove anonymous downloads now fail, and fetch +
+#               convert the pack with GITHUB_TOKEN on Linux and Windows (20 clips each)
+#   check       fetch the real pack and check its SHA-256 on Linux (no changes anywhere)
+on:
+  push:
+    branches: [build-74-determinism]
+    paths: ['.github/workflows/sfx-pack-access.yml']
+  workflow_dispatch:      # same jobs from a manual dispatch (Build 78's two publish jobs were refused only in dispatched runs)
+permissions: {}
+jobs:
+  mode:
+    runs-on: ubuntu-latest
+    outputs:
+      mode: ${{ steps.m.outputs.mode }}
+    steps:
+      - id: m
+        run: echo "mode=check" >> "$GITHUB_OUTPUT"      # done 2026-10-23: verify (run 40002288773), make-draft (run 40002427931)
+
+  # ---------------- verify: a throwaway draft release
+  test-draft:
+    needs: mode
+    if: needs.mode.outputs.mode == 'verify'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      release: ${{ steps.mk.outputs.release }}
+      asset: ${{ steps.mk.outputs.asset }}
+      sha: ${{ steps.mk.outputs.sha }}
+      tag: ${{ steps.mk.outputs.tag }}
+    steps:
+      - id: mk
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -e
+          TAG="pack-access-test-${{ github.run_id }}"
+          head -c 65536 /dev/urandom > probe.bin
+          SHA=$(sha256sum probe.bin | cut -d' ' -f1)
+          REL=$(gh api -X POST "repos/$REPO/releases" -f tag_name="$TAG" -f name="pack access test (throwaway draft, deleted by this run)" -f target_commitish="${{ github.sha }}" -F draft=true -q .id)
+          AID=$(gh api -X POST "https://uploads.github.com/repos/$REPO/releases/$REL/assets?name=probe.bin" -H "Content-Type: application/octet-stream" --input probe.bin -q .id)
+          echo "throwaway draft $TAG (release $REL, asset $AID, sha256 $SHA)"
+          { echo "release=$REL"; echo "asset=$AID"; echo "sha=$SHA"; echo "tag=$TAG"; } >> "$GITHUB_OUTPUT"
+
+  read-only-linux:
+    needs: test-draft
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: A contents-read GITHUB_TOKEN must NOT reach the draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SFX_TEST_TAG: ${{ needs.test-draft.outputs.tag }}
+          SFX_TEST_ASSET: probe.bin
+          SFX_TEST_SHA: ${{ needs.test-draft.outputs.sha }}
+        run: |
+          if tools/ci/fetch_pack_sfx.sh --check; then echo "::error::a contents: read token fetched a draft release asset"; exit 1; fi
+          echo "RESULT read-only list+fetch: refused (as expected)"
+          CODE=$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/octet-stream" "https://api.github.com/repos/$REPO/releases/assets/${{ needs.test-draft.outputs.asset }}")
+          echo "RESULT read-only direct asset download by id: HTTP $CODE"
+          CODE=$(curl -s -o /dev/null -w '%{http_code}' -H "Accept: application/octet-stream" "https://api.github.com/repos/$REPO/releases/assets/${{ needs.test-draft.outputs.asset }}")
+          echo "RESULT anonymous direct asset download by id: HTTP $CODE"
+          [ "$CODE" != 200 ] || { echo "::error::anonymous download of a draft asset succeeded"; exit 1; }
+
+  write-linux:
+    needs: test-draft
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: A contents-write GITHUB_TOKEN fetches the draft asset (Linux; the Android build job runs the same script on Linux)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SFX_TEST_TAG: ${{ needs.test-draft.outputs.tag }}
+          SFX_TEST_ASSET: probe.bin
+          SFX_TEST_SHA: ${{ needs.test-draft.outputs.sha }}
+        run: tools/ci/fetch_pack_sfx.sh --check && echo "RESULT write token Linux OK"
+
+  write-windows:
+    needs: test-draft
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: A contents-write GITHUB_TOKEN fetches the draft asset (Windows)
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SFX_TEST_TAG: ${{ needs.test-draft.outputs.tag }}
+          SFX_TEST_ASSET: probe.bin
+          SFX_TEST_SHA: ${{ needs.test-draft.outputs.sha }}
+        run: tools/ci/fetch_pack_sfx.sh --check && echo "RESULT write token Windows OK"
+
+  cleanup:
+    needs: [test-draft, read-only-linux, write-linux, write-windows]
+    if: always() && needs.test-draft.outputs.release != ''
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Delete the throwaway draft (never the owner's Sfx release)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -e
+          T=$(gh api "repos/$REPO/releases/${{ needs.test-draft.outputs.release }}" -q .tag_name)
+          case "$T" in pack-access-test-*) gh api -X DELETE "repos/$REPO/releases/${{ needs.test-draft.outputs.release }}"; echo "deleted throwaway $T";; *) echo "::error::refusing to delete release tagged $T"; exit 1;; esac
+
+  # ---------------- make-draft: the owner's Sfx release becomes a draft
+  make-draft:
+    needs: mode
+    if: needs.mode.outputs.mode == 'make-draft'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Make the existing Sfx release a draft, then prove the public can no longer download it
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -e
+          PIN=d94e9fd53240fb2787dee72fcfdc2ee23f51113beb489d59c12e586ba711692a
+          gh api --paginate "repos/$REPO/releases?per_page=100" -q '.[] | select(.tag_name == "Sfx") | [.id, .draft, (.assets[] | select(.name == "Minifantasy_Forgotten_Plains_SFX.zip") | .id, .digest, .browser_download_url)] | @tsv' > sfx.tsv
+          [ "$(wc -l < sfx.tsv)" = 1 ] || { echo "::error::expected exactly one Sfx release with the pack"; cat sfx.tsv; exit 1; }
+          IFS=$'\t' read -r REL DRAFT AID DIG URL < sfx.tsv
+          echo "before: release $REL draft=$DRAFT asset $AID $DIG"
+          [ "$DIG" = "sha256:$PIN" ] || { echo "::error::the pack's digest is not the pinned one"; exit 1; }
+          if [ "$DRAFT" != true ]; then gh api -X PATCH "repos/$REPO/releases/$REL" -F draft=true -q '"draft now: \(.draft)"'; fi
+          gh api "repos/$REPO/releases/$REL" -q '"after: release \(.id) draft=\(.draft) assets=\([.assets[] | .id, .name, .digest])"'
+          A=$(curl -s -o /dev/null -w '%{http_code}' -L "$URL"); B=$(curl -s -o /dev/null -w '%{http_code}' "https://api.github.com/repos/$REPO/releases/tags/Sfx")
+          C=$(curl -s -o /dev/null -w '%{http_code}' -H "Accept: application/octet-stream" "https://api.github.com/repos/$REPO/releases/assets/$AID")
+          echo "RESULT anonymous: browser download $A, release by tag $B, asset by id $C"
+          [ "$A" != 200 ] && [ "$B" != 200 ] && [ "$C" != 200 ] || { echo "::error::the pack is still publicly downloadable"; exit 1; }
+      - name: Fetch and convert the pack from the draft with GITHUB_TOKEN (Linux)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -e
+          command -v ffmpeg >/dev/null 2>&1 || { sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends ffmpeg >/dev/null; }
+          tools/ci/fetch_pack_sfx.sh --download "$RUNNER_TEMP/pack_mf"
+          N=$(ls "$RUNNER_TEMP/pack_mf"/*.ogg | wc -l); echo "RESULT Linux clips: $N"; [ "$N" = 20 ]
+
+  convert-windows:
+    needs: make-draft
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch and convert the pack from the draft with GITHUB_TOKEN (Windows)
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -e
+          (command -v ffmpeg >/dev/null 2>&1 || choco install ffmpeg --no-progress -y >/dev/null 2>&1) || true
+          export PATH="$PATH:/c/ProgramData/chocolatey/bin"
+          tools/ci/fetch_pack_sfx.sh --download "$RUNNER_TEMP/pack_mf"
+          N=$(ls "$RUNNER_TEMP/pack_mf"/*.ogg | wc -l); echo "RESULT Windows clips: $N"; [ "$N" = 20 ]
+
+  # ---------------- check: the real pack, no changes
+  check:
+    needs: mode
+    if: needs.mode.outputs.mode == 'check'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: tools/ci/fetch_pack_sfx.sh --check
+
+  # ---------------- probe-create: can a job with only contents: write create (then delete) a draft release whose tag looks like a build tag?
+  probe-create:
+    needs: mode
+    if: needs.mode.outputs.mode == 'probe-create'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency:            # the same lock the two Build 78 publish jobs hold (they were refused; this job without it was not)
+      group: upwardly-release-publish
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - name: The real publish script with a fake tag and two dummy packages (stays a draft, no APK), then delete the draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          TAG="v0.0.0-build9${{ github.run_id }}"
+          head -c 1000 /dev/urandom > "Upwardly Build 9 EXE.zip"; head -c 1000 /dev/urandom > "Upwardly Build 9 Linux.tar.gz"; echo "probe notes" > notes.md
+          GH_DEBUG=api bash tools/ci/publish_release.sh "$TAG" 9 notes.md "Upwardly Build 9 EXE.zip" "Upwardly Build 9 Linux.tar.gz" 2>&1 | grep -E "^\* Request to|^< HTTP|gh: |::notice|::error|uploaded" || true
+          # remove every probe draft (title "Upwardly build 9", always a draft), including the one an earlier probe left behind
+          for ID in $(gh api --paginate "repos/$REPO/releases?per_page=100" -q '.[] | select(.draft and .name == "Upwardly build 9") | .id'); do gh api -X DELETE "repos/$REPO/releases/$ID" && echo "deleted probe draft $ID"; done
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          for TAG in "probe-${{ github.run_id }}" "v0.0.0-build0probe${{ github.run_id }}"; do
+            echo "== $TAG"
+            OUT=$(jq -n --arg tag "$TAG" --arg sha "${{ github.sha }}" '{name:"probe (deleted by this run)", body:"", tag_name:$tag, target_commitish:$sha, draft:true}' | gh api -X POST "repos/$REPO/releases" --input - -q .id 2>&1) && echo "created draft $OUT" || { echo "RESULT create refused: $OUT"; continue; }
+            gh api -X DELETE "repos/$REPO/releases/$OUT" && echo "deleted $OUT"
+          done

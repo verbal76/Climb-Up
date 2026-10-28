@@ -1,0 +1,45 @@
+name: Android release key check
+# VALIDATION ONLY (publishes nothing, builds nothing). Build 73/74 (owner): reports whether the four ANDROID_RELEASE_* secrets are set and whether the
+# keystore opens with the password and alias. Prints SET/MISSING, PASS/FAIL and the public certificate fingerprint only, never a value.
+on:
+  workflow_dispatch:
+  push:
+    branches: [build-74-determinism]
+    paths: ['.github/workflows/key-check.yml']
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '17' }
+      - name: Check the release key secrets
+        env:
+          ANDROID_RELEASE_KEYSTORE_BASE64: ${{ secrets.ANDROID_RELEASE_KEYSTORE_BASE64 }}
+          ANDROID_RELEASE_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEYSTORE_PASSWORD }}
+          ANDROID_RELEASE_KEY_ALIAS: ${{ secrets.ANDROID_RELEASE_KEY_ALIAS }}
+          ANDROID_RELEASE_KEY_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEY_PASSWORD }}
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -u; umask 077; fail=0
+          for n in ANDROID_RELEASE_KEYSTORE_BASE64 ANDROID_RELEASE_KEYSTORE_PASSWORD ANDROID_RELEASE_KEY_ALIAS ANDROID_RELEASE_KEY_PASSWORD \
+                   ANDROID_KEYSTORE_BASE64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; do
+            if [ -n "${!n:-}" ]; then echo "SET      $n"; else echo "MISSING  $n"; case $n in ANDROID_RELEASE_*) fail=1;; esac; fi
+          done
+          [ $fail = 0 ] || { echo "::error::release key secrets missing"; exit 1; }
+          T=$(mktemp -d); trap 'rm -rf "$T"' EXIT
+          if ! printf '%s' "$ANDROID_RELEASE_KEYSTORE_BASE64" | tr -d ' \r\n' | base64 -d > "$T/new.ks" 2>/dev/null; then echo "FAIL keystore is not valid Base64"; exit 1; fi
+          echo "keystore decodes: $(stat -c %s "$T/new.ks") bytes"
+          OUT=$(keytool -list -v -keystore "$T/new.ks" -storepass "$ANDROID_RELEASE_KEYSTORE_PASSWORD" -alias "$ANDROID_RELEASE_KEY_ALIAS" 2>&1) || { echo "FAIL keystore does not open with that password and alias: $(echo "$OUT" | grep -i -m1 -E 'error|exception' | sed 's/.*Exception: //')"; exit 1; }
+          echo "$OUT" | grep -q PrivateKeyEntry && echo "PASS alias holds a private key" || { echo "FAIL alias has no private key"; exit 1; }
+          NEW=$(echo "$OUT" | grep -m1 "SHA256:" | sed 's/.*SHA256: //')
+          OLD=$(keytool -list -v -keystore android/debug.keystore -storepass android -alias androiddebugkey | grep -m1 "SHA256:" | sed 's/.*SHA256: //')
+          [ "$NEW" != "$OLD" ] && echo "PASS it is a new key, not the old public one" || { echo "FAIL it is the old public key"; exit 1; }
+          echo "new key certificate SHA-256 (public): $NEW"
+          echo "ALL RELEASE KEY CHECKS PASSED"

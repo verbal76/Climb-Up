@@ -141,6 +141,8 @@ public final class CourseGenerator {
             throw new IllegalStateException("saw fairness: saw on link " + h.anchor + " leaves too short a window from the real arrival (" + ss + ")");
         }
     }
+    /** Experiment diagnostics: names of buildHaz's and buildMid's hazard draws, for the observe-only tallies. */
+    static final String[] HAZ_ROLL_NAMES = {"vsaw", "gapsaw", "spikeblock", "bee", "cannon"}, MID_ROLL_NAMES = {"spikemat", "floorsaw", "spikeblock", "crusher", "crabs"};
     /** Pendulum experiment (2026-10-28): the share of gap-saw slots that hang a spiked pendulum instead. */
     static final float PENDULUM_SHARE = 0.4f;
     /** The share of a saw's cycle that must stay open to time the move past it (SawFairnessTest). */
@@ -1878,8 +1880,30 @@ public final class CourseGenerator {
         if (Math.abs(c.dsWrap(e.s, f.s)) > arcHalf(e) + arcHalf(f) + 2.5f) return false;
         if (vLo(e) - 1.5f < vHi(f) && vHi(e) + 1.5f > vLo(f)) return true;
         if (!e.isPlatform() || !f.isPlatform()) return false;
-        Element lower = e.y < f.y ? e : f;
-        return Math.abs(e.y - f.y) < (launches(lower) ? 9.5f : PLAIN_LAYER_DY);   // no trampoline shortcuts between layers
+        float dy = Math.abs(e.y - f.y);
+        if (dy >= 9.5f) return false;
+        if (dy < PLAIN_LAYER_DY) return true;
+        Element lower = e.y < f.y ? e : f, upper = lower == e ? f : e;
+        if (launches(lower)) return true;                                   // no trampoline shortcuts between layers
+        return launches(upper) && liftsClimber(c, lower);                   // a launcher above a plain platform: only if that platform's reach is plain
+    }
+    /**
+     * Experiment (owner 2026-10-28): whether a plain platform's climber can rise past the plain 4 m reach, so that a launcher 4-9.5 m above it still
+     * needs the full spacing. From plain footing the most is a jump (1.94 m) plus a hazard knock-up of 6.9 m/s at its top (+0.70 m) plus the ledge reach
+     * (1.30 m): 3.94 m (a blob push 3.96, an Enforcer kick 3.86, a bee 3.61, a crab 3.82). Two things exceed it: a skull's launch (9.5 m/s) at the top
+     * of a jump (4.57 m; skulls also roam to the next decks, so two route platforms either side count), and riding a spike-drop slab up to 3.6 + 1.0 m
+     * and jumping from there. A blob's launch needs a seesaw and moving decks carry the climber; both already launch. A platform of the previous slice
+     * (not in this course, so its hazards are unknown here) keeps the full spacing.
+     */
+    static boolean liftsClimber(Course c, Element p) {
+        int idx = -1;
+        for (int i = 0; i < c.size(); i++) if (c.get(i) == p) { idx = i; break; }
+        if (idx < 0) return true;
+        for (Element h : c.hazards) {
+            if (h.type == Element.Type.SPIKE_DROP && h.anchor == idx) return true;
+            if (h.type == Element.Type.SKULL && h.anchor >= idx - 2 && h.anchor <= idx + 2) return true;
+        }
+        return false;
     }
     /**
      * The layer rule against the previous slice ({@link #ghostElems}). The relaxed attempts of a slice (see chunkIn) waive only its shortcut spacing
@@ -2751,13 +2775,14 @@ public final class CourseGenerator {
             float uR = cur.s + cur.w / 2f, dy = r(-0.3f, 0.6f);
             boolean cannonOk = cur.w >= 3f && cur.type == Element.Type.STATIC;
             int roll = wantCreature && j == 0 ? 3 : P.adaptiveVariety() ? varRoll(HAZ_ROLL_FAM, cannonOk ? 5 : 4, cur.y) : rnd.nextInt(cannonOk ? 5 : 4);
-            if ((roll == 1 && prevRoll == 3) || (roll == 3 && prevRoll == 1)) roll = 2;      // Build 71: the bee now homes in and bumps you, so it never sits next to a saw you must time (it cut the saw's window to 0.2 s; SawFairnessTest)
-            if ((roll == 1 && prevRoll == 4) || (roll == 4 && prevRoll == 1)) roll = 2;      // Build 79: nor a cannon lane right before or after it (a cannon across the landing cut a saw's window from its whole cycle to 0.36; SawFairnessTest, seed 3)
-            if (roll == 3 && enfCalm()) roll = 2;          // PUNISHER: no bee next to an Enforcer encounter (the draw is kept, so NORMAL is unchanged)
+            GenTrace.tally("haz_pick_" + HAZ_ROLL_NAMES[roll]);          // (experiment diagnostics, observe-only: what was drawn, and below what turned it into a spiked block)
+            if ((roll == 1 && prevRoll == 3) || (roll == 3 && prevRoll == 1)) { GenTrace.tally("spikeblock_from_" + HAZ_ROLL_NAMES[roll] + "_beside_" + HAZ_ROLL_NAMES[prevRoll]); roll = 2; }      // Build 71: the bee now homes in and bumps you, so it never sits next to a saw you must time (it cut the saw's window to 0.2 s; SawFairnessTest)
+            if ((roll == 1 && prevRoll == 4) || (roll == 4 && prevRoll == 1)) { GenTrace.tally("spikeblock_from_" + HAZ_ROLL_NAMES[roll] + "_beside_" + HAZ_ROLL_NAMES[prevRoll]); roll = 2; }      // Build 79: nor a cannon lane right before or after it (a cannon across the landing cut a saw's window from its whole cycle to 0.36; SawFairnessTest, seed 3)
+            if (roll == 3 && enfCalm()) { GenTrace.tally("spikeblock_from_bee_enforcer_near"); roll = 2; }          // PUNISHER: no bee next to an Enforcer encounter (the draw is kept, so NORMAL is unchanged)
             prevRoll = roll;
-            if (roll == 1 && creatureReaches(j == 0 ? c.size() - 1 : base + j - 1)) roll = 2;      // Build 79: nor next to a skull, blob or crab that can roam onto its decks (a skull there cut the window to 0.36; SawFairnessTest)
-            if (roll == 1 && cur.w < SAW_TAKEOFF_W) roll = 2;      // rules 14: nor from a narrow foothold (NORMAL seed 3 slice 7 under rules 13: a gap saw from a 1.0 m ledge left no spot to wait for it; SawFairnessTest)
-            if (roll == 1 && j == 0 && deckHasHazard(c.size() - 1)) roll = 2;      // rules 14: nor from a deck that already carries its own trap (NORMAL seeds 2 and 4 under rules 13: a spike trap / spiked block on the take-off deck cut the saw's window to 0.40-0.46 of its cycle; SawFairnessTest)
+            if (roll == 1 && creatureReaches(j == 0 ? c.size() - 1 : base + j - 1)) { GenTrace.tally("spikeblock_from_saw_creature_reach"); roll = 2; }      // Build 79: nor next to a skull, blob or crab that can roam onto its decks (a skull there cut the window to 0.36; SawFairnessTest)
+            if (roll == 1 && cur.w < SAW_TAKEOFF_W) { GenTrace.tally("spikeblock_from_saw_narrow_takeoff"); roll = 2; }      // rules 14: nor from a narrow foothold (NORMAL seed 3 slice 7 under rules 13: a gap saw from a 1.0 m ledge left no spot to wait for it; SawFairnessTest)
+            if (roll == 1 && j == 0 && deckHasHazard(c.size() - 1)) { GenTrace.tally("spikeblock_from_saw_trap_takeoff"); roll = 2; }      // rules 14: nor from a deck that already carries its own trap (NORMAL seeds 2 and 4 under rules 13: a spike trap / spiked block on the take-off deck cut the saw's window to 0.40-0.46 of its cycle; SawFairnessTest)
             if (roll == 1) dy = Math.min(dy, 0.1f);      // a saw never guards an uphill jump: the blade would sit higher than the take-off
             float g = Math.min(3.05f, Math.max(2.3f, reach(Math.max(0f, dy)) * lerp(0.68f, 0.90f, d) * r(0.95f, 1f) * (1f - 0.03f * attempt)));
             if (roll == 1) g = Math.min(g, 2.6f);      // a saw hangs in the gap: keep the gap well short of a full-length jump so there is room to time the arc over the blade
@@ -2818,8 +2843,9 @@ public final class CourseGenerator {
         float uR = last.s + last.w / 2f, dy = r(0f, 0.6f);
         float gapIn = reach(dy) * lerp(0.5f, 0.85f, d) * (1f - 0.03f * attempt);
         int roll = wantCreature ? 4 : P.adaptiveVariety() ? varRoll(MID_ROLL_FAM, 5, last.y) : rnd.nextInt(5);
-        if (roll == 4 && enfCalm()) roll = 2;          // PUNISHER: no crab deck next to an Enforcer encounter
-        if (roll == 1 && creatureReaches(c.size())) roll = 2;      // Build 79: no floor saw where a skull, blob or crab can roam onto it (see sawsClearOfCreatures)
+        GenTrace.tally("trap_pick_" + MID_ROLL_NAMES[roll]);          // (experiment diagnostics, observe-only)
+        if (roll == 4 && enfCalm()) { GenTrace.tally("spikeblock_from_crabs_enforcer_near"); roll = 2; }          // PUNISHER: no crab deck next to an Enforcer encounter
+        if (roll == 1 && creatureReaches(c.size())) { GenTrace.tally("spikeblock_from_floorsaw_creature_reach"); roll = 2; }      // Build 79: no floor saw where a skull, blob or crab can roam onto it (see sawsClearOfCreatures)
         int crabs = roll == 4 ? 2 + (rnd.nextFloat() < inten * 0.7f ? 1 : 0) + (rnd.nextFloat() < late(last.y) * 0.6f ? 1 : 0) + T.hard : 0;      // (PUNISHER one more, NEVER GONNA HAPPEN two)      // Build 79 (owner): never fewer than two crabs, more higher up
         float w = roll == 4 ? 9f + 2f * (crabs - 2) : 8f;
         Element p = plat(Element.Type.STATIC, uR + gapIn + w / 2f, last.y + dy, w, z);

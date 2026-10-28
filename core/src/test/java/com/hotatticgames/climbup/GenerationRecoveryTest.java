@@ -264,6 +264,7 @@ public class GenerationRecoveryTest {
         while (r2.tower.sliceCount() < K + 3) r2.tower.extend();
         while (tw.sliceCount() < K + 3) tw.extend();
         for (int k = 0; k < K + 3; k++) assertArrayEquals("the tail is made again exactly as the uninterrupted climb's", tw.blob(k), r2.tower.blob(k));
+        s2.ensureCapacity(); s2.setRange(0, r2.tower.world.size() - 1);                            // (as the game's keepTower does after the world grows)
         g2.saveRun(r2.tower, s2); DiskWriter.drain();
         assertEquals("no record twice", r2.tower.sliceCount(), historyCount(copy, seed));
 

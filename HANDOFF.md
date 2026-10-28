@@ -1,3 +1,18 @@
+## RESUME HERE (2026-10-28 overnight: OWNER REPAIR AUTHORISATIONS - integration/build-82-repairs, ONE CI, then the 30-course campaign)
+
+- Branches (all pushed, every commit [skip ci]): repair/ci-failures (Track 1: 30d3574 DC3+DC8, a0ddc41 solver recovery = DC1 pass 3, 7f168a4 saw
+  fairness at acceptance = DC7 pass 2, rules 16), repair/save-history (Track 2 H1/H2 cf0bf73), feature/generation-recovery (Track 3 R1-R6 43afa44,
+  2530fc8; based on Track 2), repair/ci-trigger (0640c4b, one CI per commit). Integration: integration/build-82-repairs (merges of all four).
+- Frozen baseline 093b6bb on build-74-determinism is untouched. Never push to build-74-determinism (its push also auto-runs difficulty-report).
+- Local evidence: SolverRecoveryTest+SolverVerdictTest 14/14; SawFairnessTest pass (162 saws, worst 0.67/0.50); GenerationRecoveryTest 10/10;
+  SaveHistoryRepairTest 7/7 (Track 2); fingerprint rules 16 = 978eaa5128ad2201d29dabbf (Tracks 2/3 change none).
+- Known red: StreamingReplayTest (float-frame knife edge at step 21389, the same on 093b6bb) - owner decision, see
+  docs/verification/OPEN_OWNER_DECISIONS.md. Under the current gate rule a red CI does not start the campaign.
+- Next: seed-12 replay re-recorded on the integrated source (ReplayCheck EXPECT_*, BundledReplayTest clock), commit, then ONE CI = draft PR
+  integration/build-82-repairs -> ccr-cb458cd1-w4dh5c (pull_request run on the exact head; head commit without [skip ci]). If green: dispatch
+  difficulty-report.yml on ref integration/build-82-repairs, seeds 7301-7310, modes 0,1,2, top 5000, solve 1; ledger; GO/NO-GO report.
+  Build 82 stays on HOLD: no android.yml / windows.yml, no release, no main merge.
+
 ## RESUME HERE (2026-10-28: BOUNDED REPAIR MISSION - max 3 passes per DC; smoke gate -> 30-seed batch automatically)
 
 - Owner amendment 2026-10-28: REPAIR -> TARGETED TEST -> EVALUATE, at most three corrective passes per defect class; register in

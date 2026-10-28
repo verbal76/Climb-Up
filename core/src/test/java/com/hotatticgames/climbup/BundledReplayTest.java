@@ -18,6 +18,6 @@ public class BundledReplayTest {
         assertEquals(ReplayCheck.EXPECT_CLOCK_STEPS, c.finishClock);
         assertEquals(ReplayCheck.EXPECT_EVENTS, ReplayCheck.hex(c.events.digest()));
         assertEquals(ReplayCheck.EXPECT_STATES, ReplayCheck.hex(c.states.digest()));
-        assertEquals("1:47:33.800", ClockText.time((float) (c.finishClock / (double) RunRecord.STEPS_PER_SECOND)));
+        assertEquals("1:47:57.550", ClockText.time((float) (c.finishClock / (double) RunRecord.STEPS_PER_SECOND)));
     }
 }

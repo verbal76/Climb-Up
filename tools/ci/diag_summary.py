@@ -202,7 +202,7 @@ def main():
     L.append("")
     for mode in order:
         fam_all, fam_route, fam_off, fam_wit, fam_enemy, fam_mech = Counter(), Counter(), Counter(), Counter(), Counter(), Counter()
-        per_castle = defaultdict(Counter); win_spk = []; streaks = []; repeats = Counter(); ncourse = 0
+        per_castle = defaultdict(Counter); win_spk = []; streaks = []; repeats = Counter(); longest_run = Counter(); ncourse = 0
         for m, seed, d in cs:
             if m != mode: continue
             ncourse += 1
@@ -224,7 +224,16 @@ def main():
                         if run_: streaks.append(run_)
                         run_ = 0
                 if run_: streaks.append(run_)
-            prev = None
+            seq = []          # on-route hazards in route order (slice, platform index); a "repeat" is the next one being the same family
+            for r in rows(os.path.join(d, "hazards.csv")):
+                if r["type"] in NOT_HAZARD or r["status"] != "SCORED" or not r.get("platform"): continue
+                k_, i_ = r["platform"].split(":") if ":" in r["platform"] else ("0", "0")
+                try: seq.append((int(k_), int(i_), r["type"]))
+                except ValueError: pass
+            seq.sort(); run_f, run_n = None, 0
+            for _, _, ty in seq:
+                if ty == run_f: repeats[ty] += 1; run_n += 1; longest_run[ty] = max(longest_run[ty], run_n)
+                else: run_f, run_n = ty, 1
             for r in rows(os.path.join(d, "links.csv")):
                 hz = [x.strip() for x in r["hazards"].strip("[]").split(",") if x.strip()]
                 hz = [x for x in hz if x not in NOT_HAZARD]
@@ -232,16 +241,12 @@ def main():
                     for x in set(hz): fam_wit[x] += 1
                 for x in set(hz):
                     if r["from_type"] != "STATIC" or r["to_type"] != "STATIC": fam_mech[x] += 1
-                cur = frozenset(hz)
-                if cur and cur == prev:
-                    for x in cur: repeats[x] += 1
-                prev = cur if cur else None
         tot_all, tot_route, tot_wit = sum(fam_all.values()), sum(fam_route.values()), sum(fam_wit.values())
         body = []
         for f in sorted(fam_all, key=lambda f: -fam_all[f]):
-            body.append([f, fam_all[f], f"{fam_all[f] / max(1, ncourse):.0f}", pct(fam_all[f], tot_all), fam_route[f], pct(fam_route[f], tot_route), fam_off[f], fam_wit[f], pct(fam_wit[f], tot_wit), fam_enemy[f], fam_mech[f], repeats[f]])
+            body.append([f, fam_all[f], f"{fam_all[f] / max(1, ncourse):.0f}", pct(fam_all[f], tot_all), fam_route[f], pct(fam_route[f], tot_route), fam_off[f], fam_wit[f], pct(fam_wit[f], tot_wit), fam_enemy[f], fam_mech[f], repeats[f], longest_run[f]])
         L.append(f"### {mode} ({ncourse} courses)")
-        table(L, ["family", "placed", "per course", "share placed", "on route", "share on route", "optional", "witness links", "share witness", "on route sharing a platform with other threats", "on links with a mechanic", "repeats (same set on consecutive links)"], body)
+        table(L, ["family", "placed", "per course", "share placed", "on route", "share on route", "optional", "witness links", "share witness", "on route sharing a platform with other threats", "on links with a mechanic", "next on-route hazard same family", "longest same-family run"], body)
         if win_spk:
             ws = sorted(win_spk)
             L.append(f"Spike blocks per 25 m window: mean {statistics.mean(ws):.2f}, max {ws[-1]}, windows with >=1: {pct(sum(1 for x in ws if x >= 1), len(ws))}, >=2: {pct(sum(1 for x in ws if x >= 2), len(ws))}; "

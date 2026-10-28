@@ -46,8 +46,11 @@ public class BalanceConveyorTest {
         TestUtil.run(x, 30, 0f, false, -1);
         float before = x.surfaceCarry(1);
         x.s = c.wrap(x.es1[1] - 2.2f);
-        TestUtil.run(x, 120, 0f, false, -1);
+        // read while the climber is still on the belt (repair 2026-10-28): it then carries them off its low end, and the fall's retry starts the belt
+        // fresh (the checkpoint contract, DC3), so a reading after the fall measured the retry, not the crossing
+        for (int i = 0; i < 120 && x.mode == Sim.Mode.GROUND && x.onElem == 1; i++) TestUtil.run(x, 1, 0f, false, -1);
         assertTrue("crossing to the other side reverses the tilt and the belt (" + before + " -> " + x.surfaceCarry(1) + ")", before > 0f && x.surfaceCarry(1) < 0f);
+        assertTrue("and the tilt follows (" + x.tilt[1] + ")", x.tilt[1] > 0f);
     }
 
     @Test public void theSameRunGivesTheSameBridgeEveryTime() throws Exception {

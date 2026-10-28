@@ -115,6 +115,68 @@ def main():
     body.append(["entropy (bits)"] + [f"{per[m]['_H']:.2f}" for m in order])
     table(L, ["family", *order], body)
 
+    # ---- P2b: Hazard Family Dominance (owner amendment 2026-10-28): placed vs route-threatening vs witness-exposed, per castle and 25 m window
+    L.append("## P2b. Hazard Family Dominance"); L.append("")
+    L.append("placed = every hazard of the family in the course; on route = SCORED (on or reaching a main-route platform); witness = route links the solver's "
+             "hit-free witness traversed that list the family; optional = OFF_ROUTE (fork branches, decoys, rooms). Avalanche blocks are their own type (AVALANCHE) "
+             "and are never counted as SPIKE_BLOCK. Spike-heavy window: at least 2 on-route spike blocks and at least half of that window's on-route hazards.")
+    L.append("")
+    for mode in order:
+        fam_all, fam_route, fam_off, fam_wit, fam_enemy, fam_mech = Counter(), Counter(), Counter(), Counter(), Counter(), Counter()
+        per_castle = defaultdict(Counter); win_spk = []; streaks = []; repeats = Counter(); ncourse = 0
+        for m, seed, d in cs:
+            if m != mode: continue
+            ncourse += 1
+            wins = defaultdict(Counter)
+            for r in rows(os.path.join(d, "hazards.csv")):
+                ty = r["type"]
+                if ty in NOT_HAZARD: continue
+                fam_all[ty] += 1
+                if r["status"] == "SCORED":
+                    fam_route[ty] += 1; per_castle[int(num(r["castle"]))][ty] += 1; wins[int(num(r["window"]))][ty] += 1
+                    if r.get("same_platform_threats", "").strip() not in ("", "[]", "0"): fam_enemy[ty] += 1
+                else: fam_off[ty] += 1
+            if wins:
+                run_ = 0
+                for w in range(0, max(wins) + 1):
+                    c_ = wins.get(w, Counter()); tot = sum(c_.values()); spk = c_["SPIKE_BLOCK"]; win_spk.append(spk)
+                    if spk >= 2 and spk * 2 >= tot: run_ += 1
+                    else:
+                        if run_: streaks.append(run_)
+                        run_ = 0
+                if run_: streaks.append(run_)
+            prev = None
+            for r in rows(os.path.join(d, "links.csv")):
+                hz = [x.strip() for x in r["hazards"].strip("[]").split(",") if x.strip()]
+                hz = [x for x in hz if x not in NOT_HAZARD]
+                if r["solver_status"].startswith("TRAVERSED"):
+                    for x in set(hz): fam_wit[x] += 1
+                for x in set(hz):
+                    if r["from_type"] != "STATIC" or r["to_type"] != "STATIC": fam_mech[x] += 1
+                cur = frozenset(hz)
+                if cur and cur == prev:
+                    for x in cur: repeats[x] += 1
+                prev = cur if cur else None
+        tot_all, tot_route, tot_wit = sum(fam_all.values()), sum(fam_route.values()), sum(fam_wit.values())
+        body = []
+        for f in sorted(fam_all, key=lambda f: -fam_all[f]):
+            body.append([f, fam_all[f], f"{fam_all[f] / max(1, ncourse):.0f}", pct(fam_all[f], tot_all), fam_route[f], pct(fam_route[f], tot_route), fam_off[f], fam_wit[f], pct(fam_wit[f], tot_wit), fam_enemy[f], fam_mech[f], repeats[f]])
+        L.append(f"### {mode} ({ncourse} courses)")
+        table(L, ["family", "placed", "per course", "share placed", "on route", "share on route", "optional", "witness links", "share witness", "on route sharing a platform with other threats", "on links with a mechanic", "repeats (same set on consecutive links)"], body)
+        if win_spk:
+            ws = sorted(win_spk)
+            L.append(f"Spike blocks per 25 m window: mean {statistics.mean(ws):.2f}, max {ws[-1]}, windows with >=1: {pct(sum(1 for x in ws if x >= 1), len(ws))}, >=2: {pct(sum(1 for x in ws if x >= 2), len(ws))}; "
+                     f"spike-heavy streaks: {len(streaks)}, longest {max(streaks) if streaks else 0} windows, mean {statistics.mean(streaks) if streaks else 0:.1f}")
+            L.append("")
+        fams = sorted({f for c_ in per_castle.values() for f in c_}, key=lambda f: -sum(per_castle[c][f] for c in per_castle))
+        cb = []
+        for c in sorted(per_castle):
+            tot = sum(per_castle[c].values()); p_ = [v / tot for v in per_castle[c].values() if tot]
+            ent = -sum(x * math.log2(x) for x in p_ if x > 0)
+            cb.append([c, tot] + [f"{100.0 * per_castle[c][f] / max(1, tot):.1f}" for f in fams] + [f"{ent:.2f}"])
+        L.append(f"On-route family share by castle, % ({mode}); DOMINANCE_ROWS {mode} " + " ".join(fams))
+        table(L, ["castle", "on route"] + fams + ["entropy"], cb)
+
     # ---- P3: lanes, enemies and encounters per castle
     L.append("## P3. Lanes per castle (mean over courses of the castle's summed adjusted window values)"); L.append("")
     for mode in order:
@@ -174,6 +236,15 @@ def main():
         L.append(f"### {mode} ({len(travel)} castle intervals)")
         table(L, ["measure", "mean / median / range / sd / CV"], [["route travel m", s(travel)], ["horizontal m", s(horiz)], ["rise m", s(rise)], ["drop m", s(drop)], ["dips (>0.3 m)", s(dips)], ["route links", s(links_n)]])
 
+    # ---- generator tallies (counts.csv, experiment branch only): layer-clash kinds, launch corridors, pendulum offers and refusals
+    tal = {m: Counter() for m in order}; have = False
+    for m, seed, d in cs:
+        for r in rows(os.path.join(d, "counts.csv")):
+            have = True; tal[m][r["tally"]] += int(num(r["count"]))
+    if have:
+        L.append("## Generator tallies per mode (sum over courses; refusal reasons, pendulums)"); L.append("")
+        keys = sorted({k for m in order for k in tal[m] if re.match(r"(clash_|pad_corridor|deck_in_hazard|pendulum_|saw_window|continuity_|encounter_reproof|spikeblock_from_|haz_pick_|trap_pick_)", k)}, key=lambda k: -sum(tal[m][k] for m in order))
+        table(L, ["tally", *order], [[k] + [tal[m][k] for m in order] for k in keys[:60]])
     text = "\n".join(L)
     print(text)
     if out:

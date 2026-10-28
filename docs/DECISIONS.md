@@ -1247,3 +1247,20 @@ Source: docs/verification/CONSOLIDATED_AUDIT_REPORT.md (DC1-DC10) and docs/verif
   (FAILED_VALIDATION, tally `saw_window_refused`), and the slice is built again with the next deterministic attempt. The rule itself is unchanged.
 - **Effect.** Generation changes wherever such a saw was accepted: rules 16, seed 1 fingerprint 978eaa5128ad2201d29dabbf (was a7a4dff4...).
   SawFairnessTest: 162 saws, worst gap saw 0.67, worst floor saw 0.50, every one with a clean start.
+
+## StreamingReplayTest contract, option B (owner decision 2026-10-28)
+
+- **Decision.** The owner approved option B of OPEN_OWNER_DECISIONS.md item 1 (now closed). It applies only to the 32-bit landing-boundary
+  difference between the streamed and the whole-world frame: seed 12, step 21389, the whole-world climber 1.22e-4 m above deck top 301.9033813.
+- **Contract.**
+  - Every assertion before it stays unchanged:
+    - the same-frame replay is bit-exact;
+    - the first difference comes only after an origin shift;
+    - drift before the first event stays under 2 mm;
+    - there are at most 2 episodes;
+    - the final gap is under 0.1 m.
+  - The surface sequence is compared outside the divergence episodes. A contact that begins and ends inside one episode's differing steps is left
+    out, on both sides. Inside each episode the two frames may differ by one contact at most: the touch only one frame makes.
+  - What the climb achieves must be exactly equal: checkpoints in the order reached, keys, hazard hits, falls, completion.
+- **Unchanged.** The game, the physics, the generator and replay determinism. The game always replays in the streamed frame, and there it is
+  bit-exact.

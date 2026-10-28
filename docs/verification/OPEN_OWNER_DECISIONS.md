@@ -2,7 +2,20 @@
 
 Everything authorised was carried on. These points need the owner, and nothing else waits on them.
 
-## 1. StreamingReplayTest: one landing differs between the streamed world and the whole world (blocks a green CI)
+## 1. CLOSED 2026-10-28: StreamingReplayTest landing-boundary difference. Owner approved option B.
+
+**Owner decision (2026-10-28): option B approved.** The scope is limited to the floating-point landing-boundary discrepancy at step 21389. A
+surface-contact difference is allowed only when all of the following hold:
+- it lies inside an already-counted timing divergence episode;
+- there are at most two episodes;
+- the climbs reconverge within 0.1 m;
+- checkpoints, keys, hazard consequences (hits, falls) and completion are equivalent;
+- no further divergence is concealed.
+
+No other assertion was relaxed, no physics was changed, and the test was not disabled. Implemented in StreamingReplayTest as
+`outsideEpisodes` / `Outcome`; see DECISIONS.md.
+
+### Original analysis (kept)
 
 **What happens.** The seed-12 climb's inputs are recorded on one tower and replayed into a streaming tower, which rebuilds around a new floating
 origin every 400 steps.

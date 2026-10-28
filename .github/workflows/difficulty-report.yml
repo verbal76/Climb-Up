@@ -112,6 +112,7 @@ jobs:
             python3 tools/ci/campaign_charts.py "${{ inputs.campaign }}" "Campaign ${{ inputs.campaign }} ($(git rev-parse --short HEAD))" baseline/campaign_${{ inputs.campaign }} $(dirname $(find parts -name castle_control.csv | sort))
           fi
           EXPECT_MODES='${{ inputs.modes || '["0","1","2"]' }}' EXPECT_SEEDS='${{ inputs.seeds || '["1","2"]' }}' python3 tools/ci/batch_summary.py baseline/batch $(dirname $(find parts -name gate.json | sort))          # owner 2026-10-28: mode curves, seed spread, reliability
+          python3 tools/ci/diag_summary.py parts baseline/DIAG.md || echo "diag_summary failed (diagnostics only)"          # owner 2026-10-28: generator diagnostics (P1-P4) printed to the log
           cat baseline/batch/BATCH.md >> "$GITHUB_STEP_SUMMARY"
           cat baseline/INDEX.md >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4

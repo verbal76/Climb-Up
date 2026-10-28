@@ -2789,8 +2789,8 @@ public final class CourseGenerator {
             if (roll == 3 && enfCalm()) {          // PUNISHER: no bee next to an Enforcer encounter (the draw is kept, so NORMAL is unchanged)
                 // experiment (owner amendment 2026-10-28, hazard diversity): the rule bars a creature here, not a hazard, so draw again among the hazard
                 // families its neighbours allow (by the same variety memory); a spiked block only where none fits (it used to be a spiked block every time)
-                boolean saw = prevRoll != 3 && prevRoll != 4, cannon = cannonOk && prevRoll != 1;          // the two adjacency rules above
-                roll = redraw(HAZ_ROLL_FAM, saw && cannon ? new int[]{0, 1, 4} : saw ? new int[]{0, 1} : cannon ? new int[]{0, 4} : new int[]{0}, cur.y);
+                // (no gap saw: an Enforcer here can reach its decks, so sawsClearOfCreatures would turn it into a spiked block anyway; NGH seed 7301, 600 m)
+                roll = redraw(HAZ_ROLL_FAM, cannonOk && prevRoll != 1 ? new int[]{0, 4} : new int[]{0}, cur.y);          // (no cannon right after a gap saw)
                 GenTrace.tally("redraw_bee_enforcer_near_to_" + HAZ_ROLL_NAMES[roll]);
             }
             prevRoll = roll;

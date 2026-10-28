@@ -294,6 +294,23 @@ def main():
         L.append(f"### {mode} ({ncourse} courses; enemy and encounter counts are per course)")
         table(L, ["castle", "terrain", "hazards", "enemies", "interaction", "total", "enemies placed", "enemies on route", "by family", "Enforcers", "Enf dropped", "Enf unfair", "avalanches", "avl dropped"], body)
 
+    # ---- P3b: the enemy lane per castle by scoring rule (ledger rows): placements versus scored exposure, raw value, repetition factor
+    L.append("## P3b. Enemy lane by rule per castle (ledger: rows, raw sum, final value, mean repetition factor; per course)"); L.append("")
+    for mode in order:
+        agg = defaultdict(lambda: defaultdict(lambda: [0, 0.0, 0.0, 0.0])); ncourse = 0
+        for m, seed, d in cs:
+            if m != mode: continue
+            ncourse += 1
+            for r in rows(os.path.join(d, "ledger.csv")):
+                if r["lane"] != "ENEMIES": continue
+                a_ = agg[int(num(r["castle"]))][r["rule"]]; a_[0] += 1; a_[1] += num(r["raw"]); a_[2] += num(r["value"]); a_[3] += num(r["repetition"])
+        rules = sorted({k for c in agg for k in agg[c]})
+        body = []
+        for c in sorted(agg):
+            body.append([c] + [f"{agg[c][k][0] / max(1, ncourse):.0f} / {agg[c][k][2] / max(1, ncourse):.1f} / {agg[c][k][3] / max(1, agg[c][k][0]):.2f}" if agg[c][k][0] else "-" for k in rules])
+        L.append(f"### {mode} (cells: rows / value / mean repetition, per course)")
+        table(L, ["castle"] + rules, body)
+
     # ---- P4: castle-to-castle route travel
     L.append("## P4. Castle-to-castle route travel (main route links; horizontal = arc between take-off and landing element centres)"); L.append("")
     for mode in order:

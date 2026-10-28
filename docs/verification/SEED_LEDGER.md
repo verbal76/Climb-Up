@@ -38,3 +38,5 @@ modes gives two different climbs. None of these 30 pairs was used before.
   - top 5000 m, solver on.
 - **Rules.** Rules 16, fingerprint 978eaa5128ad2201d29dabbf.
 - **Policy.** Every course is kept in the results, failed or incomplete. No seed is replaced.
+- **Result.** All 30 courses passed. The report step of run 40752227771 failed in batch_summary (python3 -I could not see matplotlib), so the report
+  was rebuilt from the same stored courses by run 40759608865. GO/NO-GO: docs/verification/BUILD82_GO_NO_GO.md.

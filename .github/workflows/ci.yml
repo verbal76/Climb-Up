@@ -11,6 +11,9 @@ permissions:
   contents: read
 jobs:
   validate:
+    # One validation per commit (2026-10-28: a push to build-74-determinism also fired PR #9's pull_request run on the same commit, two identical
+    # ~3 h suites). A pull_request run is skipped when its head branch is one this workflow already validates on push; other PRs still get it.
+    if: github.event_name != 'pull_request' || !contains(fromJSON('["ccr-cb458cd1-w4dh5c","build-74-determinism"]'), github.head_ref)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

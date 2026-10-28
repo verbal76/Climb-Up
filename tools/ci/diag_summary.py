@@ -311,6 +311,34 @@ def main():
         L.append(f"### {mode} (cells: rows / value / mean repetition, per course)")
         table(L, ["castle"] + rules, body)
 
+    # ---- P3c: enemy and hazard modules per castle: tried, accepted (final attempt), refusal causes
+    L.append("## P3c. Creature, trap, hazard and Enforcer modules per castle (per course: tried / accepted, then the leading refusal causes)"); L.append("")
+    KINDS = ["CREATURE", "TRAP", "HAZ", "MORTAR", "DROPS", "ENFORCER"]
+    for mode in order:
+        st = defaultdict(lambda: defaultdict(Counter)); ncourse = 0
+        for m, seed, d in cs:
+            if m != mode: continue
+            ncourse += 1
+            for r in rows(os.path.join(d, "modules.csv")):
+                if r["kind"] not in KINDS: continue
+                c = min(10, int(num(r["y"]) // 500) + 1); s = st[r["kind"]][c]; s["tried"] += 1
+                if truthy(r["accepted"]):
+                    if truthy(r["final_attempt"]): s["accepted"] += 1
+                    continue
+                for cz in CAUSES:
+                    if num(r.get("refused_" + cz)) > 0: s[cz] += 1; break
+        body = []
+        for c in range(1, 11):
+            row_ = [c]
+            for k in KINDS:
+                s = st[k][c]
+                if not s["tried"]: row_.append("-"); continue
+                top = ",".join(f"{cz[0]}{100 * s[cz] / s['tried']:.0f}" for cz in CAUSES if s[cz] * 10 >= s["tried"])
+                row_.append(f"{s['tried'] / ncourse:.0f}/{s['accepted'] / ncourse:.1f} {top}")
+            body.append(row_)
+        L.append(f"### {mode} (refusal letters: l layer, h hazard, p plan, w window, c conflict, t threat budget; shown when >=10% of tries)")
+        table(L, ["castle"] + KINDS, body)
+
     # ---- P4: castle-to-castle route travel
     L.append("## P4. Castle-to-castle route travel (main route links; horizontal = arc between take-off and landing element centres)"); L.append("")
     for mode in order:
@@ -349,6 +377,7 @@ def main():
     text = "\n".join(L)
     print(text)
     if out:
+        os.makedirs(os.path.dirname(out) or ".", exist_ok=True)
         with open(out, "w") as f: f.write(text + "\n")
     sm = os.environ.get("GITHUB_STEP_SUMMARY")
     if sm:

@@ -1,3 +1,13 @@
+## RESUME HERE (2026-10-28: BOUNDED REPAIR MISSION - max 3 passes per DC; smoke gate -> 30-seed batch automatically)
+
+- Owner amendment 2026-10-28: REPAIR -> TARGETED TEST -> EVALUATE, at most three corrective passes per defect class; register in
+  docs/verification/REPAIR_REGISTER.md (DC1, DC2, DC5 at pass 2; the rest at pass 1). No pass 4; a blocked mandatory class stops the batch.
+- All DC1-DC10 corrections are committed; generation source frozen at e403a97 (rules 15). Then: batch summary step b4e91f5 (tools/ci/batch_summary.py
+  in the difficulty-report consolidate job), seed-12 replay re-recorded 68cfa45.
+- Smoke gate = ci.yml full suite on the push after 68cfa45 (the local regression batch was lost to a container restart; CI runs the same tests).
+- Then dispatch difficulty-report.yml: seeds 7301-7310, modes 0,1,2, top 5000, solve 1, ref build-74-determinism; record the run id in
+  docs/verification/SEED_LEDGER.md; never replace a failed seed; one final owner report A-J; then STOP. Build 82 / main merge stay on hold.
+
 ## RESUME HERE (2026-10-28: OWNER AUTHORISATION - CORRECTIONS -> SMOKE GATE -> 30-SEED BATCH, ACTIVE)
 
 - Directive: correct DC1-DC10 of docs/verification/CONSOLIDATED_AUDIT_REPORT.md, focused tests, one smoke gate, then AUTOMATICALLY the batch:

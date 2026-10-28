@@ -408,7 +408,7 @@ public final class Sim {
                     if (h.anchor > cp) { if (i < featDone.length) featDone[i] = false; if ((i + 1) * AVL_W <= avl.length) java.util.Arrays.fill(avl, i * AVL_W, (i + 1) * AVL_W, 0f); avlReset = true; }
                     break;
                 case CRAB: case BEE: case SKULL: case BLOB: case ENFORCER: case AIMED:
-                    if (done) break;
+                    if (done || h.anchor <= cp) break;          // (repair 2026-10-28, same rule as the avalanches: only encounters ahead of the checkpoint start again; one on the checkpoint's own deck goes on, so it can still be outlasted - reset on every respawn, an Enforcer there kicked the climber off again and never left)
                     aimAng[i] = 0f; aimFireT[i] = -1e9f; aimArmed[i] = false; aimYaw[i] = 0f;
                     crabPos[i] = 0f; crabVel[i] = 0f; crabMode[i] = 0; crabStuck[i] = 0f; crabCool[i] = 0f; crabTurn[i] = 0f; crabSeen[i] = 0f;
                     mobState[i] = 0; mobT[i] = 0f; mobS[i] = 0f; mobY[i] = 0f; mobDir[i] = 0f; mobTgt[i] = 0f; mobSeen[i] = 0f;
@@ -1742,7 +1742,8 @@ public final class Sim {
         s += vx * dt;
         if (saw) s -= tilt[e] * T.seesawSlide * dt;       // the tipped plank slides you downhill whatever you do
         coyote = T.coyote + assistForgive;
-        if (jumpBuf > 0 && !gone[e]) {          // (DC8: not off a deck that vanished this step; the coyote grace still gives the jump next step, without its velocity)
+        if (jumpBuf > 0 && gone[e]) { doJump(0f); return; }          // DC8 8.3, refined (repair 2026-10-28): a jump pressed on the frame a deck vanishes is a plain jump - none of the vanished deck's velocity - but it is the jump, on that frame (owner: crumbling platforms stay together just long enough to make the jump)
+        if (jumpBuf > 0) {
             float pv = platformVy(e);
             vx += platformVs(e) * 0.6f;
             float boost = Math.max(0, pv) * 0.6f;

@@ -1208,3 +1208,28 @@ Source: docs/verification/CONSOLIDATED_AUDIT_REPORT.md (DC1-DC10) and docs/verif
 - **Coverage (DC10).** coverage.json corrected from the evidence; the gate requires a test for every VERIFIED and checks verdicts against code.
 - **Deferred (documented, not reached by current content).** Castle numbers above 32767; the beam mount dropping a jump pressed during its 0.62 s;
   holes staying open while the climber stands on the bridge; MidHop hopping only the first non-crab hazard of a deck.
+
+## Solver recovery repair (owner authorisation 2026-10-28, SolverRecoveryTest conveyor fixture)
+
+- **What failed.** `theBalanceConveyorIsBoardedFromWhereItsJumpWasProven` (NORMAL seed 1 slice 55 on 5c09272) ended with two hits from aimed cannon 26
+  (anchor 85) at link 88. The old solver had taken the same two hits and still reported completion; DC1's hit-free witness rightly refused it.
+- **Trace (instrumented copy of the solver, fixture state at the arrival on deck 88, t = 105.59 s).** The move off rope 87 lands at speed on deck 88.
+  The run then lines up for balance conveyor 89 in the deck's middle (`standAt`, the 2026-10-27 fix for sliding off the conveyor's near end). That
+  lineup walk is clean, but the climber stands where the cannon's ball arrives: hit 0.05 s later while the recovery code braked, and a second time in
+  the air recovery. Measured from that arrival: standing at any spot of deck 88 (offsets -1.25..+0.5 m) is hit at every wait from 0.1 to 10 s; spots
+  beyond +0.75 m are hit on the walk; the move straight from the landing reaches the conveyor clean but lands where no clean exit exists.
+- **Classification.** A solver capability limitation, not an unsolvable section: holding on to rope 87 for 0.5 to 4.8 s before the move to deck 88
+  gives a clean crossing of decks 88, 89 and 90 (44 of 120 arrival timings, every one hit-free). The section, the cannon and the generator are unchanged.
+- **Repair (Autopilot only; generation fingerprint unchanged, a7a4dff4ddd8016c31424dde).**
+  1. Every recovery repositioning (brake, walk back for a run-up, the spot offsets, the stand in the middle, the conveyor lineup, the stay-put watch,
+     the look's hold) is rehearsed on an exact copy of the live climb with every hazard active (`rehearsed`) and played for real only if the copy
+     takes no hit and no fall. The copy is exact, so a recovery that was clean before plays exactly as before; one that was hit was already a failed
+     witness, and now the next option is tried instead, or the run stops with `no_move` (UNKNOWN: a limitation, never "unsolvable").
+  2. The conveyor lineup is skipped only when it gives no clean crossing and the landing does (`beltReady`: the move onto the conveyor and the
+     conveyor's own move both clean). Otherwise it is played as before.
+  3. Look-ahead before a move that lands where the run lines up for a conveyor (`continuationClean`): when neither the lineup nor the straight
+     crossing from that landing would be clean, the solver holds on for the first wait (12-step steps, within the look's 5 s) that gives a clean move
+     and a clean continuation, found on a copy; if none does, nothing changes.
+- **Unchanged.** The hit-free witness, the verdicts and their thresholds, cannon behaviour, physics, generator rules and seeded generation.
+- **Tests.** SolverRecoveryTest: the fixture completes; new `theLineupUnderTheAimedCannonIsTimedFromTheRopeAndTheWitnessIsHitFree` (PROVEN_SOLVABLE,
+  0 hits, 0 falls) and `aRecoveryRehearsalThatIsHitLeavesTheClimbUntouched`.

@@ -53,16 +53,35 @@ public final class Tower {
     private double[] yBase = new double[64], sBase = new double[64], botAbs = new double[64], topAbs = new double[64];
     private int[] routeLen = new int[64];
     private double globalMinPlatAbs = Double.POSITIVE_INFINITY;
-    private CourseGenerator.Framed top;                  // the newest slice, expanded (the next one is generated from it)
+    private CourseGenerator.Framed top;                  // the newest final slice, expanded (the next one is generated from it)
+    /**
+     * Generation recovery R2 (2026-10-28): the slice after the last final one, built but not final. A slice is final once the slice after it has been
+     * built from it; until then it is provisional: never counted, stored, admitted or saved, and if the slice after it cannot be built (all its attempts
+     * refused) it is built again from its own next attempt (a bounded backtrack, at most {@link #BACKTRACKS} times). The rule is part of what defines
+     * the course, so every device builds the same one; when nothing has to be undone (every course that built before) it is exactly the old course.
+     */
+    private CourseGenerator.Framed prov; private int provAttempt = -1;
+    public static final int BACKTRACKS = 8;
+    /** R1: set when the tower cannot grow any further (every recovery refused); the climb keeps everything already final. Never thrown at the game. */
+    private volatile String failure;
+    /** Diagnostics: backtracks made so far (R2). */
+    public int backtracks;
+    /**
+     * R3 (2026-10-28): when false (the game), a slice that has to join the window before the background thread has made it is not made on the
+     * calling thread; {@link #waiting()} says so and the game holds the simulation (no step, no clock) until it is there - the slice still joins at
+     * the same step on every device. True (tests and tools): made on the spot, as before.
+     */
+    public boolean blockingAdmit = true;
+    private boolean waiting;
     private final HashMap<Integer, CourseGenerator.Framed> cache = new HashMap<>();
     private long[] elemKey = new long[0], hazKey = new long[0];     // identity of each world element / hazard: slice * 65536 + local
-    private Future<CourseGenerator.Framed> pending;
+    private Future<Step> pending;
     private static final ExecutorService POOL = Executors.newSingleThreadExecutor(r -> { Thread t = new Thread(r, "tower-gen"); t.setDaemon(true); t.setPriority(Thread.MIN_PRIORITY); return t; });
     private Ref cpRef; private int lastCp = -2;
 
     // ---- the first slice of the next climb, made ahead of time (Build 71 owner decision: no freeze when a climb begins)
     /** One slice 0 being made in the background for a known seed and tuning (one at a time: a newer request replaces it). */
-    private static final class Prepared { final long seed; final Tuning t; final Future<CourseGenerator.Framed> slice; Prepared(long s, Tuning t, Future<CourseGenerator.Framed> f) { seed = s; this.t = t; slice = f; } }
+    private static final class Prepared { final long seed; final Tuning t; final Future<Step> slice; Prepared(long s, Tuning t, Future<Step> f) { seed = s; this.t = t; slice = f; } }
     private static volatile Prepared prepared;
     private static final ExecutorService PREP = Executors.newSingleThreadExecutor(r -> { Thread th = new Thread(r, "tower-prep"); th.setDaemon(true); th.setPriority(Thread.MIN_PRIORITY); return th; });
 
@@ -74,18 +93,54 @@ public final class Tower {
     public static void prepare(long seed, Tuning t) {
         Prepared p = prepared;
         if (p != null && p.seed == seed && p.t == t) return;
-        prepared = new Prepared(seed, t, PREP.submit((Callable<CourseGenerator.Framed>) () -> CourseGenerator.chunkFramed(seed, 0, null, t)));
+        prepared = new Prepared(seed, t, PREP.submit((Callable<Step>) () -> grow(seed, t, -1, null, null, -1)));
     }
 
-    /** Slice 0 for this climb: the prepared one when it is for this seed and tuning (waiting for the rest of it if it is still being made), else made now. */
-    private static CourseGenerator.Framed firstSlice(long seed, Tuning t) {
+    /** Slice 0 for this climb (final: slice 1 was built from it) and the provisional slice 1: the prepared ones when they are for this seed and tuning, else made now. */
+    private static Step firstSlice(long seed, Tuning t) {
         Prepared p = prepared;
         if (p != null && p.seed == seed && p.t == t) {
             prepared = null;
-            try { return p.slice.get(); } catch (Exception e) { /* make it here instead; a real generator fault then surfaces exactly as before */ }
+            try { return p.slice.get(); } catch (Exception e) { /* a fault of the thread itself: made here instead */ }
         }
-        return CourseGenerator.chunkFramed(seed, 0, null, t);
+        return grow(seed, t, -1, null, null, -1);
     }
+
+    /** What one growth step produced: the slice that became final, the new provisional one after it, or why the tower cannot grow (R1). */
+    static final class Step {
+        CourseGenerator.Framed fin, prov; int finAttempt, provAttempt, backtracks; String failure;
+    }
+
+    /**
+     * One growth step (R2), a pure function of its inputs: with the last final slice {@code f} (index {@code fi}, null before slice 0) and the provisional
+     * slice after it ({@code p}, made here when null), builds the slice after {@code p}; if that is refused on every attempt, {@code p} is built again from
+     * its next attempt and the slice after it tried again, at most {@link #BACKTRACKS} times. Returns {@code p} as final and the new provisional slice,
+     * or the failure. Only slices the player has not been shown are ever built again.
+     */
+    static Step grow(long seed, Tuning t, int fi, CourseGenerator.Framed f, CourseGenerator.Framed p, int pAttempt) {
+        Step st = new Step();
+        int[] acc = new int[1];
+        try {
+            if (p == null) { p = CourseGenerator.chunkFramedFrom(seed, fi + 1, f, t, 0, acc); pAttempt = acc[0]; }
+            for (int b = 0; ; b++) {
+                try {
+                    CourseGenerator.Framed q = CourseGenerator.chunkFramedFrom(seed, fi + 2, p, t, 0, acc);
+                    st.fin = p; st.finAttempt = pAttempt; st.prov = q; st.provAttempt = acc[0]; st.backtracks = b;
+                    return st;
+                } catch (IllegalStateException e) {
+                    if (b >= BACKTRACKS || pAttempt + 1 >= CourseGenerator.ATTEMPTS) { st.failure = "slice " + (fi + 2) + " cannot be built on slice " + (fi + 1) + " (attempt " + pAttempt + ", " + b + " backtracks): " + e.getMessage(); return st; }
+                    p = CourseGenerator.chunkFramedFrom(seed, fi + 1, f, t, pAttempt + 1, acc); pAttempt = acc[0];          // backtrack: the unseen slice, its next attempt
+                }
+            }
+        } catch (IllegalStateException e) {
+            st.failure = "slice " + (fi + 1) + " cannot be built" + (f == null ? " (first slice)" : "") + ": " + e.getMessage(); return st;
+        } catch (RuntimeException | Error e) {          // R1: whatever goes wrong in the generator is a failure to grow, never a crash or a lost climb
+            st.failure = "generator fault at slice " + (fi + 1) + ": " + e; return st;
+        }
+    }
+
+    /** R6: the first slice of a climb could not be built (the seed is never changed to hide it). */
+    public static final class FirstSliceFailed extends IllegalStateException { public FirstSliceFailed(String m) { super(m); } }
     private final java.util.HashSet<Long> doneFeat = new java.util.HashSet<>();      // keys taken, gates opened, crabs knocked off: remembered across unloading a slice
     public int openedUpTo;                                // castles up to this number are open, wherever the player later falls to
 
@@ -103,7 +158,9 @@ public final class Tower {
     public Tower(long seed, Tuning t) {
         this.seed = seed; this.T = t;
         world = new Course(seed, t.circumference()); world.gemCheckpoints = t.castleSpacing > 0f;
-        append(firstSlice(seed, t)); admitted = 1;
+        Step st = firstSlice(seed, t);
+        if (st.failure != null) throw new FirstSliceFailed(st.failure);
+        apply(st); admitted = 1;
         rebuild(0, 0, 0.0, 0.0);
     }
 
@@ -157,9 +214,28 @@ public final class Tower {
     // ------------------------------------------------------------------ generation (background) and growth of the resident world
 
     public void requestNext() {
-        if (pending != null) return;
-        final CourseGenerator.Framed prev = top; final int idx = blobs.size();
-        pending = POOL.submit((Callable<CourseGenerator.Framed>) () -> CourseGenerator.chunkFramed(seed, idx, prev, T));
+        if (pending != null || failure != null) return;
+        final CourseGenerator.Framed f = top, p = prov; final int fi = blobs.size() - 1, pa = provAttempt;
+        pending = POOL.submit((Callable<Step>) () -> grow(seed, T, fi, f, p, pa));
+    }
+
+    private int[] accepted = new int[0];
+    /** The attempt slice {@code k} was accepted on (R2 diagnostics and tests); -1 when it came from stored history. */
+    public int acceptedAttempt(int k) { return k >= 0 && k < accepted.length && k < blobs.size() ? accepted[k] : -1; }
+    /** Test-only: told of every slice as it joins the resident world (its index and stored bytes). Null in the game. */
+    public java.util.function.BiConsumer<Integer, byte[]> onStitch;
+
+    /** R1: why the tower cannot grow any further, or null while it can. */
+    public String failure() { return failure; }
+    /** R3: true when the window needs a slice that is not final yet (or never will be: {@link #failure()}); the game then holds the simulation. */
+    public boolean waiting() { return waiting; }
+
+    private void apply(Step st) {
+        if (st.failure != null) { failure = st.failure; return; }
+        backtracks += st.backtracks;
+        int k = blobs.size(); if (accepted.length <= k) { int was = accepted.length; accepted = java.util.Arrays.copyOf(accepted, Math.max(k + 1, accepted.length * 2 + 8)); java.util.Arrays.fill(accepted, was, accepted.length, -1); }
+        accepted[k] = st.finAttempt;
+        append(st.fin); prov = st.prov; provAttempt = st.provAttempt;
     }
 
     /** Takes a finished slice, if any, and lets slices join the window up to {@link #admitAbs}. Call from the thread that owns the world. Returns true if the resident world grew. */
@@ -169,17 +245,21 @@ public final class Tower {
     }
 
     private void take() {
-        CourseGenerator.Framed f;
-        try { f = pending.get(); } catch (Exception e) { throw new IllegalStateException("tower generation failed at slice " + blobs.size(), e); }
+        Step st;
+        try { st = pending.get(); } catch (Exception e) { st = new Step(); st.failure = "tower generation thread failed at slice " + blobs.size() + ": " + e; }
         finally { pending = null; }
-        append(f);
+        apply(st);
     }
 
     /** Lets every slice whose bottom is at or below {@link #admitAbs} join, in order, making it now if the background thread has not yet; a slice joins the resident world at once when the top slice is resident. */
     private boolean admit() {
-        boolean grew = false;
+        boolean grew = false; waiting = false;
         while (admitted >= blobs.size() ? topAbs[blobs.size() - 1] <= admitAbs : botAbs[admitted] <= admitAbs) {
-            if (admitted >= blobs.size()) { if (admitAbs == Double.POSITIVE_INFINITY) break; requestNext(); try { pending.get(); } catch (Exception e) { throw new IllegalStateException(e); } take(); continue; }
+            if (admitted >= blobs.size()) {
+                if (admitAbs == Double.POSITIVE_INFINITY) break;
+                if (failure != null || !blockingAdmit) { requestNext(); if (pending != null && pending.isDone()) { take(); continue; } waiting = true; break; }          // (R1/R3: hold, never block or throw)
+                requestNext(); try { pending.get(); } catch (Exception e) { /* take() records it */ } take(); if (failure != null) { waiting = true; break; } continue;
+            }
             boolean topResident = !res.isEmpty() && res.get(res.size() - 1).index == admitted - 1;
             int k = admitted++;
             if (topResident) { stitch(k, slice(k)); grew = true; }
@@ -199,10 +279,13 @@ public final class Tower {
         return -1;
     }
 
+    /** Blocking growth by one final slice (tests and tools). Throws if the tower cannot grow (R1: the game itself never calls this during play). */
     public void extend() {
+        if (failure != null) throw new IllegalStateException("tower cannot grow: " + failure);
         requestNext();
-        try { pending.get(); } catch (Exception e) { throw new IllegalStateException(e); }
+        try { pending.get(); } catch (Exception e) { /* take() records it */ }
         poll();
+        if (failure != null) throw new IllegalStateException("tower cannot grow: " + failure);
     }
 
     /** Keeps at least {@code margin} metres of tower above absolute height {@code y}. */
@@ -360,6 +443,7 @@ public final class Tower {
     }
 
     private void stitch(int k, CourseGenerator.Framed f) {
+        if (onStitch != null) onStitch.accept(k, blobs.get(k));
         Course d = f.c; Res r = new Res(k, f);
         boolean first = res.isEmpty();
         double dy = f.yBase - originY, ds = f.sBase - originS;

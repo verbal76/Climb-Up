@@ -23,6 +23,8 @@ public final class SaveData {
     public int climbBuild = 0;
     public String climbDate = "";
     public int climbRules = 0;           // Build 64: the generation rules version the climb in progress was generated under (0 = unknown: started before the stamps)
+    public int climbTuning = 0;          // R5 (2026-10-28): CRC32 of the tuning the climb was generated with (0 = unknown: started before the stamp)
+    public boolean climbNotComparable;   // R5: resumed on other generation rules or tuning than it began with: the course is mixed, so its times set no record
     public float climbHeight = 0f;       // highest point reached in the climb in progress
     public int keysHeld = 0;             // keys carried (bit per colour) - a resumed climb only has the stored slice, so this must be saved
     public int openedUpTo = 0;           // highest castle number opened in this climb (castles open in order)

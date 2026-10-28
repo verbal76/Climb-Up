@@ -114,7 +114,12 @@ public final class PlayScreen extends ScreenAdapter {
             course = CourseGenerator.chunk(Long.getLong("climb.seed", 11L), Integer.getInteger("climb.slice", 4), null, g.tuning);
             sim = Sim.startOn(course, g.tuning, 0);
         } else {
-            ClimbGame.Run run = g.preparedRun != null ? g.preparedRun : g.openRun(g.runFresh); g.preparedRun = null; g.runFresh = false;
+            ClimbGame.Run run;
+            try { run = g.preparedRun != null ? g.preparedRun : g.openRun(g.runFresh); }
+            catch (com.hotatticgames.climbup.sim.Tower.FirstSliceFailed e) {          // R6: a typed course code whose first slice cannot be built is refused, never swapped for another seed
+                g.preparedRun = null; g.runFresh = false; next = new TitleScreen(g); disposeOnLeave = true; return;
+            }
+            g.preparedRun = null; g.runFresh = false;
             if (g.saveNotice != null) { toast = g.saveNotice; toastT = 6f; g.saveNotice = null; }          // (save repair H2: a climb that could not be resumed is never replaced silently)
             tower = run.tower; course = tower.world;
             int hStart = run.startHeight > 0 ? run.startHeight : Integer.getInteger("climb.startHeight", 0);              // test hook / the hidden world picker: begin partway up
@@ -164,7 +169,7 @@ public final class PlayScreen extends ScreenAdapter {
         g.audio.playlist(Audio.GAME_TRACKS);
         runTime = 0; maxAbs = absNow(); milestone = (int) (maxAbs / 50f);
         if (!demo && tower != null && g.save.assisted && g.save.seed != 0) g.save.board().markAssisted(g.save.seed);      // a resumed assisted climb stays assisted in the times table too
-        if (!demo && tower != null) g.save.board().catchUp(g.save.seed, runRules(), g.save.splits, g.save.towers, g.save.finished, g.save.finishTime);          // times table: a climb begun before the records existed
+        if (!demo && tower != null && !g.save.climbNotComparable) g.save.board().catchUp(g.save.seed, runRules(), g.save.splits, g.save.towers, g.save.finished, g.save.finishTime);          // times table: a climb begun before the records existed
         if (!demo) {        // seed the cross-session achievement counters from Steam's stored stats (all 0 when there is no Steam)
             com.hotatticgames.climbup.platform.Achievements a = g.platform.achievements();
             achRules = new AchievementRules(a.stat(AchievementRules.STAT_TOWER_FELL_MASK));
@@ -301,11 +306,13 @@ public final class PlayScreen extends ScreenAdapter {
             if (hitstop > 0) hitstop -= dt; else acc += dt * speed;
             boolean towerOk = tower == null || keepTower();
             if (tower != null && towerOk) g.syncHistory(tower);
+            if (towerOk && tower != null && holdForTower()) { towerOk = false; acc = 0f; }          // (R3: the next stretch is not built yet: the climb holds - no step, no clock - and goes on at the same step)
             if (PerfProbe.ON) { PerfProbe.tStream = System.nanoTime(); PerfProbe.generating = tower != null && tower.generating(); if (PerfProbe.forceFall) { PerfProbe.forceFall = false; sim.respawn(); }
                 if (PerfProbe.skipAhead) { PerfProbe.skipAhead = false; int idx = Math.min(course.routeSize() - 1, Math.max(sim.bestElem, sim.onElem) + 3); while (idx < course.routeSize() - 1 && !course.get(idx).isPlatform()) idx++; sim.checkpoint = idx; sim.respawn(); } }
             int steps = 0;
             while (towerOk && acc >= Sim.DT && steps < 6) {
                 if (tower != null && !(towerOk = keepTower())) break;           // Build 74: before EVERY step, not once per frame (see keepTower)
+                if (tower != null && holdForTower()) { acc = 0f; break; }
                 if (demo || AUTOPILOT) { long d0 = PerfProbe.ON ? System.nanoTime() : 0L; driver[0].drive(sim, in); if (AUTOPILOT && driver[0].failed) driver[0] = new Autopilot.Driver(sim); if (PerfProbe.ON) PerfProbe.tDrive += System.nanoTime() - d0; } else readInput();
                 sim.step(in);
                 in.jumpPressed = false; jumpLatch = false; kJump = false; in.swingPressed = false; swingLatch = false; kSwing = false;
@@ -326,7 +333,7 @@ public final class PlayScreen extends ScreenAdapter {
             if (world.takeScan()) g.audio.play("scan", 0.5f, 1f);
             g.save.playSeconds += dt;
             if (maxAbs > g.save.bestHeight) g.save.bestHeight = (float) maxAbs;
-            if (g.save.finished && tower != null && !demo) g.save.board().infinity(g.save.seed, infinityMetres());
+            if (g.save.finished && tower != null && !demo && !g.save.climbNotComparable) g.save.board().infinity(g.save.seed, infinityMetres());
             int ms = (int) (maxAbs / 50f);
             if (ms > milestone) { milestone = ms; toast = ms * 50 + " M!"; toastT = 1.6f; g.audio.play("checkpoint", 0.55f, 1.35f); world.particles.burst(sim.s, sim.y + 1f, 12, gold, 2.6f, 3.2f, 0.1f, -0.5f, 1f); }
             for (int pi = pops.size() - 1; pi >= 0; pi--) { Pop pp = pops.get(pi); pp.age += dt; pp.liftShown += (pp.lift - pp.liftShown) * Math.min(1f, dt * 14f); if (pp.age > 1.1f) pops.remove(pi); }
@@ -477,17 +484,33 @@ public final class PlayScreen extends ScreenAdapter {
      * depended on the frame rate too. The window admits new slices by height (Tower.admitAbs), not by when the background thread finished them. Returns false if the tower could not be built (the run is then closed).
      */
     private boolean keepTower() {
-        try { tower.openedUpTo = g.save.openedUpTo; tower.admitAbs = maxAbs + ADMIT_AHEAD; tower.ensureAbove(maxAbs, BUILD_AHEAD); tower.maintain(sim); }
-        catch (RuntimeException ex) {          // the next stretch of tower could not be built (never expected): keep the run as a stamped record and go back to the title instead of crashing
-            Gdx.app.error("climb", "tower generation failed", ex);
-            if (g.save.seed != 0) Legacy.archive(g.save, Legacy.today());
-            g.history.delete(); g.persist(); next = new TitleScreen(g); disposeOnLeave = true;
+        try { tower.blockingAdmit = false; tower.openedUpTo = g.save.openedUpTo; tower.admitAbs = maxAbs + ADMIT_AHEAD;          // (R3: the game never makes a slice on this thread; it holds instead)
+              tower.ensureAbove(maxAbs, BUILD_AHEAD); tower.maintain(sim); }
+        catch (RuntimeException ex) {          // R1 (2026-10-28): something went wrong keeping the world in step. The climb is never archived or deleted for it (it was):
+            Gdx.app.error("climb", "tower maintenance failed", ex);          // the final slices and the last good save stay on disk, the failure is recorded, and the climb holds
+            if (towerStop == null) { towerStop = "THE TOWER COULD NOT BE BUILT FURTHER. YOUR CLIMB IS SAVED."; g.recordGenerationFailure(String.valueOf(ex)); g.persist(); }
             return false;
         }
         if (tower.rebuilds != seenRebuilds) { seenRebuilds = tower.rebuilds; world.rebased(tower.lastRemap, tower.originY, tower.originS); simSize = course.size(); }
         if (course.size() != simSize) { sim.setRange(0, course.size() - 1); simSize = course.size(); }
         return true;
     }
+    /**
+     * R3 + R1 (2026-10-28): true while the climb must hold because the window needs a slice that is not final yet. The simulation takes no step (so
+     * the run clock does not run and the slice joins at the same step on every device); a small line says the tower is being built. If the tower
+     * cannot grow at all (every recovery refused), the climb is saved once as it is, the failure recorded, and the hold stays with its message:
+     * nothing is archived or deleted, and the climb can be left and resumed (owner decision A of the recovery audit: this is the recommended default).
+     */
+    private boolean holdForTower() {
+        boolean hold = towerStop != null || tower.waiting();
+        if (!hold) { holdT = 0f; return false; }
+        if (tower.failure() != null && towerStop == null) {
+            towerStop = "THE TOWER COULD NOT BE BUILT FURTHER. YOUR CLIMB IS SAVED.";
+            g.saveRun(tower, sim); g.recordGenerationFailure(tower.failure()); g.persist();
+        }
+        return true;
+    }
+    private float holdT; private String towerStop;
     private static final Color SQUASH_GREEN = new Color(0.45f, 0.95f, 0.35f, 1f);
 
     /** A castle was opened: record the split (time since the previous unlock) and the total, keep the personal bests, start timing the next tower. */
@@ -500,7 +523,7 @@ public final class PlayScreen extends ScreenAdapter {
         sd.towerTotals = java.util.Arrays.copyOf(sd.towerTotals, n + 1); sd.towerTotals[n] = total;
         sd.towers = n + 1;
         RecordsData.Run cur = null;
-        if (n < RecordsData.LEGS) { sd.board().legDone(sd.seed, runRules(), n, split); cur = sd.board().current; }          // times table: this leg, its global and its on-this-course bests
+        if (n < RecordsData.LEGS) { if (!sd.climbNotComparable) sd.board().legDone(sd.seed, runRules(), n, split); cur = sd.board().current; }          // (R5: a mixed-rules climb sets no record)          // times table: this leg, its global and its on-this-course bests
         boolean hadSplit = sd.bestSplit > 0f, pbSplit = !sd.assisted && sd.difficulty == 0 && (!hadSplit || RunRecord.faster(split, sd.bestSplit));       // owner (Build 71): an assisted run's towers are timed but set no best
         if (pbSplit) sd.bestSplit = split;
         if (sd.bestTotals.length <= n) sd.bestTotals = java.util.Arrays.copyOf(sd.bestTotals, n + 1);
@@ -638,7 +661,7 @@ public final class PlayScreen extends ScreenAdapter {
             int r = RunRecord.complete(g.save);
             if (r >= 0) {
                 finishNewBest = r == 1;
-                if (tower != null) g.save.board().finish(g.save.seed, runRules(), g.save.finishTime);
+                if (tower != null && !g.save.climbNotComparable) g.save.board().finish(g.save.seed, runRules(), g.save.finishTime);
                 g.audio.fallStop(); g.audio.play("win", 1f, 1f); world.particles.burst(s, y + 1.2f, 40, new Color(1f, 0.85f, 0.3f, 1f), 4f, 4f, 0.14f, 1f, 1.6f); vibrate(60, 1); say("[RUN COMPLETE]");
                 state = State.FINISHED; stickPtr = jumpPtr = -1; jumpHeldTouch = false; g.persist();
             }
@@ -838,6 +861,9 @@ public final class PlayScreen extends ScreenAdapter {
             zoneT -= Gdx.graphics.getDeltaTime();
             float a = Math.min(1f, zoneT);
             ui.textC(Palette.NAMES[zone] + (lap > 0 ? " " + (lap + 1) : ""), W / 2, H - 70, 7f, new Color(1f, 0.95f, 0.8f, a));
+        }
+        if (tower != null && (towerStop != null || (tower.waiting() && (holdT += Gdx.graphics.getDeltaTime()) > 0.3f))) {          // (R3/R1: a short wait says so, quietly; a stop says why)
+            ui.textC(towerStop != null ? towerStop : "BUILDING THE TOWER...", W / 2, H * 0.5f + 60f, towerStop != null ? 4.4f : 3.6f, new Color(1f, 1f, 1f, 0.85f));
         }
         if (toastT > 0) {                                        // event toast: as large as fits between the height plate and the pause button; a long one wraps onto a second line (at a size that still clears the tip box) instead of printing over the plate
             float lim = Math.max(W * 0.3f, 2f * Math.min(W / 2 - (m + 380f * zk + 20f), W / 2 - (m + 116f)));      // the floor keeps a 4:3 tablet at 160 % text readable (the plate then takes most of the half-width)

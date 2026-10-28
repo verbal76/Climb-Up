@@ -59,6 +59,7 @@ public final class TitleScreen extends ScreenAdapter {
 
     @Override public void resize(int w, int h) { g.ui.resize(w, h); if (world != null) world.resize(w, h); }
 
+    private float noticeT;
     @Override public void render(float dt) {
         time += Math.min(dt, 0.1f);
         g.models.preload(4f);                       // Build 71: whatever the splash did not get to, a little each frame (a no-op once all are loaded)
@@ -97,6 +98,10 @@ public final class TitleScreen extends ScreenAdapter {
         String ver = g.versionLabel();          // always visible: which build is this?
         ui.text(ver, W - 72 - ui.font.width(ver, 2.8f), 9, 2.8f, Ui.ACCENT);
         if (notice) legacyPrompt(ui, W, H); else if (confirmNew) newRunPrompt(ui, W, H); else if (showMore) morePanel(ui, W, H);
+        if (g.saveNotice != null) {          // (R6: a refused course code says why, once, for a few seconds)
+            noticeT += dt; ui.textC(g.saveNotice, W / 2, 52, 3.2f, Ui.ACCENT);
+            if (noticeT > 6f) { g.saveNotice = null; noticeT = 0f; }
+        }
         ui.end();
         g.autoShot("title", dt);
         if (exitRequested) { exitRequested = false; g.persist(); Gdx.app.exit(); return; }       // EXIT: everything is already saved; persist once more and close the game

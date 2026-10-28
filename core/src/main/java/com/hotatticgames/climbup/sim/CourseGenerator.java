@@ -88,18 +88,33 @@ public final class CourseGenerator {
      */
     public static Course chunk(long seed, int k, Course prev, Tuning t) { return chunkIn(seed, k, prev, t, 0.0); }
 
-    private static Course chunkIn(long seed, int k, Course prev, Tuning t, double base) {
+    private static Course chunkIn(long seed, int k, Course prev, Tuning t, double base) { return chunkIn(seed, k, prev, t, base, 0, null); }
+
+    /** Attempts per slice (each one a different, deterministic random stream; from attempt 12 on the shortcut spacing to the previous slice is waived). */
+    public static final int ATTEMPTS = 24;
+
+    /**
+     * Test-only fault hook (generation recovery R1-R6, 2026-10-28): when set, an attempt it names is refused before it is built, as a real dead end
+     * would be. Never set by the game (null: no effect, no cost). It draws no random numbers, so an unrefused attempt builds exactly as it would.
+     */
+    public interface FaultPlan { boolean refuse(long seed, int k, int attempt, Course prev); }
+    public static volatile FaultPlan FAULT;
+
+    /** Slice {@code k} from attempt {@code from} on (R2: a backtrack continues a slice's own attempt sequence); the accepted attempt goes to {@code acceptedOut[0]}. */
+    private static Course chunkIn(long seed, int k, Course prev, Tuning t, double base, int from, int[] acceptedOut) {
         IllegalStateException last = null;
-        for (int attempt = 0; attempt < 24; attempt++) {      // a dead end is retried with different (but still deterministic) choices
+        for (int attempt = from; attempt < ATTEMPTS; attempt++) {      // a dead end is retried with different (but still deterministic) choices
+            FaultPlan fp = FAULT;
+            if (fp != null && fp.refuse(seed, k, attempt, prev)) { last = new IllegalStateException("forced refusal (test fault plan) at attempt " + attempt); continue; }
             CourseGenerator g = new CourseGenerator(seed, t, k + 1 + attempt * 1000003L);
             g.endless = true; g.rampH = t.rampHeight; g.base = base;
             g.relaxed = attempt >= 12;       // the previous slice can occasionally leave no room that keeps clear of every older spiral layer: after twelve normal tries, build above it without the shortcut spacing to it (never without body clearance: ghostClash) rather than ever failing
             lastForDebug = g;
             GenTrace tr = GenTrace.GEN.get(); long a0 = tr != null ? GenTrace.now() : 0L; if (tr != null) { tr.attempt = attempt; tr.relaxed = g.relaxed; }      // observe-only (reports)
-            try { g.buildChunk(prev); g.checkIntegrity(); g.checkLaunchCorridors(); Course out = g.extract(); continuous(out, t); g.progFinish(out); if (tr != null) { tr.finalAttempt = attempt; tr.attemptNanos.add(new long[]{attempt, GenTrace.now() - a0, 1}); } return out; }
+            try { g.buildChunk(prev); g.checkIntegrity(); g.checkLaunchCorridors(); Course out = g.extract(); continuous(out, t); g.progFinish(out); if (tr != null) { tr.finalAttempt = attempt; tr.attemptNanos.add(new long[]{attempt, GenTrace.now() - a0, 1}); } if (acceptedOut != null) acceptedOut[0] = attempt; return out; }
             catch (IllegalStateException e) { last = e; SLICE_FAILURES.incrementAndGet(); GenTrace.tally("attempt_fail_" + failureClass(e.getMessage())); if (tr != null) { tr.sliceFailures.add("attempt " + attempt + " [" + failureClass(e.getMessage()) + "]: " + e.getMessage()); tr.attemptNanos.add(new long[]{attempt, GenTrace.now() - a0, 0}); } }
         }
-        throw last;
+        throw last != null ? last : new IllegalStateException("slice " + k + ": no attempts left from " + from);
     }
 
     /**
@@ -148,6 +163,18 @@ public final class CourseGenerator {
         double yBase = prev.yBase + dy, sBase = prev.sBase + ds;
         Course shifted = shift(pc, (float) dy, (float) ds);
         return new Framed(chunkIn(seed, k, shifted, t, yBase), yBase, sBase);
+    }
+
+    /**
+     * R2 (generation recovery): {@link #chunkFramed} from attempt {@code from} on; the accepted attempt is written to {@code acceptedOut[0]}. With
+     * {@code from} 0 it is exactly chunkFramed.
+     */
+    public static Framed chunkFramedFrom(long seed, int k, Framed prev, Tuning t, int from, int[] acceptedOut) {
+        if (prev == null) return new Framed(chunkIn(seed, k, null, t, 0.0, from, acceptedOut), 0.0, 0.0);
+        Course pc = prev.c; Element last = pc.get(pc.routeSize() - 1);
+        double step = t.castleSpacing > 0f ? t.castleSpacing : 500.0;
+        double dy = Math.max(0.0, step * Math.floor(last.y / step)), ds = pc.circumference * Math.floor(last.s / pc.circumference);
+        return new Framed(chunkIn(seed, k, shift(pc, (float) dy, (float) ds), t, prev.yBase + dy, from, acceptedOut), prev.yBase + dy, prev.sBase + ds);
     }
 
     /** A copy of a course translated by (-dy, -ds): used to put the previous slice into the next slice's frame. */

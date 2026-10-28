@@ -234,6 +234,7 @@ public class ClimbGame extends Game {
                     Tower.Ref ref = new Tower.Ref(save.cpSlice, save.cpLocal);
                     int idx = r.tower.worldIndex(ref);
                     if (idx >= 0) {
+                        checkRulesOnResume();          // (R5)
                         try { repairHistory(save.seed, hist); } catch (java.io.IOException e) { /* the climb still resumes; the next resume cuts at the same record again */ }          // (H2: only now, once the climb really resumes from the readable start)
                         r.tower.setCheckpointRef(ref); r.startIdx = idx; r.resumed = true;
                         if (snap != null) { snap.restoreWindow(r.tower); r.snapshot = snap; }
@@ -244,11 +245,24 @@ public class ClimbGame extends Game {
             keepUnresumableClimb();
         }
         String sd = System.getProperty("climb.seed");
+        boolean typed = pendingSeed != null || sd != null;
         long seed = pendingSeed != null ? pendingSeed : sd != null ? Long.parseLong(sd) : takeRandomSeed();   // Build 64: a typed course code wins; the random draw is unchanged (Build 71: drawn ahead, see prepareNextClimb)
         pendingSeed = null;
         Tuning nt = newClimbTuning();
-        r.tower = new Tower(seed, nt); r.startIdx = 0;
+        for (int tries = 0; ; tries++) {
+            try { r.tower = new Tower(seed, nt); break; }
+            catch (Tower.FirstSliceFailed e) {          // R6 (2026-10-28): the first slice could not be built on any attempt or backtrack
+                recordGenerationFailure("seed " + seed + " first slice: " + e.getMessage());
+                if (typed || tries >= 4) {          // a typed course code is refused, never quietly swapped for another seed
+                    saveNotice = "COURSE " + SeedCode.encode(seed) + " CANNOT BE BUILT ON THESE RULES";
+                    throw e;
+                }
+                seed = drawSeed();          // a random climb: nobody chose this seed, so another random one is fine
+            }
+        }
+        r.startIdx = 0;
         Legacy.stampNewClimb(save, VERSION, appBuild, Legacy.today());
+        save.climbTuning = tuningStamp(nt); save.climbNotComparable = false;          // (R5)
         save.difficulty = nt.hard;
         save.seed = seed; save.cpSlice = 0; save.cpLocal = 0;
         try { history.reset(seed); syncHistory(r.tower); } catch (java.io.IOException e) { /* cannot store the climb: it still plays, it just cannot be resumed */ save.seed = 0; }
@@ -293,6 +307,35 @@ public class ClimbGame extends Game {
         save.seed = 0;
         if (store != null) store.saveGame(save);
         saveNotice = "SAVED CLIMB " + SeedCode.encode(old) + " COULD NOT BE RESUMED: ARCHIVED" + (aside != null ? ", FILE KEPT" : "");
+    }
+
+    /** R5 (2026-10-28): CRC32 of the tuning a climb is generated with (part of what a course is, with the seed, the difficulty and the rules version). */
+    public static int tuningStamp(Tuning t) {
+        java.util.zip.CRC32 c = new java.util.zip.CRC32();
+        c.update(new com.badlogic.gdx.utils.Json().toJson(t).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        return (int) c.getValue() | 1;          // never 0 (0 = unknown)
+    }
+
+    /**
+     * R5 (2026-10-28): a climb resumed on other generation rules or tuning than it began with goes on (its stored slices are kept exactly; new ones
+     * follow the current rules), but its course is now mixed, so it sets no record from here on and the player is told once. Owner decision B of the
+     * recovery audit: this is the recommended default.
+     */
+    private void checkRulesOnResume() {
+        if (save.climbNotComparable) return;
+        boolean rules = save.climbRules > 0 && save.climbRules != com.hotatticgames.climbup.sim.CourseGenerator.RULES_VERSION;
+        boolean tune = save.climbTuning != 0 && save.climbTuning != tuningStamp(runTuning());
+        if (!rules && !tune) return;
+        save.climbNotComparable = true;
+        saveNotice = "THIS CLIMB BEGAN ON " + (rules ? "OLDER RULES" : "OTHER TUNING") + ": ITS TIMES ARE NOT RECORDED";
+    }
+
+    /** R1 (2026-10-28): one line per generation failure (seed, difficulty, rules, tuning, what failed) in generation_failures.txt; never thrown, never shown. */
+    public void recordGenerationFailure(String what) {
+        try (java.io.FileWriter w = new java.io.FileWriter(new java.io.File(dataDir, "generation_failures.txt"), true)) {
+            w.write(System.currentTimeMillis() + " seed=" + (save != null ? save.seed : 0) + " difficulty=" + (save != null ? save.difficulty : -1) + " rules=" + com.hotatticgames.climbup.sim.CourseGenerator.RULES_VERSION
+                + " tuning=" + Integer.toHexString(tuningStamp(runTuning())) + " build=" + appBuild + " " + what + "\n");
+        } catch (Exception ignored) { }
     }
 
     private Long nextRandomSeed;

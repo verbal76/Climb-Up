@@ -27,3 +27,14 @@ modes gives two different climbs. None of these 30 pairs was used before.
 ## Execution record
 
 (filled in when the batch is dispatched: source SHA, GitHub run id, per-course results)
+
+## 30-course acceptance campaign (owner-authorised, 2026-10-28)
+
+- **Validation gate.** CI run 40727062206 on 1123a32 (integration/build-82-repairs): core 500 tests, 0 failures, 3 skipped (the existing
+  skips); desktop 129 tests, 0 failures.
+- **Campaign.** difficulty-report.yml run 40752227771, workflow_dispatch on integration/build-82-repairs @ 1123a32:
+  - seeds 7301-7310;
+  - modes 0 NORMAL, 1 PUNISHER, 2 NOT GONNA HAPPEN;
+  - top 5000 m, solver on.
+- **Rules.** Rules 16, fingerprint 978eaa5128ad2201d29dabbf.
+- **Policy.** Every course is kept in the results, failed or incomplete. No seed is replaced.

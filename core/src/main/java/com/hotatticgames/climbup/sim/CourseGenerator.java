@@ -913,6 +913,8 @@ public final class CourseGenerator {
     private static final int AVL_TRIES = 4;
     /** NOT GONNA HAPPEN round 1 correction (PUNISHER too from rules 18): the extra arrival delays (s) an avalanche is also proven with (the climber waits where the proof starts). */
     static final float[] AVL_NGH_WAITS = {0.7f, 1.6f, 2.9f};
+    /** Investigation only (rules 18 avalanche frequency): when a spot is refused, also try the stretch without the avalanche. Off in the build. */
+    static final boolean DIAG_AVL = Boolean.getBoolean("climb.diagAvl");
     /** This slice's avalanches still to place ({height above the frame, blocks, cooldown, seed, failed tries}), lowest first; the deck being tried (-1 none). */
     private final List<float[]> avlPending = new ArrayList<>();
     private int avlCand = -1;
@@ -955,6 +957,7 @@ public final class CourseGenerator {
         int hi = c.hazards.size(); c.hazards.add(a);
         long t0 = GenTrace.now();
         int from = Math.max(0, avlCand - 2);          // (rules 18: from two decks before, so the climber arrives at full speed and the trigger leads them, as in a real climb)
+        Autopilot.CHAIN_WHY.remove();
         boolean proven = insertionClear(a) && Autopilot.chainClean(c, T, from, avlCand + 4);          // (DC5: the checks every hazard gets)
         if (proven && a.skin != 0) for (float w : AVL_NGH_WAITS) if (!Autopilot.chainClean(c, T, from, avlCand + 4, w)) { proven = false; GenTrace.tally("avalanche_arrival_unfair"); break; }      // PUNISHER and NGH: every arrival time
         if (proven) {
@@ -964,6 +967,8 @@ public final class CourseGenerator {
             return;
         }
         c.hazards.remove(hi); GenTrace.tally("avalanche_unfair");
+        { String w = Autopilot.CHAIN_WHY.get(); GenTrace.tally("avlwhy_" + (w == null ? "insertion" : w)); Autopilot.CHAIN_WHY.remove();          // (diagnostics only: DIAG_AVL)
+          if (DIAG_AVL && w != null) GenTrace.tally("avlwhy_without_avalanche_" + (Autopilot.chainClean(c, T, from, avlCand + 4) ? "clean" : "fails")); }
         avlCand = -1;
         if (++pl[4] >= AVL_TRIES) { avlPending.remove(0); AVALANCHES_DROPPED.incrementAndGet(); GenTrace.tally("avalanche_dropped"); }
         else pl[0] = c.get(last).y;          // the next suitable deck from here on

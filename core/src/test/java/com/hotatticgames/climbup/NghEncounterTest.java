@@ -118,16 +118,19 @@ public class NghEncounterTest {
      */
     @Test public void nghAvalanchesHoldForEveryArrivalTimeAndSeedOneSliceTenSolves() throws Exception {
         Tuning t = TestUtil.tuning().hardCopy(2);
-        CourseGenerator.Framed f = null; int checked = 0;
-        for (int k = 0; k <= 10; k++) {
+        CourseGenerator.Framed f = null, s10 = null; int checked = 0;
+        for (int k = 0; k <= 10 || (checked == 0 && k <= 30); k++) {          // (rules 18: avalanches are rarer early on; look on until one is placed)
             f = CourseGenerator.chunkFramed(1L, k, f, t);
-            for (Element h : f.c.hazards) if (h.type == Element.Type.AVALANCHE) {
+            if (k == 10) s10 = f;
+            java.util.Set<Integer> seen = new java.util.HashSet<>();
+            for (Element h : f.c.hazards) if (h.type == Element.Type.AVALANCHE && seen.add(h.anchor)) {
                 checked++;
-                for (float w : new float[]{0f, 0.7f, 1.6f, 2.9f}) assertTrue("slice " + k + " avalanche on deck " + h.anchor + " with the climber " + w + " s later", Autopilot.chainClean(f.c, t, h.anchor - 1, h.anchor + 4, w));
+                int from = Math.max(0, h.anchor - 2);          // (rules 18: the generator proves it from two decks before the trigger)
+                for (float w : new float[]{0f, 0.7f, 1.6f, 2.9f}) assertTrue("slice " + k + " avalanche on deck " + h.anchor + " with the climber " + w + " s later", Autopilot.chainClean(f.c, t, from, h.anchor + 4, w));
             }
         }
         assertTrue("avalanches were checked (" + checked + ")", checked > 0);
-        Autopilot.Report r = Autopilot.run(f.c, t, 4000f);
+        Autopilot.Report r = Autopilot.run(s10.c, t, 4000f);
         assertTrue("NGH seed 1 slice 10 solves (link " + r.failedLink + ": " + r.failInfo + ")", r.completed);
     }
 

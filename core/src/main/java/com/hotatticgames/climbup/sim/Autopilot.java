@@ -327,6 +327,21 @@ public final class Autopilot {
         return false;
     }
 
+    /**
+     * Rules 18 (avalanche frequency investigation, 2026-10-29): an avalanche under way near platform {@code a} - its trigger deck from six route decks
+     * behind to two ahead, the span its blocks bounce over. Its blocks stay in play for seconds, so a person waits on a safe platform for them to fall
+     * clear, bounce past or come to rest and go; the planner tries the same waits (0.3 s apart, up to AVL_WAIT s) as it does beside a moving platform.
+     * Without this it only tried going at once, and refused spots a waiting climber clears hit-free (NGH/PUNISHER seed 7301: most refusals were
+     * "no plan" from the trigger deck or the one after it, few were hits). The move itself is still proven on the real simulation, blocks and all.
+     */
+    static boolean avlLiveNear(Sim s, int a) {
+        Course c = s.course; int a0 = anchorIdx(c, a);
+        for (int i = 0; i < c.hazards.size(); i++) { Element h = c.hazards.get(i); if (h.type == Element.Type.AVALANCHE && h.anchor >= a0 - 6 && h.anchor <= a0 + 2 && s.avalancheState(i) == 1) return true; }
+        return false;
+    }
+    /** Waits tried beside a live avalanche: 24 of them AVL_WAIT_STEP s apart (to 10.35 s), inside a trial AVL_TRIAL_EXTRA s longer than usual. */
+    static final float AVL_WAIT_STEP = 0.45f, AVL_TRIAL_EXTRA = 8f;
+
     static float maxPeriod(Course c, int a) {
         float p = 0;
         for (int k = 0; k <= 2; k++) { int i = c.deck(a, k); if (i >= 0 && (c.get(i).isMoving() || c.get(i).spins())) p = Math.max(p, c.get(i).period); }
@@ -508,6 +523,8 @@ public final class Autopilot {
         List<Integer> group = new ArrayList<>();      // move-style id per candidate (offset x hold x steering), for the timing-window metric
         // move-style ids for the timing-window metric (DC7: each physically distinct style its own id; ids used to collide across families)
         int[] groupWins = new int[G_COUNT]; int nWaits = 1;
+        final boolean avl = base.mode == Sim.Mode.GROUND && avlLiveNear(base, a);          // (rules 18: blocks of a live avalanche nearby: wait longer for them)
+        final float tlim = 4.5f + (c.get(a).crumbles() ? 0 : 6f) + (avl ? AVL_TRIAL_EXTRA : 0f);
         int dir = c.dsWrap(base.es1[b], base.es1[a]) >= 0 ? 1 : -1;
         boolean hangWaits = (base.mode == Sim.Mode.ROPE || base.mode == Sim.Mode.CABLE) && movingNear(c, a);
         int hw = hangWaits ? ROPE_WAITS : 1; float hstep = hangWaits ? maxPeriod(c, a) / ROPE_WAITS : 0f;
@@ -525,11 +542,12 @@ public final class Autopilot {
         } else if (base.mode == Sim.Mode.AIR && (c.get(a).type == Element.Type.PAD || c.get(a).type == Element.Type.SPRING)) {
             for (int m = 0; m < 3; m++) for (int h = 0; h < 2; h++) { final int mm = m; final boolean hh = h == 0; cands.add(() -> new AirPolicy(b, mm, hh)); }
         } else {
-            boolean moving = movingNear(c, a);
-            int waits = moving ? Math.min(24, (int) Math.ceil(maxPeriod(c, a) / 0.3f) + 1) : 1;
+            boolean moving = avl || movingNear(c, a);
+            final float wstep = avl ? AVL_WAIT_STEP : 0.3f;
+            int waits = moving ? (avl ? 24 : Math.min(24, (int) Math.ceil(maxPeriod(c, a) / 0.3f) + 1)) : 1;
             nWaits = waits;
             for (int w = 0; w < waits; w++) {
-                final float wt = w * 0.3f;
+                final float wt = w * wstep;
                 for (int oi = 0; oi < OFFSETS.length; oi++) for (int hi = 0; hi < HOLDS.length; hi++) for (int sm = 0; sm < 4; sm += 1) {
                     if (sm == 2) continue;
                     final float fo = OFFSETS[oi], fh = HOLDS[hi]; final int fsm = sm;
@@ -587,11 +605,11 @@ public final class Autopilot {
             }
         }
         PolicyFactory firstOk = null;
-        WaitPrefix wp = new WaitPrefix(base, a, b, tgt, dir, 4.5f + (c.get(a).crumbles() ? 0 : 6f));
+        WaitPrefix wp = new WaitPrefix(base, a, b, tgt, dir, tlim);
         for (int ci = 0; ci < cands.size(); ci++) {
             PolicyFactory f = cands.get(ci);
             r.trials++;
-            float limit = 4.5f + (c.get(a).crumbles() ? 0 : 6f);
+            float limit = tlim;
             if (lookahead) {
                 Sim end = trialEnd(base, a, tgt, f, limit, wp);
                 if (end == null) continue;
@@ -609,7 +627,7 @@ public final class Autopilot {
         if (!r.ok && slowCands != null) {
             for (PolicyFactory f : slowCands) {
                 r.trials++;
-                Sim end = trialEnd(base, a, tgt, f, 4.5f + (c.get(a).crumbles() ? 0 : 6f), wp);
+                Sim end = trialEnd(base, a, tgt, f, tlim, wp);
                 if (end == null) continue;
                 r.successes++;
                 if (!lookahead || leavesGoodState(end, a)) { r.ok = true; r.factory = f; break; }      // while playing, a slow move that also suits the next link beats a working one that does not
@@ -673,20 +691,41 @@ public final class Autopilot {
         Sim real = CourseGenerator.provenStart(c, t, from);
         real.humanHold = HUMAN_HOLD; real.act = null; real.hz = null;
         InputState in = new InputState(); int sb = real.setbacks(), a = from;
-        for (int q = 0; q < (int) (wait / Sim.DT); q++) { in.clear(); real.step(in); if (real.setbacks() != sb) return false; }
+        for (int q = 0; q < (int) (wait / Sim.DT); q++) { in.clear(); real.step(in); if (real.setbacks() != sb) return chainWhy("wait_" + setbackWhy(real, sb), from, a); }
         while (a < to) {
             for (int q = 0; q < 120 && (real.mode == Sim.Mode.LEDGE || real.mode == Sim.Mode.PULLUP); q++) { in.clear(); in.moveY = 1f; real.step(in); }
             for (int q = 0; q < 120 && real.mode == Sim.Mode.AIR; q++) { in.clear(); real.step(in); }          // (a shove's flight: it lands somewhere)
-            if (real.setbacks() != sb || !(real.mode == Sim.Mode.GROUND || real.mode == Sim.Mode.ROPE || real.mode == Sim.Mode.CABLE) || !onRoute(c, real.onElem) || real.onElem < a) return false;
+            if (real.setbacks() != sb) return chainWhy("landing_" + setbackWhy(real, sb), from, a);
+            if (!(real.mode == Sim.Mode.GROUND || real.mode == Sim.Mode.ROPE || real.mode == Sim.Mode.CABLE) || !onRoute(c, real.onElem) || real.onElem < a) return chainWhy("route_lost", from, a);
             if (real.onElem > a) { a = real.onElem; continue; }
-            Result r = planRun(real, a);
-            if (!r.ok) return false;
+            Result r = plan(real, a, false, true); boolean fb = !r.ok && r.fallback != null;          // (planRun, inline: a fallback is a move the planner could not prove)
+            if (fb) { r.ok = true; r.factory = r.fallback; }
+            if (!r.ok) return chainWhy("no_plan_" + avlLive(real), from, a);
             Policy p = make(r.factory);
-            for (int guard = (int) (20f / Sim.DT); guard > 0 && !succeeded(real, a); guard--) { in.clear(); p.act(real, in); real.step(in); if (real.setbacks() != sb) return false; }
-            if (!succeeded(real, a)) return false;
+            for (int guard = (int) (20f / Sim.DT); guard > 0 && !succeeded(real, a); guard--) { in.clear(); p.act(real, in); real.step(in); if (real.setbacks() != sb) return chainWhy((fb ? "fallback_" : "planned_") + setbackWhy(real, sb), from, a); }
+            if (!succeeded(real, a)) return chainWhy("timeout", from, a);
             a = real.mode == Sim.Mode.AIR ? real.lastPad : real.onElem;
         }
         return real.setbacks() == sb;
+    }
+    /** Diagnostics only (observe-only, rules 18 avalanche investigation): why the last {@link #chainClean} on this thread failed, or null. */
+    public static final ThreadLocal<String> CHAIN_WHY = new ThreadLocal<>();
+    static boolean chainWhy(String why, int from, int a) { if (GenTrace.GEN.get() != null) CHAIN_WHY.set(why + "_link" + Math.max(-3, Math.min(9, a - from))); return false; }
+    /** Diagnostics: live avalanche blocks right now ("live{n}_rest{m}": m of them nearly still), or "none". */
+    static String avlLive(Sim s) {
+        int live = 0, rest = 0;
+        for (int i = 0; i < s.course.hazards.size(); i++) {
+            Element h = s.course.hazards.get(i);
+            if (h.type != Element.Type.AVALANCHE || s.avalancheState(i) != 1) continue;
+            for (int b = 0; b < Element.AVL_MAX; b++) { float[] k = s.avalancheBlock(i, h, b); if (k != null && k[3] == 1f) { live++; if (s.avalancheBlockSpeed(i, b) < 0.5f) rest++; } }
+        }
+        return live == 0 ? "none" : "live" + Math.min(live, 9) + "_rest" + Math.min(rest, 9);
+    }
+    static String setbackWhy(Sim s, int sb) {
+        if (s.hits == 0 || s.hitBy == null) return "fall";
+        if (s.hitBy.type != Element.Type.AVALANCHE) return "hit_" + s.hitBy.type;
+        float v = s.lastAvlHitV, age = s.lastAvlHitAge;
+        return "hit_AVL_" + (v < 1f ? "resting" : v < 5f ? "slow" : "fast") + "_" + (age < 1.5f ? "t0" : age < 3f ? "t1" : age < 6f ? "t3" : "t6");
     }
 
     /** True if the move reaches the next link on a copy with every hazard of the course active (no planning window). */

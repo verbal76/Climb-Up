@@ -283,6 +283,10 @@ public final class Element {
     public static final float AVL_HE0 = 0.58f, AVL_HE1 = 0.22f, AVL_HMU0 = 0.45f, AVL_HMU1 = 0.30f, AVL_HEB = 0.82f, AVL_HMUB = 0.35f, AVL_HREST = 0.9f;
     public static final float AVL_VMAX = 22f, AVL_WMAX = 1500f, AVL_AIM = 0.35f, AVL_AIM0 = 0.6f, AVL_AIM1 = 2.6f;
     public static final int AVL_HSUB = 4;
+    /** Rules 18 settling (avalanche frequency investigation): a rigid block touching a deck slower than AVL_SETTLE_V m/s and AVL_SETTLE_W deg/s loses
+     *  (1 - AVL_SETTLE_K) of its speed and spin each sub-step, so it comes to rest (and is cleaned up after AVL_REST) instead of rocking on its corners
+     *  for the rest of its life. Hard impacts, ricochets and tumbles are faster than this and keep their full physics. */
+    public static final float AVL_SETTLE_V = 1.2f, AVL_SETTLE_W = 200f, AVL_SETTLE_K = 0.85f;
     /** Leaving: it runs up the tower at ENF_EXIT_RUN and leaps away (m/s); once ENF_GONE_Y above its deck (or falling for ENF_FALL_T s) it is gone. */
     public static final float ENF_EXIT_RUN = 7f, ENF_EXIT_VX = 6f, ENF_EXIT_VY = 13f, ENF_GONE_Y = 10f, ENF_FALL_T = 2f;
 

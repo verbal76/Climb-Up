@@ -1291,6 +1291,7 @@ public final class Sim {
                 float R = avlRadius(e, b), E = rigidE(e, b), MU = rigidMu(e, b), iM = 1f / (R * R), iI = iM * 1.5f / (R * R);          // a square: m ~ side^2, I = m side^2 / 6
                 avl[p + 3] -= g * h; avl[p] += avl[p + 2] * h; avl[p + 1] += avl[p + 3] * h; avl[p + 4] = (avl[p + 4] + avl[p + 5] * h) % 360f;
                 float reach = R * 1.4143f, by = ay + avl[p + 1];
+                boolean touched = false;
                 for (int dd = -8; dd <= 8; dd++) {          // the decks: tops (ramps on their slope), sides (walls) and corners
                     int k = dd + 8, j = avlDk[k];
                     if (j < 0) continue;
@@ -1310,7 +1311,7 @@ public final class Sim {
                     float lx = -(nx * c + ny * sn), ly = -(-nx * sn + ny * c), px = R * avlCorner(lx), py = R * avlCorner(ly);
                     float rx = px * c - py * sn, ry = px * sn + py * c, sup = -(rx * nx + ry * ny), pen = sup - dist;
                     if (pen <= 0f) continue;
-                    avl[p] += nx * pen; avl[p + 1] += ny * pen;
+                    avl[p] += nx * pen; avl[p + 1] += ny * pen; touched = true;
                     int fl = (int) avl[p + 8]; if ((fl & 2) == 0 && dd >= -1 && dd <= 4) { avl[p + 8] = fl | 2; avlArea++; }
                     float w = avl[p + 5] * DEG, vcx = avl[p + 2] - w * ry, vcy = avl[p + 3] + w * rx, vn = vcx * nx + vcy * ny;
                     if (vn >= 0f) continue;
@@ -1350,6 +1351,9 @@ public final class Sim {
                     if (vn < -1f) avlKnocks++; if (vn < -3f) avlImpacts++;          // (a knock is a real collision, not blocks settling against each other)
                 }
                 float v2 = avl[p + 2] * avl[p + 2] + avl[p + 3] * avl[p + 3];
+                if (touched && v2 < Element.AVL_SETTLE_V * Element.AVL_SETTLE_V && Math.abs(avl[p + 5]) < Element.AVL_SETTLE_W) {          // a slow block lying on a deck settles (no endless rocking on a face or corner)
+                    avl[p + 2] *= Element.AVL_SETTLE_K; avl[p + 3] *= Element.AVL_SETTLE_K; avl[p + 5] *= Element.AVL_SETTLE_K; v2 *= Element.AVL_SETTLE_K * Element.AVL_SETTLE_K;
+                }
                 if (v2 > Element.AVL_VMAX * Element.AVL_VMAX) { float k = Element.AVL_VMAX / (float) Math.sqrt(v2); avl[p + 2] *= k; avl[p + 3] *= k; }
                 avl[p + 5] = Math.max(-Element.AVL_WMAX, Math.min(Element.AVL_WMAX, avl[p + 5]));
             }
@@ -1379,11 +1383,15 @@ public final class Sim {
             if (e.skin == 1) R = avlRadius(e, b);
             float dx = Math.max(0f, Math.abs(course.dsWrap(es1[a0] + avl[p], s)) - hw), by = ay + avl[p + 1];
             float dy = by < lo ? lo - by : (by > hi ? by - hi : 0f);
-            if (dx * dx + dy * dy < R * R) { hitFromS = es1[a0] + avl[p]; return true; }
+            if (dx * dx + dy * dy < R * R) { hitFromS = es1[a0] + avl[p]; lastAvlHitV = (float) Math.sqrt(avl[p + 2] * avl[p + 2] + avl[p + 3] * avl[p + 3]); lastAvlHitAge = avl[o + 1]; return true; }
         }
         return false;
     }
 
+    /** Diagnostics only (never read by the simulation): the speed (m/s) of the last avalanche block that hit the body, and how long its avalanche had run (s). */
+    public float lastAvlHitV, lastAvlHitAge;
+    /** Diagnostics: block b's speed (m/s). */
+    public float avalancheBlockSpeed(int hi, int b) { int p = hi * AVL_W + 2 + b * AVL_B; return (hi + 1) * AVL_W <= avl.length ? (float) Math.sqrt(avl[p + 2] * avl[p + 2] + avl[p + 3] * avl[p + 3]) : 0f; }
     /** Avalanche state for the renderer and reports: 0 not reached, 1 under way, 2 spent. */
     public int avalancheState(int hi) { return (hi + 1) * AVL_W <= avl.length ? (int) avl[hi * AVL_W] : 0; }
     /** Block b: {arc, height, angle (deg), status (1 falling, 2 about to drop), collision radius, impact speed (m/s) of a deck strike this step (0 none)}

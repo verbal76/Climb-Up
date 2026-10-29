@@ -173,6 +173,23 @@ public class AvalancheOverhaulTest {
         }
     }
 
+    /** Settling (rules 18 frequency investigation): blocks that end up lying on the route stop rocking and are cleaned up, so the way on is clear well
+     *  before their 12 s life is over (before the fix 3-8 blocks rocked on the route decks until it was). */
+    @Test public void blocksLeftOnTheRouteSettleAndClearWithinEightSeconds() throws Exception {
+        Tuning t = TestUtil.tuning();
+        for (float rise : new float[]{0f, 1.2f}) for (int skin : new int[]{2, 1}) for (float ph = 0.05f; ph < 1f; ph += 0.15f) {
+            Course c = course(t, skin == 2 ? 10 : 12, ph, skin, rise);
+            Sim s = Sim.startOn(c, t, 3); s.invuln = 1e9f; InputState in = new InputState();
+            for (int i = 0; i < (int) (8f / Sim.DT); i++) { in.clear(); s.step(in); }
+            int onRoute = 0;
+            for (int b = 0; b < Element.AVL_MAX; b++) {
+                float[] k = s.avalancheBlock(0, c.hazards.get(0), b); if (k == null || k[3] != 1f) continue;
+                for (int j = 1; j <= 7; j++) { Element d = c.get(j); if (Math.abs(k[0] - d.s) < d.w / 2 + 0.5f && k[1] > d.y - 0.3f && k[1] < d.y + 2.2f) { onRoute++; break; } }
+            }
+            assertEquals("rise " + rise + " skin " + skin + " ph " + ph + ": blocks still on the route 8 s after the avalanche", 0, onRoute);
+        }
+    }
+
     @Test public void twelveBlocksStayCheapToSimulate() throws Exception {
         Tuning t = TestUtil.tuning();
         run(t, Approach.STAND, 12, 0.37f, 1, 4f, true);          // (warm up)

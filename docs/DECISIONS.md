@@ -1310,3 +1310,25 @@ HAPPEN drops 9-12 blocks; the warning is the rumble only; the work stacks on the
 - **Fairness proofs.** An avalanche is now proven from two decks before its trigger, so the proof climber arrives at full speed and the lead
   fires as it would in a real climb. PUNISHER is now also proven for every extra arrival delay (0.7, 1.6, 2.9 s), as NGH already was. An
   unprovable spot is tried elsewhere, then dropped, as before.
+- **Frequency correction (owner addendum 2026-10-29: restore about Build 82 frequency without weakening the avalanches).** Cause: the rigid
+  blocks never came to rest. Three to eight of them kept rocking on the route until their 12 s life ran out, so the fairness proof found no
+  clean move off the trigger deck ("no plan" with 6-9 blocks live). About a third of the refused spots also fail with no avalanche at all;
+  those stretches cannot be proven either way. Two narrow corrections were kept:
+  (1) Slow-contact settling (Element.AVL_SETTLE_V 1.2 m/s, AVL_SETTLE_W 200 deg/s, AVL_SETTLE_K 0.85). A block touching a deck below both
+  limits loses 15% of its motion per sub-step. The route clears in 5-7 s. Violence is unchanged where it matters: on PUNISHER seed 7301
+  there are 41-72 rebounds, 25-50 tumbles and 26-55 ricochets per avalanche.
+  (2) The planner waits for a live avalanche nearby the way a person would: 24 waits 0.45 s apart (Autopilot.AVL_WAIT_STEP), inside a trial
+  8 s longer than usual (AVL_TRIAL_EXTRA). The solver uses the same planner, so the proof claims nothing the solver cannot play.
+  Avalanches placed / dropped to 1,200 m (seed 7301, local, generation only, no solver):
+
+  | Mode | Before | After both corrections | Build 82 |
+  |---|---|---|---|
+  | PUNISHER | 3 / 8 | 9 / 2 | about 8 |
+  | NGH | not measured | 2 / 6 | about 10 |
+
+  NGH is not restored. A third change was tried and reverted because it changed nothing: letting the proof try the solver's other standing
+  spots on the trigger deck (counts identical to the run before). NGH's remaining refusals are "no plan" two decks past the trigger with 8-9
+  blocks still moving. Under the owner's nine-course directive no further correction is made. The shortfall is reported as a finding.
+- **Steam demo (for the record):** demo App ID 5526730 (Windows depot 5526731, Linux depot 5526732); full game App ID 5427130
+  (https://store.steampowered.com/app/5427130/). The demo is with Valve for review; the official Steam logo is still to be added. Branch
+  demo/build-82 and the submitted demo are not touched by this work.

@@ -144,7 +144,9 @@ public final class CourseGenerator {
     /** Experiment diagnostics: names of buildHaz's and buildMid's hazard draws, for the observe-only tallies. */
     static final String[] HAZ_ROLL_NAMES = {"vsaw", "gapsaw", "spikeblock", "bee", "cannon"}, MID_ROLL_NAMES = {"spikemat", "floorsaw", "spikeblock", "crusher", "crabs"};
     /** Pendulum experiment (2026-10-28): the share of gap-saw slots that hang a spiked pendulum instead. */
-    static final float PENDULUM_SHARE = 0.4f;
+    static final float PENDULUM_SHARE = Float.parseFloat(System.getProperty("climb.r17PendulumShare", "0.4"));          // (S1-B isolation, diagnostics only: 0 hangs none; the draw is kept, so nothing else moves)
+    /** S1-B isolation (owner master directive 2026-10-29), diagnostics only, both off by default (rules 18): the rules 16 layer spacing (9.5 m if either platform launches); the rules 16 spiked block where an Enforcer bars a bee or crab deck. */
+    static final boolean R17_OFF_SPACING = Boolean.getBoolean("climb.r17OffSpacing"), R17_OFF_REDRAW = Boolean.getBoolean("climb.r17OffRedraw");
     /** The share of a saw's cycle that must stay open to time the move past it (SawFairnessTest). */
     static final float SAW_MIN_WINDOW = 0.5f;
     private static void continuous(Course out, Tuning t) {
@@ -1902,6 +1904,7 @@ public final class CourseGenerator {
         if (dy < PLAIN_LAYER_DY) return true;
         Element lower = e.y < f.y ? e : f, upper = lower == e ? f : e;
         if (launches(lower)) return true;                                   // no trampoline shortcuts between layers
+        if (R17_OFF_SPACING) return launches(upper);                         // (S1-B: rules 16, either platform)
         return launches(upper) && liftsClimber(c, lower);                   // a launcher above a plain platform: only if that platform's reach is plain
     }
     /**
@@ -2824,7 +2827,8 @@ public final class CourseGenerator {
             GenTrace.tally("haz_pick_" + HAZ_ROLL_NAMES[roll]);          // (experiment diagnostics, observe-only: what was drawn, and below what turned it into a spiked block)
             if ((roll == 1 && prevRoll == 3) || (roll == 3 && prevRoll == 1)) { GenTrace.tally("spikeblock_from_" + HAZ_ROLL_NAMES[roll] + "_beside_" + HAZ_ROLL_NAMES[prevRoll]); roll = 2; }      // Build 71: the bee now homes in and bumps you, so it never sits next to a saw you must time (it cut the saw's window to 0.2 s; SawFairnessTest)
             if ((roll == 1 && prevRoll == 4) || (roll == 4 && prevRoll == 1)) { GenTrace.tally("spikeblock_from_" + HAZ_ROLL_NAMES[roll] + "_beside_" + HAZ_ROLL_NAMES[prevRoll]); roll = 2; }      // Build 79: nor a cannon lane right before or after it (a cannon across the landing cut a saw's window from its whole cycle to 0.36; SawFairnessTest, seed 3)
-            if (roll == 3 && enfCalm()) {          // PUNISHER: no bee next to an Enforcer encounter (the draw is kept, so NORMAL is unchanged)
+            if (roll == 3 && enfCalm() && R17_OFF_REDRAW) { GenTrace.tally("spikeblock_from_bee_enforcer_near"); roll = 2; }          // (S1-B: rules 16)
+            else if (roll == 3 && enfCalm()) {          // PUNISHER: no bee next to an Enforcer encounter (the draw is kept, so NORMAL is unchanged)
                 // experiment (owner amendment 2026-10-28, hazard diversity): the rule bars a creature here, not a hazard, so draw again among the hazard
                 // families its neighbours allow (by the same variety memory); a spiked block only where none fits (it used to be a spiked block every time)
                 // (no gap saw: an Enforcer here can reach its decks, so sawsClearOfCreatures would turn it into a spiked block anyway; NGH seed 7301, 600 m)
@@ -2896,7 +2900,8 @@ public final class CourseGenerator {
         float gapIn = reach(dy) * lerp(0.5f, 0.85f, d) * (1f - 0.03f * attempt);
         int roll = wantCreature ? 4 : P.adaptiveVariety() ? varRoll(MID_ROLL_FAM, 5, last.y) : rnd.nextInt(5);
         GenTrace.tally("trap_pick_" + MID_ROLL_NAMES[roll]);          // (experiment diagnostics, observe-only)
-        if (roll == 4 && enfCalm()) {          // PUNISHER: no crab deck next to an Enforcer encounter
+        if (roll == 4 && enfCalm() && R17_OFF_REDRAW) { GenTrace.tally("spikeblock_from_crabs_enforcer_near"); roll = 2; }          // (S1-B: rules 16)
+        else if (roll == 4 && enfCalm()) {          // PUNISHER: no crab deck next to an Enforcer encounter
             roll = redraw(MID_ROLL_FAM, new int[]{0, 1, 3}, last.y);          // experiment: a trap deck instead (spike mat, floor saw, crusher), by the variety memory
             GenTrace.tally("redraw_crabs_enforcer_near_to_" + MID_ROLL_NAMES[roll]);
         }

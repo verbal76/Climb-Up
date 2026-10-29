@@ -1,0 +1,33 @@
+id,kpi,build82,build83,status
+A1,Courses complete to castle 10,30/30,9/9,PASS
+A2,"Slices proven solvable, hit-free witness","2,096/2,096",626/626,PASS
+A3,Generation failures / unknown / unsolvable verdicts,0 / 0 / 0,0 / 0 / 0,PASS
+A4,Geometric-integrity violations,0,0,PASS
+A5,Witness setbacks (including avalanche hits),0,0,PASS
+A6,Full CI suite (core + desktop) on the frozen commit,green on 1123a32,running,NOT VERIFIED (pending)
+B1,Mode ordering at every castle,yes,yes,PASS
+B2,"Separation erosion, PUNISHER over NORMAL (limit 25%)",29.7% (+21.8% to +15.3%),88.4% (+21.2% to +2.5%),FAIL
+B3,"Separation erosion, NGH over PUNISHER (limit 25%)",61.4%,29.0% (+13.1% to +9.3%),FAIL (improved)
+B4,Ramp castle 1 to 10 (N / P / NGH),+43% / +35% / +17%,+34% / +14% / +10%,FAIL (flatter in every mode)
+B5,Castles below the previous castle (N / P / NGH),1 / 2 / 1,2 / 3 / 3,WATCH
+B6,"Castle-to-castle swing, sd of steps (N / P / NGH)",25.7 / 23.6 / 18.1,44.2 / 29.3 / 13.5,"FAIL for NORMAL, WATCH for PUNISHER, PASS for NGH"
+C1,"Avalanches per course, PUNISHER (target about Build 82)",23.2,11.0 (planned 23.3),FAIL
+C2,"Avalanches per course, NGH (target about Build 82)",28.1,10.3 (planned 38.7),FAIL
+C3,"Blocks per avalanche (P 8-10, NGH 9-12)",4-5 / 5-7,8.8 / 10.4,PASS
+C4,Violence: ricochets per avalanche; block knocks per course (P / NGH),n/a (old physics),18.9 / 22.0; 64 / 68,PASS
+C5,Share of released blocks that land in the traversal area (P / NGH),n/a,80% / 77%,PASS
+C6,Fairness: witness hits by avalanche blocks,0,0,PASS
+C7,"Lead time, first impact, determinism, cleanup, cost per step",n/a,focused tests green locally; CI pending,NOT VERIFIED (pending)
+D1,"Enemies per course, PUNISHER",597,605 (+1%),PASS
+D2,"Enemies per course, NGH",738,692 (-6%),WATCH
+D3,Enemy mix: crabs / skulls per course (N / P / NGH),"213/71, 303/121, 273/204","217/62, 334/105, 317/158","WATCH (crabs up 2-16%, skulls down 13-23%)"
+D4,Enforcers per course (P / NGH),12.0 / 20.9,12.3 / 20.7,PASS
+E1,Route links using a terrain mechanic (N / P / NGH),38% / 19% / 13%,51% / 39% / 32%,"PASS (improved), still WATCH"
+E2,Plain-deck take-off share (N / P / NGH),80% / 90% / 93%,73% / 79% / 83%,WATCH (owner observation)
+E3,Terrain lane growth castle 1 to 10 (N / P / NGH),+22% / +34% / +20%,+13% / +11% / +10%,FAIL
+E4,"Hazard family entropy, bits (N / P / NGH)",2.70 / 2.74 / 2.63,2.84 / 2.90 / 2.85,PASS
+E5,Spike-block share of hazards (N / P / NGH),28.5% / 32.8% / 35.7%,26.9% / 29.4% / 29.4%,WATCH (still the top family)
+E6,Variety flags against the 30-course baseline,n/a,0,PASS
+E7,"Generation time per course on CI, seconds (N / P / NGH)",221 / 260 / 302,268 / 551 / 476,"FAIL (P x2.1, NGH x1.6)"
+E8,"Solver time per course, seconds (N / P / NGH)",10 / 16 / 24,12 / 24 / 30,WATCH
+E9,"Peak heap, MB (N / P / NGH)",180 / 209 / 187,179 / 183 / 194,PASS

@@ -40,7 +40,13 @@ public final class Element {
          * past you. {@code phase} seeds each block's start (position, delay, speed, spin). Single use: a spot that fires, or is reached during the
          * cooldown, never fires again. A block that hits you knocks you away like any hazard.
          */
-        AVALANCHE }
+        AVALANCHE,
+        /**
+         * Rules 19 (owner directive 2026-10-29): a TARZAN SWING - a rope hanging from a pivot at (s, y), {@code len} long, swinging from side to side
+         * as a pendulum, {@code amp} radians either way of straight down, once every {@code period} seconds ({@code phase}). Its end is only in reach
+         * while it swings toward you; the climber rides it and lets go with Jump, keeping the rope's motion. (Appended last: types are stored by number.)
+         */
+        TARZAN }
 
     public Type type;
     public int zone;
@@ -84,7 +90,10 @@ public final class Element {
     public boolean crumbles() { return type == Type.CRUMBLE || (type == Type.RAMP && skin == 1) || (skin == 1 && (type == Type.MOVE_H || type == Type.MOVE_V || type == Type.SWING)); }
     /** How thick the platform's block is below its top (matches the renderer: wide blocks and the goal are 1 m, narrow ones 0.5 m). Its sides are edges: see Sim.stepAir. */
     public float slab() { return w >= 5f || type == Type.GOAL ? 1f : 0.5f; }
-    public boolean isPlatform() { return type != Type.ROPE && type != Type.CABLE && !isHazard(); }
+    public boolean isPlatform() { return type != Type.ROPE && type != Type.CABLE && type != Type.TARZAN && !isHazard(); }
+    /** A Tarzan swing's angle from straight down at time t (radians; positive swings toward +s) and how fast it changes (rad/s). */
+    public float tarzanAngle(float t) { return amp * (float) StrictMath.sin(ang(t)); }
+    public float tarzanRate(float t) { return amp * (float) (2 * Math.PI / period) * (float) StrictMath.cos(ang(t)); }
     /** True for anything that changes with time (planner sweeps its phase). */
     /** Build 72 (owner): the spinning ramp (RAMP skin 3, was the sinking ramp) turns flat on its centre like a record: one turn every {@code period} seconds. */
     public boolean spins() { return type == Type.RAMP && skin == 3; }
@@ -119,7 +128,7 @@ public final class Element {
     public float rampSlope(float t) { return spins() ? amp * (float) StrictMath.cos(spinAngle(t)) : amp; }
 
     public boolean isMoving() {
-        switch (type) { case MOVE_H: case MOVE_V: case MOVE_Z: case SWING: case SAW_H: case SAW_V: case PENDULUM: case CANNON: case SPIKE_TRAP: case SPIKE_DROP: case CRAB: case BEE: case MORTAR: case AIMED: case SKULL: case BLOB: case ENFORCER: case AVALANCHE: return true; default: return false; }
+        switch (type) { case MOVE_H: case MOVE_V: case MOVE_Z: case SWING: case SAW_H: case SAW_V: case PENDULUM: case CANNON: case SPIKE_TRAP: case SPIKE_DROP: case CRAB: case BEE: case MORTAR: case AIMED: case SKULL: case BLOB: case ENFORCER: case AVALANCHE: case TARZAN: return true; default: return false; }
     }
 
     public static final float CANNON_FLIGHT = 0.7f;      // fraction of the cycle the cycle's ball takes to cross the lane (its launch speed)

@@ -316,6 +316,16 @@ public final class WorldRenderer implements Disposable {
                 ps.add(boxPart(0f, 0.0f, 0.85f, 2.32f, 0.16f, 0.16f, railC));           // back cross-rail tying the two posts together
                 break;
             }
+            case TARZAN: {
+                // rules 19: the ROPE's look, hanging from a fixed beam; the rope and its knots swing about the pivot each frame (drawElement)
+                Color rope = ROPE_COLOR, beam = new Color(0.45f, 0.30f, 0.18f, 1f), railC = new Color(0.40f, 0.27f, 0.16f, 1f);
+                ps.add(boxPart(0, -e.len * 0.5f, 0, 0.11f, e.len, 0.11f, rope));
+                for (int k = 1; k <= (int) e.len; k++) ps.add(boxPart(0, -k + 0.5f, 0, 0.2f, 0.12f, 0.2f, new Color(0.7f, 0.52f, 0.28f, 1f)));
+                Part b0 = boxPart(0f, 0.12f, 0.45f, 2.5f, 0.26f, 0.95f, beam); b0.fixed = true; ps.add(b0);
+                for (int sd = -1; sd <= 1; sd += 2) { Part pp = boxPart(sd * 1.05f, -0.55f, 0.85f, 0.22f, 1.7f, 0.22f, beam); pp.fixed = true; ps.add(pp); }
+                Part rl = boxPart(0f, 0.0f, 0.85f, 2.32f, 0.16f, 0.16f, railC); rl.fixed = true; ps.add(rl);
+                break;
+            }
             case CABLE: {
                 // the traverse bar in the rope's colour (owner 2026-10-27: the near-black steel all but vanished against the night and space skies); same size and place
                 Color line = ROPE_COLOR, post = new Color(0.45f, 0.30f, 0.18f, 1f), hook = new Color(1f, 0.55f, 0.15f, 1f);
@@ -444,9 +454,9 @@ public final class WorldRenderer implements Disposable {
         for (int j = 0; j < course.size(); j++) {
             if (j == idx) continue;
             Element o = course.get(j);
-            boolean rope = o.type == Element.Type.ROPE;
+            boolean rope = o.type == Element.Type.ROPE || o.type == Element.Type.TARZAN;
             if (!rope && !o.isPlatform()) continue;
-            if (Math.abs(course.dsWrap(o.s, e.s)) > span + (rope ? 0.8f : o.halfW())) continue;
+            if (Math.abs(course.dsWrap(o.s, e.s)) > span + (rope ? 0.8f + (o.type == Element.Type.TARZAN ? o.len * (float) Math.sin(Math.min(1.5f, o.amp)) : 0f) : o.halfW())) continue;
             float top = rope ? o.y + 1.2f : o.y + (o.type == Element.Type.MOVE_V ? Math.abs(o.amp) : 0f);
             if (rope && o.y - o.len < e.y && top > e.y - base) return 0f;              // a rope running up past the platform: no rock in its way
             if (top >= e.y - 0.05f) continue;
@@ -622,8 +632,8 @@ public final class WorldRenderer implements Disposable {
             if (e.isMoving()) { // interpolate moving platforms
                 es = sim.es0[i] + course.dsWrap(sim.es1[i], sim.es0[i]) * alpha; ey = sim.ey0[i] + (sim.ey1[i] - sim.ey0[i]) * alpha;
             }
-            float vy = e.type == Element.Type.ROPE ? e.y - e.len * 0.5f : ey;
-            if (!visible(es, vy, ps, e.type == Element.Type.CABLE ? e.w * 0.5f : 3f)) continue;
+            float vy = e.type == Element.Type.ROPE || e.type == Element.Type.TARZAN ? e.y - e.len * 0.5f : ey;
+            if (!visible(es, vy, ps, e.type == Element.Type.CABLE ? e.w * 0.5f : e.type == Element.Type.TARZAN ? 3f + e.len : 3f)) continue;
             if (!v.built) build(i);
             drawElement(sim, i, v, es, ey, ps, time);
         }
@@ -725,6 +735,11 @@ public final class WorldRenderer implements Disposable {
             }
             switch (e.type) {
                 case ROPE: y = e.y; break;
+                case TARZAN: {
+                    y = e.y;
+                    if (!p.fixed) { float th = e.tarzanAngle(sim.time), c = (float) Math.cos(th), sn = (float) Math.sin(th), u0 = du, v0 = dy; du = u0 * c - v0 * sn; dy = u0 * sn + v0 * c; roll = p.roll + th * MathUtils.radiansToDegrees; }
+                    break;
+                }
                 case SWING: {
                     // platform hangs from a pivot: ropes are drawn separately below
                     break;

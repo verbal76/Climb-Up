@@ -5,7 +5,7 @@ package com.hotatticgames.climbup.sim;
  * No rendering or engine dependencies; cloneable so tests and the course validator can look ahead.
  */
 public final class Sim {
-    public enum Mode { GROUND, AIR, ROPE, CABLE, LEDGE, PULLUP, BEAM }
+    public enum Mode { GROUND, AIR, ROPE, CABLE, LEDGE, PULLUP, BEAM, TARZAN }
 
     public static final float DT = 1f / 60f, SWING_TIME = 0.34f;
     // event bits
@@ -54,6 +54,10 @@ public final class Sim {
      * mostly upward for a contact from above. Without the press nothing changes. Not saved (it lasts a tenth of a second).
      */
     public float reboundBuf;
+    /** Rules 19 Tarzan swing: how far down the swinging rope the climber's hands hold it (m from the pivot). */
+    public float tarzanR;
+    /** Upward speed a Jump adds on letting go of a Tarzan swing, as a share of a jump (the rope's own motion is kept). Provisional. */
+    static final float TARZAN_RELEASE_UP = 0.55f;
     public int rebounds;
     static final float REBOUND_WINDOW = 0.10f, REBOUND_GAIN = 1.0f;
     public float ps0, py0;           // player position at the start of the last step (render interpolation)
@@ -270,7 +274,7 @@ public final class Sim {
         landSpeed = o.landSpeed; events = o.events; assistForgive = o.assistForgive; ps0 = o.ps0; py0 = o.py0; teleported = o.teleported;
         es0 = o.es0.clone(); ey0 = o.ey0.clone(); es1 = o.es1.clone(); ey1 = o.ey1.clone(); edy = o.edy.clone();
         crumbleT = o.crumbleT.clone(); gone = o.gone.clone(); goneT = o.goneT.clone(); padSquash = o.padSquash.clone(); tilt = o.tilt.clone(); onT = o.onT.clone();
-        reboundBuf = o.reboundBuf; rebounds = o.rebounds;
+        reboundBuf = o.reboundBuf; rebounds = o.rebounds; tarzanR = o.tarzanR;
         clubTime = o.clubTime; swingT = o.swingT; shoveCd = o.shoveCd; crabS = o.crabS; crabY = o.crabY; keys = o.keys; keysFree = o.keysFree; featDone = o.featDone.clone(); aimAng = o.aimAng.clone(); aimFireT = o.aimFireT.clone(); aimArmed = o.aimArmed.clone(); crabPos = o.crabPos.clone(); crabVel = o.crabVel.clone(); crabMode = o.crabMode.clone(); crabStuck = o.crabStuck.clone(); crabCool = o.crabCool.clone(); crabTurn = o.crabTurn.clone(); crabSeen = o.crabSeen.clone(); mobState = o.mobState.clone(); mobT = o.mobT.clone(); mobS = o.mobS.clone(); mobY = o.mobY.clone(); mobDir = o.mobDir.clone(); mobTgt = o.mobTgt.clone(); mobSeen = o.mobSeen.clone(); deckOff = o.deckOff.clone(); crabJump = o.crabJump.clone(); crabFrom = o.crabFrom.clone(); crabFromDeck = o.crabFromDeck.clone(); crabFall = o.crabFall.clone(); aimYaw = o.aimYaw.clone(); avl = o.avl.clone(); lastAvlT = o.lastAvlT; avlImpacts = o.avlImpacts; avlKnocks = o.avlKnocks; enfKickTries = o.enfKickTries; enfKickHits = o.enfKickHits; enfSwatTries = o.enfSwatTries; enfSwatHits = o.enfSwatHits; enfRetreats = o.enfRetreats; enfFalls = o.enfFalls; enfAlerts = o.enfAlerts; enfSwatConsidered = o.enfSwatConsidered; enfSwatRejected = o.enfSwatRejected; enfSwatRisky = o.enfSwatRisky; enfLandOwn = o.enfLandOwn; enfLandNear = o.enfLandNear; enfHops = o.enfHops; enfFallEdge = o.enfFallEdge; enfFallChase = o.enfFallChase; enfFallNoDeck = o.enfFallNoDeck; avlFired = o.avlFired; avlSkipped = o.avlSkipped; avlReleased = o.avlReleased; avlNear = o.avlNear; avlArea = o.avlArea; avlHits = o.avlHits; avlRicochets = o.avlRicochets; avlPeak = o.avlPeak; avlTrigT = o.avlTrigT; avlTrigV = o.avlTrigV; avlTrigDist = o.avlTrigDist; avlFirstImpactT = o.avlFirstImpactT; avlFirstNearT = o.avlFirstNearT; avlRebounds = o.avlRebounds; avlTumbles = o.avlTumbles; squashT = o.squashT; slipCd = o.slipCd; finishedRun = o.finishedRun; lastGateNo = o.lastGateNo; lastKeyColor = o.lastKeyColor; lastGateColor = o.lastGateColor;
         act = o.act; hz = o.hz; winLo = o.winLo; winHi = o.winHi; invuln = o.invuln; hits = o.hits; hitS = o.hitS; hitY = o.hitY;
         humanHold = o.humanHold; heldX = o.heldX; heldY = o.heldY; heldXT = o.heldXT; heldYT = o.heldYT;
@@ -529,7 +533,7 @@ public final class Sim {
 
     public boolean attachedTo(int idx) {
         if (idx < 0) return false;
-        return ((mode == Mode.GROUND || mode == Mode.LEDGE || mode == Mode.ROPE || mode == Mode.CABLE || mode == Mode.BEAM) && onElem == idx);
+        return ((mode == Mode.GROUND || mode == Mode.LEDGE || mode == Mode.ROPE || mode == Mode.CABLE || mode == Mode.BEAM || mode == Mode.TARZAN) && onElem == idx);
     }
 
     // ---------------------------------------------------------------- step
@@ -619,6 +623,7 @@ public final class Sim {
             case LEDGE: stepLedge(in, dt); break;
             case PULLUP: stepPull(dt); break;
             case BEAM: stepBeam(in, dt); break;
+            case TARZAN: stepTarzan(in, dt); break;
         }
         prevJumpHeld = in.jumpHeld;
         s = course.wrap(s);
@@ -2146,6 +2151,16 @@ public final class Sim {
         for (int k2 = 0, cnt2 = act == null ? course.size() : act.length; k2 < cnt2; k2++) {
             int i = act == null ? k2 : act[k2];
             Element el = course.get(i);
+            if (el.type == Element.Type.TARZAN) {          // rules 19: the rope where it is now, not where it hangs at rest
+                float th = el.tarzanAngle(time), ux = (float) StrictMath.sin(th), uy = -(float) StrictMath.cos(th);
+                float px = course.dsWrap(s, es1[i]), py = hand - el.y, along = px * ux + py * uy, perp = Math.abs(px * uy - py * ux);
+                if (along >= 0.6f && along <= el.len && perp <= T.ropeGrabRadius) {
+                    mode = Mode.TARZAN; onElem = i; tarzanR = along; coyote = 0; jumpBuf = 0; reboundBuf = 0f; events |= EV_GRAB | EV_ROPE;
+                    progress(i); stepTarzan(NO_INPUT, 0f);
+                    return true;
+                }
+                continue;
+            }
             if (el.type == Element.Type.ROPE) {
                 if (Math.abs(course.dsWrap(es1[i], s)) <= T.ropeGrabRadius && hand <= el.y + 0.1f && hand >= el.yBottom()) {
                     mode = Mode.ROPE; onElem = i; vx = vy = 0; s = es1[i]; coyote = 0; jumpBuf = 0; events |= EV_GRAB | EV_ROPE;      // (DC4: no coyote or buffered press carried onto the rope)
@@ -2210,6 +2225,26 @@ public final class Sim {
         // pushing on at the very top: haul up from behind the beam and stand on it (a cliff-style mantle); a firm, held up-push, so a light touch while climbing never yanks you off the rope
         if (y >= yMax - 0.01f && in.moveY > 0.3f) ropeTopT += dt; else ropeTopT = 0f;
         if (ropeTopT >= ROPE_TOP_HOLD) { ropeTopT = 0f; mode = Mode.BEAM; pullT = 0; pullFromY = y; vx = vy = 0; events |= EV_PULL; }
+    }
+
+    private static final InputState NO_INPUT = new InputState();
+    /**
+     * Rules 19 Tarzan swing (owner directive 2026-10-29): the climber hangs where the swinging rope is ({@link #tarzanR} down it from the pivot) and
+     * moves with it - position and velocity are the rope's. Up and down climb it slowly; Jump lets go with the rope's own velocity plus a little lift,
+     * so when you let go decides where you fly; down at its end drops off.
+     */
+    private void stepTarzan(InputState in, float dt) {
+        Element el = course.get(onElem);
+        tarzanR = Math.max(0.8f, Math.min(el.len, tarzanR - in.moveY * T.climbSpeed * 0.5f * dt));
+        float th = el.tarzanAngle(time), w = el.tarzanRate(time), sn = (float) StrictMath.sin(th), cs = (float) StrictMath.cos(th);
+        s = course.wrap(es1[onElem] + tarzanR * sn); y = el.y - tarzanR * cs - T.handHeight;
+        vx = tarzanR * cs * w; vy = tarzanR * sn * w;
+        if (Math.abs(in.moveX) > 0.15f) facing = in.moveX > 0 ? 1 : -1; else if (Math.abs(vx) > 0.3f) facing = vx > 0 ? 1 : -1;
+        if (jumpBuf > 0) {
+            mode = Mode.AIR; onElem = -1; vy += T.jumpVel * TARZAN_RELEASE_UP; jumpBuf = 0; reboundBuf = 0f; lockout = T.grabLockout; jumpedUp = false; coyote = 0; events |= EV_JUMP;
+            return;
+        }
+        if (in.moveY < -0.7f && tarzanR >= el.len - 0.01f) { mode = Mode.AIR; onElem = -1; lockout = T.grabLockout; }
     }
 
     /** True while the climber is still hauling himself over the rope's top beam (as opposed to standing on it). */

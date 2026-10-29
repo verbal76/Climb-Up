@@ -464,6 +464,7 @@ public final class HeroRig implements Disposable {
             case GROUND: return landT > 0 && speed < 0.5f ? Anim.LAND : (speed < 0.4f ? Anim.IDLE : Anim.RUN);
             case AIR: if (bigT > 0) return Anim.BIG_JUMP; if (sim.vy > 1f) return Anim.JUMP; return sim.vy < -3f || fallT > 0.2f ? Anim.FALL : Anim.JUMP;
             case ROPE: return Math.abs(sim.y - sim.py0) > 0.002f ? Anim.CLIMB : Anim.HANG;
+            case TARZAN: return Anim.HANG;          // (rules 19: hanging on a swinging rope)
             case CABLE: return Math.abs(sim.course.dsWrap(sim.s, sim.ps0)) > 0.002f ? Anim.SHIMMY : Anim.HANG;
             case LEDGE: return Anim.HANG;
             case BEAM: return sim.mounting() ? Anim.PULLUP : (speed < 0.4f ? Anim.IDLE : Anim.RUN);
@@ -554,7 +555,7 @@ public final class HeroRig implements Disposable {
         if (anim == Anim.HANG || anim == Anim.CLIMB || anim == Anim.SHIMMY) grip = 1f;
         else if (anim == Anim.PULLUP) grip = CYCLE ? 0.8f : Math.max(0f, 1f - sim.pullT / (sim.mode == Sim.Mode.BEAM ? Sim.BEAM_MOUNT_TIME : sim.T.pullUpTime) * 1.25f);
         if (grip > 0.01f && !NO_POSE) {
-            boolean line = anim == Anim.CLIMB || anim == Anim.SHIMMY || (anim == Anim.HANG && (sim.mode == Sim.Mode.ROPE || sim.mode == Sim.Mode.CABLE));
+            boolean line = anim == Anim.CLIMB || anim == Anim.SHIMMY || (anim == Anim.HANG && (sim.mode == Sim.Mode.ROPE || sim.mode == Sim.Mode.CABLE || sim.mode == Sim.Mode.TARZAN));
             boolean cable = anim == Anim.SHIMMY || sim.mode == Sim.Mode.CABLE;
             if (stubArms) stretchArmsBy(grip, HAM_WIDEN, cable ? HAM_CABLE_REACH : HAM_REACH);   // on the overhead cable the stub-armed hamster stretches further, so it hangs with its head below the line (not above it)
             else if (astro && line && !cable) stretchArmsBy(grip, 0.08f, ASTRO_STRETCH);   // lengthen the astronauts' arms so the hands reach the rope that sits forward of the deep helmet

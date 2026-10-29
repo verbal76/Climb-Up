@@ -80,8 +80,9 @@ final class Clouds {
         float r = 1.9f * c.scale + 1.0f;
         for (int i = Math.max(0, lo); i <= Math.min(course.size() - 1, hi); i++) {
             Element e = course.get(i);
-            float ext = e.type == Element.Type.ROPE ? 0.8f : (e.type == Element.Type.CABLE ? e.w * 0.5f : e.w * 0.5f + e.amp);
-            float vlo = e.type == Element.Type.ROPE ? e.y - e.len : e.y - 1f, vhi = e.y + (e.type == Element.Type.SWING ? e.len + 1f : 3.2f) + (e.type == Element.Type.MOVE_V ? e.amp : 0f);
+            boolean rope = e.type == Element.Type.ROPE || e.type == Element.Type.TARZAN;
+            float ext = e.type == Element.Type.TARZAN ? 0.8f + e.len : e.type == Element.Type.ROPE ? 0.8f : (e.type == Element.Type.CABLE ? e.w * 0.5f : e.w * 0.5f + e.amp);
+            float vlo = rope ? e.y - e.len : e.y - 1f, vhi = e.y + (e.type == Element.Type.SWING ? e.len + 1f : 3.2f) + (e.type == Element.Type.MOVE_V ? e.amp : 0f);
             if (Math.abs(course.dsWrap(e.s, c.s)) < r + ext + 0.6f && c.y + r > vlo && c.y - r < vhi) return false;
         }
         for (Element h : course.hazards) {

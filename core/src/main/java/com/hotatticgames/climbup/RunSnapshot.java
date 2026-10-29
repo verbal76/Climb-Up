@@ -200,12 +200,13 @@ public final class RunSnapshot {
         if (aKey != null && aState != null && aState.length == aKey.length * AVL_W_R13 && AVL_W_R13 != Sim.AVL_W) aState = widenAvl(aState, aKey.length);
         Sim.Mode m = Sim.Mode.valueOf(mode);
         int on = onKey < 0 ? -1 : tower.indexOfElemKey(onKey);
-        boolean attached = m == Sim.Mode.GROUND || m == Sim.Mode.LEDGE || m == Sim.Mode.ROPE || m == Sim.Mode.CABLE || m == Sim.Mode.BEAM || m == Sim.Mode.PULLUP;
+        boolean attached = m == Sim.Mode.GROUND || m == Sim.Mode.LEDGE || m == Sim.Mode.ROPE || m == Sim.Mode.CABLE || m == Sim.Mode.BEAM || m == Sim.Mode.PULLUP || m == Sim.Mode.TARZAN;
         if (attached && on < 0) return false;
         sim.time = time;
         sim.mode = m; sim.onElem = attached ? on : -1;
         sim.s = localS(sim, tower, absS); sim.y = tower.local(absY);
         sim.vx = vx; sim.vy = vy; sim.facing = facing == 0 ? 1 : facing; sim.coyote = coyote; sim.jumpBuf = jumpBuf; sim.lockout = lockout; sim.pullT = pullT; sim.ropeTopT = ropeTopT;
+        if (m == Sim.Mode.TARZAN && on >= 0) { com.hotatticgames.climbup.sim.Element sw = sim.course.get(on); sim.tarzanR = Math.max(0.8f, Math.min(sw.len, sw.y - (sim.y + sim.T.handHeight))); }          // (rules 19: hands back where they held the swing; the save format is unchanged)
         sim.ledgeSide = ledgeSide; sim.jumpedUp = jumpedUp; sim.prevJumpHeld = prevJumpHeld; sim.won = won; sim.finishedRun = finishedRun;
         sim.falls = falls; sim.hits = hits; sim.keys = keys; sim.lastKeyColor = lastKeyColor; sim.invuln = invuln; sim.clubTime = clubTime; sim.swingT = swingT; sim.shoveCd = shoveCd;
         sim.lastGroundY = tower.local(lastGroundAbs); sim.maxHeight = tower.local(maxAbs);

@@ -46,7 +46,7 @@ public final class Autopilot {
 
     static final float[] OFFSETS = {0f, 0.45f, 0.95f, 1.5f};
     /** Move-style id ranges for the timing-window metric (DC7): ground 32 (offset x hold x steer), walk-off 4, hole hop 6, mid hop 8, rope 12, cable 8. */
-    static final int G_GROUND = 0, G_WALKOFF = 32, G_HOLEHOP = 36, G_MIDHOP = 42, G_ROPE = 50, G_CABLE = 62, G_COUNT = 70;
+    static final int G_GROUND = 0, G_WALKOFF = 32, G_HOLEHOP = 36, G_MIDHOP = 42, G_ROPE = 50, G_CABLE = 62, G_TARZAN = 70, G_COUNT = 76;
     /** Waits tried on a rope or a cable beside something that moves (DC7), spread over its period. */
     static final int ROPE_WAITS = 6;
     static final float[] HOLDS = {0.9f, 0.22f};
@@ -66,6 +66,8 @@ public final class Autopilot {
     }
     /** How many steps a stand-in for a person holds a stick direction before changing it (100 ms): see {@link Sim#humanHold}. */
     public static final int HUMAN_HOLD = 6;
+    /** Release times tried per Tarzan swing period (every period/24: about 0.1 s for a 2.5 s swing). */
+    static final int TARZAN_RELEASES = 24;
     /** A slow walk on a direction-only stick: a person feathers it, pushing and letting go in turns (each at least {@link #HUMAN_HOLD} steps). */
     static float feather(float t, float speed) {
         if (speed >= 0.99f) return 1f;
@@ -155,6 +157,25 @@ public final class Autopilot {
                 }
             }
             holdT += Sim.DT; in.jumpHeld = holdT < 0.3f; in.moveX = steer(s, b, 0);
+        }
+    }
+
+    /**
+     * Rules 19 Tarzan swing: rides the rope for {@code delay} seconds after the catch, then lets go with Jump (holding it {@code hold}) and steers to
+     * {@code b}. The planner samples the delay over the swing's period: when you let go decides where you fly.
+     */
+    static final class TarzanPolicy implements Policy {
+        final int b, steerMode; final float delay, hold; float t, holdT; int phase;
+        TarzanPolicy(int b, float delay, float hold, int steerMode) { this.b = b; this.delay = delay; this.hold = hold; this.steerMode = steerMode; }
+        public void act(Sim s, InputState in) {
+            if (s.mode == Sim.Mode.LEDGE || s.mode == Sim.Mode.PULLUP) { in.moveY = 1f; return; }
+            if (phase == 0) {
+                if (s.mode != Sim.Mode.TARZAN) phase = 2;
+                else if (t < delay) { t += Sim.DT; return; }
+                else { in.jumpPressed = true; in.jumpHeld = true; phase = 2; holdT = 0; return; }
+            }
+            holdT += Sim.DT; in.jumpHeld = holdT < hold;
+            in.moveX = steer(s, b, steerMode);
         }
     }
 
@@ -354,7 +375,7 @@ public final class Autopilot {
 
     static boolean succeeded(Sim s, int a) {
         switch (s.mode) {
-            case GROUND: case LEDGE: case PULLUP: case ROPE: case CABLE: case BEAM:
+            case GROUND: case LEDGE: case PULLUP: case ROPE: case CABLE: case BEAM: case TARZAN:
                 return s.onElem > a && onRoute(s.course, s.onElem) && (s.mode != Sim.Mode.GROUND || !s.gone[s.onElem]);
             default: return s.lastPad > a && onRoute(s.course, s.lastPad);
         }
@@ -366,7 +387,7 @@ public final class Autopilot {
     /** Pair mode (key-room detours): success means attaching to exactly element {@code tgt}. */
     static boolean succeededTo(Sim s, int tgt) {
         switch (s.mode) {
-            case GROUND: case LEDGE: case PULLUP: case ROPE: case CABLE: case BEAM: return s.onElem == tgt && (s.mode != Sim.Mode.GROUND || !s.gone[tgt]);
+            case GROUND: case LEDGE: case PULLUP: case ROPE: case CABLE: case BEAM: case TARZAN: return s.onElem == tgt && (s.mode != Sim.Mode.GROUND || !s.gone[tgt]);
             default: return s.mode == Sim.Mode.AIR && s.lastPad == tgt;
         }
     }
@@ -539,6 +560,11 @@ public final class Autopilot {
             nWaits = hw;
             for (int w = 0; w < hw; w++) { final float wt = w * hstep; int st = 0;
                 for (float k : ks) for (boolean drop : new boolean[]{false, true}) { cands.add(wt == 0f ? () -> new CablePolicy(a, b, dir, k, drop) : () -> new WaitFirst(new CablePolicy(a, b, dir, k, drop), wt)); group.add(G_CABLE + st++); } }
+        } else if (c.get(a).type == Element.Type.TARZAN) {
+            // rules 19: the release time sampled over one swing (the rope comes back to the same place every period)
+            Element tz = c.get(a); nWaits = TARZAN_RELEASES;
+            for (int w = 0; w < TARZAN_RELEASES; w++) { final float dl = w * tz.period / TARZAN_RELEASES; int st = 0;
+                for (float h : HOLDS) for (int sm = 0; sm < 3; sm++) { final float fh = h; final int fsm = sm; cands.add(() -> new TarzanPolicy(b, dl, fh, fsm)); group.add(G_TARZAN + st++); } }
         } else if (base.mode == Sim.Mode.AIR && (c.get(a).type == Element.Type.PAD || c.get(a).type == Element.Type.SPRING)) {
             for (int m = 0; m < 3; m++) for (int h = 0; h < 2; h++) { final int mm = m; final boolean hh = h == 0; cands.add(() -> new AirPolicy(b, mm, hh)); }
         } else {
@@ -696,7 +722,7 @@ public final class Autopilot {
             for (int q = 0; q < 120 && (real.mode == Sim.Mode.LEDGE || real.mode == Sim.Mode.PULLUP); q++) { in.clear(); in.moveY = 1f; real.step(in); }
             for (int q = 0; q < 120 && real.mode == Sim.Mode.AIR; q++) { in.clear(); real.step(in); }          // (a shove's flight: it lands somewhere)
             if (real.setbacks() != sb) return chainWhy("landing_" + setbackWhy(real, sb), from, a);
-            if (!(real.mode == Sim.Mode.GROUND || real.mode == Sim.Mode.ROPE || real.mode == Sim.Mode.CABLE) || !onRoute(c, real.onElem) || real.onElem < a) return chainWhy("route_lost", from, a);
+            if (!(real.mode == Sim.Mode.GROUND || real.mode == Sim.Mode.ROPE || real.mode == Sim.Mode.CABLE || real.mode == Sim.Mode.TARZAN) || !onRoute(c, real.onElem) || real.onElem < a) return chainWhy("route_lost", from, a);
             if (real.onElem > a) { a = real.onElem; continue; }
             Result r = plan(real, a, false, true); boolean fb = !r.ok && r.fallback != null;          // (planRun, inline: a fallback is a move the planner could not prove)
             if (fb) { r.ok = true; r.factory = r.fallback; }
@@ -1040,7 +1066,7 @@ public final class Autopilot {
             // owner policy 2026-10-27 (witness cleanliness): the traversal witness is hit-free from start to goal, not only while a move is executed;
             // a hit or fall anywhere (waiting, pulling up, recovering, drifting off a pad) means no clean route was established here
             if (real.setbacks() != 0) return stop(rep, real, a, "setback", String.format("setback outside a move (%s): hits=%d falls=%d mode=%s s=%.2f y=%.2f", phase, real.hits, real.falls, real.mode, real.s, real.y) + (real.hitBy != null ? " lastHazard=" + real.hitBy.type + " anchor=" + real.hitBy.anchor : ""));
-            int[] br = (real.mode == Sim.Mode.GROUND || real.mode == Sim.Mode.ROPE || real.mode == Sim.Mode.CABLE) ? branchOf(c, real.onElem) : null;
+            int[] br = (real.mode == Sim.Mode.GROUND || real.mode == Sim.Mode.ROPE || real.mode == Sim.Mode.CABLE || real.mode == Sim.Mode.TARZAN) ? branchOf(c, real.onElem) : null;
             if (br != null) {
                 // like a person carried onto a fork's branch (a bee's shove, a pad's launch onto a later fork's branch): carry on along the branch to where it
                 // rejoins the route (rules 14, whole-slice solvability: PUNISHER seed 2 slice 47 on cbe6415, seed 5 slice 64 on rules 13 b06dc71 - the
@@ -1086,7 +1112,7 @@ public final class Autopilot {
                 continue;
             }
             if (real.mode == Sim.Mode.GROUND && real.onElem != a && onRoute(c, real.onElem)) { rep.resyncs++; a = resync(real, real.onElem); continue; }      // like a person: landed on another route platform (not a fall), so carry on from there
-            if ((real.mode == Sim.Mode.ROPE || real.mode == Sim.Mode.CABLE) && real.onElem != a && onRoute(c, real.onElem) && c.get(real.onElem).type == (real.mode == Sim.Mode.ROPE ? Element.Type.ROPE : Element.Type.CABLE)) { a = resync(real, real.onElem); continue; }      // or caught a route rope or cable on the way down (2026-10-26 GenBench: PUNISHER seed 2 slice 53, a crab shoved the climber off platform 96 onto rope 88): climb on from there
+            if ((real.mode == Sim.Mode.ROPE || real.mode == Sim.Mode.CABLE || real.mode == Sim.Mode.TARZAN) && real.onElem != a && onRoute(c, real.onElem) && c.get(real.onElem).type == (real.mode == Sim.Mode.ROPE ? Element.Type.ROPE : real.mode == Sim.Mode.TARZAN ? Element.Type.TARZAN : Element.Type.CABLE)) { a = resync(real, real.onElem); continue; }      // or caught a route rope or cable on the way down (2026-10-26 GenBench: PUNISHER seed 2 slice 53, a crab shoved the climber off platform 96 onto rope 88): climb on from there
             if ((real.mode == Sim.Mode.LEDGE || real.mode == Sim.Mode.PULLUP) && real.onElem != a && onRoute(c, real.onElem)) {          // or caught the ledge of another route platform: pull up, then carry on from there (same course, the next shove)
                 Policy pull = new PullPolicy(); int before = real.setbacks();
                 for (int q = 0; q < 120 && (real.mode == Sim.Mode.LEDGE || real.mode == Sim.Mode.PULLUP) && real.setbacks() == before; q++) { in.clear(); pull.act(real, in); real.step(in); }
@@ -1215,7 +1241,7 @@ public final class Autopilot {
             }
             if (!clear) rep.unclearMoves++;          // (executed with a hazard still on it: a hit fails the witness, so it is never counted as proven)
             if (r.fallback != null && r.factory == r.fallback) rep.fallbackMoves++;
-            if (real.mode != Sim.Mode.GROUND && real.mode != Sim.Mode.CABLE && real.mode != Sim.Mode.ROPE && !(real.mode == Sim.Mode.AIR && real.lastPad == a)) continue;      // knocked about while waiting: recover first
+            if (real.mode != Sim.Mode.GROUND && real.mode != Sim.Mode.CABLE && real.mode != Sim.Mode.ROPE && real.mode != Sim.Mode.TARZAN && !(real.mode == Sim.Mode.AIR && real.lastPad == a)) continue;      // knocked about while waiting: recover first
             Policy p = make(r.factory); phase = "execute";
             int fallsBefore = real.setbacks();
             real.act = null;

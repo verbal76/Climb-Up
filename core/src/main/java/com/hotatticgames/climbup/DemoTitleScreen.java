@@ -99,7 +99,8 @@ public final class DemoTitleScreen extends ScreenAdapter {
         }
         String all = f.records.bestRunTicks > 0 && f.records.bestRunFingerprint.equals(f.fingerprint()) ? ClockText.time(f.records.bestRunTicks / (float) RunRecord.STEPS_PER_SECOND) : "-";
         ui.text("ALL THREE", px + 50, y, 3.4f, Ui.ACCENT); ui.text(all, px + pw - 50 - ui.font.width(all, 3.4f), y, 3.4f, Ui.ACCENT);
-        ui.textC("CASTLE 2 TO CASTLE 3. ASSISTED RUNS ARE NOT RECORDED.", W / 2, py + 120, 2.6f, Ui.DIM);
+        String foot = "CASTLE 2 TO CASTLE 3. ASSISTED RUNS ARE NOT RECORDED.";
+        ui.textC(foot, W / 2, py + 120, Math.min(2.6f, (pw - 60f) / (foot.length() * 6f)), Ui.DIM);          // always inside the panel
         if (ui.button("BACK", W / 2 - 150, py + 26, 300, 78, true)) { g.audio.play("click"); showTimes = false; }
     }
 

@@ -55,8 +55,13 @@ public final class DemoPromoScreen extends ScreenAdapter {
         float l1 = Math.min(6.4f, (W - 80f) / Math.max(1, r.promoLine1.length() * 6f)), l2 = Math.min(4.6f, (W - 80f) / Math.max(1, r.promoLine2.length() * 6f));
         y -= ui.font.height(l1); ui.font.drawShadow(ui.batch, r.promoLine1, W / 2 - ui.font.width(r.promoLine1, l1) / 2, y, l1, Ui.TEXT, new Color(0, 0, 0, 0.8f));
         y -= 30f + ui.font.height(l2); ui.font.drawShadow(ui.batch, r.promoLine2, W / 2 - ui.font.width(r.promoLine2, l2) / 2, y, l2, Ui.ACCENT, new Color(0, 0, 0, 0.8f));
-        float bw = Math.min(560f, W - 120f), bh = Dp.touchHeight(84f, 96f, 96f, Dp.unitsPerDp(ui)), gap = 16f, x = W / 2 - bw / 2;
-        float by = Math.min(y - 50f - bh, H * 0.42f);
+        // buttons stack up from the bottom edge (and the best-run line under them), never over the lines above: on a short screen they get shorter, not off-screen
+        DemoRecords rec = flow.records;
+        String best = rec.bestRunTicks > 0 && rec.bestRunFingerprint.equals(flow.fingerprint()) ? "YOUR BEST DEMO RUN: " + ClockText.time(rec.bestRunTicks / (float) RunRecord.STEPS_PER_SECOND) : null;
+        int nb = r.hasStoreUrl() ? 3 : 2;
+        float gap = 14f, bottom = best != null ? 64f : 26f, room = y - 34f - bottom;
+        float bh = Math.max(64f, Math.min(Dp.touchHeight(84f, 96f, 96f, Dp.unitsPerDp(ui)), (room - gap * (nb - 1)) / nb));
+        float bw = Math.min(560f, W - 120f), x = W / 2 - bw / 2, by = bottom + (nb - 1) * (bh + gap);
         if (r.hasStoreUrl()) {
             if (ui.button(r.storeButton, x, by, bw, bh, true)) { g.audio.play("click"); try { Gdx.net.openURI(r.storeUrl); } catch (RuntimeException ignored) { } }
             by -= bh + gap;
@@ -64,11 +69,7 @@ public final class DemoPromoScreen extends ScreenAdapter {
         if (ui.button(r.againButton, x, by, bw, bh, !r.hasStoreUrl())) { g.audio.play("click"); next = flow.playAgain(); }
         by -= bh + gap;
         if (ui.button("MAIN MENU", x, by, bw, bh)) { g.audio.play("click"); next = new DemoTitleScreen(g); }
-        DemoRecords rec = flow.records;
-        if (rec.bestRunTicks > 0 && rec.bestRunFingerprint.equals(flow.fingerprint())) {
-            String s = "YOUR BEST DEMO RUN: " + ClockText.time(rec.bestRunTicks / (float) RunRecord.STEPS_PER_SECOND);
-            ui.textC(s, W / 2, 50, Math.min(3f, (W - 80f) / (s.length() * 6f)), Ui.DIM);
-        }
+        if (best != null) ui.textC(best, W / 2, 22, Math.min(3f, (W - 80f) / (best.length() * 6f)), Ui.DIM);
         ui.end();
         g.autoShot("promo", dt);
         if (next != null) { com.badlogic.gdx.Screen n = next; next = null; g.setScreen(n); }

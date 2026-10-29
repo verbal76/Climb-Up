@@ -16,6 +16,9 @@ public final class Autopilot {
         public float window = 1f;     // best fraction of wait-phases a single move style succeeds at (timing tolerance; 1 = timing irrelevant)
         /** With lookahead: a working move that does not leave a state the next link can be made from (ok stays false; see {@link #planRun}). */
         public PolicyFactory fallback;
+        /** Rules 19: the move takes an ordinary knock on the way and still arrives / relies on a timed rebound (no clean move was found). */
+        public boolean viaHit, viaRebound;
+        public int hitSuccesses, reboundTrials, reboundSuccesses;
         public float margin() { return trials == 0 ? 0 : successes / (float) trials; }
     }
 
@@ -37,9 +40,11 @@ public final class Autopilot {
         public String cause = "";
         /** How the witness got through (audit counters): moves taken without a lookahead-good follow-up, resyncs onto another route element, waits on the spot, moves executed while a look-ahead still saw a hazard on them. */
         public int fallbackMoves, resyncs, waits, unclearMoves;
+        /** Rules 19 accounting: knocks taken (Sim.hits), timed rebounds made, links played with a planned knock / a planned rebound. */
+        public int hitsTaken, shoves, rebounds, hitLinks, reboundLinks;
     }
     private static Report stop(Report rep, Sim real, int a, String cause, String info) {
-        rep.failedLink = a; rep.simTime = real.time; rep.cause = cause; rep.failInfo = info;
+        rep.failedLink = a; rep.simTime = real.time; rep.cause = cause; rep.failInfo = info; rep.hitsTaken = real.hits; rep.shoves = real.shoves; rep.rebounds = real.rebounds;
         rep.verdict = cause.equals("out_of_reach") ? Verdict.PROVEN_UNSOLVABLE : Verdict.UNKNOWN; rep.completed = false;
         return rep;
     }
@@ -66,6 +71,16 @@ public final class Autopilot {
     }
     /** How many steps a stand-in for a person holds a stick direction before changing it (100 ms): see {@link Sim#humanHold}. */
     public static final int HUMAN_HOLD = 6;
+    /**
+     * Rules 19 (owner correction 2026-10-29): what makes a move fail. Only a fall (back to the checkpoint) loses the climb; a hazard's knock is a
+     * physics event whose outcome the proofs follow (Sim.hits still counts every one). -Dclimb.hitStrict=true restores the old rule (falls + hits)
+     * for comparisons. The checks that pick a clear moment to go (clearOfEverything, rehearsed, idle, the lineups) still avoid hits.
+     */
+    static boolean HIT_STRICT = Boolean.getBoolean("climb.hitStrict");          // (not final: the fixtures compare both rules)
+    static int lost(Sim s) { return HIT_STRICT ? s.setbacks() : s.falls; }
+    /** Working moves needed before a link may rely on a knock or a rebound; moves tried for a rebound; steps before the contact the press is tried at. */
+    static final int MIN_COLLISION_SUCCESSES = 2, REBOUND_CANDS = 8;
+    static final int[] REBOUND_LEADS = {1, 3, 5};
     /** Release times tried per Tarzan swing period (every period/24: about 0.1 s for a 2.5 s swing). */
     static final int TARZAN_RELEASES = 24;
     /** A slow walk on a direction-only stick: a person feathers it, pushing and letting go in turns (each at least {@link #HUMAN_HOLD} steps). */
@@ -420,7 +435,7 @@ public final class Autopilot {
 
     private static Sim trialEnd(Sim base, int a, int tgt, PolicyFactory f, float limit, MotionCache mc) {
         Sim s = trialStart(base, a, tgt, mc);
-        return trialRun(s, make(f), a, tgt, s.setbacks(), 0, (int) (limit / Sim.DT));
+        return trialRun(s, make(f), a, tgt, lost(s), 0, (int) (limit / Sim.DT));
     }
 
     private static Sim trialStart(Sim base, int a, int tgt, MotionCache mc) {
@@ -454,7 +469,7 @@ public final class Autopilot {
     static Sim finishArrival(Sim s, int a, int tgt, int fallsBefore) {
         if (s.mode != Sim.Mode.LEDGE && s.mode != Sim.Mode.PULLUP) return s;
         InputState in = new InputState();
-        for (int q = 0; q < 90 && (s.mode == Sim.Mode.LEDGE || s.mode == Sim.Mode.PULLUP); q++) { in.clear(); in.moveY = 1f; s.step(in); if (s.setbacks() != fallsBefore) return null; }
+        for (int q = 0; q < 90 && (s.mode == Sim.Mode.LEDGE || s.mode == Sim.Mode.PULLUP); q++) { in.clear(); in.moveY = 1f; s.step(in); if (lost(s) != fallsBefore) return null; }
         if (s.mode != Sim.Mode.GROUND || s.onElem < 0 || s.gone[s.onElem]) return null;
         if (tgt >= 0) return s.onElem == tgt && staysOn(s, tgt) ? s : null;
         return s.onElem > a && onRoute(s.course, s.onElem) ? s : null;
@@ -464,7 +479,7 @@ public final class Autopilot {
 
     /** After a trial step: 1 succeeded, -1 failed, 0 carry on. */
     private static int trialEnded(Sim s, int a, int tgt, int fallsBefore, float floorY) {
-        if (s.setbacks() != fallsBefore) return -1;
+        if (lost(s) != fallsBefore) return -1;
         if (tgt >= 0 ? succeededTo(s, tgt) : succeeded(s, a)) return tgt >= 0 && !staysOn(s, tgt) ? -1 : 1;
         if (tgt < 0 && s.mode == Sim.Mode.GROUND && s.onElem >= 0 && (s.onElem < a || !onRoute(s.course, s.onElem))) return -1;   // fell back, or onto a dead end
         if (s.mode == Sim.Mode.AIR && s.vy < 0 && s.y < floorY) return -1;
@@ -493,7 +508,7 @@ public final class Autopilot {
 
         private Object[] prefix(float wait) {
             Sim s = trialStart(base, a, tgt, mc);
-            int fallsBefore = s.setbacks();
+            int fallsBefore = lost(s);
             float floorY = trialFloor(s.course, a, tgt);
             Reflex p = (Reflex) make(() -> { GroundPolicy g = new GroundPolicy(a, b, dir, wait, 0f, 0f, 0); g.probe = true; return g; });
             InputState in = new InputState();
@@ -630,21 +645,21 @@ public final class Autopilot {
                 slowCands.add(() -> { GroundPolicy g = new GroundPolicy(a, b, dir, 0f, fo, fh, fsm); g.speed = fs; return g; });
             }
         }
-        PolicyFactory firstOk = null;
+        PolicyFactory firstOk = null, hitOk = null;
         WaitPrefix wp = new WaitPrefix(base, a, b, tgt, dir, tlim);
         for (int ci = 0; ci < cands.size(); ci++) {
             PolicyFactory f = cands.get(ci);
             r.trials++;
             float limit = tlim;
+            Sim end = trialEnd(base, a, tgt, f, limit, wp);
+            if (end == null) continue;
+            if (end.hits > base.hits) { r.hitSuccesses++; if (hitOk == null) hitOk = f; continue; }          // rules 19: it took a hit and still arrived - kept, but a clean move is preferred
+            r.successes++;
             if (lookahead) {
-                Sim end = trialEnd(base, a, tgt, f, limit, wp);
-                if (end == null) continue;
-                r.successes++;
                 if (firstOk == null) firstOk = f;
                 if (!r.ok && leavesGoodState(end, a)) { r.ok = true; r.factory = f; }
                 if (r.ok && !measureMargin) break;
-            } else if (trialEnd(base, a, tgt, f, limit, wp) != null) {
-                r.successes++;
+            } else {
                 if (ci < group.size()) groupWins[group.get(ci)]++;
                 if (!r.ok) { r.ok = true; r.factory = f; }
                 if (!measureMargin) break;
@@ -655,14 +670,82 @@ public final class Autopilot {
                 r.trials++;
                 Sim end = trialEnd(base, a, tgt, f, tlim, wp);
                 if (end == null) continue;
+                if (end.hits > base.hits) { r.hitSuccesses++; if (hitOk == null) hitOk = f; continue; }
                 r.successes++;
                 if (!lookahead || leavesGoodState(end, a)) { r.ok = true; r.factory = f; break; }      // while playing, a slow move that also suits the next link beats a working one that does not
                 if (firstOk == null) firstOk = f;
             }
         }
         if (measureMargin && !group.isEmpty()) { int best = 0; for (int gw : groupWins) best = Math.max(best, gw); r.window = best / (float) nWaits; }
+        if (!r.ok && firstOk == null && !HIT_STRICT) collisionMoves(base, a, tgt, cands, tlim, hitOk, r);
+        if (GenTrace.GEN.get() != null) {          // (observe-only: rules 19 acceptance accounting for the reports)
+            if (r.ok && !r.viaHit && !r.viaRebound && r.hitSuccesses > 0) GenTrace.tally("r19_why_clean_over_hit");
+            if (r.viaHit && !r.viaRebound) GenTrace.tally("r19_why_via_knock");
+            if (r.viaRebound) GenTrace.tally("r19_why_via_rebound");
+            if (!r.ok && firstOk == null && (r.hitSuccesses > 0 || r.reboundSuccesses > 0)) GenTrace.tally("r19_why_collision_too_few");
+            if (r.reboundTrials > 0) GenTrace.tally("r19_why_rebound_trials", r.reboundTrials);
+        }
         if (lookahead && !r.ok) r.fallback = firstOk;          // (DC1: the caller decides whether a move with no good follow-up will do; ok means a good one)
         return r;
+    }
+
+    /**
+     * Rules 19 (owner correction 2026-10-29: a hit is not a failure; there is no health bar). With no clean move, in the owner's order: (3) a move
+     * that takes an ordinary knock and still arrives, played out to the arrival on the real simulation (the trial follows the knock's flight and
+     * requires the climber standing, hanging or pulled up on a later route element with no fall), then (4) a bounded set of timed rebound jumps: for
+     * the first {@link #REBOUND_CANDS} moves that meet something on the way, the same move with a fresh Jump press {@link #REBOUND_LEADS} steps before
+     * that contact (all inside the 0.10 s window), kept only if the rebound really happened and the move then arrived. Either kind needs at least
+     * {@link #MIN_COLLISION_SUCCESSES} working moves (a one-frame fluke is no route). Marks the result {@link Result#viaHit} / {@link Result#viaRebound}.
+     */
+    private static void collisionMoves(Sim base, int a, int tgt, List<PolicyFactory> cands, float tlim, PolicyFactory hitOk, Result r) {
+        if (hitOk != null && r.hitSuccesses >= MIN_COLLISION_SUCCESSES) { r.ok = true; r.factory = hitOk; r.viaHit = true; return; }
+        PolicyFactory rbOk = null; boolean rbHit = false; int tried = 0;
+        for (int ci = 0; ci < cands.size() && tried < REBOUND_CANDS; ci++) {
+            PolicyFactory f = cands.get(ci);
+            float ct = contactTime(base, a, tgt, f, tlim);
+            if (Float.isNaN(ct)) continue;
+            tried++;
+            for (int lead : REBOUND_LEADS) {
+                final float at = ct - lead * Sim.DT;
+                PolicyFactory g = () -> new ReboundPress(f.create(), at);
+                r.trials++; r.reboundTrials++;
+                Sim end = trialEnd(base, a, tgt, g, tlim);
+                if (end == null || end.rebounds <= base.rebounds) continue;
+                r.reboundSuccesses++;
+                if (rbOk == null) { rbOk = g; rbHit = end.hits > base.hits; }
+            }
+        }
+        if (rbOk != null && r.reboundSuccesses >= MIN_COLLISION_SUCCESSES) { r.ok = true; r.factory = rbOk; r.viaRebound = true; r.viaHit = rbHit; }
+    }
+
+    /** The sim time of the first knock or shove move {@code f} meets (a hit, or a creature's shove), or NaN if none before the trial ends. */
+    static float contactTime(Sim base, int a, int tgt, PolicyFactory f, float limit) {
+        Sim s = trialStart(base, a, tgt, null);
+        Policy p = make(f); InputState in = new InputState();
+        int h0 = s.hits, fb = lost(s); float floorY = trialFloor(s.course, a, tgt);
+        for (int i = 0, n = (int) (limit / Sim.DT); i < n; i++) {
+            s.consumeEvents();
+            in.clear(); p.act(s, in); s.step(in);
+            if (s.hits != h0 || (s.events & Sim.EV_SHOVE) != 0) return s.time;
+            if (trialEnded(s, a, tgt, fb, floorY) != 0) return Float.NaN;
+        }
+        return Float.NaN;
+    }
+
+    /**
+     * A planned move with a timed rebound on top: lets go of Jump the step before and presses it afresh on the step that ends at sim time {@code at}
+     * (a press a person makes: fresh, one step), then holds it a fifth of a second. Keyed to the sim clock, so a reflex that restarts the move keeps it.
+     */
+    static final class ReboundPress implements Policy {
+        final Policy inner; final float at;
+        ReboundPress(Policy inner, float at) { this.inner = inner; this.at = at; }
+        public void act(Sim s, InputState in) {
+            inner.act(s, in);
+            float k = (at - (s.time + Sim.DT)) / Sim.DT;          // steps until the press
+            if (k > 0.5f && k < 1.5f) { in.jumpPressed = false; in.jumpHeld = false; }
+            else if (Math.abs(k) <= 0.5f) { in.jumpPressed = true; in.jumpHeld = true; }
+            else if (k < -0.5f && k > -12.5f) in.jumpHeld = true;
+        }
     }
 
     /**
@@ -716,23 +799,23 @@ public final class Autopilot {
     public static boolean chainClean(Course c, Tuning t, int from, int to, float wait) {
         Sim real = CourseGenerator.provenStart(c, t, from);
         real.humanHold = HUMAN_HOLD; real.act = null; real.hz = null;
-        InputState in = new InputState(); int sb = real.setbacks(), a = from;
-        for (int q = 0; q < (int) (wait / Sim.DT); q++) { in.clear(); real.step(in); if (real.setbacks() != sb) return chainWhy("wait_" + setbackWhy(real, sb), from, a); }
+        InputState in = new InputState(); int sb = lost(real), a = from;
+        for (int q = 0; q < (int) (wait / Sim.DT); q++) { in.clear(); real.step(in); if (lost(real) != sb) return chainWhy("wait_" + setbackWhy(real, sb), from, a); }
         while (a < to) {
             for (int q = 0; q < 120 && (real.mode == Sim.Mode.LEDGE || real.mode == Sim.Mode.PULLUP); q++) { in.clear(); in.moveY = 1f; real.step(in); }
             for (int q = 0; q < 120 && real.mode == Sim.Mode.AIR; q++) { in.clear(); real.step(in); }          // (a shove's flight: it lands somewhere)
-            if (real.setbacks() != sb) return chainWhy("landing_" + setbackWhy(real, sb), from, a);
+            if (lost(real) != sb) return chainWhy("landing_" + setbackWhy(real, sb), from, a);
             if (!(real.mode == Sim.Mode.GROUND || real.mode == Sim.Mode.ROPE || real.mode == Sim.Mode.CABLE || real.mode == Sim.Mode.TARZAN) || !onRoute(c, real.onElem) || real.onElem < a) return chainWhy("route_lost", from, a);
             if (real.onElem > a) { a = real.onElem; continue; }
             Result r = plan(real, a, false, true); boolean fb = !r.ok && r.fallback != null;          // (planRun, inline: a fallback is a move the planner could not prove)
             if (fb) { r.ok = true; r.factory = r.fallback; }
             if (!r.ok) return chainWhy("no_plan_" + avlLive(real), from, a);
             Policy p = make(r.factory);
-            for (int guard = (int) (20f / Sim.DT); guard > 0 && !succeeded(real, a); guard--) { in.clear(); p.act(real, in); real.step(in); if (real.setbacks() != sb) return chainWhy((fb ? "fallback_" : "planned_") + setbackWhy(real, sb), from, a); }
+            for (int guard = (int) (20f / Sim.DT); guard > 0 && !succeeded(real, a); guard--) { in.clear(); p.act(real, in); real.step(in); if (lost(real) != sb) return chainWhy((fb ? "fallback_" : "planned_") + setbackWhy(real, sb), from, a); }
             if (!succeeded(real, a)) return chainWhy("timeout", from, a);
             a = real.mode == Sim.Mode.AIR ? real.lastPad : real.onElem;
         }
-        return real.setbacks() == sb;
+        return lost(real) == sb;
     }
     /** Diagnostics only (observe-only, rules 18 avalanche investigation): why the last {@link #chainClean} on this thread failed, or null. */
     public static final ThreadLocal<String> CHAIN_WHY = new ThreadLocal<>();
@@ -755,18 +838,20 @@ public final class Autopilot {
     }
 
     /** True if the move reaches the next link on a copy with every hazard of the course active (no planning window). */
-    static boolean clearOfEverything(Sim real, int a, PolicyFactory f) {
+    static boolean clearOfEverything(Sim real, int a, PolicyFactory f) { return clearOfEverything(real, a, f, false); }
+    /** {@code tol}: the move was chosen knowing it takes a knock (rules 19, Result.viaHit): it is clear if it still arrives without a fall. */
+    static boolean clearOfEverything(Sim real, int a, PolicyFactory f, boolean tol) {
         Sim s = real.copy(); s.act = null; s.hz = null; s.humanHold = HUMAN_HOLD;
-        Policy p = make(f); InputState in = new InputState(); int sb = s.setbacks();
+        Policy p = make(f); InputState in = new InputState(); int sb = sb(s, tol);
         for (int i = 0; i < (int) (20f / Sim.DT); i++) {
             in.clear(); p.act(s, in); s.step(in);
-            if (s.setbacks() != sb) return false;
+            if (sb(s, tol) != sb) return false;
             if (succeeded(s, a)) {
-                if (s.mode == Sim.Mode.AIR && launcher(s.course, s.lastPad)) return launchClear(s, s.lastPad, sb);
+                if (s.mode == Sim.Mode.AIR && launcher(s.course, s.lastPad)) return launchClear(s, s.lastPad, sb, tol);
                 // caught its ledge: pull up first, as the run does, and the pull-up must be clear too (DC2; seed 1 slice 45 caught crumbling mover 48)
-                for (int q = 0; q < 120 && (s.mode == Sim.Mode.LEDGE || s.mode == Sim.Mode.PULLUP); q++) { in.clear(); in.moveY = 1f; s.step(in); if (s.setbacks() != sb) return false; }
+                for (int q = 0; q < 120 && (s.mode == Sim.Mode.LEDGE || s.mode == Sim.Mode.PULLUP); q++) { in.clear(); in.moveY = 1f; s.step(in); if (sb(s, tol) != sb) return false; }
                 if (s.mode == Sim.Mode.AIR) return false;          // let go (its deck went): not an arrival
-                if (s.mode == Sim.Mode.GROUND && s.onElem >= 0 && s.course.get(s.onElem).crumbles() && onRoute(s.course, s.onElem)) return crumbleClear(s, s.onElem, sb);
+                if (s.mode == Sim.Mode.GROUND && s.onElem >= 0 && s.course.get(s.onElem).crumbles() && onRoute(s.course, s.onElem)) return crumbleClear(s, s.onElem, sb, tol);
                 return true;
             }
         }
@@ -780,38 +865,41 @@ public final class Autopilot {
      * (19 of 31 arrival times). The check follows the launch the way the run plays it (no input at first, a plan for the next link from the air every
      * 6 steps, then that plan) until the next link is reached, and the move is clear only without a setback on the way. Bounded like the run's own loop.
      */
-    static boolean launchClear(Sim s, int b, int sb) {
+    static boolean launchClear(Sim s, int b, int sb, boolean tol) {
         InputState in = new InputState(); Result r = null;
         for (int q = 0; q < 150 && s.mode == Sim.Mode.AIR && (r == null || !r.ok); q++) {
             in.clear(); s.step(in);
-            if (s.setbacks() != sb) return false;
+            if (sb(s, tol) != sb) return false;
             if (succeeded(s, b)) return true;
             if (q % 6 == 5 && s.mode == Sim.Mode.AIR) r = plan(s, b, false, false);
         }
-        if (r == null || !r.ok) return s.mode != Sim.Mode.AIR && s.setbacks() == sb && (onRoute(s.course, s.onElem) || branchOf(s.course, s.onElem) != null);          // DC1: clear only if it came down clean on the route (no plan found in flight is no longer "clear")
-        return playClear(s, b, r, sb);
+        if (r == null || !r.ok) return s.mode != Sim.Mode.AIR && sb(s, tol) == sb && (onRoute(s.course, s.onElem) || branchOf(s.course, s.onElem) != null);          // DC1: clear only if it came down clean on the route (no plan found in flight is no longer "clear")
+        return playClear(s, b, r, sb, tol);
     }
     /**
      * The same for a crumbling deck (or crumbling mover): you cannot wait on it, so the move onto it is clear only if a move off it works from the
      * landing it makes, sized up there and up to 0.3 s later (PUNISHER seed 1 slice 45 on cbe6415: the solver jumped onto crumbling mover 48 the moment
      * it reached deck 47, found no move to deck 49 in that phase, and fell when the mover crumbled).
      */
-    static boolean crumbleClear(Sim s, int b, int sb) {
+    static boolean crumbleClear(Sim s, int b, int sb, boolean tol) {
         InputState in = new InputState(); Result r = null;
         for (int q = 0; q <= 18 && s.mode == Sim.Mode.GROUND && s.onElem == b; q++) {
             if (q % 6 == 0) { r = planRun(s, b); if (r.ok) break; }
             in.clear(); s.step(in);
-            if (s.setbacks() != sb) return false;
+            if (sb(s, tol) != sb) return false;
         }
         if (r == null || !r.ok) return false;          // nothing leaves it before it goes: the move onto it is not clear now
-        return playClear(s, b, r, sb);
+        return playClear(s, b, r, sb, tol);
     }
-    private static boolean playClear(Sim s, int b, Result r, int sb) {
+    private static boolean playClear(Sim s, int b, Result r, int sb, boolean tol) {
         InputState in = new InputState();
         Policy p = make(r.factory);
-        for (int i = 0; i < (int) (10f / Sim.DT) && !succeeded(s, b); i++) { in.clear(); p.act(s, in); s.step(in); if (s.setbacks() != sb) return false; }
+        for (int i = 0; i < (int) (10f / Sim.DT) && !succeeded(s, b); i++) { in.clear(); p.act(s, in); s.step(in); if (sb(s, tol) != sb) return false; }
         return succeeded(s, b);          // DC1: 10 s without reaching it is not clear
     }
+
+    /** The setback count a clearance check compares: every hit and fall, or (a knowingly hit-assisted move) falls alone. */
+    static int sb(Sim s, boolean tol) { return tol ? lost(s) : s.setbacks(); }
 
     static boolean crabDeck(Course c, int a) { for (Element h : c.hazards) if (h.anchor == a && h.type == Element.Type.CRAB) return true; return false; }
     static boolean hasMidHazard(Course c, int a) {
@@ -848,10 +936,10 @@ public final class Autopilot {
         }
         if (!r.ok) { if (Boolean.getBoolean("dbg")) System.out.printf("execLink %d->%d plan failed at t=%.2f s=%.2f y=%.2f keys=%d%n", a, b, real.time, real.s, real.y, real.keys); return false; }
         Policy p = make(r.factory); Policy pull = new PullPolicy();
-        int f0 = real.setbacks(); int guard = (int) (14f / Sim.DT);
-        while (guard-- > 0 && !succeededTo(real, b)) { in.clear(); p.act(real, in); real.step(in); if (real.setbacks() != f0) { if (Boolean.getBoolean("dbg")) System.out.printf("execLink %d->%d setback during exec: mode=%s s=%.2f y=%.2f t=%.2f events=%d hits=%d falls=%d%n", a, b, real.mode, real.s, real.y, real.time, real.events, real.hits, real.falls); return false; } }
-        if (!succeededTo(real, b)) { if (Boolean.getBoolean("dbg")) System.out.printf("execLink %d->%d exec failed mode=%s s=%.2f y=%.2f falls=%d%n", a, b, real.mode, real.s, real.y, real.setbacks() - f0); return false; }
-        for (int g = 0; g < 120 && (real.mode == Sim.Mode.LEDGE || real.mode == Sim.Mode.PULLUP); g++) { in.clear(); pull.act(real, in); real.step(in); if (real.setbacks() != f0) return false; }
+        int f0 = lost(real); int guard = (int) (14f / Sim.DT);
+        while (guard-- > 0 && !succeededTo(real, b)) { in.clear(); p.act(real, in); real.step(in); if (lost(real) != f0) { if (Boolean.getBoolean("dbg")) System.out.printf("execLink %d->%d setback during exec: mode=%s s=%.2f y=%.2f t=%.2f events=%d hits=%d falls=%d%n", a, b, real.mode, real.s, real.y, real.time, real.events, real.hits, real.falls); return false; } }
+        if (!succeededTo(real, b)) { if (Boolean.getBoolean("dbg")) System.out.printf("execLink %d->%d exec failed mode=%s s=%.2f y=%.2f falls=%d%n", a, b, real.mode, real.s, real.y, lost(real) - f0); return false; }
+        for (int g = 0; g < 120 && (real.mode == Sim.Mode.LEDGE || real.mode == Sim.Mode.PULLUP); g++) { in.clear(); pull.act(real, in); real.step(in); if (lost(real) != f0) return false; }
         return real.mode == Sim.Mode.GROUND;
     }
 
@@ -865,10 +953,10 @@ public final class Autopilot {
         int prev = r;
         for (int idx : out) { why = "out"; if (!execLink(real, prev, idx, in)) return false; prev = idx; }
         for (int q = 0; q < 40 && Math.abs(real.vx) > 0.05f && real.mode == Sim.Mode.GROUND; q++) { in.clear(); real.step(in); }      // brake after landing
-        int f0 = real.setbacks(); int guard = (int) (6f / Sim.DT);
+        int f0 = lost(real); int guard = (int) (6f / Sim.DT);
         while (guard-- > 0 && (real.keys & (1 << key.color)) == 0) {            // walk across the key platform to the key
             in.clear(); float dx = c.dsWrap(key.s, real.s); in.moveX = Math.abs(dx) < 0.1f ? 0f : Math.signum(dx); real.step(in);
-            if (real.setbacks() != f0) { why = "fell on key platform"; return false; }
+            if (lost(real) != f0) { why = "fell on key platform"; return false; }
         }
         if ((real.keys & (1 << key.color)) == 0) { why = "key not taken"; return false; }
         for (int q = 0; q < 24; q++) { in.clear(); real.step(in); }          // come to a stop before heading back
@@ -924,10 +1012,10 @@ public final class Autopilot {
     static int[] branchOf(Course c, int i) { if (i < 0) return null; for (int[] fk : c.forks) if (i >= fk[1] && i < fk[1] + fk[2]) return fk; return null; }
     /** Carries on from a branch element along fork {@code fk}'s branch to its rejoin (planned pair moves, as the key detours make); true if back on the route clean. */
     static boolean followBranch(Sim real, int[] fk, InputState in) {
-        Course c = real.course; int f0 = real.setbacks();
+        Course c = real.course; int f0 = lost(real);
         for (int g = 0; g < fk[2] + 2; g++) {
             int at = real.mode == Sim.Mode.AIR ? real.lastPad : real.onElem;          // (a branch pad has just launched us: the next move is planned from it)
-            if (real.setbacks() != f0) return false;
+            if (lost(real) != f0) return false;
             if (branchOf(c, at) != fk) return onRoute(c, at) && real.mode != Sim.Mode.AIR;
             if (real.mode == Sim.Mode.GROUND) { settle(real, at, in); if (real.onElem != at) continue; }
             int next = at + 1 < fk[1] + fk[2] ? at + 1 : fk[3];
@@ -936,15 +1024,15 @@ public final class Autopilot {
                 for (int q = 0; q < 150 && real.mode == Sim.Mode.AIR; q++) {
                     if (q % 6 == 0) { r = planPair(real, at, next, false); if (r.ok) break; }          // at once first, as the run does: the launch is where the steering starts
                     in.clear(); real.step(in);
-                    if (real.setbacks() != f0) return false;
+                    if (lost(real) != f0) return false;
                 }
-                if (r != null && r.ok) { Policy p = make(r.factory); for (int i = 0; i < (int) (10f / Sim.DT) && !succeededTo(real, next); i++) { in.clear(); p.act(real, in); real.step(in); if (real.setbacks() != f0) return false; } }
+                if (r != null && r.ok) { Policy p = make(r.factory); for (int i = 0; i < (int) (10f / Sim.DT) && !succeededTo(real, next); i++) { in.clear(); p.act(real, in); real.step(in); if (lost(real) != f0) return false; } }
                 for (int q = 0; q < 120 && (real.mode == Sim.Mode.LEDGE || real.mode == Sim.Mode.PULLUP); q++) { in.clear(); in.moveY = 1f; real.step(in); }
                 continue;
             }
             if (!execLink(real, at, next, in)) return false;
         }
-        return onRoute(c, real.onElem) && real.setbacks() == f0;
+        return onRoute(c, real.onElem) && lost(real) == f0;
     }
     /**
      * Solver recovery repair (owner authorisation 2026-10-28, SolverRecoveryTest conveyor fixture): a repositioning (a brake, a walk, a lineup, a wait)
@@ -1065,7 +1153,7 @@ public final class Autopilot {
             if (sameA > 30) return stop(rep, real, a, "stuck", "stuck at one link: knocked back again and again");
             // owner policy 2026-10-27 (witness cleanliness): the traversal witness is hit-free from start to goal, not only while a move is executed;
             // a hit or fall anywhere (waiting, pulling up, recovering, drifting off a pad) means no clean route was established here
-            if (real.setbacks() != 0) return stop(rep, real, a, "setback", String.format("setback outside a move (%s): hits=%d falls=%d mode=%s s=%.2f y=%.2f", phase, real.hits, real.falls, real.mode, real.s, real.y) + (real.hitBy != null ? " lastHazard=" + real.hitBy.type + " anchor=" + real.hitBy.anchor : ""));
+            if (lost(real) != 0) return stop(rep, real, a, "setback", String.format("setback outside a move (%s): hits=%d falls=%d mode=%s s=%.2f y=%.2f", phase, real.hits, real.falls, real.mode, real.s, real.y) + (real.hitBy != null ? " lastHazard=" + real.hitBy.type + " anchor=" + real.hitBy.anchor : ""));
             int[] br = (real.mode == Sim.Mode.GROUND || real.mode == Sim.Mode.ROPE || real.mode == Sim.Mode.CABLE || real.mode == Sim.Mode.TARZAN) ? branchOf(c, real.onElem) : null;
             if (br != null) {
                 // like a person carried onto a fork's branch (a bee's shove, a pad's launch onto a later fork's branch): carry on along the branch to where it
@@ -1114,8 +1202,8 @@ public final class Autopilot {
             if (real.mode == Sim.Mode.GROUND && real.onElem != a && onRoute(c, real.onElem)) { rep.resyncs++; a = resync(real, real.onElem); continue; }      // like a person: landed on another route platform (not a fall), so carry on from there
             if ((real.mode == Sim.Mode.ROPE || real.mode == Sim.Mode.CABLE || real.mode == Sim.Mode.TARZAN) && real.onElem != a && onRoute(c, real.onElem) && c.get(real.onElem).type == (real.mode == Sim.Mode.ROPE ? Element.Type.ROPE : real.mode == Sim.Mode.TARZAN ? Element.Type.TARZAN : Element.Type.CABLE)) { a = resync(real, real.onElem); continue; }      // or caught a route rope or cable on the way down (2026-10-26 GenBench: PUNISHER seed 2 slice 53, a crab shoved the climber off platform 96 onto rope 88): climb on from there
             if ((real.mode == Sim.Mode.LEDGE || real.mode == Sim.Mode.PULLUP) && real.onElem != a && onRoute(c, real.onElem)) {          // or caught the ledge of another route platform: pull up, then carry on from there (same course, the next shove)
-                Policy pull = new PullPolicy(); int before = real.setbacks();
-                for (int q = 0; q < 120 && (real.mode == Sim.Mode.LEDGE || real.mode == Sim.Mode.PULLUP) && real.setbacks() == before; q++) { in.clear(); pull.act(real, in); real.step(in); }
+                Policy pull = new PullPolicy(); int before = lost(real);
+                for (int q = 0; q < 120 && (real.mode == Sim.Mode.LEDGE || real.mode == Sim.Mode.PULLUP) && lost(real) == before; q++) { in.clear(); pull.act(real, in); real.step(in); }
                 if (real.mode == Sim.Mode.GROUND && onRoute(c, real.onElem)) { a = resync(real, real.onElem); continue; }
             }
             int nx = c.nextRoute(a);
@@ -1189,8 +1277,8 @@ public final class Autopilot {
             }
             if (!r.ok && real.mode == Sim.Mode.AIR && real.lastPad == a && (c.get(a).type == Element.Type.PAD || c.get(a).type == Element.Type.SPRING)) {
                 // like a person: just launched sideways off a pad, so let it carry you a moment (no input) before steering for the next one
-                int before = real.setbacks();
-                for (int q = 0; q < 150 && !r.ok && real.mode == Sim.Mode.AIR && real.setbacks() == before; q++) {
+                int before = lost(real);
+                for (int q = 0; q < 150 && !r.ok && real.mode == Sim.Mode.AIR && lost(real) == before; q++) {
                     in.clear(); real.step(in);
                     if (q % 6 == 5 && real.mode == Sim.Mode.AIR) r = plan(real, a, false, false);
                 }
@@ -1216,7 +1304,7 @@ public final class Autopilot {
             // move off rope 11, which this check skipped)
             final Sim.Mode holdAt = real.mode; phase = "look";
             boolean clear = false;
-            for (int look = 0; look < 25 && !(clear = clearOfEverything(real, a, r.factory)); look++) {
+            for (int look = 0; look < 25 && !(clear = clearOfEverything(real, a, r.factory, r.viaHit)); look++) {
                 if ((holdAt != Sim.Mode.GROUND && holdAt != Sim.Mode.ROPE && holdAt != Sim.Mode.CABLE) || real.mode != holdAt || real.onElem != a) break;
                 int before = real.setbacks();
                 if (!rehearsed(real, x -> idle(x, 12))) break;          // (holding on would be hit: execute the move as planned and let the witness judge it)
@@ -1242,8 +1330,9 @@ public final class Autopilot {
             if (!clear) rep.unclearMoves++;          // (executed with a hazard still on it: a hit fails the witness, so it is never counted as proven)
             if (r.fallback != null && r.factory == r.fallback) rep.fallbackMoves++;
             if (real.mode != Sim.Mode.GROUND && real.mode != Sim.Mode.CABLE && real.mode != Sim.Mode.ROPE && real.mode != Sim.Mode.TARZAN && !(real.mode == Sim.Mode.AIR && real.lastPad == a)) continue;      // knocked about while waiting: recover first
+            if (r.viaHit) rep.hitLinks++; if (r.viaRebound) rep.reboundLinks++;
             Policy p = make(r.factory); phase = "execute";
-            int fallsBefore = real.setbacks();
+            int fallsBefore = lost(real);
             real.act = null;
             int guard = (int) (20f / Sim.DT);
             if (DBG) System.out.printf("  policy %s from mode=%s s=%.2f y=%.2f t=%.2f%n", p.getClass().getSimpleName(), real.mode, real.s, real.y, real.time);
@@ -1255,13 +1344,13 @@ public final class Autopilot {
                 // executing link 18). Half a second on that platform: a move never routes back through an earlier platform on purpose
                 back = real.mode == Sim.Mode.GROUND && real.onElem >= 0 && ((real.onElem < a && onRoute(c, real.onElem)) || branchOf(c, real.onElem) != null) ? back + 1 : 0;
                 if (back >= 30) break;
-                if (real.setbacks() != fallsBefore) return stop(rep, real, a, "setback", String.format("setback while executing the move: hits=%d falls=%d mode=%s s=%.2f y=%.2f", real.hits, real.falls, real.mode, real.s, real.y) + (real.hitBy != null ? " lastHazard=" + real.hitBy.type + String.format(" s=%.2f y=%.2f anchor=%d", real.hitBy.s, real.hitBy.y, real.hitBy.anchor) : ""));
+                if (lost(real) != fallsBefore) return stop(rep, real, a, "setback", String.format("setback while executing the move: hits=%d falls=%d mode=%s s=%.2f y=%.2f", real.hits, real.falls, real.mode, real.s, real.y) + (real.hitBy != null ? " lastHazard=" + real.hitBy.type + String.format(" s=%.2f y=%.2f anchor=%d", real.hitBy.s, real.hitBy.y, real.hitBy.anchor) : ""));
             }
             if (back >= 30) { rep.resyncs++; resync(real, real.onElem); continue; }      // the loop re-syncs to the platform it is on
             // like a person: a move that stalls for 20 s with no hit and no fall (NGH seed 2 slice 7, 2d4388a: the plan made on a rope beside a blob deck,
             // with the planner simulating only the nearby window, waited at the rope top while the real course moved on) is sized up again from where the
             // climber is, at most twice per link, before the link counts as failed
-            if (!succeeded(real, a) && real.setbacks() == fallsBefore) { if (stallA != a) { stallA = a; stalls = 0; } if (stalls++ < 2) continue; }
+            if (!succeeded(real, a) && lost(real) == fallsBefore) { if (stallA != a) { stallA = a; stalls = 0; } if (stalls++ < 2) continue; }
             if (!succeeded(real, a)) return stop(rep, real, a, "stalled", String.format("move did not reach the next link within 20 s: mode=%s on=%d s=%.2f y=%.2f vx=%.2f vy=%.2f", real.mode, real.onElem, real.s, real.y, real.vx, real.vy));
             // settle: finish pull-ups and keep going from the attached element
             if (real.mode == Sim.Mode.LEDGE || real.mode == Sim.Mode.PULLUP) {
@@ -1286,12 +1375,12 @@ public final class Autopilot {
     /** The goal was reached: PROVEN_SOLVABLE only if the whole witness was hit-free and every key on the route was really taken (DC1: a skipped key detour used to pass silently). */
     private static Report finish(Report rep, Sim real, int a) {
         Course c = real.course;
-        if (real.setbacks() != 0) return stop(rep, real, a, "setback", String.format("reached the goal with hits=%d falls=%d", real.hits, real.falls));
+        if (lost(real) != 0) return stop(rep, real, a, "setback", String.format("reached the goal with hits=%d falls=%d", real.hits, real.falls));
         for (int i = 0; i < c.hazards.size(); i++) {
             Element k = c.hazards.get(i);
             if (k.type == Element.Type.KEY && k.anchor >= 0 && k.anchor < c.routeSize() && !(i < real.featDone.length && real.featDone[i])) return stop(rep, real, a, "key_missed", "key " + i + " on route deck " + k.anchor + " never taken");
         }
-        rep.verdict = Verdict.PROVEN_SOLVABLE; rep.completed = true; rep.simTime = real.time; rep.cause = "";
+        rep.verdict = Verdict.PROVEN_SOLVABLE; rep.completed = true; rep.simTime = real.time; rep.cause = ""; rep.hitsTaken = real.hits; rep.shoves = real.shoves; rep.rebounds = real.rebounds;
         return rep;
     }
 

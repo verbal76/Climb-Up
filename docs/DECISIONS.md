@@ -1348,7 +1348,26 @@ HAPPEN drops 9-12 blocks; the warning is the rumble only; the work stacks on the
 - **Spinning ramps** (RAMP skin 3) are no longer generated; Sim and the renderer still play them for earlier saves and replays.
 - **Bridge planks** that fall out stay gone for the climb (respawns, slice unload/reload, saves); holed bridges are proven with their holes open.
 - **Timed rebound jump:** a fresh airborne Jump press arms a 100 ms window (provisional, within the owner's 80-120 ms); contact with a crab,
-  bee, cannon ball, aimed shot, mortar round or saw inside it adds a jump impulse to the contact's normal outcome. **Open for the owner:** a
-  successful rebound off a damaging hazard still counts as a hit (and grants the usual 0.7 s invulnerability).
+  bee, cannon ball, aimed shot, mortar round or saw inside it adds a jump impulse to the contact's normal outcome. **Owner decision
+  (2026-10-29 consolidated correction):** a rebound is recorded apart (Sim.rebounds) as a skill move; the contact itself stays recorded (a
+  rebound off a hazard still increments Sim.hits, its historical meaning, and grants the usual 0.7 s invulnerability).
+- **A hit is not a failure (owner consolidated correction 2026-10-29).** There is no health bar. Every proof that used to reject a move on
+  `falls + hits` (link trials and their arrival, the generator's chain proofs, key detours, fork branches, the whole-course witness) now
+  rejects it on a fall only (`Autopilot.lost`); the move must still arrive standing, hanging or pulled up on a later route element, so a
+  knock onto a dead end, back down, or nowhere still fails. Order of evaluation per link: clean moves (always preferred, searched first);
+  then moves that take an ordinary knock and still arrive; then a bounded timed-rebound search (the first 8 moves that meet something,
+  pressed afresh 1, 3 and 5 steps before the contact - at most 24 extra trials). A knock or rebound link needs at least 2 working moves
+  (`MIN_COLLISION_SUCCESSES`): one frame is not a route. The checks that choose a clear moment to go (clearOfEverything, rehearsals, lineups,
+  waits, SafeStart) still avoid hits, so the solver waits for a clean chance when one exists; a move chosen knowing it takes a knock is
+  judged by its outcome there too. `-Dclimb.hitStrict=true` restores the old rule for comparisons. Accounting: Sim.hits (hazard knocks,
+  unchanged), Sim.shoves (creature shoves, new), Sim.rebounds; Report.hitsTaken/shoves/rebounds/hitLinks/reboundLinks; generator tallies
+  r19_why_*. Audit finding: creature shoves never counted as hits, so crab/bee/blob/skull/Enforcer contacts were already judged by outcome;
+  the over-strict path was lethal-hazard contact (saws, cannon balls, spikes, avalanche blocks).
+- **Tarzan swing save/restore (owner decision 2026-10-29):** run.json stores the grip distance down the rope (`hasTarzanR`, `tarzanR` =
+  Sim.tarzanR) with the attachment mode and the rope's element key; the rope's place comes from the course and the saved clock. Restore
+  clamps the grip to the rope and hangs the climber there wherever the rope has swung to (position and velocity from the swing). A file with
+  Mode TARZAN but no grip (none were released) is projected onto the rope's direction at the saved time (never height alone); hands more than
+  0.5 m off the rope refuse the snapshot (checkpoint resume). A swing just let go of is not caught again for 1 s (you fly beside it; it used
+  to re-catch you 0.3 s after letting go): `tarzanLastKey`/`tarzanAgainT`, optional in run.json.
 - **Reports and probes grow courses exactly as the game does** (GameGrowth = Tower.grow backtracking); chunkFramed alone reported stops the
   game recovers from.

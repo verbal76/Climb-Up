@@ -123,4 +123,37 @@ public class TarzanSwingTest {
         for (Sim m : new Sim[]{a, b, cp}) { m.step(jump()); for (int k = 0; k < 90; k++) m.step(none()); }
         for (Sim m : new Sim[]{b, cp}) { assertEquals(a.s, m.s, 0f); assertEquals(a.y, m.y, 0f); assertEquals(a.vx, m.vx, 0f); assertEquals(a.vy, m.vy, 0f); assertEquals(a.mode, m.mode); }
     }
+
+    /** Where a forward release at the bottom of the swing comes down to height {@code y} (no launcher there): the arc of the landing point. */
+    static float landingArc(Tuning t, float y) {
+        Course c = new Course(1, t.circumference()); c.add(new Element(Element.Type.STATIC, 0f, -40f, 4f));
+        Element tz = new Element(Element.Type.TARZAN, PIVOT_S, PIVOT_Y, 1f); tz.len = LEN; tz.amp = AMP; tz.period = PERIOD; c.add(tz);
+        Sim m = releaseAfter(c, t, PERIOD - Sim.DT * 2);
+        for (int k = 0; k < 600 && !(m.y <= y && m.vy < 0); k++) m.step(none());
+        return m.s;
+    }
+    /** Owner list: a release from the swing onto a bounce pad and onto a spring: the launcher catches the flight and bounces it as it would a jump. */
+    @Test public void aReleaseCanLandOnABouncePadOrASpring() throws Exception {
+        Tuning t = T();
+        float at = landingArc(t, 0f);
+        for (Element.Type ty : new Element.Type[]{Element.Type.PAD, Element.Type.SPRING}) {
+            Course c = new Course(1, t.circumference()); c.add(new Element(Element.Type.STATIC, 0f, -40f, 4f));          // (no far deck in the way of the flight)
+            Element tz = new Element(Element.Type.TARZAN, PIVOT_S, PIVOT_Y, 1f); tz.len = LEN; tz.amp = AMP; tz.period = PERIOD; c.add(tz);
+            Element pad = new Element(ty, at, 0f, 1.6f); if (ty == Element.Type.SPRING) pad.amp = 0.3f; c.add(pad);
+            int pi = c.size() - 1;
+            Sim m = releaseAfter(c, t, PERIOD - Sim.DT * 2);
+            boolean bounced = false;
+            for (int k = 0; k < 600 && !bounced; k++) { m.step(none()); bounced = m.lastPad == pi && m.vy > 0f; }
+            assertTrue(ty + ": the release came down on it and bounced", bounced);
+            assertTrue(ty + ": a full launcher bounce (" + m.vy + ")", m.vy > 0.8f * t.padBounce * (ty == Element.Type.SPRING ? (float) Math.cos(0.3f) : 1f));
+        }
+    }
+
+    /** Letting go flies beside the swinging rope: it is not caught again for a second (any other rope still is), then it is. */
+    @Test public void aSwingLetGoOfIsNotCaughtAgainAtOnce() throws Exception {
+        Tuning t = T(); Course c = course(t);
+        Sim m = releaseAfter(c, t, PERIOD - Sim.DT * 2);
+        for (int k = 0; k < (int) (Sim.TARZAN_REGRAB / Sim.DT) - 2; k++) { m.step(none()); assertNotEquals("re-caught at step " + k, Sim.Mode.TARZAN, m.mode); }
+        Sim copy = m.copy(); assertEquals(m.tarzanAgainT, copy.tarzanAgainT, 0f); assertEquals(m.tarzanLast, copy.tarzanLast);
+    }
 }

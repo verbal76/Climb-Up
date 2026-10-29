@@ -50,6 +50,13 @@ public final class RunSnapshot {
     // DC3 (2026-10-27): a side catch in progress (the platform whose side the body slipped into, and from which side). Optional: older files have none.
     public long sideKey = -1;
     public int sideDir = 1;
+    // Rules 19 (owner decision 2026-10-29): holding a Tarzan swing, how far down the rope the hands are (Sim.tarzanR, from the pivot). The rope's own
+    // place follows from the course and the clock. Optional: hasTarzanR false (older files) means absent, never a grip of 0.
+    public boolean hasTarzanR;
+    public float tarzanR;
+    // Rules 19: a swing just let go of (Sim.tarzanLast) and how long it stays out of reach. Optional: older files have none (-1, 0).
+    public long tarzanLastKey = -1;
+    public float tarzanAgainT;
 
     public RunSnapshot() {}
 
@@ -107,6 +114,8 @@ public final class RunSnapshot {
         r.aKey = new long[ak.size()]; r.aState = new float[ak.size() * Sim.AVL_W];
         for (int i = 0; i < ak.size(); i++) { r.aKey[i] = ak.get(i); System.arraycopy(sim.avl, ai.get(i) * Sim.AVL_W, r.aState, i * Sim.AVL_W, Sim.AVL_W); }
         r.lastAvlT = sim.lastAvlT;
+        if (sim.mode == Sim.Mode.TARZAN) { r.hasTarzanR = true; r.tarzanR = sim.tarzanR; }
+        if (sim.tarzanAgainT > 0f && sim.tarzanLast >= 0) { r.tarzanLastKey = tower.elemKeyAt(sim.tarzanLast); r.tarzanAgainT = sim.tarzanAgainT; }
         int[] se = sim.sideEntry();
         if (se[0] >= 0) { r.sideKey = tower.elemKeyAt(se[0]); r.sideDir = se[1]; }
         java.util.List<Long> done = tower.doneKeys(sim);
@@ -133,6 +142,8 @@ public final class RunSnapshot {
     /** Structural sanity: every number finite, a known mode, arrays that agree. A snapshot that fails this is never written and never applied. */
     public boolean valid() {
         if (version != VERSION || seed == 0) return false;
+        if (hasTarzanR && !(fin(tarzanR) && tarzanR >= 0f)) return false;
+        if (!fin(tarzanAgainT) || tarzanAgainT < 0f) return false;
         if (!fin(absS, absY, lastGroundAbs, maxAbs, pullFromAbsS, pullFromAbsY, pullToAbsS, pullToAbsY, time, vx, vy, coyote, jumpBuf, lockout, pullT, ropeTopT, invuln, clubTime, swingT, shoveCd)) return false;
         if (time < 0f || cpSlice < 0 || cpLocal < 0 || maxSlice < 0) return false;
         try { Sim.Mode.valueOf(mode); } catch (Exception e) { return false; }
@@ -151,6 +162,8 @@ public final class RunSnapshot {
     }
 
     /** Rules 12-13 kept 5 block slots per avalanche (2 + 5 x Sim.AVL_B floats); rules 14 keeps Element.AVL_MAX. The extra slots of an old save are empty. */
+    /** How far off the rope's line a grip-less Tarzan save's hands may be and still be taken as holding it (m). */
+    static final float TARZAN_LEGACY_TOL = 0.5f;
     static final int AVL_W_R13 = 2 + 5 * Sim.AVL_B, AVL_W_R17 = 2 + 7 * Sim.AVL_B;          // (rules 14-17 kept 7 slots; rules 18 keeps 12)
     static float[] widenAvl(float[] old, int n) { return widenAvl(old, n, AVL_W_R13); }
     static float[] widenAvl(float[] old, int n, int oldW) {
@@ -206,7 +219,6 @@ public final class RunSnapshot {
         sim.mode = m; sim.onElem = attached ? on : -1;
         sim.s = localS(sim, tower, absS); sim.y = tower.local(absY);
         sim.vx = vx; sim.vy = vy; sim.facing = facing == 0 ? 1 : facing; sim.coyote = coyote; sim.jumpBuf = jumpBuf; sim.lockout = lockout; sim.pullT = pullT; sim.ropeTopT = ropeTopT;
-        if (m == Sim.Mode.TARZAN && on >= 0) { com.hotatticgames.climbup.sim.Element sw = sim.course.get(on); sim.tarzanR = Math.max(0.8f, Math.min(sw.len, sw.y - (sim.y + sim.T.handHeight))); }          // (rules 19: hands back where they held the swing; the save format is unchanged)
         sim.ledgeSide = ledgeSide; sim.jumpedUp = jumpedUp; sim.prevJumpHeld = prevJumpHeld; sim.won = won; sim.finishedRun = finishedRun;
         sim.falls = falls; sim.hits = hits; sim.keys = keys; sim.lastKeyColor = lastKeyColor; sim.invuln = invuln; sim.clubTime = clubTime; sim.swingT = swingT; sim.shoveCd = shoveCd;
         sim.lastGroundY = tower.local(lastGroundAbs); sim.maxHeight = tower.local(maxAbs);
@@ -237,6 +249,14 @@ public final class RunSnapshot {
         tower.applyDone(sim);
         sim.syncElements(hasS0 ? localS(sim, tower, absS0) : sim.s);
         if (sideKey >= 0 && sim.mode == Sim.Mode.AIR) { int w = tower.indexOfElemKey(sideKey); if (w >= 0) sim.setSideEntry(w, sideDir); }          // (after syncElements, which clears it)
+        int tl = tarzanLastKey < 0 ? -1 : tower.indexOfElemKey(tarzanLastKey);
+        sim.tarzanLast = tl; sim.tarzanAgainT = tl >= 0 ? tarzanAgainT : 0f;
+        if (m == Sim.Mode.TARZAN) {          // rules 19: back on the same rope, the same distance down it, wherever it has swung to at the saved time
+            if (sim.course.get(on).type != com.hotatticgames.climbup.sim.Element.Type.TARZAN) return false;
+            float r = hasTarzanR ? tarzanR : sim.tarzanGripFromPosition(on, TARZAN_LEGACY_TOL);      // a file without the grip: project the hands onto the rope
+            if (Float.isNaN(r)) return false;                                                         // not on the rope after all: the checkpoint resume
+            sim.attachTarzan(on, r);
+        }
         return true;
     }
 }

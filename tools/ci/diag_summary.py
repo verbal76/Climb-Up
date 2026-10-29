@@ -380,6 +380,33 @@ def main():
             L.append(""); L.append("## T1. Avalanche placement and refusal breakdown (sum over courses)"); L.append("")
             L.append("avlwhy_<reason>_<live blocks>_link<n>: why the proof failed, how many blocks were live and the link from the proof start; avlwhy_arrival_<s>s: the arrival delay that failed; avlwhy_without_avalanche_clean/fails: the same stretch proven again with no avalanche (only with -Dclimb.diagAvl=true)"); L.append("")
             table(L, ["tally", *order], [[k] + [tal[m][k] for m in order] for k in akeys])
+        # T4 clearance audit and S1-C avalanche envelope (owner master directive, 2026-10-29): every key, not cut
+        for pre, title, note in [
+            ("t4body_", "T4. Layer body refusals: refused type vs the element it met, deficit (m)", "deficit = the smaller of the vertical overlap (1.5 m margins included) and the arc overlap (2.5 m pad included)"),
+            ("t4bodyraw_", "T4. Layer body refusals: raw overlap or margins only", "overlap = the bodies meet with no margin; margin_only = refused only by the 1.5 m / 2.5 m margins"),
+            ("t4sp_", "T4. Layer spacing refusals by rule, deficit (m)", "plain4 = two platforms under 4 m apart; lower_<type> = the lower platform launches (9.5 m); upper_<type>_lifts = a launcher above a platform whose climber can rise past 4 m"),
+            ("t4sppair_", "T4. Layer spacing refusals by pair, deficit (m)", ""),
+            ("t4hz_", "T4. Deck-in-lethal-box refusals: hazard vs refused element, depth (m)", "depth = the smaller of the arc and vertical overlap with the hazard's box"),
+            ("t4avllen_", "S1-C. Deck refusals by an avalanche, by its block count (the box height is the block count in metres)", ""),
+            ("t4envthru_", "S1-C. Blocks that passed through another revolution's element (standing room included), and whether the lethal box covered it", "counted once per block (needs -Dclimb.diagAvlEnv=true)")]:
+            ks = sorted({k for m in order for k in tal[m] if k.startswith(pre)}, key=lambda k: -sum(tal[m][k] for m in order))
+            if not ks: continue
+            L.append(""); L.append("## " + title + " (sum over courses)"); L.append("")
+            if note: L.append(note); L.append("")
+            table(L, ["tally", *order], [[k] + [tal[m][k] for m in order] for k in ks])
+        for pre, title in [("t4env_", "S1-C. Where avalanche blocks really are: block-steps per 2 m cell (columns: arc offset from the trigger deck; rows: height above it)"),
+                           ("t4avlbox_", "S1-C. Where decks refused by an avalanche's box sit: refusals per 2 m cell (same axes)")]:
+            for m in order:
+                cells = {}
+                for k, v in tal[m].items():
+                    if k.startswith(pre):
+                        a, b = k[len(pre):].split("_"); cells[(int(a), int(b))] = v
+                if not cells: continue
+                xs = range(min(a for a, _ in cells), max(a for a, _ in cells) + 1); ys = range(max(b for _, b in cells), min(b for _, b in cells) - 1, -1)
+                L.append(""); L.append(f"## {title}, {m}"); L.append("")
+                L.append("```"); L.append("dy\\ds " + " ".join(f"{2 * x:>6}" for x in xs))
+                for y in ys: L.append(f"{2 * y:>5} " + " ".join(f"{cells.get((x, y), 0):>6}" for x in xs))
+                L.append("```")
     text = "\n".join(L)
     print(text)
     if out:

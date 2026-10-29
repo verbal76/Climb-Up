@@ -65,6 +65,13 @@ public final class GeometryIntegrity {
         return true;
     }
 
+    /** Diagnostics only (T4): the hazard whose lethal box of another revolution holds element {@code e}, or null ({@link #elementClear}'s test). */
+    static Element elementBlocker(Course c, Element e, List<Element> hz, List<Element> otherHaz) {
+        for (Element h : hz) if (physical(h) && otherRevolution(c, CourseGenerator.hzS(h), e.s) && hazardInBody(c, h, e)) return h;
+        for (Element h : otherHaz) if (physical(h) && otherRevolution(c, CourseGenerator.hzS(h), e.s) && hazardInBody(c, h, e)) return h;
+        return null;
+    }
+
     /** The violation between two elements, or null. */
     static String pair(Course c, Element e, Element f) {
         if (otherRevolution(c, e.s, f.s)) return CourseGenerator.layersBodiesClash(c, e, f) ? "I1 bodies of two revolutions intersect" : null;

@@ -1368,8 +1368,31 @@ public final class Sim {
             avl[p + 7] = sp2 < 0.09f && Math.abs(avl[p + 5]) < 30f ? avl[p + 7] + DT : 0f;
             if (avl[p + 1] < -Element.AVL_FLOOR || clock > Element.AVL_LIFE || avl[p + 7] > Element.AVL_REST || Math.abs(avl[p]) > 30f) { avl[p + 6] = 0f; continue; }
             live++;
+            if (DIAG_AVL_ENV) avlEnv(e, p, a0);
         }
         if (live == 0) avl[o] = 2f;
+    }
+
+    /** Diagnostics only (S1-C, owner directive 2026-10-29; off unless climb.diagAvlEnv is set, and then only inside generation proofs): where the blocks really go. */
+    static final boolean DIAG_AVL_ENV = Boolean.getBoolean("climb.diagAvlEnv");
+    /**
+     * Tallies a falling block's 2 m cell relative to the trigger deck, and the first time it passes through the body (standing room included) of an
+     * element of another revolution (blocks collide only with the trigger route's nearby decks), with whether the generator's lethal box covered it.
+     */
+    private void avlEnv(Element e, int p, int a0) {
+        if (GenTrace.GEN.get() == null) return;
+        GenTrace.tally("t4env_" + (int) Math.floor(avl[p] / 2f) + "_" + (int) Math.floor(avl[p + 1] / 2f));
+        if (((int) avl[p + 8] & 8) != 0) return;
+        Element d = course.get(a0);
+        float bs = d.s + avl[p], by = d.y + avl[p + 1], half = course.circumference * 0.5f;
+        float hs = CourseGenerator.hzS(e), hh = CourseGenerator.hzHalf(e), lo = CourseGenerator.hzLo(e), hi = CourseGenerator.hzHi(e);
+        for (Element f : course.elements) {
+            if (Math.abs(bs - f.s) < half || !(Math.abs(course.dsWrap(bs, f.s)) < CourseGenerator.arcHalf(f) && by > CourseGenerator.vLo(f) && by < CourseGenerator.vHi(f))) continue;
+            avl[p + 8] = (int) avl[p + 8] | 8;
+            boolean inBox = Math.abs(course.dsWrap(hs, f.s)) < hh + CourseGenerator.arcHalf(f) && lo < CourseGenerator.vHi(f) && hi > CourseGenerator.vLo(f);
+            GenTrace.tally("t4envthru_" + f.type + "_" + (inBox ? "inbox" : "outside_box"));
+            return;
+        }
     }
 
     /** A falling block overlaps the body (a disc against the body's box). */

@@ -1933,6 +1933,33 @@ public final class CourseGenerator {
         if (Math.abs(c.dsWrap(e.s, f.s)) > arcHalf(e) + arcHalf(f) + 2.5f) return false;
         return vLo(e) - 1.5f < vHi(f) && vHi(e) + 1.5f > vLo(f);
     }
+    /** Diagnostics only (T4): a deficit in metres as a bucket name. */
+    static String t4Bucket(float d) { return d <= 0.25f ? "le0.25" : d <= 0.5f ? "le0.5" : d <= 1f ? "le1" : d <= 2f ? "le2" : d <= 4f ? "le4" : "gt4"; }
+    /** Diagnostics only (T4, owner directive 2026-10-29): how far a layer refusal of {@code e} against {@code f} misses, and by which rule. */
+    private void t4LayerDeficit(Element e, Element f) {
+        float ds = Math.abs(c.dsWrap(e.s, f.s)), arcGate = arcHalf(e) + arcHalf(f) + 2.5f - ds;          // how far the arc would have to move to clear the 2.5 m pad
+        String pair = e.type + "_vs_" + f.type;
+        if (layersBodiesClash(c, e, f)) {
+            float v = Math.min(vHi(f) - (vLo(e) - 1.5f), vHi(e) + 1.5f - vLo(f)), d = Math.min(v, arcGate);
+            boolean raw = ds < arcHalf(e) + arcHalf(f) && vLo(e) < vHi(f) && vHi(e) > vLo(f);          // the bodies meet with no margin at all
+            GenTrace.tally("t4body_" + pair + "_" + t4Bucket(d));
+            GenTrace.tally("t4bodyraw_" + (raw ? "overlap" : "margin_only") + "_" + t4Bucket(d));
+            return;
+        }
+        float dy = Math.abs(e.y - f.y);
+        Element lower = e.y < f.y ? e : f, upper = lower == e ? f : e;
+        String rule = dy < PLAIN_LAYER_DY ? "plain4" : launches(lower) ? "lower_" + lower.type : "upper_" + upper.type + "_lifts";
+        float d = Math.min((dy < PLAIN_LAYER_DY ? PLAIN_LAYER_DY : 9.5f) - dy, arcGate);
+        GenTrace.tally("t4sp_" + rule + "_" + t4Bucket(d));
+        GenTrace.tally("t4sppair_" + pair + "_" + t4Bucket(d));
+    }
+    /** Diagnostics only (T4/S1-C): how deep a refused element sits in hazard {@code h}'s lethal box; for an avalanche, where it sits relative to the trigger deck (2 m cells). */
+    private void t4BoxDeficit(Element e, Element h) {
+        if (h == null) return;
+        float hs = hzS(h), ds = c.dsWrap(e.s, hs), arc = hzHalf(h) + arcHalf(e) - Math.abs(ds), v = Math.min(hzHi(h) - vLo(e), vHi(e) - hzLo(h));
+        GenTrace.tally("t4hz_" + h.type + "_vs_" + e.type + "_" + t4Bucket(Math.min(arc, v)));
+        if (h.type == Element.Type.AVALANCHE) { GenTrace.tally("t4avlbox_" + (int) Math.floor(ds / 2f) + "_" + (int) Math.floor((e.y - h.y) / 2f)); GenTrace.tally("t4avllen_b" + Math.round(h.len)); }
+    }
     /** Shortcut spacing between plain fixed platforms of different revolutions (see {@link #layersClash}). */
     static final float PLAIN_LAYER_DY = 4f;
     /** A platform that can throw the climber well above a jump, or carry them: these keep the full 9.5 m to the revolution above them. */
@@ -2368,12 +2395,14 @@ public final class CourseGenerator {
         if (!ok && GenTrace.GEN.get() != null) { Element e = c.get(clashAt), f = lastClash;          // (observe-only: what a layer refusal ran into, for reports)
             GenTrace.tally("clash_" + (lastClashGhost ? "ghost_" : "slice_") + (layersBodiesClash(c, e, f) ? "body_" : "spacing_") + f.type + (f.anchor >= 0 ? "_side" : ""));
             why("layer_" + (lastClashGhost ? "ghost_" : "slice_") + (layersBodiesClash(c, e, f) ? "body_" : "spacing_") + e.type + "_vs_" + f.type); }
+        if (!ok && GenTrace.GEN.get() != null) t4LayerDeficit(c.get(clashAt), lastClash);
         if (!ok) { boolean cr = false; for (Element h : hz) if (h.type == Element.Type.CRAB) cr = true;
             if (cr) { Element e = c.get(clashAt), f = lastClash; boolean body = vLo(e) - 1.5f < vHi(f) && vHi(e) + 1.5f > vLo(f);
                 CRABCLASH[(f.anchor >= 0 ? 2 : 0) + (body ? 0 : 1) + (lastClashGhost ? 4 : 0)]++; } }
         // DC5: a new deck never lies in the lethal box of a hazard of another revolution placed before it (an avalanche's fall, a cannon's lane):
         // the slice audit's I4 rule, applied here so the generator places something else instead of losing the attempt
-        for (int i = n0; i < c.size() && ok; i++) if (!GeometryIntegrity.elementClear(c, c.get(i), c.hazards.subList(0, Math.min(c.hazards.size(), h0Of(hz))), ghostHaz)) { ok = false; failHaz++; GenTrace.tally("deck_in_hazard_refused"); why("hazard_deck_in_hazard_box"); }
+        for (int i = n0; i < c.size() && ok; i++) if (!GeometryIntegrity.elementClear(c, c.get(i), c.hazards.subList(0, Math.min(c.hazards.size(), h0Of(hz))), ghostHaz)) { ok = false; failHaz++; GenTrace.tally("deck_in_hazard_refused"); why("hazard_deck_in_hazard_box");
+            if (GenTrace.GEN.get() != null) t4BoxDeficit(c.get(i), GeometryIntegrity.elementBlocker(c, c.get(i), c.hazards.subList(0, Math.min(c.hazards.size(), h0Of(hz))), ghostHaz)); }
         for (Element h : hz) { if (!ok) break; if (h.type == Element.Type.CLUB) continue; ok = hazardOk(h, ownerOf(h)); if (!ok) why("hazard_box_" + h.type); else { ok = GeometryIntegrity.hazardClear(c, h, ghostElems, ghostHaz); if (!ok) why("hazard_other_layer_" + h.type); } if (!ok) failHaz++; }          // (DC5: and the slice audit's own I4 rule, hazards of two revolutions included)
         for (int i = n0; i < c.size() && ok; i++) if (!padCorridorClear(i)) { ok = false; failHaz++; GenTrace.tally("pad_corridor_refused"); why("hazard_launch_corridor"); }
         if (ok && !sawsClearOfCreatures(hz)) { ok = false; failHaz++; why("hazard_saw_creature"); }

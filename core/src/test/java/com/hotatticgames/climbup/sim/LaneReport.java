@@ -217,15 +217,18 @@ public final class LaneReport {
         this.solve = solve; long t0 = System.nanoTime();
         GenTrace.clock = System::nanoTime;          // the reports measure wall time; the sim package itself never reads a clock
         CourseGenerator.Framed f = null; int k = 0;
+        GameGrowth growth = new GameGrowth(seed, t);          // (Group 6, 2026-10-29: slices exactly as the game grows them, backtracking included; chunkFramed alone never backtracked)
         try {
             while (f == null || f.yBase + f.c.get(f.c.routeSize() - 1).y < top) {
-                GenTrace tr = new GenTrace(); GenTrace.GEN.set(tr); long g0 = System.nanoTime(), ga = alloc();
+                long g0 = System.nanoTime(), ga = alloc();
                 CourseGenerator.Framed pf = f;
-                try { f = CourseGenerator.chunkFramed(seed, k, f, t); }
-                catch (RuntimeException e) { for (String s : tr.sliceFailures) sliceFailures.add(new String[]{"" + k, q(s)}); genSeconds += (System.nanoTime() - g0) / 1e9; failedSlice = k; throw e; }          // the slice that stopped generation keeps its attempts' reasons
-                finally { GenTrace.GEN.remove(); }
+                int bt0 = growth.backtracks;
+                try { f = growth.next(); }
+                catch (RuntimeException e) { if (growth.failedTrace != null) for (String s : growth.failedTrace.sliceFailures) sliceFailures.add(new String[]{"" + growth.failedSlice, q(s)}); genSeconds += (System.nanoTime() - g0) / 1e9; failedSlice = growth.failedSlice; throw e; }          // the slice that stopped generation keeps its attempts' reasons
+                GenTrace tr = growth.trace;
+                if (growth.backtracks > bt0) tr.counts.merge("generation_backtracks", growth.backtracks - bt0, Integer::sum);
                 integrity(k, pf, f);
-                double gs = (System.nanoTime() - g0) / 1e9; long gal = ga < 0 ? -1 : alloc() - ga; genSeconds += gs;
+                double gs = growth.seconds; long gal = ga < 0 ? -1 : alloc() - ga; genSeconds += gs;
                 GenTrace.Solve st = null; Autopilot.Report rep = null; double secs = Double.NaN; long sal = -1;
                 if (solve) {
                     st = new GenTrace.Solve(); GenTrace.SOLVE.set(st); long s0 = System.nanoTime(), sa = alloc();

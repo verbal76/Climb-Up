@@ -149,10 +149,10 @@ public class T5Probe {
     static void audit(int mode, long seed, int slices) {
         Tuning t = mode == 0 ? T : T.hardCopy(mode); T = t;
         row("slice,lower,lower_type,upper,upper_type,ds,dy,route_skipped,generator_clash,search_reached,solver_reached");
-        CourseGenerator.Framed f = null; int pairs = 0, hit = 0;
+        CourseGenerator.Framed f = null; GameGrowth growth = new GameGrowth(seed, t); int pairs = 0, hit = 0;
         Map<String, int[]> byType = new TreeMap<>();
         for (int k = 0; k < slices; k++) {
-            f = CourseGenerator.chunkFramed(seed, k, f, t);
+            f = growth.next();          // (as the game grows the climb: GameGrowth)
             Course c = f.c;
             for (int i = 0; i < c.size(); i++) {
                 Element lo = c.get(i); if (!lo.isPlatform()) continue;
@@ -191,11 +191,11 @@ public class T5Probe {
         DifficultyProfile P = DifficultyProfile.of(t);
         float sp = t.castleSpacing;
         row("castle,measured_T,measured_H,measured_E,measured_X,target_T,target_H,target_E,target_X,factor_T,factor_H,factor_E,factor_X,route_platforms_per100,plain_decks_per100,mechanic_platforms_per100,hazards_per100,enemies_per100,avg_rise_per_link");
-        CourseGenerator.Framed f = null; int k = 0;
+        CourseGenerator.Framed f = null; GameGrowth growth = new GameGrowth(seed, t); int k = 0;
         double[][] opp = new double[12][7];          // per castle: route platforms, plain usable decks, mechanic platforms, hazards, enemies, rise sum, links
         double done = -1e9;
         while (f == null || f.yBase + f.c.get(f.c.routeSize() - 1).y < top) {
-            f = CourseGenerator.chunkFramed(seed, k++, f, t);
+            f = growth.next(); k++;
             Course c = f.c; double lastY = done;
             for (int i = 1; i < c.routeSize(); i++) {
                 Element e = c.get(i); double y = f.yBase + e.y; if (y <= done) continue;
@@ -291,10 +291,10 @@ public class T5Probe {
     static void parity(int mode, long seed, int slices) {
         Tuning t = mode == 0 ? T : T.hardCopy(mode); T = t;
         row("slice,link,from_type,to_type,hazards_near,planned,margin,window,steps,first_div_step,first_div_field,max_pos_dev,windowed_end,full_end,outcome_differs,clean_next_ok,natural_next_ok");
-        CourseGenerator.Framed f = null;
+        CourseGenerator.Framed f = null; GameGrowth growth = new GameGrowth(seed, t);
         int links = 0, diverged = 0, outcome = 0, natOnly = 0, cleanOnly = 0, planned = 0, falseProof = 0;
         for (int k = 0; k < slices; k++) {
-            f = CourseGenerator.chunkFramed(seed, k, f, t);
+            f = growth.next();          // (as the game grows the climb: GameGrowth)
             Course c = f.c;
             for (int a = 0; a < c.routeSize() - 2; a++) {
                 int b = c.nextRoute(a); if (b <= a || b >= c.routeSize()) continue;

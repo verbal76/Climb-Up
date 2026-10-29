@@ -372,7 +372,7 @@ def main():
             have = True; tal[m][r["tally"]] += int(num(r["count"]))
     if have:
         L.append("## Generator tallies per mode (sum over courses; refusal reasons, pendulums)"); L.append("")
-        keys = sorted({k for m in order for k in tal[m] if re.match(r"(clash_|pad_corridor|deck_in_hazard|pendulum_|saw_window|continuity_|encounter_reproof|spikeblock_from_|haz_pick_|trap_pick_)", k)}, key=lambda k: -sum(tal[m][k] for m in order))
+        keys = sorted({k for m in order for k in tal[m] if re.match(r"(generation_backtracks|c1_reach_clash_|clash_|pad_corridor|deck_in_hazard|pendulum_|saw_window|continuity_|encounter_reproof|spikeblock_from_|haz_pick_|trap_pick_)", k)}, key=lambda k: -sum(tal[m][k] for m in order))
         table(L, ["tally", *order], [[k] + [tal[m][k] for m in order] for k in keys[:60]])
         # avalanche refusal breakdown (owner T1, 2026-10-29): every avalanche tally, not cut to the top 60 (per mode, summed over courses)
         akeys = sorted({k for m in order for k in tal[m] if re.match(r"(avalanche_|avlwhy_)", k) and k != "avalanche_proof_ms"}, key=lambda k: -sum(tal[m][k] for m in order))

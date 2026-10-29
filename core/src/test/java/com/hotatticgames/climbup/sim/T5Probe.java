@@ -115,8 +115,10 @@ public class T5Probe {
     }
     static int tgt = 1, low = 0, startI = 0;
 
+    static final float[] OFFS = parseOffs(System.getProperty("t5.offsets", "0,1.5,3,4.5,6,7.5,9"));
+    static float[] parseOffs(String v) { String[] p = v.split(","); float[] r = new float[p.length]; for (int i = 0; i < p.length; i++) r[i] = Float.parseFloat(p[i]); return r; }
     static void reach(String kind) {
-        for (float off : new float[]{0f, 1.5f, 3f, 4.5f, 6f, 7.5f, 9f}) {
+        for (float off : OFFS) {
             float best = -1f, bestSolver = -1f; int sinceLast = 0;
             for (float dy = 1f; dy <= 14.01f; dy += 0.25f) {
                 Course c = fixture(kind, off, dy);

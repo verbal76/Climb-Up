@@ -1898,6 +1898,7 @@ public final class CourseGenerator {
      */
     public static boolean layersClash(Course c, Element e, Element f) {
         if (Math.abs(e.s - f.s) < c.circumference * 0.5f) return false;     // same revolution: handled by route order
+        if (reachShortcut(c, e, f)) return true;                             // C1: within the measured reach of the lower one (on top of the rules below)
         if (Math.abs(c.dsWrap(e.s, f.s)) > arcHalf(e) + arcHalf(f) + 2.5f) return false;
         if (vLo(e) - 1.5f < vHi(f) && vHi(e) + 1.5f > vLo(f)) return true;
         if (!e.isPlatform() || !f.isPlatform()) return false;
@@ -1938,6 +1939,68 @@ public final class CourseGenerator {
         if (Math.abs(c.dsWrap(e.s, f.s)) > arcHalf(e) + arcHalf(f) + 2.5f) return false;
         return vLo(e) - 1.5f < vHi(f) && vHi(e) + 1.5f > vLo(f);
     }
+    /**
+     * Correction C1 (owner master directive 2026-10-29; evidence docs/verification/build83/T5_FINDINGS.md, GitHub run 40936899187): the shortcut rule
+     * between spiral revolutions only looked within arcHalf + arcHalf + 2.5 m of arc and held a pad 9.5 m below the next revolution, but a climber on
+     * the real Sim gets from a pad onto a deck 10.25 m up and up to 10.5 m along the arc, from a spring 8 m up 10.5 m along, from an elevator its rise +
+     * 3.75 m, from a plain deck 3.75 m up 6 m along. Generated courses held 15 / 33 / 44 such direct shortcuts per course in their first 30 slices
+     * (NORMAL / PUNISHER / NGH), skipping a revolution of route. Two platforms of different revolutions now also clash when the upper one is within the
+     * MEASURED reach of the lower one at their edge-to-edge arc gap, plus {@link #SHORTCUT_MARGIN}. It only adds refusals: nothing refused before is
+     * accepted now. The tables are lower bounds of the real reach (T5Probe reach: an independent bounded input search and the solver, the higher of
+     * the two), measured with a 3 m target, in 1.5 m arc steps: {gap from the lower platform's arc edge to the target's (m), reach (m)}.
+     */
+    static float reachAt(Course c, Element lower, float gap) {
+        float[][] tab;
+        switch (lower.type) {
+            case PAD: tab = REACH_PAD; break;
+            case SPRING: tab = REACH_SPRING; break;
+            case SWING: tab = REACH_SWING; break;
+            case RAMP: tab = REACH_RAMP; break;
+            case SEESAW: tab = REACH_SEESAW; break;
+            case MOVE_H: tab = REACH_MOVE_H; break;
+            case MOVE_V: {          // an elevator: plain reach from the top of its travel (measured: rise + 3.75 m up to 3 m of gap, rise + 2 at 4.5, rise - 2.5 at 6)
+                float a = lower.amp;
+                return envelope(new float[][]{{-3f, a + 3.75f}, {-1.5f, a + 3.75f}, {0f, a + 3.75f}, {1.5f, a + 3.75f}, {3f, a + 3.75f}, {4.5f, a + 2f}, {6f, a - 2.5f}}, gap);
+            }
+            default: tab = REACH_PLAIN;
+        }
+        float r = envelope(tab, gap);
+        if (lower.type == Element.Type.STATIC && r > 0f && liftsClimber(c, lower)) r += 0.75f;          // a spike-drop slab or a skull on it: measured 4.5 m against plain 3.75
+        return r;
+    }
+    /**
+     * The highest reach measured within one measuring step (1.5 m) of {@code gap} either way (reach is not monotonic: a pad reaches 8.25 m onto a deck
+     * straight above it, 10.25 m 4.5 m along); a gap nearer than the first measurement takes the first one; -1 beyond the measured range.
+     */
+    private static float envelope(float[][] tab, float gap) {
+        float r = -1f;
+        for (float[] p : tab) if (Math.abs(p[0] - gap) <= 1.5f) r = Math.max(r, p[1]);
+        if (gap < tab[0][0]) r = Math.max(r, tab[0][1]);
+        return r;
+    }
+    static final float SHORTCUT_MARGIN = 0.5f;
+    /** Diagnostics only: -Dclimb.c1Off=true restores the rule without C1 (for same-seed comparisons). */
+    static final boolean C1_OFF = Boolean.getBoolean("climb.c1Off");
+    static boolean reachShortcut(Course c, Element e, Element f) {
+        if (C1_OFF || !e.isPlatform() || !f.isPlatform()) return false;
+        if (Math.abs(e.s - f.s) < c.circumference * 0.5f) return false;
+        Element lower = e.y < f.y ? e : f, upper = lower == e ? f : e;
+        float dy = upper.y - lower.y; if (dy <= 0f) return false;
+        float gap = Math.abs(c.dsWrap(e.s, f.s)) - arcHalf(lower) - arcHalf(upper);
+        float r = reachAt(c, lower, gap);
+        boolean hit = r > 0f && dy < r + SHORTCUT_MARGIN;
+        if (hit && GenTrace.GEN.get() != null) GenTrace.tally("c1_reach_clash_" + lower.type);
+        return hit;
+    }
+    // (offsets of the measurements minus the fixtures' arc half-widths: lower platform as built by the generator, 3 m target)
+    static final float[][] REACH_PLAIN = {{-3f, 3.75f}, {-1.5f, 3.75f}, {0f, 3.75f}, {1.5f, 3.75f}, {3f, 3.75f}, {4.5f, 2.0f}};
+    static final float[][] REACH_MOVE_H = {{-4.9f, 3.75f}, {-3.4f, 3.75f}, {-1.9f, 3.75f}, {-0.4f, 3.75f}, {1.1f, 3.75f}, {2.6f, 3.75f}, {4.1f, 2.75f}};
+    static final float[][] REACH_SEESAW = {{-5f, 3.75f}, {-3.5f, 3.5f}, {-2f, 3.75f}, {-0.5f, 3.75f}, {1f, 3.25f}, {2.5f, 2.25f}};
+    static final float[][] REACH_RAMP = {{-3.15f, 4.75f}, {-1.65f, 4.25f}, {-0.15f, 4.0f}, {1.35f, 4.5f}, {2.85f, 4.75f}, {4.35f, 3.5f}};
+    static final float[][] REACH_SWING = {{-4.9f, 6.5f}, {-3.4f, 6.75f}, {-1.9f, 6.75f}, {-0.4f, 6.5f}, {1.1f, 6.5f}, {2.6f, 6.5f}, {4.1f, 6.75f}, {5.6f, 6.0f}, {7.1f, 4.25f}};
+    static final float[][] REACH_SPRING = {{-2.5f, 8.5f}, {-1f, 8.5f}, {0.5f, 8.5f}, {2f, 8.5f}, {3.5f, 8.5f}, {5f, 8.5f}, {6.5f, 8.5f}, {8f, 8.0f}, {9.5f, 6.75f}, {11f, 3.75f}};
+    static final float[][] REACH_PAD = {{-2.5f, 8.25f}, {-1f, 8.25f}, {0.5f, 9.5f}, {2f, 10.25f}, {3.5f, 10.0f}, {5f, 10.0f}, {6.5f, 8.0f}, {8f, 3.25f}};
+
     /** Diagnostics only (T4): a deficit in metres as a bucket name. */
     static String t4Bucket(float d) { return d <= 0.25f ? "le0.25" : d <= 0.5f ? "le0.5" : d <= 1f ? "le1" : d <= 2f ? "le2" : d <= 4f ? "le4" : "gt4"; }
     /** Diagnostics only (T4, owner directive 2026-10-29): how far a layer refusal of {@code e} against {@code f} misses, and by which rule. */
@@ -1981,6 +2044,7 @@ public final class CourseGenerator {
      */
     public static boolean forkLayersClash(Course c, Element d, Element f) {
         if (Math.abs(d.s - f.s) < c.circumference * 0.5f) return false;
+        if (reachShortcut(c, d, f)) return true;                             // C1
         if (Math.abs(c.dsWrap(d.s, f.s)) > arcHalf(d) + arcHalf(f) + 2.5f) return false;
         if (vLo(d) - 1.5f < vHi(f) && vHi(d) + 1.5f > vLo(f)) return true;
         if (!d.isPlatform() || !f.isPlatform()) return false;

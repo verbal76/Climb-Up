@@ -47,7 +47,8 @@ jobs:
   registered:
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
-    steps: [ { run: echo "demo.yml is registered on ${{ github.ref_name }}; dispatch it to build" } ]
+    steps:
+      - run: echo "demo.yml is registered on ${{ github.ref_name }}; dispatch it to build"
 
   validate:
     if: github.event_name == 'workflow_dispatch' && startsWith(github.ref, 'refs/heads/demo/')
@@ -178,7 +179,8 @@ jobs:
           sha256sum "$OUT"
           cp badging.txt out/android-badging.txt
       - name: Fetch the last published full game APK (Build 71) for the side-by-side install
-        env: { GH_TOKEN: "${{ github.token }}" }
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: gh release download v1.1.5-build71 -p '*.apk' -O full.apk && ls -l full.apk
       - name: Enable KVM for the emulator
         run: |
@@ -195,7 +197,9 @@ jobs:
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot
           script: bash tools/ci/demo_side_by_side_test.sh full.apk "out/Upwardly Demo Build ${BUILD_NUMBER} APK.apk" out/shots
       - uses: actions/upload-artifact@v4
-        with: { name: demo-android-${{ env.BUILD_NUMBER }}, path: out/ }
+        with:
+          name: demo-android-${{ env.BUILD_NUMBER }}
+          path: out/
 
   windows:
     needs: validate
@@ -265,7 +269,9 @@ jobs:
           cp build/windows/SHA256SUMS.txt out/windows-SHA256SUMS.txt
           cp "build/windows/dist/Upwardly Demo/BUILD_INFO.txt" out/windows-BUILD_INFO.txt
       - uses: actions/upload-artifact@v4
-        with: { name: demo-windows-${{ env.BUILD_NUMBER }}, path: out/ }
+        with:
+          name: demo-windows-${{ env.BUILD_NUMBER }}
+          path: out/
 
   linux:
     needs: validate
@@ -309,7 +315,9 @@ jobs:
           cp "build/linux/dist/Upwardly Demo/BUILD_INFO.txt" out/linux-BUILD_INFO.txt
           cp smoke.txt out/linux-smoke.txt
       - uses: actions/upload-artifact@v4
-        with: { name: demo-linux-${{ env.BUILD_NUMBER }}, path: out/ }
+        with:
+          name: demo-linux-${{ env.BUILD_NUMBER }}
+          path: out/
 
   draft:
     needs: [validate, android, windows, linux]

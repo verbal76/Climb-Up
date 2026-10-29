@@ -1332,3 +1332,23 @@ HAPPEN drops 9-12 blocks; the warning is the rumble only; the work stacks on the
 - **Steam demo (for the record):** demo App ID 5526730 (Windows depot 5526731, Linux depot 5526732); full game App ID 5427130
   (https://store.steampowered.com/app/5427130/). The demo is with Valve for review; the official Steam logo is still to be added. Branch
   demo/build-82 and the submitted demo are not touched by this work.
+
+## Rules 19 owner decisions (2026-10-29, branch fix/build-83-root-causes)
+
+- **C1 shortcut rule (correction):** two platforms of different spiral revolutions clash when the upper one is within the lower one's measured
+  ordinary reach (T5 tables, + 0.5 m), anywhere along the arc. Intended route links and branches are never cross-revolution pairs, so C1 does not
+  touch them (DescentRouteC1Test). Evidence: docs/verification/build83/T5_FINDINGS.md.
+- **Emergent movement, category C (owner answer 1):** C1 and the layer spacing guard ordinary movement only. Skull launches, ridden spike drops,
+  collision knock-backs and timed rebounds may reach later revolutions; the generator does not prevent them and never relies on them.
+- **New mechanics in every mode (owner answer 1):** descents, lowered pads, Tarzan swings and turbo ramps appear in NORMAL, PUNISHER and NGH;
+  difficulty comes from geometry and timing, the physics is the same in every mode.
+- **Visuals (owner answer 1):** procedural and existing CC0/original assets (narrow bar platforms, a rope swinging from a beam, a booster block).
+- **Frequencies (owner answer 1):** a modest start (about 1 in 4 eligible pad/rope/narrow modules get a descent variant; Tarzan swings and turbo
+  ramps take about the old share of spinning ramps and ski jumps), measured and adjusted with the owner.
+- **Spinning ramps** (RAMP skin 3) are no longer generated; Sim and the renderer still play them for earlier saves and replays.
+- **Bridge planks** that fall out stay gone for the climb (respawns, slice unload/reload, saves); holed bridges are proven with their holes open.
+- **Timed rebound jump:** a fresh airborne Jump press arms a 100 ms window (provisional, within the owner's 80-120 ms); contact with a crab,
+  bee, cannon ball, aimed shot, mortar round or saw inside it adds a jump impulse to the contact's normal outcome. **Open for the owner:** a
+  successful rebound off a damaging hazard still counts as a hit (and grants the usual 0.7 s invulnerability).
+- **Reports and probes grow courses exactly as the game does** (GameGrowth = Tower.grow backtracking); chunkFramed alone reported stops the
+  game recovers from.

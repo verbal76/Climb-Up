@@ -45,6 +45,17 @@ public final class Sim {
     public int falls;
     public float landSpeed;          // for squash feedback
     public int events;               // accumulated since last consumeEvents()
+    /** Events that no longer fit in {@link #events} (all 32 bits are taken): accumulated since the last {@link #consumeEvents2}. */
+    public int events2;
+    public static final int EV2_REBOUND = 1;
+    /**
+     * Rules 19 timed rebound jump (owner directive 2026-10-29): a fresh Jump press in the air arms it for REBOUND_WINDOW seconds; if the climber then
+     * touches a reboundable creature or projectile, that contact's normal outcome (shove or knock-back) is kept and a jump impulse is added to it,
+     * mostly upward for a contact from above. Without the press nothing changes. Not saved (it lasts a tenth of a second).
+     */
+    public float reboundBuf;
+    public int rebounds;
+    static final float REBOUND_WINDOW = 0.10f, REBOUND_GAIN = 1.0f;
     public float ps0, py0;           // player position at the start of the last step (render interpolation)
     public boolean deferRespawn, respawnPending;    // a managed world window: the respawn is completed by Tower.maintain
     public float floorOverride = Float.NaN;          // managed window: the height of the lowest platform of the WHOLE tower (the resident part is not all of it)
@@ -116,6 +127,8 @@ public final class Sim {
     public float hitS, hitY;                      // where the last hit happened (effects)
     /** Arc position of the part of the hazard that touched the body in the last {@link #hazardHit} that returned true (the ball, the blade where it rides now, the falling block). */
     private float hitFromS = Float.NaN;
+    /** Where the touching part of the last hazard hit was (arc and height), kept for the timed rebound after knockOff clears hitFromS. */
+    private float hitFromS2 = Float.NaN, hitFromY = Float.NaN;
     /** Seconds a knock-off keeps the hands from grabbing again (owner correction 2026-10-27, DC4: knocked off a rope, the climber re-grabbed it the next frame and was hit again every 0.72 s). */
     static final float KNOCK_LOCKOUT = 0.3f;
     public int[] act;                // planner window: element indices simulated (null = everything)
@@ -257,6 +270,7 @@ public final class Sim {
         landSpeed = o.landSpeed; events = o.events; assistForgive = o.assistForgive; ps0 = o.ps0; py0 = o.py0; teleported = o.teleported;
         es0 = o.es0.clone(); ey0 = o.ey0.clone(); es1 = o.es1.clone(); ey1 = o.ey1.clone(); edy = o.edy.clone();
         crumbleT = o.crumbleT.clone(); gone = o.gone.clone(); goneT = o.goneT.clone(); padSquash = o.padSquash.clone(); tilt = o.tilt.clone(); onT = o.onT.clone();
+        reboundBuf = o.reboundBuf; rebounds = o.rebounds;
         clubTime = o.clubTime; swingT = o.swingT; shoveCd = o.shoveCd; crabS = o.crabS; crabY = o.crabY; keys = o.keys; keysFree = o.keysFree; featDone = o.featDone.clone(); aimAng = o.aimAng.clone(); aimFireT = o.aimFireT.clone(); aimArmed = o.aimArmed.clone(); crabPos = o.crabPos.clone(); crabVel = o.crabVel.clone(); crabMode = o.crabMode.clone(); crabStuck = o.crabStuck.clone(); crabCool = o.crabCool.clone(); crabTurn = o.crabTurn.clone(); crabSeen = o.crabSeen.clone(); mobState = o.mobState.clone(); mobT = o.mobT.clone(); mobS = o.mobS.clone(); mobY = o.mobY.clone(); mobDir = o.mobDir.clone(); mobTgt = o.mobTgt.clone(); mobSeen = o.mobSeen.clone(); deckOff = o.deckOff.clone(); crabJump = o.crabJump.clone(); crabFrom = o.crabFrom.clone(); crabFromDeck = o.crabFromDeck.clone(); crabFall = o.crabFall.clone(); aimYaw = o.aimYaw.clone(); avl = o.avl.clone(); lastAvlT = o.lastAvlT; avlImpacts = o.avlImpacts; avlKnocks = o.avlKnocks; enfKickTries = o.enfKickTries; enfKickHits = o.enfKickHits; enfSwatTries = o.enfSwatTries; enfSwatHits = o.enfSwatHits; enfRetreats = o.enfRetreats; enfFalls = o.enfFalls; enfAlerts = o.enfAlerts; enfSwatConsidered = o.enfSwatConsidered; enfSwatRejected = o.enfSwatRejected; enfSwatRisky = o.enfSwatRisky; enfLandOwn = o.enfLandOwn; enfLandNear = o.enfLandNear; enfHops = o.enfHops; enfFallEdge = o.enfFallEdge; enfFallChase = o.enfFallChase; enfFallNoDeck = o.enfFallNoDeck; avlFired = o.avlFired; avlSkipped = o.avlSkipped; avlReleased = o.avlReleased; avlNear = o.avlNear; avlArea = o.avlArea; avlHits = o.avlHits; avlRicochets = o.avlRicochets; avlPeak = o.avlPeak; avlTrigT = o.avlTrigT; avlTrigV = o.avlTrigV; avlTrigDist = o.avlTrigDist; avlFirstImpactT = o.avlFirstImpactT; avlFirstNearT = o.avlFirstNearT; avlRebounds = o.avlRebounds; avlTumbles = o.avlTumbles; squashT = o.squashT; slipCd = o.slipCd; finishedRun = o.finishedRun; lastGateNo = o.lastGateNo; lastKeyColor = o.lastKeyColor; lastGateColor = o.lastGateColor;
         act = o.act; hz = o.hz; winLo = o.winLo; winHi = o.winHi; invuln = o.invuln; hits = o.hits; hitS = o.hitS; hitY = o.hitY;
         humanHold = o.humanHold; heldX = o.heldX; heldY = o.heldY; heldXT = o.heldXT; heldYT = o.heldYT;
@@ -310,6 +324,7 @@ public final class Sim {
     }
 
     public int consumeEvents() { int e = events; events = 0; return e; }
+    public int consumeEvents2() { int e = events2; events2 = 0; return e; }
     /** The side entry in progress (see trackSideEntry): {platform, side}, for saving a climb mid-catch (DC3). */
     public int[] sideEntry() { return new int[]{sideIn, sideDir}; }
     public void setSideEntry(int platform, int side) { sideIn = platform; sideDir = side >= 0 ? 1 : -1; }
@@ -363,9 +378,24 @@ public final class Sim {
     private void knockOff() {
         // away from what touched you (DC4: the hazard's home was used, so a body between a carried saw's home and the saw itself was thrown through it)
         float side = hitBy == null ? 0f : course.dsWrap(s, Float.isNaN(hitFromS) ? hitBy.sAt(time) : hitFromS);
-        hitFromS = Float.NaN;
+        hitFromS2 = hitFromS; hitFromS = Float.NaN;
         mode = Mode.AIR; onElem = -1; coyote = 0; jumpBuf = 0; lockout = Math.max(lockout, KNOCK_LOCKOUT);
         vx = (side >= 0f ? 1f : -1f) * T.hitKnockSide; vy = T.hitKnockUp; invuln = 0.7f;      // tuning.json: hitKnockSide / hitKnockUp
+        if (hitBy != null && reboundable(hitBy.type)) tryRebound(hitFromS2, hitFromY);          // (a timed press turns the knock into a rebound; it is still a hit)
+    }
+    /** Hazards a timed press rebounds off (creatures go through their own shoves): cannon balls, aimed shots, mortar rounds, saws. */
+    static boolean reboundable(Element.Type t) { return t == Element.Type.CANNON || t == Element.Type.AIMED || t == Element.Type.MORTAR || t == Element.Type.SAW_H || t == Element.Type.SAW_V; }
+    /**
+     * The timed rebound (see {@link #reboundBuf}): with a fresh press armed, adds a jump impulse to the outcome this contact already gave - all of it
+     * upward for a contact from straight above (the sideways part of the shove is damped), half of it for a contact from the side.
+     */
+    private void tryRebound(float objS, float objY) {
+        if (reboundBuf <= 0f || Float.isNaN(objS)) return;
+        float dx = course.dsWrap(s, objS), dy = y + T.height * 0.5f - objY, d = (float) Math.sqrt(dx * dx + dy * dy);
+        float ny = d > 1e-4f ? Math.max(0f, dy / d) : 1f;
+        vy += T.jumpVel * REBOUND_GAIN * (0.5f + 0.5f * ny);
+        vx *= 1f - 0.6f * ny;
+        reboundBuf = 0f; jumpBuf = 0f; rebounds++; events2 |= EV2_REBOUND;
     }
 
     /** Falls to the checkpoint plus hazard knock-offs: any of them means a move was not clean (the solver and the generator proofs reject such moves). */
@@ -419,7 +449,7 @@ public final class Sim {
             }
         }
         if (avlReset) lastAvlT = -1e9f;
-        shoveCd = 0f; swingT = 0f; squashT = 0f; slipCd = 0f;
+        shoveCd = 0f; swingT = 0f; squashT = 0f; slipCd = 0f; reboundBuf = 0f;
     }
 
     /**
@@ -578,6 +608,7 @@ public final class Sim {
 
         if (mode != Mode.AIR) sideIn = -1;
         if (in.jumpPressed) jumpBuf = T.jumpBuffer + assistForgive; else jumpBuf = Math.max(0, jumpBuf - dt);
+        if (in.jumpPressed && mode == Mode.AIR) reboundBuf = REBOUND_WINDOW; else reboundBuf = Math.max(0f, reboundBuf - dt);          // (a fresh press only: holding Jump never re-arms it)
         if (lockout > 0) lockout = Math.max(0, lockout - dt);
 
         switch (mode) {
@@ -645,6 +676,7 @@ public final class Sim {
         if (shoveCd <= 0f && invuln <= 0f && Math.abs(dx) < 0.55f + hw && y < cy + 0.62f && y + T.height > cy + 0.05f && (mode == Mode.GROUND || mode == Mode.AIR)) {
             float side = Math.signum(dx); if (side == 0f) side = -facing;
             vx = side * 9f; vy = Math.max(vy, 6f); mode = Mode.AIR; onElem = -1; lockout = 0.3f; jumpedUp = false; coyote = 0f; shoveCd = 0.9f; events |= EV_SHOVE;
+            tryRebound(cs, cy + 0.35f);          // (the crab's body centre)
         }
     }
     /** Build 79: a bridge's plank holes are open (see Element.holed); you drop through one once your middle is HOLE_FOOT inside its edges. */
@@ -663,6 +695,7 @@ public final class Sim {
         if (shoveCd <= 0f && invuln <= 0f && Math.abs(dx) < Element.BEE_R + hw && by + Element.BEE_R > y + 0.1f && by - Element.BEE_R < y + T.height - 0.05f && (mode == Mode.GROUND || mode == Mode.AIR)) {
             float side = Math.signum(dx); if (side == 0f) side = -facing;
             vx = side * Element.BEE_PUSH_X; vy = Math.max(vy, Element.BEE_PUSH_Y); mode = Mode.AIR; onElem = -1; lockout = 0.25f; jumpedUp = false; coyote = 0f; shoveCd = 1.0f; events |= EV_SHOVE;
+            tryRebound(bs, by);
         }
     }
     private final float[] beeTmp = new float[2], beeEnv = new float[4];
@@ -1774,7 +1807,7 @@ public final class Sim {
         float dx = Math.abs(course.dsWrap(b[0], s)), ddx = Math.max(0f, dx - hw);
         float ddy = b[1] < lo ? lo - b[1] : (b[1] > hiY ? b[1] - hiY : 0f);
         if (ddx * ddx + ddy * ddy >= Element.AIM_R * Element.AIM_R) return false;
-        hitFromS = b[0]; return true;
+        hitFromS = b[0]; hitFromY = b[1]; return true;
     }
 
     // ---------------------------------------------------------------- hazards that ride a moving platform (bug #14)
@@ -1815,7 +1848,7 @@ public final class Sim {
                 for (int back = 0; back < Element.CANNON_TRAIL; back++) {
                     if (!e.cannonBallAlive(time, back)) continue;
                     float dx = Math.abs(course.dsWrap(e.cannonBallS(time, back) + cs, s)), ddx = Math.max(0f, dx - hw);
-                    if (ddx * ddx + ddy * ddy < r * r) { hitFromS = e.cannonBallS(time, back) + cs; return true; }
+                    if (ddx * ddx + ddy * ddy < r * r) { hitFromS = e.cannonBallS(time, back) + cs; hitFromY = cy; return true; }
                 }
                 continue;
             }
@@ -1824,7 +1857,7 @@ public final class Sim {
             int po = hzPose(hz == null ? k : hz[k], e);
             float ePosY = hzv[po + 1];
             float dx = Math.abs(course.dsWrap(hzv[po] + cs, s));
-            hitFromS = hzv[po] + cs;
+            hitFromS = hzv[po] + cs; hitFromY = ePosY + cyOff;
             float r = e.discR();
             if (r > 0f) {
                 float ddx = Math.max(0f, dx - hw), cy = ePosY + cyOff;

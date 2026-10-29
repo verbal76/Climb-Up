@@ -7,6 +7,9 @@ on:
       modes: { description: 'JSON list of difficulties (0 NORMAL, 1 PUNISHER, 2 NOT GONNA HAPPEN)', required: false, default: '["0","1","2"]' }
       seeds: { description: 'JSON list of candidate seeds', required: false, default: '["4101","4102","4103","4104","4105","4106","4107","4108"]' }
       solve: { description: '1 = solve every section slice, 0 = generation only', required: false, default: '1' }
+  push:          # registers the workflow on the demo branch (a dispatch-only workflow off the default branch cannot be dispatched); runs the default scan
+    branches: ['demo/**']
+    paths: ['.github/workflows/demo-courses.yml']
 permissions:
   contents: read
 jobs:
@@ -17,8 +20,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        mode: ${{ fromJSON(inputs.modes) }}
-        seed: ${{ fromJSON(inputs.seeds) }}
+        mode: ${{ fromJSON(inputs.modes || '["0","1","2"]') }}
+        seed: ${{ fromJSON(inputs.seeds || '["4101","4102","4103","4104","4105","4106","4107","4108"]') }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -27,7 +30,7 @@ jobs:
       - run: ./gradlew :core:testClasses --no-daemon -q
       - name: Scan
         env:
-          SOLVE: ${{ inputs.solve }}
+          SOLVE: ${{ inputs.solve || '1' }}
         run: |
           GDX=$(find ~/.gradle -name 'gdx-1.14.2.jar' | head -1)
           cd core && java -Xmx3g -cp "build/classes/java/main:build/classes/java/test:$GDX" com.hotatticgames.climbup.DemoBake scan ../assets/data/tuning.json ${{ matrix.mode }} ${{ matrix.seed }} | tee ../scan.txt

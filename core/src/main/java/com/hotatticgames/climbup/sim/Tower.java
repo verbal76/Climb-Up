@@ -213,8 +213,14 @@ public final class Tower {
 
     // ------------------------------------------------------------------ generation (background) and growth of the resident world
 
+    /**
+     * The demo (docs/DEMO.md): a tower built from a baked course that must never grow. Sealed, it makes no slice at all - the window holds only what the
+     * course holds, so nothing past the stage's last castle can ever exist. Unset in the full game.
+     */
+    public boolean sealed;
+
     public void requestNext() {
-        if (pending != null || failure != null) return;
+        if (pending != null || failure != null || sealed) return;
         final CourseGenerator.Framed f = top, p = prov; final int fi = blobs.size() - 1, pa = provAttempt;
         pending = POOL.submit((Callable<Step>) () -> grow(seed, T, fi, f, p, pa));
     }
@@ -256,7 +262,7 @@ public final class Tower {
         boolean grew = false; waiting = false;
         while (admitted >= blobs.size() ? topAbs[blobs.size() - 1] <= admitAbs : botAbs[admitted] <= admitAbs) {
             if (admitted >= blobs.size()) {
-                if (admitAbs == Double.POSITIVE_INFINITY) break;
+                if (admitAbs == Double.POSITIVE_INFINITY || sealed) break;
                 if (failure != null || !blockingAdmit) { requestNext(); if (pending != null && pending.isDone()) { take(); continue; } waiting = true; break; }          // (R1/R3: hold, never block or throw)
                 requestNext(); try { pending.get(); } catch (Exception e) { /* take() records it */ } take(); if (failure != null) { waiting = true; break; } continue;
             }
@@ -281,6 +287,7 @@ public final class Tower {
 
     /** Blocking growth by one final slice (tests and tools). Throws if the tower cannot grow (R1: the game itself never calls this during play). */
     public void extend() {
+        if (sealed) throw new IllegalStateException("a sealed tower does not grow");
         if (failure != null) throw new IllegalStateException("tower cannot grow: " + failure);
         requestNext();
         try { pending.get(); } catch (Exception e) { /* take() records it */ }

@@ -16,12 +16,16 @@ public final class Cues {
     public enum Surface { STONE, DIRT, GRASS, WOOD }
 
     /** What a platform sounds like underfoot: wooden bridges, seesaws, crumbling boards and plank belts are wood; otherwise the world decides (meadow and dusk grass, snow and space stone). */
+    /** The demo shows every stage in one world (docs/DEMO.md): footsteps follow that world's ground. -1 (the full game): each platform's own. */
+    public static int zoneOverride = -1;
+
     public static Surface surface(Element e) {
         if (e == null) return Surface.STONE;
         if (e.type == Element.Type.SEESAW || e.type == Element.Type.CRUMBLE || e.crumbles()) return Surface.WOOD;
         if (e.type == Element.Type.STATIC && (e.skin == 1 || e.skin == 4)) return Surface.WOOD;
-        if (e.zone == Palette.SPACE) return Surface.STONE;
-        return e.zone == 1 || e.zone == 3 ? Surface.STONE : Surface.GRASS;
+        int z = zoneOverride >= 0 ? zoneOverride : e.zone;
+        if (z == Palette.SPACE) return Surface.STONE;
+        return z == 1 || z == 3 ? Surface.STONE : Surface.GRASS;
     }
 
     /** Pack clip group for a footstep (wood has no step clip of its own: bare dirt is the closest). */

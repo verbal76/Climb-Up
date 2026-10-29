@@ -44,7 +44,7 @@ public final class SettingsScreen extends ScreenAdapter {
     private static volatile boolean checkRunning;
     private static volatile String checkStatus = "REPLAYS A RECORDED CLIMB TO THE FINISH (A FEW MINUTES) AND COMPARES IT WITH THE DESKTOP.";
     private void startCheck() {
-        if (checkRunning) return;
+        if (checkRunning || Edition.DEMO) return;
         checkRunning = true; checkStatus = "STARTING...";
         Thread t = new Thread(() -> {
             try {
@@ -72,7 +72,7 @@ public final class SettingsScreen extends ScreenAdapter {
     private static volatile boolean pickBusy, pickReady;
     private static volatile String pickStatus = "";
     private void startPick() {
-        if (pickBusy || checkRunning) return;
+        if (pickBusy || checkRunning || Edition.DEMO) return;
         pickBusy = true; final int w = pickWorld; final String name = com.hotatticgames.climbup.render.Palette.NAMES[w].toUpperCase();
         final int h = w == 0 ? 0 : (int) (w * g.tuning.zoneHeight) + 5;
         pickStatus = "PREPARING " + name + "...";
@@ -121,7 +121,7 @@ public final class SettingsScreen extends ScreenAdapter {
 
     /** The ERASE ALL PLAYERS row: a first tap arms it, a second one erases (the data-reset item the spec's menu list asks for). */
     private void eraseRow() {
-        row("ERASE ALL PLAYERS", confirmReset ? g.platform.tip("TAP TO CONFIRM") : "ERASE", null, null, () -> {
+        row(Edition.DEMO ? "ERASE DEMO DATA" : "ERASE ALL PLAYERS", confirmReset ? g.platform.tip("TAP TO CONFIRM") : "ERASE", null, null, () -> {
             if (confirmReset) { g.eraseEverything(); confirmReset = false; }
             else confirmReset = true;
         });
@@ -155,7 +155,7 @@ public final class SettingsScreen extends ScreenAdapter {
             toggle("LEFT-HANDED LAYOUT", s.leftHanded, () -> s.leftHanded = !s.leftHanded);
             toggle("HIGH-CONTRAST CONTROLS", s.highContrast, () -> s.highContrast = !s.highContrast);
             toggle("REDUCED HUD", s.reducedHud, () -> s.reducedHud = !s.reducedHud);          // Build 67: just the height, the tower bar and a carried key; screenshots then show no HUD
-            toggle("SHOW COURSE SEED", s.showSeed, () -> s.showSeed = !s.showSeed);
+            if (!Edition.DEMO) toggle("SHOW COURSE SEED", s.showSeed, () -> s.showSeed = !s.showSeed);          // the demo has no course codes
             toggle("SHOW BEST TIMES", s.showBestTimes, () -> s.showBestTimes = !s.showBestTimes);
             eraseRow();
         } else if (page == 0) {                                     // AUDIO + DISPLAY / GENERAL
@@ -168,24 +168,31 @@ public final class SettingsScreen extends ScreenAdapter {
             toggle("REDUCED MOTION", s.reducedMotion, () -> s.reducedMotion = !s.reducedMotion);
             toggle("CONTEXTUAL TIPS", s.tips, () -> s.tips = !s.tips);
         } else if (page == 2) {                                     // ABOUT (+ the data reset on desktop, whose controls live in the launcher's own tab)
-            rowY -= 24; ui.textC(g.platform.title() + "  " + Legacy.versionLine(ClimbGame.VERSION, ClimbGame.appBuild), W / 2, rowY + 30, 4.5f, Ui.TEXT);
-            if (ui.tappedIn(0, rowY, W, 72)) versionTaps++;                 // Build 74: seven taps on the version line show the determinism check
+            rowY -= 24; ui.textC(g.platform.title() + "  " + g.versionLabel(), W / 2, rowY + 30, 4.5f, Ui.TEXT);
+            if (!Edition.DEMO && ui.tappedIn(0, rowY, W, 72)) versionTaps++;                 // Build 74: seven taps on the version line show the determinism check (never in the demo)
             rowY -= 72;
-            if (versionTaps >= 7) {
+            if (Edition.DEMO) {          // the demo's identity: what it was built from and which courses it plays (no developer tools, no updates)
+                String fp = g.demoFlow != null ? g.demoFlow.fingerprint().toUpperCase(java.util.Locale.ROOT) : "NO RECIPE";
+                String src = Edition.SOURCE_COMMIT.length() > 12 ? Edition.SOURCE_COMMIT.substring(0, 12) : Edition.SOURCE_COMMIT;
+                rowY = aboutLines("DEMO REVISION " + Edition.DEMO_REVISION + "  SOURCE " + src.toUpperCase(java.util.Locale.ROOT) + "  RULES " + com.hotatticgames.climbup.sim.CourseGenerator.RULES_VERSION, 2.6f, W, rowY, 54);
+                rowY = aboutLines("COURSES " + fp, 2.4f, W, rowY, 54);
+                rowY = aboutLines("THIS DEMO MAKES NO NETWORK CALLS.", 2.6f, W, rowY, 54);
+            } else if (versionTaps >= 7) {
                 row("DETERMINISM CHECK", checkRunning ? "RUNNING" : "RUN", null, null, this::startCheck);
                 rowY = aboutLines(checkStatus, 2.4f, W, rowY, 54);
                 row("WORLD PICKER", com.hotatticgames.climbup.render.Palette.NAMES[pickWorld].toUpperCase(), () -> pickWorld = (pickWorld + 4) % 5, () -> pickWorld = (pickWorld + 1) % 5, null);
                 row("START IN THIS WORLD", pickBusy ? "PREPARING" : "GO", null, null, this::startPick);
                 rowY = aboutLines(pickStatus.isEmpty() ? "A NEW CLIMB IN THAT WORLD, FOR FOOTAGE: IT REPLACES THE CURRENT CLIMB AND SETS NO RECORDS." : pickStatus, 2.4f, W, rowY, 54);
             }
-            if (g.platform.networkAllowed()) {
+            if (Edition.DEMO) { /* no update rows: the demo has no OTA */ }
+            else if (g.platform.networkAllowed()) {
                 rowY = aboutLines("CONTENT: " + g.ota.describe(), 3.0f, W, rowY, 54);
                 rowY = aboutLines("UPDATES ARE SIGNED AND VERIFIED. " + (g.otaClient.status.isEmpty() ? "" : g.otaClient.status.toUpperCase()), 2.4f, W, rowY, 54);
                 toggle("CHECK FOR GAME UPDATES", s.otaEnabled, () -> s.otaEnabled = !s.otaEnabled);
                 row("UPDATE NOW", "CHECK", null, null, () -> g.startOtaCheck(true));
             } else { ui.textC("UPDATES COME THROUGH STEAM.", W / 2, rowY + 30, 2.8f, Ui.DIM); rowY -= 64; }     // the desktop build has no update code path of its own (networkAllowed() is false)
             ui.textC(g.audio.diag(), W / 2, rowY + 30, 2.8f, Ui.DIM); rowY -= 64;
-            if (g.canRestartApp()) row("APPLY UPDATE / RESTART GAME", "RESTART", null, null, () -> { g.persist(); g.restartApp(); });
+            if (g.canRestartApp() && !Edition.DEMO) row("APPLY UPDATE / RESTART GAME", "RESTART", null, null, () -> { g.persist(); g.restartApp(); });
             else row("RESTART AUDIO", "RESTART", null, null, () -> g.audio.restart());
             if (desktop) eraseRow();
         } else {                                                    // ACCESS: captions, colour, assists (spec section 12)
@@ -195,10 +202,10 @@ public final class SettingsScreen extends ScreenAdapter {
             toggle("COLOURBLIND-SAFE COLOURS", s.colourblind, () -> s.colourblind = !s.colourblind);
             toggle("ASSIST: SLOWER SPEED", s.assistSlow, () -> s.assistSlow = !s.assistSlow);
             toggle("ASSIST: JUMP FORGIVENESS", s.assistForgive, () -> s.assistForgive = !s.assistForgive);
-            row("DIFFICULTY (NEW CLIMBS)", com.hotatticgames.climbup.sim.Tuning.HARD_NAMES[Math.max(0, Math.min(com.hotatticgames.climbup.sim.Tuning.PLAYABLE_MODES - 1, s.difficulty))], null, null, () -> s.difficulty = (Math.min(s.difficulty, com.hotatticgames.climbup.sim.Tuning.PLAYABLE_MODES - 1) + 1) % com.hotatticgames.climbup.sim.Tuning.PLAYABLE_MODES);      // the modes Tuning.PLAYABLE_MODES offers (Build 81 private playtest: all three); a climb keeps the one it began with
+            if (!Edition.DEMO) row("DIFFICULTY (NEW CLIMBS)", com.hotatticgames.climbup.sim.Tuning.HARD_NAMES[Math.max(0, Math.min(com.hotatticgames.climbup.sim.Tuning.PLAYABLE_MODES - 1, s.difficulty))], null, null, () -> s.difficulty = (Math.min(s.difficulty, com.hotatticgames.climbup.sim.Tuning.PLAYABLE_MODES - 1) + 1) % com.hotatticgames.climbup.sim.Tuning.PLAYABLE_MODES);      // the modes Tuning.PLAYABLE_MODES offers (Build 81 private playtest: all three); a climb keeps the one it began with
         }
         ui.end();
-        if (pickReady) { pickReady = false; if (back instanceof PlayScreen) back.dispose(); g.setScreen(new PlayScreen(g, false)); return; }      // the world picker's climb is ready
+        if (pickReady && !Edition.DEMO) { pickReady = false; if (back instanceof PlayScreen) back.dispose(); g.setScreen(new PlayScreen(g, false)); return; }      // the world picker's climb is ready
         g.autoShot("settings", dt);
     }
 }

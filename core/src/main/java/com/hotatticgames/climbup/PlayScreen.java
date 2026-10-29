@@ -55,7 +55,7 @@ public final class PlayScreen extends ScreenAdapter {
     private final ShapeRenderer shapes = new ShapeRenderer();
     private final Autopilot.Driver[] driver = new Autopilot.Driver[1];
     /** Test hook (-Dclimb.autopilot=true): the solver's driver plays the real climb (with -Dclimb.hazard=CABLE it jumps for the cable, for pictures of the hang). */
-    private static final boolean AUTOPILOT = Boolean.getBoolean("climb.autopilot");
+    private static final boolean AUTOPILOT = Edition.devFlag("climb.autopilot");
     private State state = State.PLAYING;
     private boolean clockLive;           // the speed-run clock starts on the first input of a session
     private String toastSub = "";
@@ -98,9 +98,14 @@ public final class PlayScreen extends ScreenAdapter {
     private boolean jumpLatch, jumpHeldTouch;
     private float kx, ky; private boolean kJump, kJumpHeld;
     private static final float STICK_R = 120f;
-    private static final String OVERLAY = System.getProperty("climb.overlay");   // test hook: pause | win
+    private static final String OVERLAY = Edition.devProp("climb.overlay");   // test hook: pause | win
 
-    public PlayScreen(ClimbGame g, boolean demo) { this.g = g; this.demo = demo; }
+    /** The demo stage this screen plays (docs/DEMO.md), or null in the full game. */
+    private final DemoFlow.Stage stage;
+    private DemoRecords.Result stageResult; private boolean stageBestRun, stageLeaving; private float stageClearT, stageLeaveT;
+
+    public PlayScreen(ClimbGame g, boolean demo) { this(g, demo, null); }
+    public PlayScreen(ClimbGame g, boolean demo, DemoFlow.Stage stage) { this.g = g; this.demo = demo; this.stage = stage; }
 
     @Override public void show() {
         if (world != null) { // returning from the settings screen: keep the run exactly as it was
@@ -110,6 +115,7 @@ public final class PlayScreen extends ScreenAdapter {
             g.audio.playlist(Audio.GAME_TRACKS);
             return;
         }
+        if (Edition.DEMO && (stage == null || demo || g.preparedRun == null)) { next = g.mainMenu(); disposeOnLeave = true; return; }      // the demo plays its stages and nothing else
         if (demo) {                                       // scripted attract/screenshot run: one fixed, validated slice
             course = CourseGenerator.chunk(Long.getLong("climb.seed", 11L), Integer.getInteger("climb.slice", 4), null, g.tuning);
             sim = Sim.startOn(course, g.tuning, 0);
@@ -117,14 +123,14 @@ public final class PlayScreen extends ScreenAdapter {
             ClimbGame.Run run;
             try { run = g.preparedRun != null ? g.preparedRun : g.openRun(g.runFresh); }
             catch (com.hotatticgames.climbup.sim.Tower.FirstSliceFailed e) {          // R6: a typed course code whose first slice cannot be built is refused, never swapped for another seed
-                g.preparedRun = null; g.runFresh = false; next = new TitleScreen(g); disposeOnLeave = true; return;
+                g.preparedRun = null; g.runFresh = false; next = g.mainMenu(); disposeOnLeave = true; return;
             }
             g.preparedRun = null; g.runFresh = false;
             if (g.saveNotice != null) { toast = g.saveNotice; toastT = 6f; g.saveNotice = null; }          // (save repair H2: a climb that could not be resumed is never replaced silently)
             tower = run.tower; course = tower.world;
-            int hStart = run.startHeight > 0 ? run.startHeight : Integer.getInteger("climb.startHeight", 0);              // test hook / the hidden world picker: begin partway up
+            int hStart = run.startHeight > 0 ? run.startHeight : Edition.devInt("climb.startHeight", 0);              // test hook / the hidden world picker: begin partway up
             while (hStart > 0 && tower.topAbsY() < hStart + 80f) tower.extend();
-            String hzType = System.getProperty("climb.hazard");              // test hook: start beside the first hazard of this type (e.g. CANNON)
+            String hzType = Edition.devProp("climb.hazard");              // test hook: start beside the first hazard of this type (e.g. CANNON)
             if (hzType != null) {
                 for (int tries = 0; tries < 40; tries++) {
                     for (int q = 3; q < course.size(); q++) { Element e = course.get(q); if (e.anchor < 0 && ((e.type.name().equals(hzType) && (e.type != Element.Type.RAMP || Integer.getInteger("climb.rampSkin", -1) < 0 || e.skin == Integer.getInteger("climb.rampSkin", -1))) || (hzType.equals("BRIDGE") && e.skin == 1 && e.type == Element.Type.STATIC) || (hzType.equals("BELT") && e.skin == 4 && e.type == Element.Type.STATIC) || (hzType.equals("CHECKPOINT") && e.checkpoint && q > 2))) { run.startIdx = Math.max(0, q - Integer.getInteger("climb.hazardBack", 1)); break; } }
@@ -160,6 +166,7 @@ public final class PlayScreen extends ScreenAdapter {
         }
         world = new WorldRenderer(g.tuning, course, g.models, g.settings.quality, g.settings.character);
         if (tower != null) world.setOrigin(tower.originY, tower.originS);
+        if (stage != null) { world.zoneOverride = g.demoFlow.recipe.world; applyStageFloor(); fade = 1f; }          // the demo: every stage in its world, and it opens from black
         applySettings();
         world.snapCamera(sim);
         if (demo || AUTOPILOT) driver[0] = new Autopilot.Driver(sim);
@@ -170,20 +177,20 @@ public final class PlayScreen extends ScreenAdapter {
         runTime = 0; maxAbs = absNow(); milestone = (int) (maxAbs / 50f);
         if (!demo && tower != null && g.save.assisted && g.save.seed != 0) g.save.board().markAssisted(g.save.seed);      // a resumed assisted climb stays assisted in the times table too
         if (!demo && tower != null && !g.save.climbNotComparable) g.save.board().catchUp(g.save.seed, runRules(), g.save.splits, g.save.towers, g.save.finished, g.save.finishTime);          // times table: a climb begun before the records existed
-        if (!demo) {        // seed the cross-session achievement counters from Steam's stored stats (all 0 when there is no Steam)
+        if (!demo && stage == null) {        // seed the cross-session achievement counters from Steam's stored stats (all 0 when there is no Steam)
             com.hotatticgames.climbup.platform.Achievements a = g.platform.achievements();
             achRules = new AchievementRules(a.stat(AchievementRules.STAT_TOWER_FELL_MASK));
             achBestInfinity = a.stat(AchievementRules.STAT_BEST_INFINITY_M);
             achMarathonBase = a.stat(AchievementRules.STAT_MARATHON_M);
             achSessionStartMax = maxAbs;
         }
-        if (Boolean.getBoolean("climb.finishDemo")) { g.save.runClock = 3723.4f; g.save.finished = true; g.save.finishTime = 3723.4f; finishNewBest = true; state = State.FINISHED; if (tower != null) g.save.board().finish(g.save.seed, 3723.4f); }       // test hook: shows the finish screen
-        if (Boolean.getBoolean("climb.ropeScript")) {   // test hook: start low on the first rope; readInput() then climbs it, mounts the beam and jumps (screenshots of the rope top)
+        if (Edition.devFlag("climb.finishDemo")) { g.save.runClock = 3723.4f; g.save.finished = true; g.save.finishTime = 3723.4f; finishNewBest = true; state = State.FINISHED; if (tower != null) g.save.board().finish(g.save.seed, 3723.4f); }       // test hook: shows the finish screen
+        if (Edition.devFlag("climb.ropeScript")) {   // test hook: start low on the first rope; readInput() then climbs it, mounts the beam and jumps (screenshots of the rope top)
             for (int e = 0; e < course.size(); e++) if (course.get(e).type == Element.Type.ROPE && course.get(e).y > 5f) {
                 Element el = course.get(e); sim.mode = Sim.Mode.ROPE; sim.onElem = e; sim.s = sim.es1[e]; sim.y = el.y - el.len + 0.6f; sim.vx = sim.vy = 0; world.snapCamera(sim); break;
             }
         }
-        if (Boolean.getBoolean("climb.hang")) {   // test hook: hang from the left edge of the first platform ahead
+        if (Edition.devFlag("climb.hang")) {   // test hook: hang from the left edge of the first platform ahead
             int e = 1; Element el = course.get(e);
             sim.mode = Sim.Mode.LEDGE; sim.onElem = e; sim.ledgeSide = 1; sim.facing = 1;
             sim.s = course.wrap(sim.es1[e] - (el.halfW() + 0.24f)); sim.y = sim.ey1[e] - g.tuning.handHeight + 0.08f;
@@ -200,7 +207,7 @@ public final class PlayScreen extends ScreenAdapter {
         sim.assistForgive = g.settings.assistForgive ? g.tuning.assistJumpForgiveness : 0f;
     }
 
-    @Override public void resize(int w, int h) { g.ui.resize(w, h); world.resize(w, h); }
+    @Override public void resize(int w, int h) { g.ui.resize(w, h); if (world != null) world.resize(w, h); }
 
     // ------------------------------------------------------------------ input
 
@@ -270,12 +277,12 @@ public final class PlayScreen extends ScreenAdapter {
         in.jumpPressed = jumpLatch || kJump;
         in.swingPressed = swingLatch || kSwing;
         }
-        if (Boolean.getBoolean("climb.ropeScript")) {
+        if (Edition.devFlag("climb.ropeScript")) {
             scriptT += Sim.DT;
             in.moveY = sim.mode == Sim.Mode.ROPE || sim.mounting() ? 1f : 0f; in.moveX = 0f;
             if (sim.mode == Sim.Mode.BEAM && !sim.mounting()) { in.moveX = scriptT % 3f < 1.2f ? 1f : 0f; in.jumpPressed = scriptT > Float.parseFloat(System.getProperty("climb.ropeJumpAt", "99")); }
         }
-        if (Boolean.getBoolean("climb.walkScript")) {   // test hook: a half stick to the right for a few seconds, then stop - the slow Walk clip in the real game (screenshots of the hero walking)
+        if (Edition.devFlag("climb.walkScript")) {   // test hook: a half stick to the right for a few seconds, then stop - the slow Walk clip in the real game (screenshots of the hero walking)
             scriptT += Sim.DT;
             in.moveX = scriptT < Float.parseFloat(System.getProperty("climb.walkFor", "4")) ? Float.parseFloat(System.getProperty("climb.walkStick", "0.5")) : 0f; in.moveY = 0f; in.jumpPressed = false; in.jumpHeld = false;
         }
@@ -285,6 +292,7 @@ public final class PlayScreen extends ScreenAdapter {
     // ------------------------------------------------------------------ frame
 
     @Override public void render(float dt) {
+        if (world == null) { if (next != null) { com.badlogic.gdx.Screen n = next; next = null; g.setScreen(n); dispose(); } return; }          // nothing to play (refused before it began): straight on
         if (PerfProbe.ON) { PerfProbe.tStart = System.nanoTime(); PerfProbe.steps = 0; PerfProbe.events = 0; PerfProbe.saved = false; PerfProbe.tDrive = 0; }
         dt = Math.min(dt, 0.1f);
         time += dt;
@@ -323,7 +331,7 @@ public final class PlayScreen extends ScreenAdapter {
                 int ev = sim.consumeEvents();
                 if (PerfProbe.ON) PerfProbe.events |= ev;
                 handleEvents(ev);
-                if (!demo) achievements(ev);
+                if (!demo && stage == null) achievements(ev);
                 acc -= Sim.DT; steps++;
                 if (state != State.PLAYING) break;
             }
@@ -448,7 +456,7 @@ public final class PlayScreen extends ScreenAdapter {
     private void ambientSounds(float dt) {
         hazardSounds(dt);
         conveyorHum(dt);
-        int zone = (int) Math.floorMod((long) Math.floor(Math.max(0.0, absNow()) / sim.T.zoneHeight), (long) com.hotatticgames.climbup.render.Palette.ZONES);
+        int zone = stage != null ? g.demoFlow.recipe.world : (int) Math.floorMod((long) Math.floor(Math.max(0.0, absNow()) / sim.T.zoneHeight), (long) com.hotatticgames.climbup.render.Palette.ZONES);
         g.audio.ambience(Cues.ambience(zone), dt);
         if (sim.mode == Sim.Mode.LEDGE) {   // he is really trying not to fall
             gruntT -= dt;
@@ -493,7 +501,18 @@ public final class PlayScreen extends ScreenAdapter {
         }
         if (tower.rebuilds != seenRebuilds) { seenRebuilds = tower.rebuilds; world.rebased(tower.lastRemap, tower.originY, tower.originS); simSize = course.size(); }
         if (course.size() != simSize) { sim.setRange(0, course.size() - 1); simSize = course.size(); }
+        if (stage != null) applyStageFloor();
         return true;
+    }
+
+    /**
+     * The demo: a stage begins just past castle 2's door and nothing below it is playable. A fall that drops more than the floor's margin under the
+     * start castle's deck ends like a fall past the bottom of the tower (back to the last checkpoint), so no earlier section can ever be reached.
+     */
+    private void applyStageFloor() {
+        float fl = tower.local(stage.floorAbs);
+        if (Float.isNaN(sim.floorOverride) || sim.floorOverride < fl) sim.floorOverride = fl;
+        if (sim.floorY < fl) sim.floorY = fl;
     }
     /**
      * R3 + R1 (2026-10-28): true while the climb must hold because the window needs a slice that is not final yet. The simulation takes no step (so
@@ -657,7 +676,8 @@ public final class PlayScreen extends ScreenAdapter {
             if (ResumeState.gateOpened(g.save, sim.lastGateNo)) towerUnlocked();          // a castle counts (and is timed) once, even if the climb is resumed and its door walked through again
             say("[DOOR OPENS]");
         }
-        if ((ev & Sim.EV_FINISH) != 0) {
+        if ((ev & Sim.EV_FINISH) != 0 && stage != null) stageFinished(s, y);
+        else if ((ev & Sim.EV_FINISH) != 0) {
             int r = RunRecord.complete(g.save);
             if (r >= 0) {
                 finishNewBest = r == 1;
@@ -797,6 +817,7 @@ public final class PlayScreen extends ScreenAdapter {
         double hAbs = absNow();
         double hZone = Math.max(0.0, hAbs);          // a fall below the very first platform (before the respawn catches it) is still the meadow, not the last world wrapped around
         int Z = Palette.ZONES; int zone = Math.min(Z - 1, (int) (((hZone / g.tuning.zoneHeight) % Z + Z) % Z)), lap = (int) (hZone / (g.tuning.zoneHeight * Z));
+        if (stage != null) { zone = g.demoFlow.recipe.world; lap = 0; }          // the demo shows every stage in its one world
         String hs = (long) Math.max(0, hAbs) + " M";
         float barW = 360 * zk, barY;
         if (reduced) {                                // Build 67 REDUCED HUD (owner: "that box is too bulky"): the height alone, shadowed to read on the sky, the tower bar right under it, any key under that
@@ -807,7 +828,7 @@ public final class PlayScreen extends ScreenAdapter {
             ui.rect(m - 6, H - m - (seedLine ? 160f : 136f) * zk, 380 * zk + 12, (seedLine ? 160f : 136f) * zk + 6, new Color(0.05f, 0.07f, 0.14f, 0.55f));
             if (seedLine) ui.text("SEED " + SeedCode.encode(g.save.seed) + (g.save.difficulty > 0 ? "  " + com.hotatticgames.climbup.sim.Tuning.HARD_NAMES[Math.min(2, g.save.difficulty)] : ""), m, H - m - 152 * zk, 2.7f * zk, g.save.difficulty > 0 ? new Color(1f, 0.45f, 0.4f, 1f) : Ui.DIM);      // Build 79: a harder climb says so      // Build 72: was 2.3, too small to read on a phone
             ui.text(hs, m, H - m - 30 * zk, 4f * zk, Ui.TEXT);
-            ui.text("BEST " + (int) Math.max(g.save.bestHeight, maxAbs), m, H - m - 56 * zk, 2.9f * zk, Ui.DIM);         // Build 72: was 2.6
+            ui.text(stage != null ? stageLine() : "BEST " + (int) Math.max(g.save.bestHeight, maxAbs), m, H - m - 56 * zk, 2.9f * zk, stage != null ? Ui.ACCENT : Ui.DIM);         // Build 72: was 2.6
             // speed-run clock: distance and time on the tower being worked towards, and the total time of the climb (always shown)
             float segM = (float) Math.max(0.0, maxAbs - g.save.towerStartHeight);
             if (g.save.finished) ui.text("INFINITY +" + (int) Math.max(0.0, maxAbs - g.tuning.finishCastle * g.tuning.castleSpacing) + " M", m, H - m - 80 * zk, 3f * zk, new Color(1f, 0.82f, 0.3f, 1f));
@@ -817,7 +838,7 @@ public final class PlayScreen extends ScreenAdapter {
             barY = H - m - 126 * zk;
         }
         // ten towers (castle to castle): finished towers green, the one being climbed yellow, the rest black; the orange tick is where you are right now
-        int N = Math.max(1, (int) g.tuning.finishCastle); double span = g.tuning.castleSpacing;
+        int N = Math.max(1, (int) sim.T.finishCastle); double span = g.tuning.castleSpacing;          // (the run's own finish castle: 10, or the demo stage's last)
         int cur = Math.min(N - 1, (int) (Math.max(0.0, maxAbs) / span));
         float within = (float) Math.max(0.0, Math.min(1.0, hAbs / (span * N)));
         ui.rect(m, barY, barW, 8, new Color(0.2f, 0.22f, 0.32f, 1f));
@@ -894,7 +915,11 @@ public final class PlayScreen extends ScreenAdapter {
         if (state == State.PLAYING) { if (g.platform.touchControls()) drawControls(); else g.platform.drawPlayHints(ui, sim.clubTime > 0f, W, H); }
         if (fade > 0) ui.rect(0, 0, W, H, new Color(0, 0, 0, fade));
         if (state == State.PAUSED) pauseMenu();
-        if (state == State.FINISHED) finishMenu();
+        if (state == State.FINISHED) { if (stage != null) stageClearMenu(); else finishMenu(); }
+        if (stageLeaving) {          // the demo: the stage fades to black, then the next stage's title card (or the promotional screen)
+            stageLeaveT += Gdx.graphics.getDeltaTime(); ui.rect(0, 0, W, H, new Color(0, 0, 0, Math.min(1f, stageLeaveT / 0.6f)));
+            if (stageLeaveT >= 0.6f && next == null) { stageLeaving = false; next = g.demoFlow.after(stage.difficulty); disposeOnLeave = true; }
+        }
         ui.end();
     }
     private static final float PixelFont_H = 7f;
@@ -1002,6 +1027,7 @@ public final class PlayScreen extends ScreenAdapter {
     }
 
     private void pauseMenu() {
+        if (stage != null) { stagePauseMenu(); return; }
         Ui ui = g.ui; float W = ui.w(), H = ui.h();
         boolean canEnd = g.save.finished && tower != null && !demo;          // climbing for ever after castle 10: the run can be ended here and its times saved
         boolean seedLine = g.save.seed != 0 && !demo;                        // Build 64: the course code is always in the pause menu, whatever the HUD switch says
@@ -1045,7 +1071,87 @@ public final class PlayScreen extends ScreenAdapter {
             if (ui.button(confirmEnd ? "TAP AGAIN TO CONFIRM" : "END RUN AND SAVE TIME", bx, by, bw, bh)) { if (confirmEnd) endRunToSummary(); else confirmEnd = true; }
             by -= bs;
         }
-        if (ui.button(tower != null ? "SAVE & EXIT" : "MAIN MENU", bx, by, bw, bh)) { g.audio.play("click"); saveRun(); g.persist(); next = new TitleScreen(g); disposeOnLeave = true; }
+        if (ui.button(tower != null ? "SAVE & EXIT" : "MAIN MENU", bx, by, bw, bh)) { g.audio.play("click"); saveRun(); g.persist(); next = g.mainMenu(); disposeOnLeave = true; }
+    }
+
+    // ------------------------------------------------------------------ the demo's stage (docs/DEMO.md)
+
+    /** The HUD line under the height: the stage's difficulty and the best time on this course. */
+    private String stageLine() {
+        String name = g.demoFlow.recipe.stages.get(stage.difficulty).title.replace(" DIFFICULTY", "");
+        long b = g.demoFlow.records.bestFor(stage.difficulty, stage.seed, stage.fingerprint);
+        return b > 0 && g.settings.showBestTimes ? name + "  BEST " + fmtTime(b / (float) RunRecord.STEPS_PER_SECOND) : name;
+    }
+
+    /** Walking through the stage's last castle: the time (whole simulation steps) goes to the demo's records; the stage-clear panel comes up. */
+    private void stageFinished(float s, float y) {
+        DemoFlow f = g.demoFlow;
+        stageResult = f.records.stageFinished(stage.difficulty, g.save.runTicks, stage.seed, stage.fingerprint, g.save.assisted);
+        if (stage.difficulty == 2) stageBestRun = f.records.sequenceFinished(f.fingerprint());
+        f.records.save(g.dataDir);
+        if (stage.difficulty < 2) f.prepare(stage.difficulty + 1);          // the next stage's tower is built while this panel shows
+        g.audio.fallStop(); g.audio.play("win", 1f, 1f); world.particles.burst(s, y + 1.2f, 40, new Color(1f, 0.85f, 0.3f, 1f), 4f, 4f, 0.14f, 1f, 1.6f); vibrate(60, 1); say("[STAGE COMPLETE]");
+        state = State.FINISHED; stageClearT = 0f; stickPtr = jumpPtr = -1; jumpHeldTouch = false; g.persist();
+    }
+
+    /** The stage-clear panel: the time, how it compares, CONTINUE (also by itself after a few seconds). Nothing is simulated meanwhile. */
+    private void stageClearMenu() {
+        Ui ui = g.ui; float W = ui.w(), H = ui.h(); DemoFlow f = g.demoFlow;
+        stageClearT += Gdx.graphics.getDeltaTime();
+        ui.rect(0, 0, W, H, new Color(0, 0, 0, 0.62f));
+        float pw = Math.min(W - 60, 680), ph = Math.min(H - 40, 520), x = W / 2 - pw / 2, y = H / 2 - ph / 2;
+        ui.panel(x, y, pw, ph);
+        String name = f.recipe.stages.get(stage.difficulty).title.replace(" DIFFICULTY", "");
+        String head = "CASTLE " + stage.toCastle + " REACHED!";
+        ui.textC(head, W / 2, y + ph - 76, Math.min(4.8f, (pw - 40) / (head.length() * 6f)), Ui.ACCENT);
+        ui.textC(name, W / 2, y + ph - 130, Math.min(3.4f, (pw - 40) / (name.length() * 6f)), Ui.DIM);
+        float secs = g.save.runTicks / (float) RunRecord.STEPS_PER_SECOND;
+        ui.textC(fmtTime(secs), W / 2, y + ph - 210, 8f, new Color(0.45f, 1f, 0.55f, 1f));
+        String sub = stageResult == null ? "" : stageResult.assisted ? "ASSISTED - NOT A RECORD" : stageResult.newBest ? (stageResult.previous > 0 ? "NEW BEST! " + fmtDelta((g.save.runTicks - stageResult.previous) / (float) RunRecord.STEPS_PER_SECOND) : "NEW BEST!")
+            : "BEST " + fmtTime(f.records.bestFor(stage.difficulty, stage.seed, stage.fingerprint) / (float) RunRecord.STEPS_PER_SECOND);
+        ui.textC(sub, W / 2, y + ph - 262, 3.6f, stageResult != null && stageResult.newBest ? new Color(1f, 0.85f, 0.3f, 1f) : Ui.DIM);
+        if (stage.difficulty == 2 && f.records.runClean && f.records.runTicks > 0) {
+            String tot = "ALL THREE: " + fmtTime(f.records.runTicks / (float) RunRecord.STEPS_PER_SECOND) + (stageBestRun ? "  NEW BEST!" : "");
+            ui.textC(tot, W / 2, y + ph - 306, Math.min(3.2f, (pw - 40) / (tot.length() * 6f)), Ui.TEXT);
+        }
+        float bw = Math.min(520, pw - 60), bh = Dp.touchHeight(84f, 96f, 96f, Dp.unitsPerDp(ui)), bx = W / 2 - bw / 2;
+        if (!stageLeaving && (ui.button("CONTINUE", bx, y + 30, bw, bh, true) || stageClearT > 9f)) { g.audio.play("click"); stageLeaving = true; stageLeaveT = 0f; }
+    }
+
+    /** The demo's pause menu: RESUME, RETRY CHECKPOINT, RESTART STAGE (this stage only, from its beginning), SETTINGS, MAIN MENU. */
+    private void stagePauseMenu() {
+        Ui ui = g.ui; float W = ui.w(), H = ui.h();
+        float bs = 90, bh = bs - 12, pw = 560, bw = 440, ph = 176 + 4 * bs + 36, x = W / 2 - pw / 2, y = H / 2 - ph / 2;
+        ui.rect(0, 0, W, H, new Color(0, 0, 0, 0.55f));
+        ui.panel(x, y, pw, ph);
+        String name = g.demoFlow.recipe.stages.get(stage.difficulty).title;
+        ui.textC(name, W / 2, y + 14, Math.min(2.6f, (pw - 40) / (name.length() * 6f)), Ui.DIM);
+        if (padLost) { String pl = "CONTROLLER DISCONNECTED"; ui.textC(pl, W / 2, y + ph - 82, Math.min(5f, (pw - 40) / (pl.length() * 6f)), Ui.ACCENT); }
+        else ui.textC("PAUSED", W / 2, y + ph - 90, 8f, Ui.TEXT);
+        float bx = W / 2 - bw / 2, by = y + ph - 176;
+        if (ui.button("RESUME", bx, by, bw, bh, true)) resumePlay();
+        by -= bs;
+        if (ui.button(confirmRestart ? g.platform.tip("TAP AGAIN TO CONFIRM") : "RETRY CHECKPOINT", bx, by, bw, bh)) {
+            if (confirmRestart) { sim.respawn(); sim.consumeEvents(); world.snapCamera(sim); confirmRestart = confirmEnd = false; resumePlay(); } else { confirmRestart = true; confirmEnd = false; }
+        }
+        by -= bs;
+        if (ui.button(confirmEnd ? g.platform.tip("TAP AGAIN TO CONFIRM") : "RESTART STAGE", bx, by, bw, bh)) {
+            if (confirmEnd) restartStage(); else { confirmEnd = true; confirmRestart = false; }
+        }
+        by -= bs;
+        if (ui.button("SETTINGS", bx, by, bw, bh)) { g.audio.play("click"); g.persist(); next = new SettingsScreen(g, this); disposeOnLeave = false; }
+        by -= bs;
+        if (ui.button("MAIN MENU", bx, by, bw, bh)) { g.audio.play("click"); g.persist(); next = g.mainMenu(); disposeOnLeave = true; }
+    }
+
+    /** RESTART STAGE: a fresh run of this stage only (new tower, simulation and clock; nothing carried), straight away. */
+    private void restartStage() {
+        g.audio.play("click");
+        ClimbGame.Run r;
+        try { r = g.demoFlow.take(stage.difficulty); } catch (RuntimeException e) { next = g.mainMenu(); disposeOnLeave = true; return; }
+        g.demoFlow.beginStage(stage.difficulty);
+        g.preparedRun = r; g.runFresh = false;
+        next = new PlayScreen(g, false, stage); disposeOnLeave = true;
     }
 
     // ------------------------------------------------------------------ lifecycle

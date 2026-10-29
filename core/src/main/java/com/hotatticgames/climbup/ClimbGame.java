@@ -44,12 +44,26 @@ public class ClimbGame extends Game {
     public ClimbGame(File dataDir) { this(dataDir, Platform.MOBILE); }
     public ClimbGame(File dataDir, Platform platform) { this.dataDir = dataDir; this.platform = platform; }
 
+    /** The demo's one path (null in the full game, and in a demo whose recipe could not be read: {@link #demoProblem} then says why). */
+    public DemoFlow demoFlow;
+    public String demoProblem;
+
     @Override public void create() {
+        Edition.scrubLaunchOptions();                 // the demo: no launch option can start a climb anywhere, pick a course or play itself
         demo = "true".equals(System.getProperty("climb.demo"));
         shotDir = System.getProperty("climb.shots");
         initStores();
         if (System.getProperty("climb.character") != null) settings.character = Integer.getInteger("climb.character");
         String bundled = Gdx.files.internal("data/tuning.json").readString("UTF-8");
+        if (Edition.DEMO) {          // the demo has no OTA at all: its courses are baked for the bundled numbers, and it makes no network call
+            tuning = Tuning.parse(bundled);
+            try { demoFlow = DemoFlow.open(this); } catch (RuntimeException e) { demoFlow = null; demoProblem = "THE DEMO'S RECIPE COULD NOT BE READ: " + e.getMessage(); }
+            if (demoFlow != null) com.hotatticgames.climbup.audio.Cues.zoneOverride = demoFlow.recipe.world;          // footsteps sound like the world the demo shows
+            ui = new Ui(settings); audio = new Audio(settings); models = new Models();
+            platform.attach(this);
+            setScreen(new SplashScreen(this));
+            return;
+        }
         // OTA (see docs/OTA.md): an applied payload (signed manifest, verified checksum, validated numbers) may replace the bundled tuning numbers; anything wrong falls back to the bundled file
         ota = new com.hotatticgames.climbup.ota.OtaStore(new File(dataDir, "ota"));
         String over = null;
@@ -216,12 +230,18 @@ public class ClimbGame extends Game {
         return t;
     }
     /** The tuning of the climb in progress, at the difficulty it began with. */
-    public Tuning runTuning() { return tuningFor(save != null ? save.difficulty : 0); }
+    public Tuning runTuning() {
+        if (demoFlow != null) return demoFlow.simTuning(Math.max(0, Math.min(2, save != null ? save.difficulty : 0)));          // a demo stage ends at its last castle
+        return tuningFor(save != null ? save.difficulty : 0);
+    }
+    /** Where MAIN MENU, BACK and the splash lead: the demo's own menu in the demo, the title screen in the full game. */
+    public com.badlogic.gdx.Screen mainMenu() { return Edition.DEMO ? new DemoTitleScreen(this) : new TitleScreen(this); }
     /** The tuning the next new climb starts with (the DIFFICULTY setting). */
     public Tuning newClimbTuning() { return tuningFor(settings != null ? Math.min(settings.difficulty, Tuning.PLAYABLE_MODES - 1) : 0); }      // a saved NEVER GONNA HAPPEN setting starts PUNISHER climbs (owner 2026-10-24)
 
     /** Opens the saved climb, or starts a new one (fresh seed) when there is none or {@code fresh} is set. */
     public Run openRun(boolean fresh) {
+        if (Edition.DEMO) throw new IllegalStateException("the demo has no free climb: its stages come from DemoFlow");
         Run r = new Run();
         if (!fresh && save.seed != 0) {
             try {
@@ -349,7 +369,7 @@ public class ClimbGame extends Game {
      * prepares its own slice (SeedScreen). Calling it again before that climb starts does nothing.
      */
     public void prepareNextClimb() {
-        if (demo || tuning == null) return;
+        if (demo || tuning == null || Edition.DEMO) return;
         String sd = System.getProperty("climb.seed");
         long seed;
         if (sd != null) seed = Long.parseLong(sd);
@@ -373,7 +393,7 @@ public class ClimbGame extends Game {
 
     /** Hosting hook: a host that can relaunch the app (the OTA module host) overrides both. The packaged / desktop game has no behaviour here. */
     /** The version text on the title screen. The packaged game shows version and build; a hosted game may add what it is running. */
-    public String versionLabel() { return Legacy.versionLine(VERSION, appBuild); }
+    public String versionLabel() { return Edition.DEMO ? "DEMO " + Edition.DEMO_REVISION + "  " + Legacy.versionLine(VERSION, appBuild) : Legacy.versionLine(VERSION, appBuild); }
 
     public boolean canRestartApp() { return false; }
     public void restartApp() { }
@@ -459,6 +479,7 @@ public class ClimbGame extends Game {
 
     /** SETTINGS > ERASE ALL PLAYERS: every player and the settings. */
     public void eraseEverything() {
+        if (Edition.DEMO) { DemoRecords.erase(dataDir); if (demoFlow != null) demoFlow.records.reset(); }          // the demo's ERASE: its records and progress too
         settingsStore.eraseAll(); profiles.deleteAll();
         settings = new Settings();
         openPlayer(profiles.last().id);
@@ -466,6 +487,7 @@ public class ClimbGame extends Game {
 
     @Override public void dispose() {
         persist();
+        if (demoFlow != null) demoFlow.records.save(dataDir);
         if (getScreen() != null) getScreen().dispose();
         audio.dispose(); models.dispose(); com.hotatticgames.climbup.render.Portraits.dispose(); ui.dispose(); platform.dispose();
     }

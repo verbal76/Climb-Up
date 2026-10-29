@@ -1,0 +1,23 @@
+{
+  "format": 1,
+  "recipe": 1,
+  "demoName": "UPWARDLY DEMO",
+  "fromCastle": 2,
+  "toCastle": 3,
+  "world": 2,
+  "titleCard": { "fadeIn": 0.6, "hold": 2.0, "fadeOut": 0.7 },
+  "stages": [
+    { "difficulty": 0, "seed": "1", "title": "NORMAL DIFFICULTY", "course": "demo/stage-normal.course", "sha256": "0000000000000000000000000000000000000000000000000000000000000000" },
+    { "difficulty": 1, "seed": "1", "title": "PUNISHER DIFFICULTY", "course": "demo/stage-punisher.course", "sha256": "1111111111111111111111111111111111111111111111111111111111111111" },
+    { "difficulty": 2, "seed": "1", "title": "NOT GONNA HAPPEN DIFFICULTY", "course": "demo/stage-ngh.course", "sha256": "2222222222222222222222222222222222222222222222222222222222222222" }
+  ],
+  "promo": {
+    "title": "UPWARDLY",
+    "line1": "WISHLIST NOW ON STEAM",
+    "line2": "AVAILABLE NOVEMBER 2026",
+    "storeButton": "WISHLIST ON STEAM",
+    "storeUrl": "",
+    "againButton": "PLAY DEMO AGAIN",
+    "steamLogo": ""
+  }
+}

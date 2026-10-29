@@ -56,7 +56,7 @@ public final class RunSummaryScreen extends ScreenAdapter {
         ui.textC(run.infinityPb ? "NEW INFINITY RECORD!" : "BEST INFINITY " + TimesScreen.metres(rec.bestInfinity), W / 2, iy - 68f, 3.6f, run.infinityPb ? gold : Ui.DIM);
         float bw = Math.min(420f, W / 2 - 50f), bh = 78f;
         if (ui.button("TIMES TABLE", W / 2 - bw - 14, 22, bw, bh)) { g.audio.play("click"); g.setScreen(new TimesScreen(g, this)); }
-        if (ui.button("MAIN MENU", W / 2 + 14, 22, bw, bh, true) || leave) { g.audio.play("click"); g.setScreen(new TitleScreen(g)); }
+        if (ui.button("MAIN MENU", W / 2 + 14, 22, bw, bh, true) || leave) { g.audio.play("click"); g.setScreen(g.mainMenu()); }
         ui.end();
         g.autoShot("summary", dt);
     }

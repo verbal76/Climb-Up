@@ -70,6 +70,12 @@ public final class WorldRenderer implements Disposable {
     private static final float CAM_DIST = Float.parseFloat(System.getProperty("climb.camDist", "9.6"));
     public int quality = 2;           // 0 low, 1 medium, 2 high
     public boolean reducedMotion;
+    /**
+     * The demo (docs/DEMO.md): every stage is SHOWN in this world (a Palette index), whatever height it is climbed at - sky, light, platform skins and
+     * scenery. Presentation only: what the generator built (and how it plays) is untouched. -1 (the full game): the world follows the height.
+     */
+    public int zoneOverride = -1;
+    private int zoneOf(Element e) { return zoneOverride >= 0 ? zoneOverride : e.zone; }
     /** COLOURBLIND-SAFE COLOURS: the keys and castle gates use the safe palette (see {@link KeyColors}); the shape markers are always drawn. */
     public boolean colourblind;
     private boolean paletteSafe;      // the palette the cached coloured instances were built with
@@ -178,7 +184,7 @@ public final class WorldRenderer implements Disposable {
         if (builtN == builtIdx.length) builtIdx = java.util.Arrays.copyOf(builtIdx, builtN * 2);
         builtIdx[builtN++] = idx;
         Array<Part> ps = new Array<>();
-        boolean snow = e.zone == 1 || e.zone == 3;
+        int ez = zoneOf(e); boolean snow = ez == 1 || ez == 3;
         String base = snow ? "block-snow" : "block-grass";
         switch (e.type) {
             case SEESAW: bridgeParts(ps, e.w, true, e.tiltBelt()); break;
@@ -221,7 +227,7 @@ public final class WorldRenderer implements Disposable {
                 float left = -w / 2f; int pos = 0;
                 boolean deck = e.skin == 2 && e.type == Element.Type.STATIC;        // castle deck: stretched front-to-back so the tower stands fully on it
                 float zs = deck ? 4.0f : 1.7f;
-                boolean orbit = e.zone == Palette.SPACE && e.type != Element.Type.GOAL;
+                boolean orbit = ez == Palette.SPACE && e.type != Element.Type.GOAL;
                 if (orbit) { spacePlatform(ps, e, idx); pos = w; }          // deep space: a metal deck on a drifting asteroid
                 while (pos < w) {
                     boolean two = w - pos >= 2;
@@ -241,7 +247,7 @@ public final class WorldRenderer implements Disposable {
                     ps.add(boxPart(-0.35f, 0.02f, 0.2f, 0.22f, 0.05f, 0.18f, new Color(0.35f, 0.25f, 0.18f, 1f)));
                     ps.add(boxPart(0.4f, 0.02f, -0.1f, 0.18f, 0.05f, 0.22f, new Color(0.35f, 0.25f, 0.18f, 1f)));
                 }
-                if (!orbit && quality > 0 && (e.zone == 2 || e.zone == 3) && e.type != Element.Type.GOAL) {       // dusk and night: islands hang from a Space Kit rock
+                if (!orbit && quality > 0 && (ez == 2 || ez == 3) && e.type != Element.Type.GOAL) {       // dusk and night: islands hang from a Space Kit rock
                     int hh = hash(idx, 41); boolean big = w >= 5;
                     String rock = big ? new String[]{"rock_large_1", "rock_large_2", "rock_large_3"}[hh % 3] : new String[]{"rock_1", "rock_2", "rock_3", "rock_4"}[hh % 4];
                     float sc = Math.max(0.3f, Math.min(w, 6f) * 0.85f / (big ? 7.6f : 3.0f)), top = big ? 0.3f : 0.4f;
@@ -540,7 +546,7 @@ public final class WorldRenderer implements Disposable {
         else camY += (target - camY) * Math.min(1f, (target > camY ? 7f : 10f) * dt);
         float bgY = (float) ((camY + originY) % 65536.0);          // continuous across origin moves (and across the shift, nothing pops); wraps only every 65 km
         float zf = (float) Math.max(0.0, (camY + originY) / T.zoneHeight);      // Build 70 (owner): below the start is still the start area (Meadow), never the last world wrapped round
-        float zoneF = Math.min(Palette.ZONES - 0.001f, ((zf % Palette.ZONES) + Palette.ZONES) % Palette.ZONES);        // the five worlds repeat for ever
+        float zoneF = zoneOverride >= 0 ? zoneOverride + 0.5f : Math.min(Palette.ZONES - 0.001f, ((zf % Palette.ZONES) + Palette.ZONES) % Palette.ZONES);        // the five worlds repeat for ever (the demo: the middle of its one world)
         Palette.blend(Palette.SKY_TOP, zoneF, skyTop); Palette.blend(Palette.SKY_BOT, zoneF, skyBot); Palette.blend(Palette.SKY_MID, zoneF, skyMid);
         if (zoneF < 2f) {         // Build 77 (owner): the sun comes up as you climb the two morning worlds - the violet low sky slowly lifts and lightens
             float rise = MathUtils.clamp(zoneF / 1.8f, 0f, 1f) * 0.35f;
@@ -1171,7 +1177,7 @@ public final class WorldRenderer implements Disposable {
                 float deck = h.y - 2.35f, dz = AIM_DEPTH;
                 float[] mz = mouthFromAxle(h.dir > 0 ? 0f : 180f, 0f, mouthTmp);
                 float body = h.s - laneUnits(mz[0], dz, T.radius);
-                drawSlab(body, deck, dz, camS, h.zone);
+                drawSlab(body, deck, dz, camS, zoneOf(h));
                 drawBox(body, deck, dz, camS, 1.25f, CANNON_LIFT, 1.25f, 0.42f, 0.38f, 0.5f);
                 drawBox(body, deck + CANNON_LIFT, dz, camS, 1.45f, 0.16f, 1.45f, 0.3f, 0.27f, 0.36f);
                 drawCannon(body, h.y - CANNON_AXIS_UP, dz, camS, h.dir > 0 ? 0f : 180f, 0f);
@@ -1204,7 +1210,7 @@ public final class WorldRenderer implements Disposable {
                 float yawDeg = rsim != null && rhz < rsim.aimYaw.length ? rsim.aimYaw[rhz] * MathUtils.radiansToDegrees : 0f;
                 float deg = ang * MathUtils.radiansToDegrees;
                 float tilt = Math.cos(yawDeg * MathUtils.degreesToRadians) >= 0f ? deg : 180f - deg; tilt = ((tilt + 180f) % 360f + 360f) % 360f - 180f;
-                drawSlab(h.s, deck, dz, camS, h.zone);
+                drawSlab(h.s, deck, dz, camS, zoneOf(h));
                 drawBox(h.s, deck, dz, camS, 1.25f, AIM_LIFT, 1.25f, 0.34f, 0.31f, 0.40f);
                 drawBox(h.s, deck + AIM_LIFT, dz, camS, 1.45f, 0.16f, 1.45f, 0.3f, 0.27f, 0.36f);
                 drawCannon(h.s, h.y - CANNON_AXIS_UP, dz, camS, yawDeg, tilt);

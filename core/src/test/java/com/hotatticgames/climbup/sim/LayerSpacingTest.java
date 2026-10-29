@@ -47,13 +47,16 @@ public class LayerSpacingTest {
         }
     }
 
-    /** A plain platform whose climber can rise past plain reach keeps the full spacing below a launcher: a spike-drop slab on it, or a skull on it or within two route platforms. */
-    @Test public void plainPlatformsWithLiftingHazardsKeepTheFullSpacing() throws Exception {
+    /**
+     * Rules 19 (owner decision 2026-10-29, emergent movement): a skull's launch or a ridden spike-drop slab carrying the climber up to a launcher above is
+     * collision-assisted movement the player may discover; it no longer keeps the full spacing (rules 17 did). Ordinary reach still decides (C1).
+     */
+    @Test public void liftingHazardsNoLongerKeepTheFullSpacing() throws Exception {
         Tuning t = T();
         for (Element.Type hz : new Element.Type[]{Element.Type.SPIKE_DROP, Element.Type.SKULL}) {
             Course c = pair(t, Element.Type.STATIC, Element.Type.PAD, 6f);
             Element h = new Element(hz, 10f, 0f, 2f); h.anchor = 0; c.hazards.add(h);
-            assertTrue("pad above a platform with a " + hz, clash(c));
+            assertFalse("pad 6 m above a platform with a " + hz + ": ordinary reach (3.75 m + margin) is below it", clash(c));
         }
         Course c = pair(t, Element.Type.STATIC, Element.Type.PAD, 6f);
         Element saw = new Element(Element.Type.SAW_H, 10f, 0.6f, 0f); saw.anchor = 0; c.hazards.add(saw);

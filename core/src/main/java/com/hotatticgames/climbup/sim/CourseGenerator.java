@@ -1908,7 +1908,10 @@ public final class CourseGenerator {
         Element lower = e.y < f.y ? e : f, upper = lower == e ? f : e;
         if (launches(lower)) return true;                                   // no trampoline shortcuts between layers
         if (R17_OFF_SPACING) return launches(upper);                         // (S1-B: rules 16, either platform)
-        return launches(upper) && liftsClimber(c, lower);                   // a launcher above a plain platform: only if that platform's reach is plain
+        // Rules 19 (owner decision 2026-10-29, emergent movement, category C): a launcher above a plain platform no longer needs the full spacing when
+        // a skull's launch or a ridden spike-drop slab could carry the climber up to it - collision-assisted and ridden movement may find such routes;
+        // ordinary reach (C1, reachShortcut) and body clearance still hold. (Rules 17 kept 9.5 m there: liftsClimber.)
+        return false;
     }
     /**
      * Experiment (owner 2026-10-28): whether a plain platform's climber can rise past the plain 4 m reach, so that a launcher 4-9.5 m above it still
@@ -1964,9 +1967,7 @@ public final class CourseGenerator {
             }
             default: tab = REACH_PLAIN;
         }
-        float r = envelope(tab, gap);
-        if (lower.type == Element.Type.STATIC && r > 0f && liftsClimber(c, lower)) r += 0.75f;          // a spike-drop slab or a skull on it: measured 4.5 m against plain 3.75
-        return r;
+        return envelope(tab, gap);          // (ordinary movement only: a skull's launch or a ridden spike drop is emergent movement, owner decision 2026-10-29)
     }
     /**
      * The highest reach measured within one measuring step (1.5 m) of {@code gap} either way (reach is not monotonic: a pad reaches 8.25 m onto a deck

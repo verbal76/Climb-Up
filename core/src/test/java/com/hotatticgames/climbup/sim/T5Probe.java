@@ -30,6 +30,8 @@ public class T5Probe {
         if (part.equals("reach")) { row("kind,offset,dy,generator_clash,search_reached,search_trials,solver_reached"); for (int i = 1; i < a.length - 1; i++) reach(a[i]); }
         else if (part.equals("ceiling")) ceiling();
         else if (part.equals("audit")) audit(Integer.parseInt(a[1]), Long.parseLong(a[2]), Integer.parseInt(a[3]));
+        else if (part.equals("ctrl")) ctrl(Integer.parseInt(a[1]), Long.parseLong(a[2]), Float.parseFloat(a[3]));
+        else if (part.equals("cf")) counterfactual(Integer.parseInt(a[1]), Long.parseLong(a[2]), Integer.parseInt(a[3]));
         else if (part.equals("parity")) parity(Integer.parseInt(a[1]), Long.parseLong(a[2]), Integer.parseInt(a[3]));
         String name = part + (a.length > 2 ? "-" + String.join("_", Arrays.copyOfRange(a, 1, a.length - 1)) : "");
         Files.write(out.resolve("t5-" + name + ".csv"), OUT.toString().getBytes());
@@ -172,6 +174,94 @@ public class T5Probe {
             System.out.printf(Locale.ROOT, "AUDIT mode %d seed %d slice %d: cross-revolution pairs within 11 m up / 10 m arc %d, reachable %d%n", mode, seed, k, pairs, hit);
         }
         for (Map.Entry<String, int[]> e : byType.entrySet()) System.out.printf(Locale.ROOT, "AUDIT mode %d seed %d lower %-8s pairs %5d reachable %4d%n", mode, seed, e.getKey(), e.getValue()[0], e.getValue()[1]);
+    }
+
+    // ------------------------------------------------------------------ Group 4: progression controller and placement opportunities
+
+    /**
+     * Group 4B/4D (owner testing program 2026-10-29): generates a course to {@code top} and prints, per castle, the controller's measured lanes against
+     * the profile's targets and the factors it applied (Progression records), and the placement opportunities the route offered: route platforms,
+     * plain decks a creature deck, trap or avalanche can use, platforms with a mechanic, route hazards and enemies, all per 100 m of climb.
+     * Run it twice, with and without -Dclimb.r17OffSpacing=true, for the controlled spacing comparison.
+     */
+    static void ctrl(int mode, long seed, float top) {
+        Tuning t = mode == 0 ? T : T.hardCopy(mode); T = t;
+        DifficultyProfile P = DifficultyProfile.of(t);
+        float sp = t.castleSpacing;
+        row("castle,measured_T,measured_H,measured_E,measured_X,target_T,target_H,target_E,target_X,factor_T,factor_H,factor_E,factor_X,route_platforms_per100,plain_decks_per100,mechanic_platforms_per100,hazards_per100,enemies_per100,avg_rise_per_link");
+        CourseGenerator.Framed f = null; int k = 0;
+        double[][] opp = new double[12][7];          // per castle: route platforms, plain usable decks, mechanic platforms, hazards, enemies, rise sum, links
+        double done = -1e9;
+        while (f == null || f.yBase + f.c.get(f.c.routeSize() - 1).y < top) {
+            f = CourseGenerator.chunkFramed(seed, k++, f, t);
+            Course c = f.c; double lastY = done;
+            for (int i = 1; i < c.routeSize(); i++) {
+                Element e = c.get(i); double y = f.yBase + e.y; if (y <= done) continue;
+                int n = Math.min(11, Progression.castleOf(y, sp));
+                opp[n][0]++;
+                boolean anchored = false; for (Element h : c.hazards) if (h.anchor == i) anchored = true;
+                if (e.type == Element.Type.STATIC && !e.wet() && e.w >= 2.5f && !anchored) opp[n][1]++;
+                if (Progression.demandingFooting(e) || e.type == Element.Type.PAD || e.type == Element.Type.SPRING || e.type == Element.Type.ROPE || e.type == Element.Type.CABLE) opp[n][2]++;
+                for (Element h : c.hazards) if (h.anchor == i) { if (Progression.enemy(h.type)) opp[n][4]++; else if (Progression.hazard(h.type)) opp[n][3]++; }
+                Element pr = c.get(i - 1); if (pr.anchor < 0) { opp[n][5] += e.y - pr.y; opp[n][6]++; }
+                lastY = Math.max(lastY, y);
+            }
+            done = lastY;
+        }
+        Progression pg = Progression.of(f.c.prog);
+        for (int i = 0; i < pg.completedCount(); i++) {
+            float[] r = pg.completed(i); int n = (int) r[0]; if (n < 1 || n > 10) continue;
+            double per = sp / 100.0;
+            row(String.format(Locale.ROOT, "%d,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.3f,%.3f,%.3f,%.3f,%.2f,%.2f,%.2f,%.2f,%.2f,%.3f", n,
+                r[1 + Progression.T], r[1 + Progression.H], r[1 + Progression.E], r[1 + Progression.X],
+                P.target(n, Progression.T), P.target(n, Progression.H), P.target(n, Progression.E), P.target(n, Progression.X),
+                r[1 + Progression.ACC], r[2 + Progression.ACC], r[3 + Progression.ACC], r[4 + Progression.ACC],
+                opp[n][0] / per, opp[n][1] / per, opp[n][2] / per, opp[n][3] / per, opp[n][4] / per, opp[n][6] > 0 ? opp[n][5] / opp[n][6] : 0));
+        }
+        System.out.printf(Locale.ROOT, "CTRL mode %d seed %d: %d castles recorded, spacing off=%b%n", mode, seed, pg.completedCount(), CourseGenerator.R17_OFF_SPACING);
+    }
+
+    /**
+     * Group 4C/4D first-divergence counterfactual (owner testing program 2026-10-29): along the rules 18 course, every slice is also built a second time
+     * from the SAME previous slice (same pre-decision state, same random streams: generation is a pure function of seed, slice and previous slice) with
+     * only the rules 17 spacing switched off. The first module attempt whose outcome differs is reported with both versions, and the slice's direct
+     * consequences (route platforms, mechanics, enemies, hazards, avalanches, accepted creature and trap modules). The chain continues on the rules 18
+     * slice, so no downstream random drift is mixed into the per-slice differences.
+     */
+    static void counterfactual(int mode, long seed, int slices) {
+        Tuning t = mode == 0 ? T : T.hardCopy(mode); T = t;
+        row("slice,first_div_module,a_kind,a_role,a_ok,a_fails,b_kind,b_role,b_ok,b_fails,a_route,b_route,a_mech,b_mech,a_enemies,b_enemies,a_hazards,b_hazards,a_avl,b_avl,a_creature_ok,b_creature_ok,a_trap_haz_ok,b_trap_haz_ok,a_creature_tried,b_creature_tried,a_attempts,b_attempts");
+        CourseGenerator.Framed f = null;
+        double[] sum = new double[16];
+        for (int k = 0; k < slices; k++) {
+            GenTrace ta = new GenTrace(), tb = new GenTrace();
+            CourseGenerator.R17_OFF_SPACING = false; GenTrace.GEN.set(ta); CourseGenerator.Framed fa = CourseGenerator.chunkFramed(seed, k, f, t); GenTrace.GEN.remove();
+            CourseGenerator.R17_OFF_SPACING = true; GenTrace.GEN.set(tb); CourseGenerator.Framed fb = CourseGenerator.chunkFramed(seed, k, f, t); GenTrace.GEN.remove();
+            CourseGenerator.R17_OFF_SPACING = false;
+            int div = -1, n = Math.min(ta.modules.size(), tb.modules.size());
+            for (int i = 0; i < n && div < 0; i++) if (!sig(ta.modules.get(i)).equals(sig(tb.modules.get(i)))) div = i;
+            if (div < 0 && ta.modules.size() != tb.modules.size()) div = n;
+            String ma = div >= 0 && div < ta.modules.size() ? desc(ta.modules.get(div)) : ",,,", mb = div >= 0 && div < tb.modules.size() ? desc(tb.modules.get(div)) : ",,,";
+            int[] sa = stats(fa.c, ta), sb = stats(fb.c, tb);
+            StringBuilder st = new StringBuilder();
+            for (int q = 0; q < 8; q++) { st.append(',').append(sa[q]).append(',').append(sb[q]); sum[2 * q] += sa[q]; sum[2 * q + 1] += sb[q]; }
+            row(k + "," + div + "," + ma + "," + mb + st + "," + ta.attempt + "," + tb.attempt);
+            f = fa;
+        }
+        String[] nm = {"route", "mechanic platforms", "enemies", "hazards", "avalanches", "creature modules ok", "trap/haz modules ok", "creature modules tried"};
+        for (int q = 0; q < 8; q++) System.out.printf(Locale.ROOT, "CF mode %d seed %d %-22s rules18 %6.0f  spacing-off %6.0f  (%+.1f%%)%n", mode, seed, nm[q], sum[2 * q], sum[2 * q + 1], sum[2 * q] > 0 ? 100 * (sum[2 * q + 1] / sum[2 * q] - 1) : 0);
+    }
+    static String sig(GenTrace.Module m) { return m.attempt + "|" + m.kind + "|" + m.role + "|" + m.ok + "|" + Arrays.toString(m.fails); }
+    static String desc(GenTrace.Module m) { return m.kind + "," + m.role + "," + m.ok + "," + Arrays.toString(m.fails).replace(",", " "); }
+    /** route platforms, mechanic platforms, route enemies, route hazards, avalanches, accepted creature modules, accepted trap/haz modules, tried creature modules (final attempt). */
+    static int[] stats(Course c, GenTrace tr) {
+        int[] r = new int[8];
+        for (int i = 0; i < c.routeSize(); i++) { Element e = c.get(i); r[0]++; if (Progression.demandingFooting(e) || e.type == Element.Type.PAD || e.type == Element.Type.SPRING || e.type == Element.Type.ROPE || e.type == Element.Type.CABLE) r[1]++; }
+        for (Element h : c.hazards) { if (h.anchor < 0 || h.anchor >= c.routeSize()) continue; if (h.type == Element.Type.AVALANCHE) r[4]++; else if (Progression.enemy(h.type)) r[2]++; else if (Progression.hazard(h.type)) r[3]++; }
+        for (GenTrace.Module m : tr.modules) { if (m.attempt != tr.finalAttempt) continue;
+            if (m.kind.equals("CREATURE")) { r[7]++; if (m.ok) r[5]++; }
+            if ((m.kind.equals("TRAP") || m.kind.equals("HAZ")) && m.ok) r[6]++; }
+        return r;
     }
 
     // ------------------------------------------------------------------ ceiling

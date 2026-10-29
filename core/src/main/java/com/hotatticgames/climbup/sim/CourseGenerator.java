@@ -146,7 +146,9 @@ public final class CourseGenerator {
     /** Pendulum experiment (2026-10-28): the share of gap-saw slots that hang a spiked pendulum instead. */
     static final float PENDULUM_SHARE = Float.parseFloat(System.getProperty("climb.r17PendulumShare", "0.4"));          // (S1-B isolation, diagnostics only: 0 hangs none; the draw is kept, so nothing else moves)
     /** S1-B isolation (owner master directive 2026-10-29), diagnostics only, both off by default (rules 18): the rules 16 layer spacing (9.5 m if either platform launches); the rules 16 spiked block where an Enforcer bars a bee or crab deck. */
-    static final boolean R17_OFF_SPACING = Boolean.getBoolean("climb.r17OffSpacing"), R17_OFF_REDRAW = Boolean.getBoolean("climb.r17OffRedraw");
+    static final boolean R17_OFF_REDRAW = Boolean.getBoolean("climb.r17OffRedraw");
+    /** Not final only so the Group 4 counterfactual probe (T5Probe cf) can build one slice both ways from the same state; nothing else writes it. */
+    static boolean R17_OFF_SPACING = Boolean.getBoolean("climb.r17OffSpacing");
     /** The share of a saw's cycle that must stay open to time the move past it (SawFairnessTest). */
     static final float SAW_MIN_WINDOW = 0.5f;
     private static void continuous(Course out, Tuning t) {

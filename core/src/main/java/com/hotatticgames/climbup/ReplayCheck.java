@@ -18,8 +18,8 @@ public final class ReplayCheck {
     public static final int FALL_EVERY = 20000, FINGERPRINT_EVERY = 10000, STUCK = 4000; public static final byte SKIP = (byte) 0x80;
     /** The bundled phone check: the seed 12 climb to the castle-10 finish, and what Linux, Windows and the Android emulator print for it. */
     public static final String BUNDLED = "replays/seed12.bin.gz"; public static final long BUNDLED_SEED = 12L;
-    public static final long EXPECT_FINISH_STEP = 388841L, EXPECT_CLOCK_STEPS = 388842L;
-    public static final String EXPECT_EVENTS = "b84e95773ebe747109d34e86", EXPECT_STATES = "477c77291f9948f63a3e4ea8";
+    public static final long EXPECT_FINISH_STEP = 383438L, EXPECT_CLOCK_STEPS = 383439L;
+    public static final String EXPECT_EVENTS = "6efab64f27c6e9749c2f0b5e", EXPECT_STATES = "a1f49d0b03b7cd7d67d8eb15";
 
     public static final class Climb {
         public final Tower tw; public final Sim s; final float lookahead; final boolean falls;

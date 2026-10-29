@@ -33,7 +33,11 @@ public final class DemoFlow {
         Stage(int d, long seed, String title, String fp, double floorAbs, int from, int to) { difficulty = d; this.seed = seed; this.title = title; fingerprint = fp; this.floorAbs = floorAbs; fromCastle = from; toCastle = to; }
     }
 
-    DemoFlow(ClimbGame g, DemoRecipe recipe, DemoRecords records) { this.g = g; this.recipe = recipe; this.records = records; }
+    /** Reads a bundled file (the game's internal assets; tests read the repository's assets folder). */
+    private final java.util.function.Function<String, byte[]> files;
+
+    DemoFlow(ClimbGame g, DemoRecipe recipe, DemoRecords records) { this(g, recipe, records, p -> Gdx.files.internal(p).readBytes()); }
+    DemoFlow(ClimbGame g, DemoRecipe recipe, DemoRecords records, java.util.function.Function<String, byte[]> files) { this.g = g; this.recipe = recipe; this.records = records; this.files = files; }
 
     /** Reads the recipe from the game's assets and the records from the data folder. Throws (with the reason) when the recipe cannot be read. */
     static DemoFlow open(ClimbGame g) {
@@ -54,7 +58,7 @@ public final class DemoFlow {
     public synchronized DemoCourse course(int d) {
         if (courses[d] == null) {
             DemoRecipe.Stage st = recipe.stages.get(d);
-            courses[d] = DemoCourse.load(Gdx.files.internal(st.course).readBytes(), recipe, st, genTuning(d));
+            courses[d] = DemoCourse.load(files.apply(st.course), recipe, st, genTuning(d));
         }
         return courses[d];
     }
@@ -85,6 +89,13 @@ public final class DemoFlow {
         r.startIdx = 0; r.startHeight = (int) (recipe.fromCastle * genTuning(d).castleSpacing);
         if (r.tower.afterCastle(recipe.fromCastle) < 0) throw new DemoCourse.Invalid("castle " + recipe.fromCastle + " is not in the window of stage " + (d + 1));
         return r;
+    }
+
+    /** The stage floor on a running simulation (PlayScreen, before every step): a fall past it ends like a fall past the bottom of the tower. */
+    public static void applyFloor(com.hotatticgames.climbup.sim.Sim sim, Tower tower, Stage stage) {
+        float fl = tower.local(stage.floorAbs);
+        if (Float.isNaN(sim.floorOverride) || sim.floorOverride < fl) sim.floorOverride = fl;
+        if (sim.floorY < fl) sim.floorY = fl;
     }
 
     /** Starts building stage {@code d}'s run in the background (the title card, or the stage before it, runs meanwhile). */
@@ -123,7 +134,9 @@ public final class DemoFlow {
     public com.badlogic.gdx.Screen after(int d) { records.save(g.dataDir); return d < 2 ? stageScreen(d + 1) : new DemoPromoScreen(g, this); }
 
     /** Where PLAY goes: the stage the sequence has reached (the promo screen once it is finished). */
-    public com.badlogic.gdx.Screen resume() { int s = records.stage; return s >= 3 ? new DemoPromoScreen(g, this) : stageScreen(s); }
+    public com.badlogic.gdx.Screen resume() { int s = resumeStage(); return s >= 3 ? new DemoPromoScreen(g, this) : stageScreen(s); }
+    /** The stage PLAY continues at (3 = the promotional screen): the first stage of the sequence not yet cleared. */
+    public int resumeStage() { return records.stage; }
 
     /** PLAY DEMO AGAIN: back to NORMAL; the bests stay. */
     public com.badlogic.gdx.Screen playAgain() { records.restartSequence(); records.save(g.dataDir); return stageScreen(0); }

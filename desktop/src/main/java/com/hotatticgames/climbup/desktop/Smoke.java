@@ -70,8 +70,26 @@ final class Smoke {
             for (int i = 0; i < 1200; i++) { in.moveX = (i / 90) % 2 == 0 ? 1f : -1f; in.jumpHeld = i % 60 < 20; in.jumpPressed = i % 60 == 0; sim.step(in); in.jumpPressed = false; }
             check("simulation", Double.isFinite(sim.y) && Double.isFinite(sim.s), "steps=1200 y0=" + h0 + " y=" + sim.y);
         } catch (Throwable t) { check("simulation", false, t.toString()); }
+        if (com.hotatticgames.climbup.Edition.DEMO) demoChecks(root, data);
         say(failures == 0 ? "SMOKE_RESULT PASS" : "SMOKE_RESULT FAIL " + failures);
         try { Files.write(new File(data, "smoke.log").toPath(), LOG.toString().getBytes(StandardCharsets.UTF_8)); } catch (Exception ignored) { }      // the packaged launcher has no console: the log file is the evidence
         return failures == 0 ? 0 : 1;
+    }
+
+    /** The demo package (docs/DEMO.md): its identity, its own save folder, and every baked course in the package checked against this build's generator stamps. */
+    private static void demoChecks(File root, File data) {
+        say("SMOKE_INFO demo revision=" + com.hotatticgames.climbup.Edition.DEMO_REVISION + " source=" + com.hotatticgames.climbup.Edition.SOURCE_COMMIT + " build=" + com.hotatticgames.climbup.Edition.BUILD_NUMBER);
+        check("demoSaveDir", data.getName().equals("Upwardly Demo"), data.getAbsolutePath());
+        try {
+            com.hotatticgames.climbup.DemoRecipe r = com.hotatticgames.climbup.DemoRecipe.parse(new String(Files.readAllBytes(new File(root, "demo/recipe.json").toPath()), StandardCharsets.UTF_8));
+            Tuning base = Tuning.parse(new String(Files.readAllBytes(new File(root, "data/tuning.json").toPath()), StandardCharsets.UTF_8));
+            StringBuilder fp = new StringBuilder();
+            for (com.hotatticgames.climbup.DemoRecipe.Stage st : r.stages) {
+                Tuning t = st.difficulty == 0 ? base : base.hardCopy(st.difficulty);
+                com.hotatticgames.climbup.DemoCourse c = com.hotatticgames.climbup.DemoCourse.load(Files.readAllBytes(new File(root, st.course).toPath()), r, st, t);
+                fp.append(' ').append(c.fingerprint());
+            }
+            check("demoCourses", true, "recipe " + r.recipe + fp);
+        } catch (Throwable t) { check("demoCourses", false, t.toString()); }
     }
 }

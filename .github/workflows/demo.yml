@@ -1,0 +1,370 @@
+name: Demo build (Android + Windows + Linux, private draft)
+# MANUAL ONLY (docs/DEMO.md). Builds "Upwardly Demo" for all three platforms from ONE commit of a demo/** branch (the approved game source plus the
+# demo layer), checks it, and attaches the three packages, a build manifest, checksums, review screenshots and the SteamPipe layout to a PRIVATE
+# DRAFT GitHub Release. It never publishes a release, never uploads to Steam and never touches the full game's releases, OTA channel or depots.
+# The full game's android.yml / windows.yml (and their branch guards) are unchanged.
+on:
+  workflow_dispatch:
+    inputs:
+      source_commit:
+        description: "The approved full-game commit this demo is built from (must be in this branch's history), e.g. Build 82 = 623805c2c4a7b7d6415d2f4d98065ef8fddd8185"
+        type: string
+        required: true
+      recipe_version:
+        description: "Demo recipe version (must equal \"recipe\" in assets/demo/recipe.json)"
+        type: string
+        required: true
+      demo_build_number:
+        description: "Demo build number (Android versionCode of the demo app, package names, release title)"
+        type: string
+        required: true
+      demo_revision:
+        description: "Demo layer revision shown in the game's About line and the manifest (e.g. 1)"
+        type: string
+        default: "1"
+      promo_line1:
+        description: "Optional: replaces the promo screen's second line (default from the recipe: WISHLIST NOW ON STEAM)"
+        type: string
+        default: ""
+      promo_line2:
+        description: "Optional: replaces the promo screen's third line (default from the recipe: AVAILABLE NOVEMBER 2026)"
+        type: string
+        default: ""
+  push:          # registers the workflow on demo branches (a dispatch-only workflow off the default branch cannot be dispatched); a push builds nothing
+    branches: ['demo/**']
+    paths: ['.github/workflows/demo.yml']
+permissions:
+  contents: read
+  actions: read
+
+env:
+  BUILD_NUMBER: ${{ inputs.demo_build_number }}
+  CLIMB_EDITION: demo
+  CLIMB_DEMO_REVISION: ${{ inputs.demo_revision }}
+  EXPECTED_CERT_SHA256: "CE:DD:D6:86:8B:F9:4C:30:B2:70:F3:59:01:88:66:95:EE:6A:E9:AB:95:51:19:6C:2C:A9:E2:99:50:04:1C:39"
+
+jobs:
+  registered:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps: [ { run: echo "demo.yml is registered on ${{ github.ref_name }}; dispatch it to build" } ]
+
+  validate:
+    if: github.event_name == 'workflow_dispatch' && startsWith(github.ref, 'refs/heads/demo/')
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    outputs:
+      fingerprint: ${{ steps.fp.outputs.fingerprint }}
+      seeds: ${{ steps.fp.outputs.seeds }}
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '17' }
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Provenance - the approved source is in this branch, the recipe is the one asked for
+        run: |
+          set -e
+          git cat-file -e "${{ inputs.source_commit }}^{commit}" || { echo "::error::source commit ${{ inputs.source_commit }} does not exist"; exit 1; }
+          git merge-base --is-ancestor "${{ inputs.source_commit }}" HEAD || { echo "::error::${{ inputs.source_commit }} is not in the history of ${{ github.ref_name }}: the demo must be built on the approved source"; exit 1; }
+          echo "demo commit $(git rev-parse HEAD) contains source ${{ inputs.source_commit }}"
+          git log --oneline "${{ inputs.source_commit }}..HEAD" | sed 's/^/  demo layer: /'
+          R=$(python3 -c "import json; print(json.load(open('assets/demo/recipe.json'))['recipe'])")
+          [ "$R" = "${{ inputs.recipe_version }}" ] || { echo "::error::recipe.json is recipe $R, not ${{ inputs.recipe_version }}"; exit 1; }
+      - name: Demo tests in the demo edition (DemoTest, Part 12.1) and in the full edition (the full game unchanged)
+        run: |
+          ./gradlew :core:test --tests 'com.hotatticgames.climbup.DemoTest' -Pclimb.edition=demo --no-daemon
+          ./gradlew :core:test --tests 'com.hotatticgames.climbup.DemoTest' --tests 'com.hotatticgames.climbup.OfficialRunTest' --tests 'com.hotatticgames.climbup.WorldPickerStartTest' --tests 'com.hotatticgames.climbup.TowerPrepareTest' --no-daemon
+      - name: The featured courses are exactly what this build's generator makes (every slice re-made and compared byte for byte)
+        run: |
+          GDX=$(find ~/.gradle -name 'gdx-1.14.2.jar' | head -1)
+          cd core && java -Xmx3g -cp "build/classes/java/main:build/classes/java/test:$GDX" com.hotatticgames.climbup.DemoBake verify ../assets/data/tuning.json ../assets/demo/recipe.json ../assets | tee ../verify.txt
+      - name: Section solver evidence (every slice of each stage's castle 2 to 3 section, the real slice solver)
+        run: |
+          GDX=$(find ~/.gradle -name 'gdx-1.14.2.jar' | head -1)
+          for d in 0 1 2; do S=$(python3 -c "import json; print(json.load(open('assets/demo/recipe.json'))['stages'][$d]['seed'])"); (cd core && java -Xmx3g -cp "build/classes/java/main:build/classes/java/test:$GDX" com.hotatticgames.climbup.DemoBake scan ../assets/data/tuning.json $d $S) | tee -a scan.txt; done
+          grep -q "solved=\([0-9]*\)/\1 " scan.txt || true
+          python3 - <<'PY'
+          import re,sys
+          for l in open('scan.txt'):
+              m=re.search(r'solved=(\d+)/(\d+)', l)
+              if not m or m.group(1)!=m.group(2): print('::error::not every section slice was solved: '+l.strip()); sys.exit(1)
+          print('every section slice of all three stages solved')
+          PY
+      - id: fp
+        name: Generator fingerprint and seeds
+        run: |
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          r=json.load(open('assets/demo/recipe.json'))
+          print('seeds=' + ','.join(s['seed'] for s in r['stages']))
+          PY
+          RULES=$(grep -oP "RULES_VERSION = \K[0-9]+" core/src/main/java/com/hotatticgames/climbup/sim/CourseGenerator.java)
+          echo "fingerprint=rules$RULES $(python3 -c "import json; print(' '.join(s['sha256'][:12] for s in json.load(open('assets/demo/recipe.json'))['stages']))")" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: demo-validation-${{ env.BUILD_NUMBER }}
+          path: |
+            verify.txt
+            scan.txt
+            core/build/test-results/test/*.xml
+
+  android:
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: write     # ONLY to read the owner's DRAFT "Sfx" sound-pack release (a read token cannot see a draft); nothing here publishes
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '17' }
+      - name: Apply optional promo messaging
+        run: python3 tools/ci/demo_promo.py "${{ inputs.promo_line1 }}" "${{ inputs.promo_line2 }}"
+      - name: Signing secrets (the game's own identity, so later demo builds update the installed demo; PASS/FAIL only)
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          OTA_SIGNING_PRIVATE_KEY: ${{ secrets.OTA_SIGNING_PRIVATE_KEY }}
+          OTA_SIGNING_KEY_PASSPHRASE: ${{ secrets.OTA_SIGNING_KEY_PASSPHRASE }}
+        run: |
+          set -e
+          tools/ci/verify_secrets.sh --keystore-out "$RUNNER_TEMP/android-signing.keystore"
+          echo "ANDROID_KEYSTORE_FILE=$RUNNER_TEMP/android-signing.keystore" >> "$GITHUB_ENV"
+      - name: Accept Android SDK licenses
+        run: |
+          mkdir -p "$ANDROID_HOME/licenses"
+          printf '\n24333f8a63b6825ea9c5514f83c2829b004d1fee\n8933bad161af4178b1185d1a37fbf41ea5269c55\nd56f5187479451eabf01fb78af6dfcb131a6481e\n' > "$ANDROID_HOME/licenses/android-sdk-license"
+          printf '\n84831b9409646a918e30573bab4c9c91346d8abd\n' > "$ANDROID_HOME/licenses/android-sdk-preview-license"
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Fetch the licensed sound pack (SHA-256 checked)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          (command -v ffmpeg >/dev/null 2>&1 || sudo apt-get install -y --no-install-recommends ffmpeg >/dev/null 2>&1) || true
+          tools/ci/fetch_pack_sfx.sh --download
+      - name: Assemble the demo APK (com.hotatticgames.climbup.demo, "Upwardly Demo")
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: ./gradlew :android:assembleRelease --no-daemon -PwithAndroid -Pclimb.edition=demo -Pclimb.demoRevision=${{ inputs.demo_revision }}
+      - name: Sign (key rotation, as the full game), verify identity, package, label, permissions
+        env:
+          ANDROID_RELEASE_KEYSTORE_BASE64: ${{ secrets.ANDROID_RELEASE_KEYSTORE_BASE64 }}
+          ANDROID_RELEASE_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEYSTORE_PASSWORD }}
+          ANDROID_RELEASE_KEY_ALIAS: ${{ secrets.ANDROID_RELEASE_KEY_ALIAS }}
+          ANDROID_RELEASE_KEY_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEY_PASSWORD }}
+        run: |
+          set -e
+          SRC=$(ls android/build/outputs/apk/release/*.apk | head -1)
+          mkdir -p out; OUT="out/Upwardly Demo Build ${BUILD_NUMBER} APK.apk"
+          tools/ci/rotate_sign.sh "$SRC" "$OUT"
+          BT=$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -1)
+          "$BT/aapt2" dump badging "$OUT" > badging.txt; grep -E "^package|application-label:|sdkVersion|uses-permission|launchable-activity" badging.txt
+          grep -q "^package: name='com.hotatticgames.climbup.demo'" badging.txt || { echo "::error::the demo APK is not com.hotatticgames.climbup.demo"; exit 1; }
+          grep -q "versionCode='${BUILD_NUMBER}'" badging.txt || { echo "::error::versionCode is not ${BUILD_NUMBER}"; exit 1; }
+          grep -q "application-label:'Upwardly Demo'" badging.txt || { echo "::error::the demo app is not labelled Upwardly Demo"; exit 1; }
+          if grep -q "android.permission.INTERNET" badging.txt; then echo "::error::the demo must not ask for INTERNET"; exit 1; fi
+          if grep -q "application-debuggable" badging.txt; then echo "::error::must not be debuggable"; exit 1; fi
+          "$BT/apksigner" verify --verbose --print-certs --max-sdk-version 27 "$OUT" > cert.txt
+          GOT=$(grep -m1 "certificate SHA-256 digest" cert.txt | sed 's/.*: //' | tr 'a-f' 'A-F' | sed 's/../&:/g; s/:$//')
+          [ "$GOT" = "$EXPECTED_CERT_SHA256" ] || { echo "::error::not signed with the studio identity"; exit 1; }
+          unzip -l "$OUT" | grep -E "assets/demo/" ; unzip -l "$OUT" | grep -q "assets/demo/stage-ngh.course" || { echo "::error::the baked courses are not in the APK"; exit 1; }
+          sha256sum "$OUT"
+          cp badging.txt out/android-badging.txt
+      - name: Fetch the last published full game APK (Build 71) for the side-by-side install
+        env: { GH_TOKEN: "${{ github.token }}" }
+        run: gh release download v1.1.5-build71 -p '*.apk' -O full.apk && ls -l full.apk
+      - name: Enable KVM for the emulator
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: On an emulator, install the demo beside the full game and launch it
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot
+          script: bash tools/ci/demo_side_by_side_test.sh full.apk "out/Upwardly Demo Build ${BUILD_NUMBER} APK.apk" out/shots
+      - uses: actions/upload-artifact@v4
+        with: { name: demo-android-${{ env.BUILD_NUMBER }}, path: out/ }
+
+  windows:
+    needs: validate
+    runs-on: windows-latest
+    timeout-minutes: 90
+    permissions:
+      contents: write     # ONLY to read the owner's DRAFT "Sfx" sound-pack release; nothing here publishes
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '17' }
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - run: pip install pillow
+      - name: Apply optional promo messaging
+        run: python tools/ci/demo_promo.py "${{ inputs.promo_line1 }}" "${{ inputs.promo_line2 }}"
+      - name: Fetch the licensed sound pack (SHA-256 checked)
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          (command -v ffmpeg >/dev/null 2>&1 || choco install ffmpeg --no-progress -y >/dev/null 2>&1) || true
+          export PATH="$PATH:/c/ProgramData/chocolatey/bin"
+          tools/ci/fetch_pack_sfx.sh --download
+      - name: Package "Upwardly Demo" (jar, jlink runtime, EXE, assets, checksums, Steam layout)
+        shell: powershell
+        run: powershell -File tools/windows/package.ps1 -BuildNumber ${{ env.BUILD_NUMBER }} -Channel demo -Edition demo -DemoRevision ${{ inputs.demo_revision }}
+      - name: Run the packaged EXE without any Java on PATH (--smoke, incl. the demo's identity, save folder and courses)
+        shell: powershell
+        run: |
+          $env:JAVA_HOME = ''
+          $env:Path = ($env:Path -split ';' | Where-Object { $_ -notmatch '(?i)java|jdk|temurin|hostedtoolcache' }) -join ';'
+          $env:APPDATA = "$env:RUNNER_TEMP\appdata"; New-Item -ItemType Directory -Force $env:APPDATA | Out-Null
+          $p = Start-Process -FilePath "build\windows\dist\Upwardly Demo\Upwardly Demo.exe" -ArgumentList '--smoke' -Wait -PassThru
+          "exit code: " + $p.ExitCode
+          $log = "$env:APPDATA\HotAtticGames\Upwardly Demo\smoke.log"
+          Get-Content $log
+          if (Test-Path "$env:APPDATA\HotAtticGames\Upwardly") { throw "the demo wrote into the full game's save folder" }
+          if ($p.ExitCode -ne 0) { throw "smoke failed" }
+      - name: Launch the EXE with a software OpenGL driver, run 40 s, require a clean exit
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Copy-Item -Recurse "build\windows\dist\Upwardly Demo" "$env:RUNNER_TEMP\glapp"
+          $rel = Invoke-RestMethod https://api.github.com/repos/pal1000/mesa-dist-win/releases/latest
+          $asset = $rel.assets | Where-Object { $_.name -match 'release-msvc\.7z$' } | Select-Object -First 1
+          "software GL driver: " + $asset.name + " (CI-only test helper, never shipped)"
+          Invoke-WebRequest $asset.browser_download_url -OutFile "$env:RUNNER_TEMP\mesa.7z"
+          7z x "$env:RUNNER_TEMP\mesa.7z" "-o$env:RUNNER_TEMP\mesa" -y | Out-Null
+          Get-ChildItem "$env:RUNNER_TEMP\mesa\x64\*.dll" | Where-Object { $_.Name -match 'opengl32|libgallium_wgl|libglapi|libEGL|libGLESv2' } | Copy-Item -Destination "$env:RUNNER_TEMP\glapp"
+          $env:GALLIUM_DRIVER = 'llvmpipe'; $env:MESA_GL_VERSION_OVERRIDE = '4.5'
+          $env:APPDATA = "$env:RUNNER_TEMP\appdata2"; New-Item -ItemType Directory -Force $env:APPDATA | Out-Null
+          $p = Start-Process -FilePath "$env:RUNNER_TEMP\glapp\Upwardly Demo.exe" -ArgumentList '--exit-after=40' -PassThru
+          $done = $p.WaitForExit(180000)
+          "exited by itself within 180 s: $done"
+          if ($done) { "exit code: " + $p.ExitCode } else { $p.Kill() }
+          $log = "$env:APPDATA\HotAtticGames\Upwardly Demo\desktop.log"
+          if (Test-Path $log) { Get-Content $log } else { "no desktop.log was written" }
+          if (-not $done -or $p.ExitCode -ne 0) { throw "the packaged demo did not start, run and exit cleanly" }
+      - name: Collect
+        shell: bash
+        run: |
+          mkdir -p out/steam-windows
+          cp "build/windows/Upwardly-Demo-Windows.zip" "out/Upwardly Demo Build ${BUILD_NUMBER} EXE.zip"
+          cp build/windows/SHA256SUMS.txt out/windows-SHA256SUMS.txt
+          cp "build/windows/dist/Upwardly Demo/BUILD_INFO.txt" out/windows-BUILD_INFO.txt
+      - uses: actions/upload-artifact@v4
+        with: { name: demo-windows-${{ env.BUILD_NUMBER }}, path: out/ }
+
+  linux:
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: write     # ONLY to read the owner's DRAFT "Sfx" sound-pack release; nothing here publishes
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '17' }
+      - name: Apply optional promo messaging
+        run: python3 tools/ci/demo_promo.py "${{ inputs.promo_line1 }}" "${{ inputs.promo_line2 }}"
+      - name: Fetch the licensed sound pack (SHA-256 checked)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          (command -v ffmpeg >/dev/null 2>&1 || sudo apt-get install -y --no-install-recommends ffmpeg >/dev/null 2>&1) || true
+          tools/ci/fetch_pack_sfx.sh --download
+      - name: Package the native Linux x86-64 "Upwardly Demo" app-image + tar.gz
+        run: bash tools/linux/package.sh ${{ env.BUILD_NUMBER }}
+      - name: Smoke the native launcher (bundled runtime, no system Java; demo identity, save folder, courses)
+        run: |
+          sudo apt-get update && sudo apt-get install -y xvfb libgl1-mesa-dri libglx-mesa0 libopenal1
+          APP="build/linux/dist/Upwardly Demo"
+          file "$APP/bin/Upwardly Demo"
+          export XDG_DATA_HOME="$RUNNER_TEMP/xdg"
+          env -u JAVA_HOME PATH=/usr/bin:/bin xvfb-run -a -s "-screen 0 1280x800x24" "$APP/bin/Upwardly Demo" --smoke | tee smoke.txt
+          grep -q "SMOKE_RESULT PASS" smoke.txt || { echo "::error::Linux smoke failed"; exit 1; }
+          grep -q "SMOKE_OK demoCourses" smoke.txt || { echo "::error::the demo checks did not run"; exit 1; }
+          test ! -e "$XDG_DATA_HOME/HotAtticGames/Upwardly" || { echo "::error::the demo wrote into the full game's save folder"; exit 1; }
+      - name: Play the packaged demo under a virtual display and capture every demo screen (review screenshots)
+        run: bash tools/ci/demo_visual.sh "build/linux/dist/Upwardly Demo" out/shots
+      - name: Collect
+        run: |
+          mkdir -p out
+          cp "build/linux/Upwardly-Demo-Linux.tar.gz" "out/Upwardly Demo Build ${BUILD_NUMBER} Linux.tar.gz"
+          cp build/linux/SHA256SUMS.txt out/linux-SHA256SUMS.txt
+          cp "build/linux/dist/Upwardly Demo/BUILD_INFO.txt" out/linux-BUILD_INFO.txt
+          cp smoke.txt out/linux-smoke.txt
+      - uses: actions/upload-artifact@v4
+        with: { name: demo-linux-${{ env.BUILD_NUMBER }}, path: out/ }
+
+  draft:
+    needs: [validate, android, windows, linux]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write     # creates a DRAFT release only (never published; collaborators only, no tag is pushed)
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { path: dl }
+      - name: Manifest, checksums, SteamPipe layout, private draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          N: ${{ env.BUILD_NUMBER }}
+        run: |
+          set -e
+          mkdir -p rel
+          APK=$(find dl -name "Upwardly Demo Build ${N} APK.apk" | head -1); EXE=$(find dl -name "Upwardly Demo Build ${N} EXE.zip" | head -1); LNX=$(find dl -name "Upwardly Demo Build ${N} Linux.tar.gz" | head -1)
+          for f in "$APK" "$EXE" "$LNX"; do [ -n "$f" ] && [ -f "$f" ] || { echo "::error::a platform package is missing"; exit 1; }; cp "$f" rel/; done
+          unzip -l "rel/Upwardly Demo Build ${N} EXE.zip" | grep -q "Upwardly Demo.exe" || { echo "::error::no Upwardly Demo.exe in the zip"; exit 1; }
+          tar tzf "rel/Upwardly Demo Build ${N} Linux.tar.gz" | grep -q "Upwardly Demo/bin/Upwardly Demo" || { echo "::error::no native launcher in the tar.gz"; exit 1; }
+          # review screenshots (Linux visual run + Android emulator)
+          (cd dl && zip -qr "../rel/Upwardly Demo Build ${N} review screenshots.zip" $(find . -path '*shots*' -name '*.png' | sort)) || true
+          # SteamPipe: content for a Windows depot and a Linux depot, plus build scripts with placeholders (the Demo App ID is issued by Steam later)
+          mkdir -p steam/content/windows steam/content/linux steam/scripts steam/output
+          unzip -q "rel/Upwardly Demo Build ${N} EXE.zip" -d steam/tmpw && cp -r "steam/tmpw/Upwardly Demo/." steam/content/windows/ && rm -rf steam/tmpw
+          tar xzf "rel/Upwardly Demo Build ${N} Linux.tar.gz" -C steam && cp -r "steam/Upwardly Demo/." steam/content/linux/ && rm -rf "steam/Upwardly Demo"
+          cp tools/steam-demo/*.vdf steam/scripts/
+          (cd steam && zip -qr "../rel/Upwardly Demo Build ${N} SteamPipe layout.zip" .)
+          (cd rel && sha256sum *.apk *.zip *.tar.gz > checksums.sha256)
+          VER=$(grep -oP "appVersionName = '\K[^']+" build.gradle)
+          python3 - <<PY
+          import json,hashlib,os
+          r=json.load(open('assets/demo/recipe.json'))
+          def sha(p): return hashlib.sha256(open(p,'rb').read()).hexdigest()
+          files=sorted(os.listdir('rel'))
+          m={"game":"Upwardly Demo","demo_build":int("${N}"),"game_version":"${VER}","demo_revision":"${{ inputs.demo_revision }}","recipe":r["recipe"],
+             "demo_commit":"${{ github.sha }}","demo_branch":"${{ github.ref_name }}","source_commit":"${{ inputs.source_commit }}",
+             "generator_fingerprint":"${{ needs.validate.outputs.fingerprint }}",
+             "stages":[{"difficulty":s["difficulty"],"title":s["title"],"seed":s["seed"],"course":s["course"],"course_sha256":s["sha256"]} for s in r["stages"]],
+             "section":{"from_castle":r["fromCastle"],"to_castle":r["toCastle"],"world":"Dusk Spire"},
+             "packages":{"android":{"package":"com.hotatticgames.climbup.demo","label":"Upwardly Demo","versionCode":int("${N}")},"windows":{"exe":"Upwardly Demo.exe","save_folder":"%APPDATA%/HotAtticGames/Upwardly Demo"},"linux":{"launcher":"bin/Upwardly Demo","save_folder":"\$XDG_DATA_HOME/HotAtticGames/Upwardly Demo"}},
+             "checksums":{f:sha('rel/'+f) for f in files if not f.endswith('.sha256')},
+             "validation":{"run":"${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}","demo_tests":"DemoTest (demo + full editions), OfficialRunTest, WorldPickerStartTest, TowerPrepareTest","courses":"DemoBake verify: every slice re-made and byte-identical","solver":"every section slice of all three stages solved","android":"installed beside com.hotatticgames.climbup on an API 34 emulator, launched, running after 30 s, no INTERNET","windows":"--smoke (bundled runtime, demo courses) + 40 s software-GL launch","linux":"--smoke + virtual-display play capture"},
+             "promo":{"title":r["promo"]["title"],"line1":r["promo"]["line1"],"line2":r["promo"]["line2"],"store_url":r["promo"]["storeUrl"],"steam_logo":r["promo"]["steamLogo"] or "NOT SUPPLIED (owner: official Steam logo file)"}}
+          json.dump(m,open('rel/demo-build-manifest.json','w'),indent=2)
+          PY
+          cat rel/demo-build-manifest.json
+          TAG="demo-v${VER}-r${{ inputs.demo_revision }}-build${N}"
+          printf 'Upwardly Demo build %s (PRIVATE DRAFT - never published by this workflow; nothing was uploaded to Steam).\n\nNORMAL -> PUNISHER -> NOT GONNA HAPPEN, castle 2 to castle 3 in Dusk Spire, then the promotional screen.\nDemo commit %s on %s, built from approved source %s. Recipe %s, demo revision %s.\nSeeds: %s. Generator fingerprint: %s.\nAndroid: com.hotatticgames.climbup.demo (installs beside the full game). Windows/Linux: "Upwardly Demo", saves in HotAtticGames/Upwardly Demo.\nSee demo-build-manifest.json and checksums.sha256.\n' "$N" "${{ github.sha }}" "${{ github.ref_name }}" "${{ inputs.source_commit }}" "${{ inputs.recipe_version }}" "${{ inputs.demo_revision }}" "${{ needs.validate.outputs.seeds }}" "${{ needs.validate.outputs.fingerprint }}" > notes.md
+          if gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
+            [ "$(gh release view "$TAG" --repo "$REPO" --json isDraft -q .isDraft)" = "true" ] || { echo "::error::$TAG exists and is not a draft: refusing to touch it"; exit 1; }
+            gh release upload "$TAG" rel/* --repo "$REPO" --clobber
+          else
+            gh release create "$TAG" rel/* --repo "$REPO" --target "${{ github.sha }}" --title "Upwardly Demo build ${N} (private draft)" --notes-file notes.md --draft
+          fi
+          gh release view "$TAG" --repo "$REPO" --json isDraft,url,assets -q '"draft=\(.isDraft) \(.url)\n" + ([.assets[].name] | join("\n"))'

@@ -1,0 +1,12 @@
+"DepotBuild"
+{
+	// TEMPLATE ONLY (see app_build_demo_TEMPLATE.vdf): the Upwardly Demo's linux depot.
+	"DepotID" "REPLACE_WITH_DEMO_LINUX_DEPOT_ID"
+	"ContentRoot" "..\content\linux\"
+	"FileMapping"
+	{
+		"LocalPath" "*"
+		"DepotPath" "."
+		"Recursive" "1"
+	}
+}

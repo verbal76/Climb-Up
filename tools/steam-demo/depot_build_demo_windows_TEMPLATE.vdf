@@ -1,0 +1,12 @@
+"DepotBuild"
+{
+	// TEMPLATE ONLY (see app_build_demo_TEMPLATE.vdf): the Upwardly Demo's windows depot.
+	"DepotID" "REPLACE_WITH_DEMO_WINDOWS_DEPOT_ID"
+	"ContentRoot" "..\content\windows\"
+	"FileMapping"
+	{
+		"LocalPath" "*"
+		"DepotPath" "."
+		"Recursive" "1"
+	}
+}

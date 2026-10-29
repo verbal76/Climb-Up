@@ -19,7 +19,7 @@ import java.util.List;
 
 /** The Windows launcher's services: keyboard, mouse and controller input, no touch overlay, no network, the Upwardly name, and the extra Settings tabs. */
 public final class DesktopPlatform implements Platform {
-    public static final String TITLE = "Upwardly";
+    public static final String TITLE = com.hotatticgames.climbup.Edition.DEMO ? "Upwardly Demo" : "Upwardly";          // the demo is its own app (docs/DEMO.md)
 
     public final File configFile;
     public final DesktopConfig cfg;
@@ -66,7 +66,8 @@ public final class DesktopPlatform implements Platform {
         g = game; sources = sourceFactory.get(); input = new InputManager(cfg, sources); nav = new MenuNav(input);
         game.ui.nav = nav;
         try { graphics.start(game); save(); } catch (RuntimeException e) { DesktopLog.error("graphics setup failed; using the defaults", e); }
-        steam.init(); graphics.steamOnDeck = steam.onSteamDeck();                      // Steam achievements: silent if the Steam client is not running
+        if (!com.hotatticgames.climbup.Edition.DEMO) steam.init();          // the demo will have its own Steam App ID (not yet issued): it never starts Steam as the full game
+        graphics.steamOnDeck = steam.onSteamDeck();                      // Steam achievements: silent if the Steam client is not running
     }
 
     /** desktop.log in the data folder: startup time and frame pacing of this run (the evidence the packaged build can give without a console). */

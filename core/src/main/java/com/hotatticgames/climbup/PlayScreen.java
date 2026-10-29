@@ -510,9 +510,7 @@ public final class PlayScreen extends ScreenAdapter {
      * start castle's deck ends like a fall past the bottom of the tower (back to the last checkpoint), so no earlier section can ever be reached.
      */
     private void applyStageFloor() {
-        float fl = tower.local(stage.floorAbs);
-        if (Float.isNaN(sim.floorOverride) || sim.floorOverride < fl) sim.floorOverride = fl;
-        if (sim.floorY < fl) sim.floorY = fl;
+        DemoFlow.applyFloor(sim, tower, stage);
     }
     /**
      * R3 + R1 (2026-10-28): true while the climb must hold because the window needs a slice that is not final yet. The simulation takes no step (so

@@ -8,8 +8,11 @@
    Upwardly-<ver>-win64-<channel>.zip, SHA256SUMS.txt, BUILD_INFO.txt
  Nothing here talks to Steam or to GitHub Releases.
 #>
-param([int]$BuildNumber = 0, [string]$Channel = 'experimental')
+param([int]$BuildNumber = 0, [string]$Channel = 'experimental', [string]$Edition = 'full', [string]$DemoRevision = '0')
 $ErrorActionPreference = 'Stop'
+# -Edition demo builds "Upwardly Demo" (docs/DEMO.md): its own app name, save folder and package names; the full game is unchanged.
+$name = if ($Edition -eq 'demo') { 'Upwardly Demo' } else { 'Upwardly' }
+$zipName = if ($Edition -eq 'demo') { 'Upwardly-Demo-Windows.zip' } else { 'Upwardly-Windows.zip' }
 $root = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 Set-Location $root
 $out = Join-Path $root 'build\windows'
@@ -17,10 +20,10 @@ $jarDir = Join-Path $root 'desktop\build\windows\input'      # where :desktop:wi
 New-Item -ItemType Directory -Force $out | Out-Null
 $version = (Select-String -Path 'build.gradle' -Pattern "appVersionName = '([^']+)'").Matches[0].Groups[1].Value
 $exeVersion = "$version.$BuildNumber"
-Write-Host "Upwardly $version build $BuildNumber ($Channel)"
+Write-Host "$name $version build $BuildNumber ($Channel)"
 
 # 1. the jar (Windows natives only)
-& "$root\gradlew.bat" :desktop:windowsJar "-PbuildNumber=$BuildNumber" --no-daemon
+& "$root\gradlew.bat" :desktop:windowsJar "-PbuildNumber=$BuildNumber" "-Pclimb.edition=$Edition" "-Pclimb.demoRevision=$DemoRevision" --no-daemon
 if ($LASTEXITCODE -ne 0) { throw 'windowsJar failed' }
 
 # 2. icon
@@ -34,14 +37,14 @@ New-Item -ItemType Directory -Force $dist | Out-Null
 # runtime modules: jdk.crypto.ec is needed because the shared startup code parses the pinned EC key (even though this build never goes online)
 $jp = Join-Path $env:JAVA_HOME 'bin\jpackage.exe'
 if (-not (Test-Path $jp)) { $jp = 'jpackage' }
-& $jp --type app-image --name Upwardly --app-version $exeVersion --vendor 'Hot Attic Games' `
+& $jp --type app-image --name $name --app-version $exeVersion --vendor 'Hot Attic Games' `
   --description 'Upwardly - a tower that does not exist, a climb that does.' --copyright 'Hot Attic Games' `
   --icon "$out\upwardly.ico" --input $jarDir --main-jar upwardly.jar --main-class com.hotatticgames.climbup.desktop.DesktopLauncher `
   --add-modules 'java.base,java.desktop,java.logging,java.management,java.naming,java.xml,jdk.unsupported,jdk.crypto.ec' `
   --java-options '-Dfile.encoding=UTF-8' --java-options '-Xms256m' --java-options '-Xmx1024m' --java-options '-XX:+UseG1GC' `
   --dest $dist
 if ($LASTEXITCODE -ne 0) { throw 'jpackage failed' }
-$app = Join-Path $dist 'Upwardly'
+$app = Join-Path $dist $name
 
 # 4. assets beside the jar (the launcher finds app\assets); the OTA public key is not needed on a build that never touches the network
 Copy-Item -Recurse "$root\assets" "$app\app\assets"
@@ -52,13 +55,14 @@ Copy-Item "$root\ASSETS.md" "$app\app\licenses\ASSETS.md"
 # 5. identification and checksums
 $sha = (git rev-parse HEAD)
 @"
-Upwardly (Windows 64-bit)
+$name (Windows 64-bit)
+edition: $Edition
 version: $version
 exe version: $exeVersion
 channel: $Channel   (experimental builds are test artifacts, not releases)
 source sha: $sha
 built: $((Get-Date).ToUniversalTime().ToString('s'))Z
-launch executable: Upwardly.exe
+launch executable: $name.exe
 bundled runtime: $(Get-Content "$app\runtime\release" -Raw)
 "@ | Set-Content -Encoding ASCII "$app\BUILD_INFO.txt"
 $sums = Get-ChildItem -Recurse -File $app | Sort-Object FullName | ForEach-Object { $h = (Get-FileHash -Algorithm SHA256 $_.FullName).Hash.ToLower(); "$h  $($_.FullName.Substring($app.Length + 1).Replace('\','/'))" }
@@ -72,7 +76,7 @@ Copy-Item -Recurse "$app\*" "$steam\content"
 Copy-Item "$root\tools\windows\steam\*.vdf" "$steam\scripts"
 
 # 7. zip
-$zip = Join-Path $out "Upwardly-Windows.zip"
+$zip = Join-Path $out $zipName
 if (Test-Path $zip) { Remove-Item $zip }
 Compress-Archive -Path $app -DestinationPath $zip
 (Get-FileHash -Algorithm SHA256 $zip).Hash.ToLower() + "  " + (Split-Path $zip -Leaf) | Add-Content -Encoding ASCII "$out\SHA256SUMS.txt"

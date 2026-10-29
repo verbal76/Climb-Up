@@ -10,7 +10,7 @@ import java.util.*;
  * The demo's course tool (docs/DEMO.md). Courses are made by the real generator through the real Tower, exactly as a climb on that seed makes them.
  *
  *   DemoBake scan   <tuning.json> <difficulty> <seed> [seed...]     one line per seed: the section's contents and its score (env SOLVE=0 skips the solver)
- *   DemoBake bake   <tuning.json> <recipe.json> <assets dir>       writes every stage's course file and the recipe's sha256 lines
+ *   DemoBake bake   <tuning.json> <recipe.json> <assets dir> [stage,...]   writes the stages' course files (all, or the listed 0-based ones) and their recipe sha256 lines
  *   DemoBake verify <tuning.json> <recipe.json> <assets dir>       makes every course again and fails unless each is byte-identical to the file
  *
  * The section a stage plays is castle fromCastle's deck to castle toCastle's door; its score (scan) rewards variety - distinct traversal kinds and hazard
@@ -33,7 +33,10 @@ public final class DemoBake {
                 String recipeText = new String(Files.readAllBytes(recipeFile.toPath()), StandardCharsets.UTF_8);
                 DemoRecipe r = parseLoose(recipeText);
                 boolean ok = true; String out = recipeText;
+                java.util.Set<Integer> only = new java.util.HashSet<>();
+                if (a.length > 4) for (String x : a[4].split(",")) only.add(Integer.parseInt(x.trim()));
                 for (DemoRecipe.Stage st : r.stages) {
+                    if (!only.isEmpty() && !only.contains(st.difficulty)) continue;
                     long t0 = System.nanoTime();
                     Tuning t = gen(base, st.difficulty);
                     Built b = build(t, st.seed, r.toCastle);
@@ -43,6 +46,7 @@ public final class DemoBake {
                     if (a[0].equals("bake")) {
                         f.getParentFile().mkdirs(); Files.write(f.toPath(), file);
                         out = out.replace(st.sha256, sha);
+                        Files.write(recipeFile.toPath(), out.getBytes(StandardCharsets.UTF_8));          // after every stage: a long bake keeps what it finished
                         System.out.println("BAKED stage " + (st.difficulty + 1) + " seed " + st.seed + " slices " + b.blobs.size() + " top " + (int) b.top + " m sha256 " + sha + " (" + (System.nanoTime() - t0) / 1_000_000_000L + " s)");
                     } else {
                         String have = f.isFile() ? DemoCourse.contentSha256(Files.readAllBytes(f.toPath())) : "(missing)";

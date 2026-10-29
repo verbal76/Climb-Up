@@ -1,12 +1,14 @@
 plugins { id 'com.android.application' version '8.7.3' }
 
+def demoEdition = (project.findProperty('climb.edition') ?: 'full').toString() == 'demo'   // docs/DEMO.md: the demo is its own app beside the full game (same signing identity)
 def buildCode = (System.getenv('BUILD_NUMBER') ?: System.getenv('GITHUB_RUN_NUMBER') ?: (project.findProperty('buildCode') ?: '1')).toInteger()   // the workflow's build_number input, else the run number, else a local default
 
 android {
     namespace 'com.hotatticgames.climbup.android'
     compileSdk 35
     defaultConfig {
-        applicationId 'com.hotatticgames.climbup'
+        applicationId demoEdition ? 'com.hotatticgames.climbup.demo' : 'com.hotatticgames.climbup'
+        resValue 'string', 'app_name', demoEdition ? 'Upwardly Demo' : 'Upwardly'
         minSdk 26
         targetSdk 35
         versionCode buildCode
@@ -27,6 +29,7 @@ android {
     }
     sourceSets {
         main {
+            if (demoEdition) manifest.srcFile 'src/demo/AndroidManifest.xml'
             assets.srcDirs = ['../assets']
             jniLibs.srcDirs = ['libs']
         }

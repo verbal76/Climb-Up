@@ -1,4 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Upwardly</string>
+    <!-- app_name comes from android/build.gradle (resValue): "Upwardly", or "Upwardly Demo" in the demo edition (docs/DEMO.md). -->
 </resources>

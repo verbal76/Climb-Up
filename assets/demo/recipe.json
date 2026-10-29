@@ -7,16 +7,16 @@
   "world": 2,
   "titleCard": { "fadeIn": 0.6, "hold": 2.0, "fadeOut": 0.7 },
   "stages": [
-    { "difficulty": 0, "seed": "1", "title": "NORMAL DIFFICULTY", "course": "demo/stage-normal.course", "sha256": "0000000000000000000000000000000000000000000000000000000000000000" },
-    { "difficulty": 1, "seed": "1", "title": "PUNISHER DIFFICULTY", "course": "demo/stage-punisher.course", "sha256": "1111111111111111111111111111111111111111111111111111111111111111" },
-    { "difficulty": 2, "seed": "1", "title": "NOT GONNA HAPPEN DIFFICULTY", "course": "demo/stage-ngh.course", "sha256": "2222222222222222222222222222222222222222222222222222222222222222" }
+    { "difficulty": 0, "seed": "4104", "title": "NORMAL DIFFICULTY", "course": "demo/stage-normal.course", "sha256": "800c556024d484228bd3a1d701549a6e9df8f9b4f3eacbaef90f8075ec5349ed" },
+    { "difficulty": 1, "seed": "4105", "title": "PUNISHER DIFFICULTY", "course": "demo/stage-punisher.course", "sha256": "13d85c2403a41a17e5776dc9441709e8413d212c0b77c00cfc9e871474fabb32" },
+    { "difficulty": 2, "seed": "4103", "title": "NOT GONNA HAPPEN DIFFICULTY", "course": "demo/stage-ngh.course", "sha256": "a0828718b39981550d96f7740d658d25bbe3c956792133b3f2905d4d7b84e953" }
   ],
   "promo": {
     "title": "UPWARDLY",
     "line1": "WISHLIST NOW ON STEAM",
     "line2": "AVAILABLE NOVEMBER 2026",
     "storeButton": "WISHLIST ON STEAM",
-    "storeUrl": "",
+    "storeUrl": "https://store.steampowered.com/app/5427130/",
     "againButton": "PLAY DEMO AGAIN",
     "steamLogo": ""
   }

@@ -35,7 +35,7 @@ def editionStamp = [
     demo: edition == 'demo',
     revision: (project.findProperty('climb.demoRevision') ?: '0').toString(),
     sourceCommit: (project.findProperty('climb.sourceCommit') ?: System.getenv('GITHUB_SHA') ?: 'unknown').toString(),
-    buildNumber: (System.getenv('BUILD_NUMBER') ?: project.findProperty('buildCode') ?: '0').toString()
+    buildNumber: (System.getenv('BUILD_NUMBER') ?: project.findProperty('buildNumber') ?: project.findProperty('buildCode') ?: '0').toString()
 ]
 def generateEdition = tasks.register('generateEdition') {
     inputs.property('stamp', editionStamp.toString())

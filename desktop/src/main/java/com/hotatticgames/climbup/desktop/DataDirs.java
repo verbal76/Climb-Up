@@ -17,7 +17,7 @@ public final class DataDirs {
         if (o != null && !o.isEmpty()) return new File(o);
         String os = System.getProperty("os.name", ""), xdg = System.getenv("XDG_DATA_HOME"), home = System.getProperty("user.home", ".");
         File dir = resolve(os, System.getenv("APPDATA"), xdg, home);
-        File old = legacyLinux(os, xdg, home);
+        File old = com.hotatticgames.climbup.Edition.DEMO ? null : legacyLinux(os, xdg, home);          // (the demo never had a legacy folder: it never moves the full game's files)
         if (old != null) migrateLinuxLegacy(old, dir);
         return dir;
     }
@@ -61,7 +61,7 @@ public final class DataDirs {
     }
     /** Pure: the folder for a known Pictures folder (null or missing = the data folder). */
     public static File screenshotDir(File dataDir, File pictures) {
-        return pictures != null && pictures.isDirectory() ? new File(new File(pictures, "Upwardly"), "Screenshots") : new File(dataDir, "Screenshots");
+        return pictures != null && pictures.isDirectory() ? new File(new File(pictures, FOLDER), "Screenshots") : new File(dataDir, "Screenshots");
     }
     /** Pure: the operating system's Pictures folder - Windows and macOS: Pictures under the home; Linux: XDG_PICTURES_DIR from ~/.config/user-dirs.dirs (its text is passed in), else ~/Pictures. */
     public static File resolvePictures(String os, String home, String userDirsText) {
@@ -82,14 +82,19 @@ public final class DataDirs {
     }
 
     /** Pure so every platform's answer can be tested on any machine. */
-    public static File resolve(String os, String appData, String xdg, String home) {
+    /** The folder name under HotAtticGames: the demo saves apart from the full game (docs/DEMO.md), so neither can ever read the other's files. */
+    static final String FOLDER = com.hotatticgames.climbup.Edition.DEMO ? "Upwardly Demo" : "Upwardly";
+
+    public static File resolve(String os, String appData, String xdg, String home) { return resolve(os, appData, xdg, home, FOLDER); }
+    /** Pure: the data folder for a given folder name. */
+    public static File resolve(String os, String appData, String xdg, String home, String folder) {
         String n = os.toLowerCase(Locale.ROOT);
         if (n.contains("win")) {
             String base = appData != null && !appData.isEmpty() ? appData : new File(home, "AppData/Roaming").getPath();
-            return new File(new File(base, "HotAtticGames"), "Upwardly");
+            return new File(new File(base, "HotAtticGames"), folder);
         }
-        if (n.contains("mac")) return new File(home, "Library/Application Support/HotAtticGames/Upwardly");
+        if (n.contains("mac")) return new File(home, "Library/Application Support/HotAtticGames/" + folder);
         String base = xdg != null && !xdg.isEmpty() ? xdg : new File(home, ".local/share").getPath();
-        return new File(new File(base, "HotAtticGames"), "Upwardly");
+        return new File(new File(base, "HotAtticGames"), folder);
     }
 }

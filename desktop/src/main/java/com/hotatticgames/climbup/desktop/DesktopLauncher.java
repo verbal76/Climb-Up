@@ -15,6 +15,7 @@ public final class DesktopLauncher {
     static float exitAfter;
 
     public static void main(String[] args) {
+        com.hotatticgames.climbup.Edition.scrubLaunchOptions();          // the demo: before anything reads a launch option (docs/DEMO.md)
         for (String a : args) {
             if (a.equals("--smoke")) { System.exit(Smoke.run()); return; }
             if (a.startsWith("--exit-after=")) { try { exitAfter = Float.parseFloat(a.substring(13)); } catch (NumberFormatException ignored) { } }

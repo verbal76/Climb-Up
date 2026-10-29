@@ -43,7 +43,7 @@ public final class DemoTitleScreen extends ScreenAdapter {
         backdrop.render(dt);
         Ui ui = g.ui; ui.begin();
         float W = ui.w(), H = ui.h(), time = backdrop.time();
-        String t1 = g.platform.title();
+        String t1 = g.demoFlow != null ? g.demoFlow.recipe.promoTitle : "UPWARDLY";
         float px = Math.min(15f, (W - 80f) / Math.max(1, t1.length() * 6f));
         float tx = W / 2 - ui.font.width(t1, px) / 2, ty = H - 190 + (float) Math.sin(time * 1.6f) * 4f;
         ui.font.drawShadow(ui.batch, t1, tx + 6, ty - 8, px, new Color(0.35f, 0.12f, 0.02f, 1f), new Color(0, 0, 0, 0.6f));

@@ -24,6 +24,7 @@ public final class DemoRecords {
     public boolean runClean = true;                        // every stage of this sequence so far was unassisted and on the recipe's courses
     public long bestRunTicks; public String bestRunFingerprint = "";
     public int finishes;                                   // whole sequences finished
+    public boolean[] cleared = new boolean[3];             // the stages of this sequence already finished (stage can never be past the first that is not)
 
     /** What a stage finish did to the records. */
     public static final class Result { public boolean newBest, assisted, firstOnCourse; public long previous; }
@@ -37,7 +38,8 @@ public final class DemoRecords {
         if (!assisted && (!comparable || ticks < b.ticks)) { b.ticks = ticks; b.seed = seed; b.fingerprint = fingerprint; r.newBest = true; }
         if (assisted) runClean = false;
         runTicks += ticks;
-        stage = difficulty + 1;
+        cleared[difficulty] = true;
+        stage = Math.max(stage, difficulty + 1);
         return r;
     }
 
@@ -50,10 +52,10 @@ public final class DemoRecords {
     }
 
     /** PLAY DEMO AGAIN (or a first start): the sequence begins again at NORMAL. Bests stay. */
-    public void restartSequence() { stage = 0; runTicks = 0; runClean = true; }
+    public void restartSequence() { stage = 0; runTicks = 0; runClean = true; cleared = new boolean[3]; }
 
     /** ERASE DEMO DATA: everything back to a first start. */
-    public void reset() { stage = 0; best = new Best[]{new Best(), new Best(), new Best()}; runTicks = 0; runClean = true; bestRunTicks = 0; bestRunFingerprint = ""; finishes = 0; }
+    public void reset() { cleared = new boolean[3]; stage = 0; best = new Best[]{new Best(), new Best(), new Best()}; runTicks = 0; runClean = true; bestRunTicks = 0; bestRunFingerprint = ""; finishes = 0; }
 
     /** A best that belongs to this course and generator (0 when there is none, or it was set on another). */
     public long bestFor(int difficulty, long seed, String fingerprint) {
@@ -82,7 +84,9 @@ public final class DemoRecords {
         if (r.best == null || r.best.length != 3) throw new IllegalArgumentException("demo records bests");
         for (int i = 0; i < 3; i++) { if (r.best[i] == null) r.best[i] = new Best(); if (r.best[i].fingerprint == null) r.best[i].fingerprint = ""; if (r.best[i].ticks < 0) r.best[i].ticks = 0; }
         if (r.bestRunFingerprint == null) r.bestRunFingerprint = "";
-        r.stage = Math.max(0, Math.min(3, r.stage));
+        if (r.cleared == null || r.cleared.length != 3) r.cleared = new boolean[3];
+        int first = 0; while (first < 3 && r.cleared[first]) first++;
+        r.stage = Math.max(0, Math.min(first, Math.min(3, r.stage)));          // a stage is only reached by clearing the ones before it (an edited file cannot skip ahead)
         return r;
     }
 

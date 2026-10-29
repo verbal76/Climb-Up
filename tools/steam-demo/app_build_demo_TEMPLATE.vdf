@@ -1,0 +1,15 @@
+"AppBuild"
+{
+	// TEMPLATE ONLY (docs/DEMO.md). The Upwardly DEMO gets its own Steam Demo App ID and depots from Steamworks; the owner fills them in.
+	// Never the full game's App ID (5427130) or depots. Nothing in this repository uploads to Steam.
+	"AppID" "REPLACE_WITH_DEMO_APP_ID"
+	"Desc" "Upwardly Demo (REPLACE_WITH_DEMO_BUILD)"
+	"ContentRoot" "..\content\"
+	"BuildOutput" "..\output\"
+	"SetLive" ""     // empty: never auto-publish to a branch; set a branch by hand after review
+	"Depots"
+	{
+		"REPLACE_WITH_DEMO_WINDOWS_DEPOT_ID" "depot_build_demo_windows_TEMPLATE.vdf"
+		"REPLACE_WITH_DEMO_LINUX_DEPOT_ID" "depot_build_demo_linux_TEMPLATE.vdf"
+	}
+}

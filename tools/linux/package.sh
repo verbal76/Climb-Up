@@ -10,6 +10,10 @@
 # Nothing here talks to Steam or GitHub Releases.
 set -euo pipefail
 BUILD_NUMBER="${1:-0}"
+# CLIMB_EDITION=demo builds "Upwardly Demo" (docs/DEMO.md): its own app name, save folder and package names; the full game is unchanged.
+EDITION="${CLIMB_EDITION:-full}"
+if [ "$EDITION" = "demo" ]; then NAME="Upwardly Demo"; TARNAME="Upwardly-Demo-Linux.tar.gz"; else NAME="Upwardly"; TARNAME="Upwardly-Linux.tar.gz"; fi
+EXTRA_GRADLE=("-Pclimb.edition=$EDITION" "-Pclimb.demoRevision=${CLIMB_DEMO_REVISION:-0}")
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
 OUT="$ROOT/build/linux"
@@ -18,47 +22,48 @@ mkdir -p "$OUT"
 VERSION="$(grep -oP "appVersionName = '\K[^']+" build.gradle)"
 APPVER="${VERSION}.${BUILD_NUMBER}"
 JP="${JAVA_HOME:-}/bin/jpackage"; [ -x "$JP" ] || JP="$(command -v jpackage)"
-echo "Upwardly $VERSION build $BUILD_NUMBER (linux x86-64) via $JP"
+echo "$NAME $VERSION build $BUILD_NUMBER (linux x86-64) via $JP"
 
 # 1. the jar (Linux natives only)
-./gradlew :desktop:linuxJar "-PbuildNumber=${BUILD_NUMBER}" --no-daemon
+./gradlew :desktop:linuxJar "-PbuildNumber=${BUILD_NUMBER}" "${EXTRA_GRADLE[@]}" --no-daemon
 test -f "$JARDIR/upwardly.jar" || { echo "linuxJar missing"; exit 1; }
 
 # 2. jpackage native app-image with a jlink'd runtime (same module set as the Windows build; jdk.crypto.ec for the pinned EC key parse)
 DIST="$OUT/dist"; rm -rf "$DIST"; mkdir -p "$DIST"
 ICON=""; [ -f "$ROOT/docs/play_store_icon_512.png" ] && ICON="--icon $ROOT/docs/play_store_icon_512.png"
-"$JP" --type app-image --name Upwardly --app-version "$APPVER" --vendor 'Hot Attic Games' \
+"$JP" --type app-image --name "$NAME" --app-version "$APPVER" --vendor 'Hot Attic Games' \
   --description 'Upwardly - a tower that does not exist, a climb that does.' --copyright 'Hot Attic Games' \
   $ICON --input "$JARDIR" --main-jar upwardly.jar --main-class com.hotatticgames.climbup.desktop.DesktopLauncher \
   --add-modules 'java.base,java.desktop,java.logging,java.management,java.naming,java.xml,jdk.unsupported,jdk.crypto.ec' \
   --java-options '-Dfile.encoding=UTF-8' --java-options '-Xms256m' --java-options '-Xmx1024m' --java-options '-XX:+UseG1GC' \
   --dest "$DIST"
-APP="$DIST/Upwardly"
-test -x "$APP/bin/Upwardly" || { echo "launcher missing"; exit 1; }
+APP="$DIST/$NAME"
+test -x "$APP/bin/$NAME" || { echo "launcher missing"; exit 1; }
 
 # 3. assets beside the jar (the launcher finds <jar-dir>/assets); drop the OTA key material (this build never goes online)
 cp -r "$ROOT/assets" "$APP/lib/app/assets"
 rm -rf "$APP/lib/app/assets/ota"
 mkdir -p "$APP/lib/app/licenses"
 cp "$ROOT/ASSETS.md" "$APP/lib/app/licenses/ASSETS.md" 2>/dev/null || true
-chmod +x "$APP/bin/Upwardly"
+chmod +x "$APP/bin/$NAME"
 
 # 4. identification + checksums
 SHA="$(git rev-parse HEAD)"
 cat > "$APP/BUILD_INFO.txt" <<EOF
-Upwardly (Linux x86-64)
+$NAME (Linux x86-64)
+edition: $EDITION
 version: $VERSION
 app version: $APPVER
 source sha: $SHA
 built: $(date -u +%Y-%m-%dT%H:%M:%SZ)
-launch executable: bin/Upwardly
+launch executable: bin/$NAME
 bundled runtime: $(cat "$APP/lib/runtime/release" 2>/dev/null | head -1)
 EOF
 ( cd "$APP" && find . -type f | sort | while read -r f; do printf '%s  %s\n' "$(sha256sum "$f" | cut -d' ' -f1)" "${f#./}"; done ) > "$OUT/SHA256SUMS.txt"
 
 # 5. tar.gz (preserve exec bits)
-TAR="$OUT/Upwardly-Linux.tar.gz"; rm -f "$TAR"
-tar -C "$DIST" -czf "$TAR" Upwardly
+TAR="$OUT/$TARNAME"; rm -f "$TAR"
+tar -C "$DIST" -czf "$TAR" "$NAME"
 printf '%s  %s\n' "$(sha256sum "$TAR" | cut -d' ' -f1)" "$(basename "$TAR")" >> "$OUT/SHA256SUMS.txt"
 echo "app-image: $APP"
 echo "tar.gz:    $TAR  ($(du -h "$TAR" | cut -f1))"

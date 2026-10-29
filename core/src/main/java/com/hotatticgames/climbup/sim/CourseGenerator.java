@@ -1979,8 +1979,8 @@ public final class CourseGenerator {
         return r;
     }
     static final float SHORTCUT_MARGIN = 0.5f;
-    /** Diagnostics only: -Dclimb.c1Off=true restores the rule without C1 (for same-seed comparisons). */
-    static final boolean C1_OFF = Boolean.getBoolean("climb.c1Off");
+    /** Diagnostics only: -Dclimb.c1Off=true restores the rule without C1 (for same-seed comparisons). Not final only so a probe can switch it for one slice. */
+    static boolean C1_OFF = Boolean.getBoolean("climb.c1Off");
     static boolean reachShortcut(Course c, Element e, Element f) {
         if (C1_OFF || !e.isPlatform() || !f.isPlatform()) return false;
         if (Math.abs(e.s - f.s) < c.circumference * 0.5f) return false;

@@ -17,6 +17,7 @@ on:
       baseline_run: { description: 'Earlier Difficulty report run (any commit) to compare variety, ropes and difficulty against (its lanes-mode-* artifacts)', required: false, default: '' }
       consolidate_only: { description: '1 = rebuild only the report from include_run''s stored courses (no gate, no course jobs; for a consolidation that failed after its courses passed)', required: false, default: '0' }
       campaign: { description: 'Campaign charts tag (A = NORMAL+PUNISHER, B = NGH; owner 2026-10-27): A1-A9 or B1-B9 from this run''s courses', required: false, default: '' }
+      jvm_props: { description: 'Diagnostics only: extra JVM -D properties for the course jobs (e.g. -Dclimb.diagAvl=true -Dclimb.diagAvlFrom=1)', required: false, default: '' }
   push:
     branches: [build-74-determinism]
     paths:
@@ -73,7 +74,7 @@ jobs:
             cd core && java -Xmx3g -cp "build/classes/java/main:build/classes/java/test:$GDX" com.hotatticgames.climbup.sim.GenBench ../assets/data/tuning.json ${{ matrix.mode }} ${{ matrix.seed }} ${{ inputs.top || '5000' }} ../report/genbench-${{ matrix.mode }}-${{ matrix.seed }}.csv | tee ../report/genbench-${{ matrix.mode }}-${{ matrix.seed }}.txt
             exit 0
           fi
-          cd core && java -Xmx3g -cp "build/classes/java/main:build/classes/java/test:$GDX" com.hotatticgames.climbup.sim.LaneReport ../assets/data/tuning.json ${{ inputs.top || '5000' }} ${{ matrix.mode }} ${{ matrix.seed }} ../report
+          cd core && java ${{ inputs.jvm_props }} -Xmx3g -cp "build/classes/java/main:build/classes/java/test:$GDX" com.hotatticgames.climbup.sim.LaneReport ../assets/data/tuning.json ${{ inputs.top || '5000' }} ${{ matrix.mode }} ${{ matrix.seed }} ../report
       - uses: actions/upload-artifact@v4
         if: always()
         with:

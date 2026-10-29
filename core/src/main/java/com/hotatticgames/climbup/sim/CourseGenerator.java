@@ -915,6 +915,8 @@ public final class CourseGenerator {
     static final float[] AVL_NGH_WAITS = {0.7f, 1.6f, 2.9f};
     /** Investigation only (rules 18 avalanche frequency): when a spot is refused, also try the stretch without the avalanche. Off in the build. */
     static final boolean DIAG_AVL = Boolean.getBoolean("climb.diagAvl");
+    /** Diagnostics only (T3, owner 2026-10-29): decks before the trigger the avalanche proof starts from; 2 is the rules 18 rule and the default, so generation is unchanged unless set. */
+    static final int DIAG_AVL_FROM = Integer.getInteger("climb.diagAvlFrom", 2);
     /** This slice's avalanches still to place ({height above the frame, blocks, cooldown, seed, failed tries}), lowest first; the deck being tried (-1 none). */
     private final List<float[]> avlPending = new ArrayList<>();
     private int avlCand = -1;
@@ -956,10 +958,10 @@ public final class CourseGenerator {
         a.anchor = avlCand; a.len = pl[1]; a.period = pl[2]; a.phase = pl[3]; a.zone = d.zone; if (P == DifficultyProfile.NGH) a.skin = 1; else if (P == DifficultyProfile.PUNISHER) a.skin = 2;          // rules 18 rigid cubes (Sim.stepRigid): NGH each its own size, PUNISHER one size
         int hi = c.hazards.size(); c.hazards.add(a);
         long t0 = GenTrace.now();
-        int from = Math.max(0, avlCand - 2);          // (rules 18: from two decks before, so the climber arrives at full speed and the trigger leads them, as in a real climb)
+        int from = Math.max(0, avlCand - DIAG_AVL_FROM);          // (rules 18: from two decks before, so the climber arrives at full speed and the trigger leads them, as in a real climb)
         Autopilot.CHAIN_WHY.remove();
         boolean proven = insertionClear(a) && Autopilot.chainClean(c, T, from, avlCand + 4);          // (DC5: the checks every hazard gets)
-        if (proven && a.skin != 0) for (float w : AVL_NGH_WAITS) if (!Autopilot.chainClean(c, T, from, avlCand + 4, w)) { proven = false; GenTrace.tally("avalanche_arrival_unfair"); break; }      // PUNISHER and NGH: every arrival time
+        if (proven && a.skin != 0) for (float w : AVL_NGH_WAITS) if (!Autopilot.chainClean(c, T, from, avlCand + 4, w)) { proven = false; GenTrace.tally("avalanche_arrival_unfair"); GenTrace.tally("avlwhy_arrival_" + w + "s"); break; }          // (the delay that failed: diagnostics only)      // PUNISHER and NGH: every arrival time
         if (proven) {
             avlPending.remove(0); avlPlaced.add(new Object[]{hi, pl}); varAdd(hazFam(a), a.y, c.size()); encounters.add(new int[]{from, avlCand + 4, a.skin != 0 ? 1 : 0}); avlCand = -1;
             AVALANCHES_PLACED.incrementAndGet(); GenTrace.tally("avalanche_placed_b" + Math.round(pl[1]));

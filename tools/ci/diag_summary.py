@@ -374,6 +374,12 @@ def main():
         L.append("## Generator tallies per mode (sum over courses; refusal reasons, pendulums)"); L.append("")
         keys = sorted({k for m in order for k in tal[m] if re.match(r"(clash_|pad_corridor|deck_in_hazard|pendulum_|saw_window|continuity_|encounter_reproof|spikeblock_from_|haz_pick_|trap_pick_)", k)}, key=lambda k: -sum(tal[m][k] for m in order))
         table(L, ["tally", *order], [[k] + [tal[m][k] for m in order] for k in keys[:60]])
+        # avalanche refusal breakdown (owner T1, 2026-10-29): every avalanche tally, not cut to the top 60 (per mode, summed over courses)
+        akeys = sorted({k for m in order for k in tal[m] if re.match(r"(avalanche_|avlwhy_)", k) and k != "avalanche_proof_ms"}, key=lambda k: -sum(tal[m][k] for m in order))
+        if akeys:
+            L.append(""); L.append("## T1. Avalanche placement and refusal breakdown (sum over courses)"); L.append("")
+            L.append("avlwhy_<reason>_<live blocks>_link<n>: why the proof failed, how many blocks were live and the link from the proof start; avlwhy_arrival_<s>s: the arrival delay that failed; avlwhy_without_avalanche_clean/fails: the same stretch proven again with no avalanche (only with -Dclimb.diagAvl=true)"); L.append("")
+            table(L, ["tally", *order], [[k] + [tal[m][k] for m in order] for k in akeys])
     text = "\n".join(L)
     print(text)
     if out:

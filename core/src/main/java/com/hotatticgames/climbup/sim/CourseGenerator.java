@@ -3192,10 +3192,12 @@ public final class CourseGenerator {
                 break;
             }
             case RAMP: {
-                // a walkway up to a block that is taller than a jump; from the second world it may crumble, shake you about, or spin like a record (Build 72)
+                // a walkway up to a block that is taller than a jump; from the second world it may crumble, shake you about, or run downhill as a belt
+                // (rules 19, owner decision 2026-10-29: no more spinning ramps, skin 3; the other four share its draws equally. Sim and the renderer still
+                // play skin 3 so earlier saves and replays are unchanged)
                 float sc = r(1.3f, 1.75f), L = 2.2f * sc, slope = RAMP_SLOPE, rise = slope * L;
                 int skin = 0;
-                if (z >= 1) { int roll = rnd.nextInt(10); skin = roll < 2 ? 0 : roll < 4 ? 1 : roll < 6 ? 2 : roll < 8 ? 3 : 4; }
+                if (z >= 1) { int roll = rnd.nextInt(8); skin = roll < 2 ? 0 : roll < 4 ? 1 : roll < 6 ? 2 : 4; }
                 Element rp = plat(Element.Type.RAMP, eR + L / 2f, y0 + rise / 2f, L, z); rp.amp = slope; rp.skin = skin; rp.len = sc;      // Build 72 (owner): its foot meets the platform it starts from
                 if (skin == 3) { rp.period = r(2.2f, 3.0f); rp.phase = r(0f, 6.28f); }       // one turn every 2.2-3 s
                 if (skin == 4) rp.phase = lerp(1.3f, 3.4f, d) * r(0.95f, 1.05f);                // Build 72 (owner): a conveyor belt running downhill, faster the harder the climb (run speed is 5.6 m/s)

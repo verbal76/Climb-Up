@@ -290,7 +290,7 @@ public class T5Probe {
         Tuning t = mode == 0 ? T : T.hardCopy(mode); T = t;
         row("slice,link,from_type,to_type,hazards_near,planned,margin,window,steps,first_div_step,first_div_field,max_pos_dev,windowed_end,full_end,outcome_differs,clean_next_ok,natural_next_ok");
         CourseGenerator.Framed f = null;
-        int links = 0, diverged = 0, outcome = 0, natOnly = 0, cleanOnly = 0, planned = 0;
+        int links = 0, diverged = 0, outcome = 0, natOnly = 0, cleanOnly = 0, planned = 0, falseProof = 0;
         for (int k = 0; k < slices; k++) {
             f = CourseGenerator.chunkFramed(seed, k, f, t);
             Course c = f.c;
@@ -304,18 +304,21 @@ public class T5Probe {
                 planned++;
                 Sim w = base.copy(); w.humanHold = Autopilot.HUMAN_HOLD; w.deferRespawn = false; w.setWindow(a - 1, a + 6);
                 Sim fw = base.copy(); fw.humanHold = Autopilot.HUMAN_HOLD; fw.deferRespawn = false; fw.act = null; fw.hz = null; fw.winLo = 0; fw.winHi = Integer.MAX_VALUE;
-                Autopilot.Policy p = r.factory.create();
+                Autopilot.Policy p = Autopilot.make(r.factory);          // exactly the planner's move: its reflexes included (Autopilot.trialRun)
                 List<InputState> ins = new ArrayList<>(); List<float[]> snaps = new ArrayList<>();
-                int arrived = -1;
+                int sb0 = base.setbacks(), arrived = -1; boolean wOk = false, pulling = false;
                 for (int n = 0; n < 1200; n++) {
                     InputState in = new InputState(); p.act(w, in); w.step(in);
                     InputState cp = new InputState(); cp.moveX = in.moveX; cp.moveY = in.moveY; cp.jumpHeld = in.jumpHeld; cp.jumpPressed = in.jumpPressed; cp.swingPressed = in.swingPressed; ins.add(cp);
                     snaps.add(new float[]{w.s, w.y, w.vx, w.vy, w.mode.ordinal(), w.onElem, w.hits, w.falls, w.lastPad});
-                    if (w.mode == Sim.Mode.LEDGE || w.mode == Sim.Mode.PULLUP) p = PULL;
-                    if (w.mode == Sim.Mode.GROUND && w.onElem > a && w.onElem < c.routeSize()) { arrived = w.onElem; break; }
-                    if (w.falls != base.falls || w.hits != base.hits) break;
+                    if (w.setbacks() != sb0) break;
+                    if (pulling) { if (w.mode == Sim.Mode.GROUND) { wOk = w.onElem > a; arrived = w.onElem; break; } if (w.mode != Sim.Mode.LEDGE && w.mode != Sim.Mode.PULLUP) break; continue; }
+                    if (Autopilot.succeeded(w, a)) {
+                        if (w.mode == Sim.Mode.LEDGE || w.mode == Sim.Mode.PULLUP) { pulling = true; p = PULL; continue; }          // (Autopilot.finishArrival: the pull-up is part of the move)
+                        wOk = true; arrived = w.onElem >= 0 ? w.onElem : w.lastPad; break;
+                    }
                 }
-                int div = -1; String field = ""; float maxDev = 0f;
+                int div = -1; String field = ""; float maxDev = 0f; boolean fOk = false;
                 for (int i = 0; i < ins.size(); i++) {
                     fw.step(ins.get(i));
                     float[] sn = snaps.get(i);
@@ -323,21 +326,21 @@ public class T5Probe {
                     if (fd != null && div < 0) { div = i; field = fd; }
                     maxDev = Math.max(maxDev, Math.abs(c.dsWrap(fw.s, sn[0])) + Math.abs(fw.y - sn[1]));
                 }
-                String we = end(w), fe = end(fw);
-                boolean od = !we.equals(fe);
+                if (fw.setbacks() == sb0) fOk = wOk && (fw.mode == w.mode && fw.onElem == w.onElem || Autopilot.succeeded(fw, a));
+                String we = (wOk ? "OK " : "FAIL ") + end(w), fe = (fOk ? "OK " : "FAIL ") + end(fw);
+                boolean od = wOk != fOk;          // the gameplay outcome differs: a proof the full world does not bear out, or the reverse
                 if (div >= 0) diverged++; if (od) outcome++;
-                // natural arrival: the next link planned from where this move really arrives (hazards in their phase), and from a clean start there
+                if (wOk && !fOk) falseProof++;
                 String cn = "", nn = "";
-                if (arrived >= 0 && c.nextRoute(arrived) > arrived && c.nextRoute(arrived) < c.routeSize()) {
+                if (wOk && arrived >= 0 && c.nextRoute(arrived) > arrived && c.nextRoute(arrived) < c.routeSize()) {
                     boolean clean = Autopilot.plan(Sim.startOn(c, t, arrived), arrived, false).ok;
-                    Sim nat = w.copy();
-                    boolean natural = Autopilot.plan(nat, arrived, false).ok;
+                    boolean natural = Autopilot.plan(w.copy(), arrived, false).ok;
                     cn = "" + clean; nn = "" + natural;
                     if (clean && !natural) cleanOnly++; if (natural && !clean) natOnly++;
                 }
                 row(head + String.format(Locale.ROOT, ",%d,%d,%s,%.4f,%s,%s,%b,%s,%s", ins.size(), div, field, maxDev, we, fe, od, cn, nn));
             }
-            System.out.printf(Locale.ROOT, "PARITY mode %d seed %d slice %d: %d links, %d planned, %d diverged (any field), %d outcome differs; next link clean-only %d, natural-only %d%n", mode, seed, k, links, planned, diverged, outcome, cleanOnly, natOnly);
+            System.out.printf(Locale.ROOT, "PARITY mode %d seed %d slice %d: %d links, %d planned, %d diverged (any field), %d outcome differs (%d windowed-ok/full-fail); next link clean-only %d, natural-only %d%n", mode, seed, k, links, planned, diverged, outcome, falseProof, cleanOnly, natOnly);
         }
     }
     static String diff(Sim f, float[] w) {

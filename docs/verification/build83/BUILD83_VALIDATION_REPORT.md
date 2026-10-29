@@ -6,7 +6,7 @@ Mode triples are NORMAL / PUNISHER / NGH. Lane totals are per course.
 
 | # | KPI | Key measurements (Build 82 → Build 83) | Result |
 |---|---|---|---|
-| 1 | Run identity and reproducibility | Every run records its commit, rules (18), fingerprint `3e795268…`, seeds, mode, tuning and CI run. The bundled seed-12 replay was re-recorded on this commit. Reproducing identical results is checked by the full CI, which is still running | NOT VERIFIED (identity recorded; reproducibility pending CI) |
+| 1 | Run identity and reproducibility | Every run records its commit, rules (18), fingerprint `3e795268…`, seeds, mode, tuning and CI run. The bundled seed-12 replay was re-recorded on this commit. The full CI run 40884943058 on `c8ef538` passed (core 521 tests, 0 failures, 3 existing skips; desktop 129 tests, 0 failures), including the generation fingerprint and the bundled seed-12 replay (finish step, clock, event and state hashes) | PASS |
 | 2 | Course completion and validation | 9/9 courses complete to castle 10. 626/626 slices proven. 0 generation failures, 0 geometry violations, 0 incomplete sections | PASS |
 | 3 | Terrain difficulty | Terrain lane 5,306 / 5,862 / 6,541 → 5,949 / 6,153 / 6,547 (+12% / +5% / 0%). It starts higher but grows less from castle 1 to 10: +22% / +34% / +20% → +13% / +11% / +10%. Movement variety went up (KPI 16) | FAIL (progression flattened) |
 | 4 | Hazard difficulty | Hazard lane 1,342 / 1,663 / 2,009 → 1,307 / 1,544 / 1,885 (−3% / −7% / −6%). PUNISHER hazards are flat from castle 1 to 10 (145 → 147). Hazard variety is up (entropy +5–8%) and spike-block density is down. Avalanches contribute less (KPI 11). Every hazard was avoided by the witness | FAIL (PUNISHER progression; less pressure in every mode) |
@@ -16,10 +16,10 @@ Mode triples are NORMAL / PUNISHER / NGH. Lane totals are per course.
 | 8 | Gameplay variety and repetition | Hazard entropy 2.70 / 2.74 / 2.63 → 2.84 / 2.90 / 2.85. Mechanic links +13 / +19 / +20 points. 0 variety flags against the 30-course baseline. "Difficulty rising while variety falls": none found. Unique mechanics per castle are 20.9 / 22.5 / 22.4. Spike blocks are still the top hazard and are mostly stand-ins for saws | PASS (WATCH: spike-block stand-ins, plain-deck share) |
 | 9 | Generator quality and efficiency | Tries per course down 20–35%, acceptance up, 0 exhausted attempts. **But the generator substitutes for what it can't place:** only 47% / 27% of planned avalanches (P / NGH) are kept; NGH creature-deck acceptance is 57% → 43% and trap acceptance 55% → 36%; refused threats fall back to crab and saw modules; spike blocks stand in for saws 3–6×; whole-slice discards doubled | FAIL |
 | 10 | Solver accuracy and fairness | A physics-consistent, hit-free witness through all 626 slices: 0 failed links, 0 unreachable sections, 0 setbacks. Planner-side refusals are 0.4–3% of attempts. (Modules the generator refused before any proof were never solver-tested) | PASS |
-| 11 | Avalanche performance | **Frequency 23.2 / 28.1 → 11.0 / 10.3 a course (P / NGH; −53% / −63%).** Blocks 8.8 / 10.4 per avalanche (target 8–10 / 9–12). About 19 / 22 ricochets per avalanche, 64 / 68 block knocks per course; 80% / 77% of blocks reach the traversal area, 25% / 27% near the climber; 0 witness hits (avoidable). NORMAL 0.3 a course, castles 9–10 only, as designed. Trigger timing, lead and cleanup are covered by unit tests in the pending CI | FAIL (frequency); PASS (physics, fairness) |
+| 11 | Avalanche performance | **Frequency 23.2 / 28.1 → 11.0 / 10.3 a course (P / NGH; −53% / −63%).** Blocks 8.8 / 10.4 per avalanche (target 8–10 / 9–12). About 19 / 22 ricochets per avalanche, 64 / 68 block knocks per course; 80% / 77% of blocks reach the traversal area, 25% / 27% near the climber; 0 witness hits (avoidable). NORMAL 0.3 a course, castles 9–10 only, as designed. Trigger timing, lead, cleanup and determinism unit tests pass in the full CI | FAIL (frequency); PASS (physics, fairness) |
 | 12 | Enforcer performance | Per course 12.0 / 20.9 → 12.3 / 20.7 (P / NGH); NORMAL 0 (prohibition holds). PUNISHER tiers Yellow 3.7, Orange 6.0, Red 2.7; NGH all Red (20.7). PUNISHER: 15.7 kick tries (2.7 hit), 4.0 swats (3.3 hit), 12.0 retreats, 0.3 falls. NGH: 45 kick tries (13.3 hit), 27 swats (22 hit), 15 retreats, 5 falls. Build 82 behaviour counts aren't in its consolidated summary | PASS (counts, tiers, NORMAL prohibition); NOT VERIFIED (behaviour against Build 82) |
 | 13 | Generation and runtime performance | Generation per course 221 / 260 / 302 s → 268 / 551 / 476 s (×1.2 / ×2.1 / ×1.6). The overnight commit was 1,304 / 1,530 s, so the speed-up removed 58–69%. Solver 10 / 16 / 24 → 12 / 24 / 30 s. Peak heap 180 / 209 / 187 → 179 / 183 / 194 MB. The likely expensive operation is the avalanche proofs (two decks back, four arrival times); it hasn't been profiled on CI | FAIL (generation time); PASS (memory) |
-| 14 | Determinism, saves and replays | Fingerprint refreshed; seed-12 replay re-recorded (5,002 m, 10 doors, finish step 383,438). The replay, determinism, save and recovery tests all run in the pending full CI | NOT VERIFIED (pending CI) |
+| 14 | Determinism, saves and replays | Fingerprint refreshed; seed-12 replay re-recorded (5,002 m, 10 doors, finish step 383,438). The full CI run 40884943058 on `c8ef538` passed (core 521 tests, 0 failures, 3 existing skips; desktop 129 tests, 0 failures): determinism, bundled replay, persistence, save migration and corrupt-save recovery tests are all green. The cross-platform replay comparison (determinism.yml: Linux, Windows, Android) was not run for this candidate | PASS (on the JVM); NOT VERIFIED (cross-platform) |
 | 15 | Release and platform integrity | No packages built: nothing was authorised, and none is needed for this evaluation | NOT VERIFIED |
 | 16 | Advanced movement utilization | Links with a mechanic 38% / 19% / 13% → 51% / 39% / 32%. The solver traversed a mechanic in 99.8% / 100% / 99.7% of 25 m windows (Build 82: 99.9 / 93.3 / 84.1%). Pads traversed per course 83 / 51 → 249 / 273. Every placed main-route mechanic was traversed. Plain decks are still 73 / 79 / 83% of take-offs | PASS (WATCH: plain-deck dominance) |
 
@@ -29,7 +29,7 @@ Mode triples are NORMAL / PUNISHER / NGH. Lane totals are per course.
    - KPIs 2 and 10 pass: every course completes and is proven solvable.
    - KPI 9 fails: the generator substitutes for avalanches and enemies it cannot place.
    - KPI 13 fails: generation is slower.
-   - KPIs 1 and 14 await the full CI, and KPI 15 was not run.
+   - KPIs 1 and 14 pass (full CI green); KPI 15 was not run.
 2. **Is it appropriately difficult?** No.
    - Terrain (3), hazards (4), enemies (5, NGH) and pacing (7) fail. Separation erodes beyond the 25% standard, the ramp is flatter, and NORMAL swings more.
    - Interaction (6) holds.
@@ -74,7 +74,7 @@ Mode triples are NORMAL / PUNISHER / NGH. Lane totals are per course.
   - FAIL: confirmed regression.
   - WATCH: concerning but not established.
   - NOT VERIFIED: the evidence isn't available.
-- **Full CI** (run 40884943058 on `c8ef538`) was **still running** when this was written. Its rows say so.
+- **Full CI** (run 40884943058 on `c8ef538`) **passed**: core 521 tests, 0 failures (3 existing skips); desktop 129 tests, 0 failures.
 
 ---
 
@@ -164,7 +164,7 @@ Values are per course unless stated; mode triples are NORMAL / PUNISHER / NGH. �
 | Slices proven solvable | all | 2,096 / 2,096 | **NOT RUN** | 626 / 626 | – | PASS |
 | Generation failures / unknown or unsolvable verdicts / integrity violations | 0 | 0 / 0 / 0 | 0 / – / 0 | 0 / 0 / 0 | – | PASS |
 | Witness setbacks (fair encounters, including avalanche hits) | 0 | 0 | NOT RUN | 0 | – | PASS |
-| Determinism, bundled replay, regression suite (full CI) | green | green (1123a32) | – | running | – | NOT VERIFIED (pending) |
+| Determinism, bundled replay, regression suite (full CI) | green | green (1123a32) | – | green: 521 + 129 tests, 0 failures | – | PASS |
 | Generation time, s per course (P / NGH) | Build 82 ref. | 260 / 302 (seed 7301: 153 / 355) | 1,304 / 1,530 | 551 / 476 | ×2.1 / ×1.6 | **FAIL** (much better than Initial: −58% / −69%) |
 | Solver time, s per course (N / P / NGH) | Build 82 ref. | 10 / 16 / 24 | NOT RUN | 12 / 24 / 30 | +20–50% | WATCH |
 | Peak heap, MB | Build 82 ref. | 180 / 209 / 187 | – / 190 / 182 | 179 / 183 / 194 | ±4% | PASS |
@@ -272,7 +272,7 @@ Castle by castle. Enemy pressure is the enemy lane (castle sum of adjusted 25 m 
 - **"Almost no terrain variety":** 73–83% of take-offs are still plain decks. The main cause is the generator's spiral-clearance check. It refuses 74–86% of pads, vertical movers and falling elevators before the solver ever sees them. Build 82 refused 96–99.5% of them, which is why Build 83 already shows more terrain mechanics.
 - **Generator or solver?** Mostly the generator. The solver's own refusals are 0.4–3% of attempts. Its share is the whole-slice discards and the avalanche proofs.
 
-**Determinism:** NOT VERIFIED until the full CI finishes. Focused determinism and avalanche tests passed locally before the freeze. Under the owner's instruction, local results are not counted.
+**Determinism:** PASS. The full CI on GitHub passed the determinism, fingerprint and bundled-replay tests. The cross-platform replay comparison (Linux, Windows, Android) was not run for this candidate.
 
 ---
 
@@ -296,7 +296,7 @@ The follow-up validation for D1–D3 is the Final campaign (run 40884899102). No
 
 **Final test results:**
 - Campaign: 9/9 courses complete and 626/626 slices proven solvable, with 0 failures, 0 integrity violations and 0 witness setbacks.
-- Full CI: **pending** (run 40884943058).
+- Full CI: **passed** (run 40884943058): core 521 tests, 0 failures, 3 existing skips; desktop 129 tests, 0 failures.
 
 **Passed:**
 - Reliability.
@@ -323,7 +323,7 @@ The follow-up validation for D1–D3 is the Final campaign (run 40884899102). No
 - Plain-deck dominance and spike blocks as stand-ins.
 - The spiral-clearance check refusing most vertical and moving modules.
 - Whole-slice discards doubled.
-- Determinism unconfirmed until CI finishes.
+- Cross-platform replay equality (Linux, Windows, Android) not run.
 - Real-device feel of avalanches with no warning not tested.
 
 **Recommendation: NO-GO for Build 83 as the release candidate.**
@@ -333,7 +333,7 @@ The follow-up validation for D1–D3 is the Final campaign (run 40884899102). No
 - A CONDITIONAL GO would need the frequency shortfall and the separation and ramp regressions resolved and re-validated. That is new development, for the owner to decide; it is not authorised here.
 
 **Not verified:**
-- Full CI and determinism (pending).
+- Cross-platform replay comparison.
 - Real-device play.
 - Whether the spiral-clearance check is stricter than necessary.
 - Whether the solver could play the modules refused before any proof.

@@ -62,7 +62,7 @@ public final class CourseGenerator {
      * generator (the crab rules of Build 63 changed what a seed produced, so runs from earlier builds carry version 0, "old rules", and are not compared).
      * {@code GeneratorFingerprintTest} fails when generation changes without a bump.
      */
-    public static final int RULES_VERSION = 16;     // 16 = (unreleased) owner repair authorisations 2026-10-28: saw fairness enforced at slice acceptance from the real arrival (SafeStart), solver recovery repositionings rehearsed with every hazard (the whole-slice witness), retries reset only encounters ahead of the checkpoint, a jump on the frame a deck vanishes is a plain jump; 15 = (unreleased) owner correction directive 2026-10-28 (consolidated audit DC1-DC10): physics corrections (pad bounce wins, no stale coyote or buffered leap across grabs/shoves, knock-off locks grabs and pushes from the contact, pull-ups let go of vanished or out-of-plane decks), proven, hit-free whole-slice witness with explicit verdicts, ledge catches proven through the pull-up, re-proofs from hazards' real reach and of encounters, insertion checks, route-aware creature decks; every mode's generation changes; 14 = (unreleased) owner directive 2026-10-27, NOT GONNA HAPPEN modernisation: NGH joins the progression controller with its own curve (850 to 1,210), history-aware variety (0.35), a looser 25 m guard (4x), RED Enforcers from castle 1 (2-3 a castle), avalanches of 5-7 blocks each with its own seeded size and physics (3-4 a castle, 15-45 s cooldown); NORMAL and PUNISHER generate exactly as in rules 13 (same fingerprint: a metadata-only version change for them); 13 = (unreleased) owner directive 2026-10-27: castle-to-castle progression controller (Progression: measured castles steer the next castle's terrain, hazard, enemy and interaction selection within fixed bounds; a 25 m spike guard), continuations at the castle's own demand first, NORMAL shares the history-aware variety at a lighter strength, PUNISHER's head start 1,250 m (castle 1 at NORMAL castles 3-4); NGH unchanged; 12 = (unreleased) owner amendments 2026-10-27: PUNISHER Enforcer robots (crabs, bees, skulls and blobs kept clear of them), spike-block avalanches (PUNISHER 2-3 a castle; NORMAL castles 9-10, two blocks), PUNISHER history-aware variety, NORMAL narrow rope-fallback correction; 11 = Build 82 (owner directive 2026-10-27, NORMAL seed 2 stopped at 881 m): while the spiral lags its pitch a refused pick falls back only to challenges that climb, and a slice ending must leave the next slice two ordinary steps (rises a hop or stair makes), climbing out first when it does not; 10 = (unreleased) Build 82 draft (owner release requirements 2026-10-26): spiral pitch measured above the revolution below, slice endings that leave the next slice room, relaxed attempts keep body clearance, geometry integrity enforced on every slice, challenges before ropes in the fallbacks; 9 = (unreleased) Build 82 draft (owner correction directive 2026-10-26): terrain difficulty rises over the whole climb with each mode's head start, NGH has its own profile, no enemies on spike-drop platforms (rare ones on intermediate safe platforms instead), the solver hops a skull at its real dash speed; 8 = Build 81 (owner decisions 2026-10-25): keys lie on a main-route platform (no rooms, branches or perches); 7 = Build 80 (owner directive 2026-10-24): no level gates, PUNISHER on its own curve, encounter-conflict rule, splits with reconnecting branches instead of dead ends; 6 = Build 79: skulls, blobs and crabs reach the platforms either side (crabs follow up to three, fall with crumbling decks), faster skull, no blob wobble, two to four crabs a deck, bee pairs, creatures on spike-drop rows, bridges that drop planks, flat-turning aimed cannons, an always-running balance conveyor, decoys kept off ropes, a slightly harder first world; 5 = Build 77: faster skull with loop+swoop, key detours proved with the skull at either end, one balance conveyor per section from Castle 6 to 10; 4 = Build 76: faster plank conveyor bridges; 3 = Build 72: flush ramps, faster crumbling, a wilder shaking ramp, the spinning ramp; 2 = Build 71: the bee homes in, skulls and green blobs, mortars out of step at random
+    public static final int RULES_VERSION = 18;     // 18 = EXPERIMENT (Build 83 development, owner avalanche overhaul 2026-10-29, not for release): avalanches drop PUNISHER 8-10 and NGH 9-12 rigid spiked cubes (corner impacts, spin, friction, block-on-block knocks), with no warning, a trigger that leads a moving climber, a third of the blocks aimed where they will be, proofs from two decks before the trigger and for every arrival delay; NORMAL keeps two blocks and its physics; 17 = EXPERIMENT (branch experiment/pendulums, owner directive 2026-10-28, not for release): spiked pendulums take 40% of the gap-saw slots; 16 = 16 = (unreleased) owner repair authorisations 2026-10-28: saw fairness enforced at slice acceptance from the real arrival (SafeStart), solver recovery repositionings rehearsed with every hazard (the whole-slice witness), retries reset only encounters ahead of the checkpoint, a jump on the frame a deck vanishes is a plain jump; 15 = (unreleased) owner correction directive 2026-10-28 (consolidated audit DC1-DC10): physics corrections (pad bounce wins, no stale coyote or buffered leap across grabs/shoves, knock-off locks grabs and pushes from the contact, pull-ups let go of vanished or out-of-plane decks), proven, hit-free whole-slice witness with explicit verdicts, ledge catches proven through the pull-up, re-proofs from hazards' real reach and of encounters, insertion checks, route-aware creature decks; every mode's generation changes; 14 = (unreleased) owner directive 2026-10-27, NOT GONNA HAPPEN modernisation: NGH joins the progression controller with its own curve (850 to 1,210), history-aware variety (0.35), a looser 25 m guard (4x), RED Enforcers from castle 1 (2-3 a castle), avalanches of 5-7 blocks each with its own seeded size and physics (3-4 a castle, 15-45 s cooldown); NORMAL and PUNISHER generate exactly as in rules 13 (same fingerprint: a metadata-only version change for them); 13 = (unreleased) owner directive 2026-10-27: castle-to-castle progression controller (Progression: measured castles steer the next castle's terrain, hazard, enemy and interaction selection within fixed bounds; a 25 m spike guard), continuations at the castle's own demand first, NORMAL shares the history-aware variety at a lighter strength, PUNISHER's head start 1,250 m (castle 1 at NORMAL castles 3-4); NGH unchanged; 12 = (unreleased) owner amendments 2026-10-27: PUNISHER Enforcer robots (crabs, bees, skulls and blobs kept clear of them), spike-block avalanches (PUNISHER 2-3 a castle; NORMAL castles 9-10, two blocks), PUNISHER history-aware variety, NORMAL narrow rope-fallback correction; 11 = Build 82 (owner directive 2026-10-27, NORMAL seed 2 stopped at 881 m): while the spiral lags its pitch a refused pick falls back only to challenges that climb, and a slice ending must leave the next slice two ordinary steps (rises a hop or stair makes), climbing out first when it does not; 10 = (unreleased) Build 82 draft (owner release requirements 2026-10-26): spiral pitch measured above the revolution below, slice endings that leave the next slice room, relaxed attempts keep body clearance, geometry integrity enforced on every slice, challenges before ropes in the fallbacks; 9 = (unreleased) Build 82 draft (owner correction directive 2026-10-26): terrain difficulty rises over the whole climb with each mode's head start, NGH has its own profile, no enemies on spike-drop platforms (rare ones on intermediate safe platforms instead), the solver hops a skull at its real dash speed; 8 = Build 81 (owner decisions 2026-10-25): keys lie on a main-route platform (no rooms, branches or perches); 7 = Build 80 (owner directive 2026-10-24): no level gates, PUNISHER on its own curve, encounter-conflict rule, splits with reconnecting branches instead of dead ends; 6 = Build 79: skulls, blobs and crabs reach the platforms either side (crabs follow up to three, fall with crumbling decks), faster skull, no blob wobble, two to four crabs a deck, bee pairs, creatures on spike-drop rows, bridges that drop planks, flat-turning aimed cannons, an always-running balance conveyor, decoys kept off ropes, a slightly harder first world; 5 = Build 77: faster skull with loop+swoop, key detours proved with the skull at either end, one balance conveyor per section from Castle 6 to 10; 4 = Build 76: faster plank conveyor bridges; 3 = Build 72: flush ramps, faster crumbling, a wilder shaking ramp, the spinning ramp; 2 = Build 71: the bee homes in, skulls and green blobs, mortars out of step at random
     /** The rules version a climb started on a given build used (0 = unknown or before the stamps: not comparable). */
     public static int rulesOfBuild(int build) { return build >= 82 ? 9 : build >= 81 ? 8 : build >= 80 ? 7 : build >= 79 ? 6 : build >= 77 ? 5 : build >= 76 ? 4 : build >= 72 ? 3 : build >= 71 ? 2 : build >= 63 ? 1 : 0; }
 
@@ -134,13 +134,17 @@ public final class CourseGenerator {
      */
     private static void sawsFair(Course out, Tuning t) {
         for (Element h : out.hazards) {
-            if (h.type != Element.Type.SAW_H || h.anchor < 0 || h.anchor >= out.routeSize() - 1) continue;
+            if ((h.type != Element.Type.SAW_H && h.type != Element.Type.PENDULUM) || h.anchor < 0 || h.anchor >= out.routeSize() - 1) continue;      // (pendulum experiment: a gap pendulum keeps the saw's half cycle)
             SafeStart.Result ss = SafeStart.evaluate(out, t, h.anchor);
             if (ss.ok && ss.window >= SAW_MIN_WINDOW) continue;
             GenTrace.tally("saw_window_refused");
             throw new IllegalStateException("saw fairness: saw on link " + h.anchor + " leaves too short a window from the real arrival (" + ss + ")");
         }
     }
+    /** Experiment diagnostics: names of buildHaz's and buildMid's hazard draws, for the observe-only tallies. */
+    static final String[] HAZ_ROLL_NAMES = {"vsaw", "gapsaw", "spikeblock", "bee", "cannon"}, MID_ROLL_NAMES = {"spikemat", "floorsaw", "spikeblock", "crusher", "crabs"};
+    /** Pendulum experiment (2026-10-28): the share of gap-saw slots that hang a spiked pendulum instead. */
+    static final float PENDULUM_SHARE = 0.4f;
     /** The share of a saw's cycle that must stay open to time the move past it (SawFairnessTest). */
     static final float SAW_MIN_WINDOW = 0.5f;
     private static void continuous(Course out, Tuning t) {
@@ -666,6 +670,9 @@ public final class CourseGenerator {
 
     // ---- observe-only generation trace (reports, 2026-10-26): reads sizes and refusal counters, never the random stream or any decision
     private String traceRole = "PICK", tracePicked;
+    /** Experiment diagnostics (owner directive 2026-10-28, priority 1): the module being tried while a report trace runs, and which check refused it. Observe-only. */
+    private String traceKind;
+    private void why(String s) { if (traceKind != null && GenTrace.GEN.get() != null) GenTrace.tally("why_" + traceKind + "_" + s); }
     private boolean tryModuleBelow(Kind k, float d, int zone) {
         if (capOn() && capKind(k) >= 0) { int h0 = c.hazards.size(); float y = c.get(c.size() - 1).y; boolean ok = tryModuleBelowT(k, d, zone); capCount(k, y, h0, ok); return ok; }
         return tryModuleBelowT(k, d, zone);
@@ -678,7 +685,9 @@ public final class CourseGenerator {
         m.e0 = c.size(); m.h0 = c.hazards.size();
         int[] f0 = {failLayer, failHaz, failPlan, failWindow, failConflict, failThreat};
         long t0 = GenTrace.now();
-        boolean ok = tryModuleBelow0(k, d, zone);
+        traceKind = k.name();
+        boolean ok;
+        try { ok = tryModuleBelow0(k, d, zone); } finally { traceKind = null; }
         m.nanos = GenTrace.now() - t0;
         int[] f1 = {failLayer, failHaz, failPlan, failWindow, failConflict, failThreat};
         for (int i = 0; i < 6; i++) m.fails[i] = f1[i] - f0[i];
@@ -863,10 +872,10 @@ public final class CourseGenerator {
 
     /**
      * The avalanches planned for section n (castle n-1 to castle n), fixed by the seed and the section like the keys: {height, blocks, cooldown s, seed}.
-     * PUNISHER: two, sometimes three (more often higher up), never more; 4 or 5 blocks (5 more often higher up). NORMAL: none before castle 9; castle 9
+     * PUNISHER: two, sometimes three (more often higher up), never more; 8-10 blocks (rules 18; 9-10 more often higher up). NORMAL: none before castle 9; castle 9
      * rarely one, castle 10 a little more often, none past castle 10; always 2 blocks. The cooldown (30-90 s of simulation time) only makes an
      * avalanche eligible; none is ever forced. Guidance, not a quota: a planned avalanche that cannot be proven safe is dropped. NOT GONNA HAPPEN (mode
-     * 3, rules 14, owner 2026-10-27): three, sometimes four (more often higher up), never more, from castle 1; 5-7 blocks; cooldown 15-45 s; its own
+     * 3, rules 14, owner 2026-10-27): three, sometimes four (more often higher up), never more, from castle 1; 9-12 blocks (rules 18); cooldown 15-45 s; its own
      * random stream, so the other modes' plans are untouched.
      */
     public static float[][] avalanchePlan(long seed, int n, float spacing, int mode) {
@@ -878,7 +887,7 @@ public final class CourseGenerator {
             float[][] out = new float[cnt][];
             for (int k = 0; k < cnt; k++) {
                 float a = lo + (hi - lo) * k / cnt, b = lo + (hi - lo) * (k + 1) / cnt, h = a + q.nextFloat() * (b - a);
-                out[k] = new float[]{h, 5 + q.nextInt(3), 15f + 30f * q.nextFloat(), q.nextFloat(), 0f};
+                out[k] = new float[]{h, 9 + q.nextInt(4), 15f + 30f * q.nextFloat(), q.nextFloat(), 0f};          // (rules 18: 9-12 blocks, owner 2026-10-29; 5-7 before)
             }
             return out;
         }
@@ -891,7 +900,8 @@ public final class CourseGenerator {
         float[][] out = new float[count][];
         for (int k = 0; k < count; k++) {
             float a = lo + (hi - lo) * k / count, b = lo + (hi - lo) * (k + 1) / count, h = a + r.nextFloat() * (b - a);
-            int nb = blocks > 0 ? blocks : 4 + (r.nextFloat() < Math.min(0.9f, 0.3f + 0.07f * (n - 1)) ? 1 : 0);
+            float u = blocks > 0 ? 0f : r.nextFloat(), pu = Math.min(0.9f, 0.3f + 0.07f * (n - 1));
+            int nb = blocks > 0 ? blocks : 8 + (u < pu ? 1 : 0) + (u < pu * 0.5f ? 1 : 0);          // (rules 18: 8-10, twice the 4-5 of rules 12-17, more often 9-10 higher up; the same draw)
             out[k] = new float[]{h, nb, 30f + 60f * r.nextFloat(), r.nextFloat(), 0f};
         }
         return out;
@@ -901,8 +911,10 @@ public final class CourseGenerator {
     public static final java.util.concurrent.atomic.AtomicInteger AVALANCHES_PLACED = new java.util.concurrent.atomic.AtomicInteger(), AVALANCHES_DROPPED = new java.util.concurrent.atomic.AtomicInteger();
     /** Trigger decks an avalanche is tried from before it is dropped. */
     private static final int AVL_TRIES = 4;
-    /** NOT GONNA HAPPEN round 1 correction: the extra arrival delays (s) an avalanche is also proven with (the climber waits on the deck before the trigger). */
+    /** NOT GONNA HAPPEN round 1 correction (PUNISHER too from rules 18): the extra arrival delays (s) an avalanche is also proven with (the climber waits where the proof starts). */
     static final float[] AVL_NGH_WAITS = {0.7f, 1.6f, 2.9f};
+    /** Investigation only (rules 18 avalanche frequency): when a spot is refused, also try the stretch without the avalanche. Off in the build. */
+    static final boolean DIAG_AVL = Boolean.getBoolean("climb.diagAvl");
     /** This slice's avalanches still to place ({height above the frame, blocks, cooldown, seed, failed tries}), lowest first; the deck being tried (-1 none). */
     private final List<float[]> avlPending = new ArrayList<>();
     private int avlCand = -1;
@@ -941,18 +953,22 @@ public final class CourseGenerator {
         if (!avlTriggerDeck(avlCand)) { avlCand = -1; GenTrace.tally("avalanche_trigger_taken"); return; }          // (DC5: something was anchored on it since it was chosen: choose again)
         float[] pl = avlPending.get(0);
         Element d = c.get(avlCand), a = new Element(Element.Type.AVALANCHE, d.s, d.y, d.w);
-        a.anchor = avlCand; a.len = pl[1]; a.period = pl[2]; a.phase = pl[3]; a.zone = d.zone; if (P == DifficultyProfile.NGH) a.skin = 1;          // NOT GONNA HAPPEN's blocks: each its own size and physics (Sim.stepChaos)
+        a.anchor = avlCand; a.len = pl[1]; a.period = pl[2]; a.phase = pl[3]; a.zone = d.zone; if (P == DifficultyProfile.NGH) a.skin = 1; else if (P == DifficultyProfile.PUNISHER) a.skin = 2;          // rules 18 rigid cubes (Sim.stepRigid): NGH each its own size, PUNISHER one size
         int hi = c.hazards.size(); c.hazards.add(a);
         long t0 = GenTrace.now();
-        boolean proven = insertionClear(a) && Autopilot.chainClean(c, T, avlCand - 1, avlCand + 4);          // (DC5: the checks every hazard gets)
-        if (proven && a.skin == 1) for (float w : AVL_NGH_WAITS) if (!Autopilot.chainClean(c, T, avlCand - 1, avlCand + 4, w)) { proven = false; GenTrace.tally("avalanche_arrival_unfair"); break; }      // NGH: every arrival time
+        int from = Math.max(0, avlCand - 2);          // (rules 18: from two decks before, so the climber arrives at full speed and the trigger leads them, as in a real climb)
+        Autopilot.CHAIN_WHY.remove();
+        boolean proven = insertionClear(a) && Autopilot.chainClean(c, T, from, avlCand + 4);          // (DC5: the checks every hazard gets)
+        if (proven && a.skin != 0) for (float w : AVL_NGH_WAITS) if (!Autopilot.chainClean(c, T, from, avlCand + 4, w)) { proven = false; GenTrace.tally("avalanche_arrival_unfair"); break; }      // PUNISHER and NGH: every arrival time
         if (proven) {
-            avlPending.remove(0); avlPlaced.add(new Object[]{hi, pl}); varAdd(hazFam(a), a.y, c.size()); encounters.add(new int[]{avlCand - 1, avlCand + 4, a.skin == 1 ? 1 : 0}); avlCand = -1;
+            avlPending.remove(0); avlPlaced.add(new Object[]{hi, pl}); varAdd(hazFam(a), a.y, c.size()); encounters.add(new int[]{from, avlCand + 4, a.skin != 0 ? 1 : 0}); avlCand = -1;
             AVALANCHES_PLACED.incrementAndGet(); GenTrace.tally("avalanche_placed_b" + Math.round(pl[1]));
             GenTrace.tally("avalanche_proof_ms", (int) ((GenTrace.now() - t0) / 1_000_000L));
             return;
         }
         c.hazards.remove(hi); GenTrace.tally("avalanche_unfair");
+        { String w = Autopilot.CHAIN_WHY.get(); GenTrace.tally("avlwhy_" + (w == null ? "insertion" : w)); Autopilot.CHAIN_WHY.remove();          // (diagnostics only: DIAG_AVL)
+          if (DIAG_AVL && w != null) GenTrace.tally("avlwhy_without_avalanche_" + (Autopilot.chainClean(c, T, from, avlCand + 4) ? "clean" : "fails")); }
         avlCand = -1;
         if (++pl[4] >= AVL_TRIES) { avlPending.remove(0); AVALANCHES_DROPPED.incrementAndGet(); GenTrace.tally("avalanche_dropped"); }
         else pl[0] = c.get(last).y;          // the next suitable deck from here on
@@ -1137,6 +1153,14 @@ public final class CourseGenerator {
         for (Kind k : Kind.values()) { int cl = kindClass(k); if (cl >= 0 && after[cl] > 0) w[k.ordinal()] = (float) (w[k.ordinal()] * before[cl] / after[cl]); }
     }
     /** A module's internal choice among {@code n} options of the given families, weighted by the memory (one random number). */
+    /** Experiment (2026-10-28): one of {@code allowed} rolls, weighted by the variety memory like {@link #varRoll} (even weights where the memory is off). */
+    private int redraw(int[] fams, int[] allowed, float y) {
+        float[] p = new float[allowed.length]; float sum = 0f;
+        for (int i = 0; i < allowed.length; i++) { p[i] = varPenalty(fams[allowed[i]], y); sum += p[i]; }
+        float x = rnd.nextFloat() * sum;
+        for (int i = 0; i < allowed.length; i++) { x -= p[i]; if (x <= 0f) return allowed[i]; }
+        return allowed[allowed.length - 1];
+    }
     private int varRoll(int[] fams, int n, float y) {
         float[] p = new float[n]; float sum = 0f;
         for (int i = 0; i < n; i++) { p[i] = varPenalty(fams[i], y); sum += p[i]; }
@@ -1861,13 +1885,40 @@ public final class CourseGenerator {
      * jumpVel^2 / 2g = 1.95 m and a ledge is caught up to handHeight + ledgeReachAbove = 1.3 m above them, 3.25 m in all (3.6 m with a skull's
      * launch at the start of a jump), so 4 m leaves a margin. Where their arcs come within 2.5 m the body clearance above (2.8 m standing room + 0.8 m deck
      * + 1.5 m) keeps them 5.1 m apart anyway. Validated with the planner itself (docs/probes/ShortcutProbe): no plain pair of revolutions reachable.
+     * Experiment (owner decision 2026-10-28, branch experiment/pendulums, rules 17): the 9.5 m applies where the LOWER platform launches or carries the
+     * climber, as {@link #forkLayersClash} already does. A launcher above a plain platform is no shortcut: the plain platform's 3.25-3.6 m reach falls short
+     * of it, and it throws the climber further up its own revolution; when the revolution above it is built, it is the lower one and keeps its 9.5 m.
+     * (Under "either platform", pads, elevators and falling elevators lost about 99% of their tries to plain platforms below them: NGH seed 7301 to 600 m.)
      */
     public static boolean layersClash(Course c, Element e, Element f) {
         if (Math.abs(e.s - f.s) < c.circumference * 0.5f) return false;     // same revolution: handled by route order
         if (Math.abs(c.dsWrap(e.s, f.s)) > arcHalf(e) + arcHalf(f) + 2.5f) return false;
         if (vLo(e) - 1.5f < vHi(f) && vHi(e) + 1.5f > vLo(f)) return true;
         if (!e.isPlatform() || !f.isPlatform()) return false;
-        return Math.abs(e.y - f.y) < (launches(e) || launches(f) ? 9.5f : PLAIN_LAYER_DY);   // no trampoline shortcuts between layers
+        float dy = Math.abs(e.y - f.y);
+        if (dy >= 9.5f) return false;
+        if (dy < PLAIN_LAYER_DY) return true;
+        Element lower = e.y < f.y ? e : f, upper = lower == e ? f : e;
+        if (launches(lower)) return true;                                   // no trampoline shortcuts between layers
+        return launches(upper) && liftsClimber(c, lower);                   // a launcher above a plain platform: only if that platform's reach is plain
+    }
+    /**
+     * Experiment (owner 2026-10-28): whether a plain platform's climber can rise past the plain 4 m reach, so that a launcher 4-9.5 m above it still
+     * needs the full spacing. From plain footing the most is a jump (1.94 m) plus a hazard knock-up of 6.9 m/s at its top (+0.70 m) plus the ledge reach
+     * (1.30 m): 3.94 m (a blob push 3.96, an Enforcer kick 3.86, a bee 3.61, a crab 3.82). Two things exceed it: a skull's launch (9.5 m/s) at the top
+     * of a jump (4.57 m; skulls also roam to the next decks, so two route platforms either side count), and riding a spike-drop slab up to 3.6 + 1.0 m
+     * and jumping from there. A blob's launch needs a seesaw and moving decks carry the climber; both already launch. A platform of the previous slice
+     * (not in this course, so its hazards are unknown here) keeps the full spacing.
+     */
+    static boolean liftsClimber(Course c, Element p) {
+        int idx = -1;
+        for (int i = 0; i < c.size(); i++) if (c.get(i) == p) { idx = i; break; }
+        if (idx < 0) return true;
+        for (Element h : c.hazards) {
+            if (h.type == Element.Type.SPIKE_DROP && h.anchor == idx) return true;
+            if (h.type == Element.Type.SKULL && h.anchor >= idx - 2 && h.anchor <= idx + 2) return true;
+        }
+        return false;
     }
     /**
      * The layer rule against the previous slice ({@link #ghostElems}). The relaxed attempts of a slice (see chunkIn) waive only its shortcut spacing
@@ -1882,7 +1933,7 @@ public final class CourseGenerator {
     }
     /** Shortcut spacing between plain fixed platforms of different revolutions (see {@link #layersClash}). */
     static final float PLAIN_LAYER_DY = 4f;
-    /** A platform that can throw the climber well above a jump, or carry them: these keep the full 9.5 m between revolutions. */
+    /** A platform that can throw the climber well above a jump, or carry them: these keep the full 9.5 m to the revolution above them. */
     static boolean launches(Element e) {
         switch (e.type) { case PAD: case SPRING: case SEESAW: case RAMP: case SWING: return true; default: return e.isMoving(); }
     }
@@ -2199,7 +2250,7 @@ public final class CourseGenerator {
         if (!geometryOk(n0, hz)) {
             rollbackTo(n0, h0);
             hazardTried += hz.isEmpty() ? 0 : 1;
-            crabWhy(hz, false, w0);
+            crabWhy(hz, false, w0); pendulumWhy(hz, false, w0);
             PRECHECK_REFUSED.incrementAndGet();
             return false;
         }
@@ -2256,7 +2307,7 @@ public final class CourseGenerator {
             boolean touched = false;
             for (Element h : hz) if (h.anchor == i || h.anchor + 1 == i || h.anchor == i + 1) touched = true;
             float need = i >= n0 - 1 ? minMargin : linkNeed(i);       // a link proven again keeps the margin it was proven with (a ledge grab 0.05), not this module's
-            boolean sawLink = false; for (Element h : c.hazards) if (h.type == Element.Type.SAW_H && h.anchor == i) sawLink = true;
+            boolean sawLink = false; for (Element h : c.hazards) if ((h.type == Element.Type.SAW_H || h.type == Element.Type.PENDULUM) && h.anchor == i) sawLink = true;
             if (!res.ok || res.margin() < Math.max(need, 0f)) { ok = false; failPlan++; if (trace.length() < 600) trace.append(String.format("[link %d %s->%s ok=%b %d/%d need %.3f]", i, c.get(i).type, c.get(i + 1).type, res.ok, res.successes, res.trials, minMargin)); }
             else if ((touched || sawLink) && res.window < (sawLink ? Math.max(0.5f, windowNeeded(c.get(i).y)) : windowNeeded(c.get(i).y))) { ok = false; failWindow++; }      // a saw leaves at least half its cycle to time the jump (SawFairnessTest), whatever else shares the link
             else if (Autopilot.hasMidHazard(c, i)) {       // a person never stands on the exact spot the planner starts from: the move must work from nearby too
@@ -2300,7 +2351,7 @@ public final class CourseGenerator {
         if (!ok) { while (c.size() > n0) c.elements.remove(c.size() - 1); while (c.hazards.size() > h0) c.hazards.remove(c.hazards.size() - 1); }
         else { for (int i = Math.max(0, n0 - 1); i < c.size() - 1; i++) setLinkNeed(i, minMargin); if (!hz.isEmpty()) hazardsPlaced += hz.size(); }
         hazardTried += hz.isEmpty() ? 0 : 1;
-        crabWhy(hz, ok, w0);
+        crabWhy(hz, ok, w0); pendulumWhy(hz, ok, w0);
         return ok;
     }
 
@@ -2313,20 +2364,28 @@ public final class CourseGenerator {
         for (int i = n0; i < c.size() && ok; i++) { ok = clearOfOtherLayers(i); if (!ok) clashAt = i; }
         if (!ok) failLayer++;
         if (!ok && GenTrace.GEN.get() != null) { Element e = c.get(clashAt), f = lastClash;          // (observe-only: what a layer refusal ran into, for reports)
-            GenTrace.tally("clash_" + (lastClashGhost ? "ghost_" : "slice_") + (layersBodiesClash(c, e, f) ? "body_" : "spacing_") + f.type + (f.anchor >= 0 ? "_side" : "")); }
+            GenTrace.tally("clash_" + (lastClashGhost ? "ghost_" : "slice_") + (layersBodiesClash(c, e, f) ? "body_" : "spacing_") + f.type + (f.anchor >= 0 ? "_side" : ""));
+            why("layer_" + (lastClashGhost ? "ghost_" : "slice_") + (layersBodiesClash(c, e, f) ? "body_" : "spacing_") + e.type + "_vs_" + f.type); }
         if (!ok) { boolean cr = false; for (Element h : hz) if (h.type == Element.Type.CRAB) cr = true;
             if (cr) { Element e = c.get(clashAt), f = lastClash; boolean body = vLo(e) - 1.5f < vHi(f) && vHi(e) + 1.5f > vLo(f);
                 CRABCLASH[(f.anchor >= 0 ? 2 : 0) + (body ? 0 : 1) + (lastClashGhost ? 4 : 0)]++; } }
         // DC5: a new deck never lies in the lethal box of a hazard of another revolution placed before it (an avalanche's fall, a cannon's lane):
         // the slice audit's I4 rule, applied here so the generator places something else instead of losing the attempt
-        for (int i = n0; i < c.size() && ok; i++) if (!GeometryIntegrity.elementClear(c, c.get(i), c.hazards.subList(0, Math.min(c.hazards.size(), h0Of(hz))), ghostHaz)) { ok = false; failHaz++; GenTrace.tally("deck_in_hazard_refused"); }
-        for (Element h : hz) { if (!ok) break; if (h.type == Element.Type.CLUB) continue; ok = hazardOk(h, ownerOf(h)) && GeometryIntegrity.hazardClear(c, h, ghostElems, ghostHaz); if (!ok) failHaz++; }          // (DC5: and the slice audit's own I4 rule, hazards of two revolutions included)
-        for (int i = n0; i < c.size() && ok; i++) if (!padCorridorClear(i)) { ok = false; failHaz++; GenTrace.tally("pad_corridor_refused"); }
-        if (ok && !sawsClearOfCreatures(hz)) { ok = false; failHaz++; }
-        if (ok && !protectedRowsOk(n0)) { ok = false; failHaz++; }
+        for (int i = n0; i < c.size() && ok; i++) if (!GeometryIntegrity.elementClear(c, c.get(i), c.hazards.subList(0, Math.min(c.hazards.size(), h0Of(hz))), ghostHaz)) { ok = false; failHaz++; GenTrace.tally("deck_in_hazard_refused"); why("hazard_deck_in_hazard_box"); }
+        for (Element h : hz) { if (!ok) break; if (h.type == Element.Type.CLUB) continue; ok = hazardOk(h, ownerOf(h)); if (!ok) why("hazard_box_" + h.type); else { ok = GeometryIntegrity.hazardClear(c, h, ghostElems, ghostHaz); if (!ok) why("hazard_other_layer_" + h.type); } if (!ok) failHaz++; }          // (DC5: and the slice audit's own I4 rule, hazards of two revolutions included)
+        for (int i = n0; i < c.size() && ok; i++) if (!padCorridorClear(i)) { ok = false; failHaz++; GenTrace.tally("pad_corridor_refused"); why("hazard_launch_corridor"); }
+        if (ok && !sawsClearOfCreatures(hz)) { ok = false; failHaz++; why("hazard_saw_creature"); }
+        if (ok && !protectedRowsOk(n0)) { ok = false; failHaz++; why("hazard_protected_rows"); }
         return ok;
     }
 
+    /** Pendulum experiment diagnostics (observe-only): each module carrying a pendulum, accepted or refused, and the first check that refused it. */
+    private void pendulumWhy(List<Element> hz, boolean ok, int[] w0) {
+        boolean pend = false; for (Element h : hz) if (h.type == Element.Type.PENDULUM) pend = true;
+        if (!pend) return;
+        GenTrace.tally(ok ? "pendulum_module_accepted" : "pendulum_module_refused_" + (failLayer != w0[0] ? "layer" : failHaz != w0[1] ? "hazard_placement"
+            : failPlan != w0[2] ? "plan" : failWindow != w0[3] ? "timing_window" : failConflict != w0[4] ? "conflict" : failThreat != w0[5] ? "threat" : "other"));
+    }
     private void crabWhy(List<Element> hz, boolean ok, int[] w0) {
         boolean crabs = false; for (Element h : hz) if (h.type == Element.Type.CRAB) crabs = true;
         if (crabs) {          // diagnostics only: why modules carrying crabs are refused
@@ -2488,6 +2547,7 @@ public final class CourseGenerator {
      */
     private boolean routeLinkStillOk(int q) {
         boolean gapSaw = false;
+        for (Element h : c.hazards) if (h.type == Element.Type.PENDULUM && h.anchor == q) gapSaw = true;          // (pendulum experiment: pendulums hang only in gaps)
         for (Element h : c.hazards) if (h.type == Element.Type.SAW_H && h.anchor == q) { Element p = c.get(q); if (!(p.w >= 7f && Math.abs(h.y - p.y - 0.62f) < 0.01f)) gapSaw = true; }
         // DC2 (owner correction 2026-10-27): the same proof quality as the link's first proof - its proven start (quiet moment, belt landing) and the
         // margin it was built with - not a bare "one move still works" from a standing start at time 0
@@ -2716,7 +2776,7 @@ public final class CourseGenerator {
         return es;
     }
 
-    /** One or two hazard-guarded gaps: a saw blade, a spiked pendulum-free blade, a cannon lane, or a spiked block you must clear. */
+    /** One or two hazard-guarded gaps: a saw blade, a spiked pendulum (pendulum experiment 2026-10-28), a cannon lane, or a spiked block you must clear. */
     private List<Element> buildHaz(Element last, float d, int z, int attempt, List<Element> hzOut) {
         float inten = intensity(last.y);
         float fh = hotNow ? Math.min(1f, fac(last.y)[Progression.H]) : fac(last.y)[Progression.H];          // rules 13: the castle's hazard factor lengthens or shortens the chain (1 for NGH)
@@ -2730,13 +2790,20 @@ public final class CourseGenerator {
             float uR = cur.s + cur.w / 2f, dy = r(-0.3f, 0.6f);
             boolean cannonOk = cur.w >= 3f && cur.type == Element.Type.STATIC;
             int roll = wantCreature && j == 0 ? 3 : P.adaptiveVariety() ? varRoll(HAZ_ROLL_FAM, cannonOk ? 5 : 4, cur.y) : rnd.nextInt(cannonOk ? 5 : 4);
-            if ((roll == 1 && prevRoll == 3) || (roll == 3 && prevRoll == 1)) roll = 2;      // Build 71: the bee now homes in and bumps you, so it never sits next to a saw you must time (it cut the saw's window to 0.2 s; SawFairnessTest)
-            if ((roll == 1 && prevRoll == 4) || (roll == 4 && prevRoll == 1)) roll = 2;      // Build 79: nor a cannon lane right before or after it (a cannon across the landing cut a saw's window from its whole cycle to 0.36; SawFairnessTest, seed 3)
-            if (roll == 3 && enfCalm()) roll = 2;          // PUNISHER: no bee next to an Enforcer encounter (the draw is kept, so NORMAL is unchanged)
+            GenTrace.tally("haz_pick_" + HAZ_ROLL_NAMES[roll]);          // (experiment diagnostics, observe-only: what was drawn, and below what turned it into a spiked block)
+            if ((roll == 1 && prevRoll == 3) || (roll == 3 && prevRoll == 1)) { GenTrace.tally("spikeblock_from_" + HAZ_ROLL_NAMES[roll] + "_beside_" + HAZ_ROLL_NAMES[prevRoll]); roll = 2; }      // Build 71: the bee now homes in and bumps you, so it never sits next to a saw you must time (it cut the saw's window to 0.2 s; SawFairnessTest)
+            if ((roll == 1 && prevRoll == 4) || (roll == 4 && prevRoll == 1)) { GenTrace.tally("spikeblock_from_" + HAZ_ROLL_NAMES[roll] + "_beside_" + HAZ_ROLL_NAMES[prevRoll]); roll = 2; }      // Build 79: nor a cannon lane right before or after it (a cannon across the landing cut a saw's window from its whole cycle to 0.36; SawFairnessTest, seed 3)
+            if (roll == 3 && enfCalm()) {          // PUNISHER: no bee next to an Enforcer encounter (the draw is kept, so NORMAL is unchanged)
+                // experiment (owner amendment 2026-10-28, hazard diversity): the rule bars a creature here, not a hazard, so draw again among the hazard
+                // families its neighbours allow (by the same variety memory); a spiked block only where none fits (it used to be a spiked block every time)
+                // (no gap saw: an Enforcer here can reach its decks, so sawsClearOfCreatures would turn it into a spiked block anyway; NGH seed 7301, 600 m)
+                roll = redraw(HAZ_ROLL_FAM, cannonOk && prevRoll != 1 ? new int[]{0, 4} : new int[]{0}, cur.y);          // (no cannon right after a gap saw)
+                GenTrace.tally("redraw_bee_enforcer_near_to_" + HAZ_ROLL_NAMES[roll]);
+            }
             prevRoll = roll;
-            if (roll == 1 && creatureReaches(j == 0 ? c.size() - 1 : base + j - 1)) roll = 2;      // Build 79: nor next to a skull, blob or crab that can roam onto its decks (a skull there cut the window to 0.36; SawFairnessTest)
-            if (roll == 1 && cur.w < SAW_TAKEOFF_W) roll = 2;      // rules 14: nor from a narrow foothold (NORMAL seed 3 slice 7 under rules 13: a gap saw from a 1.0 m ledge left no spot to wait for it; SawFairnessTest)
-            if (roll == 1 && j == 0 && deckHasHazard(c.size() - 1)) roll = 2;      // rules 14: nor from a deck that already carries its own trap (NORMAL seeds 2 and 4 under rules 13: a spike trap / spiked block on the take-off deck cut the saw's window to 0.40-0.46 of its cycle; SawFairnessTest)
+            if (roll == 1 && creatureReaches(j == 0 ? c.size() - 1 : base + j - 1)) { GenTrace.tally("spikeblock_from_saw_creature_reach"); roll = 2; }      // Build 79: nor next to a skull, blob or crab that can roam onto its decks (a skull there cut the window to 0.36; SawFairnessTest)
+            if (roll == 1 && cur.w < SAW_TAKEOFF_W) { GenTrace.tally("spikeblock_from_saw_narrow_takeoff"); roll = 2; }      // rules 14: nor from a narrow foothold (NORMAL seed 3 slice 7 under rules 13: a gap saw from a 1.0 m ledge left no spot to wait for it; SawFairnessTest)
+            if (roll == 1 && j == 0 && deckHasHazard(c.size() - 1)) { GenTrace.tally("spikeblock_from_saw_trap_takeoff"); roll = 2; }      // rules 14: nor from a deck that already carries its own trap (NORMAL seeds 2 and 4 under rules 13: a spike trap / spiked block on the take-off deck cut the saw's window to 0.40-0.46 of its cycle; SawFairnessTest)
             if (roll == 1) dy = Math.min(dy, 0.1f);      // a saw never guards an uphill jump: the blade would sit higher than the take-off
             float g = Math.min(3.05f, Math.max(2.3f, reach(Math.max(0f, dy)) * lerp(0.68f, 0.90f, d) * r(0.95f, 1f) * (1f - 0.03f * attempt)));
             if (roll == 1) g = Math.min(g, 2.6f);      // a saw hangs in the gap: keep the gap well short of a full-length jump so there is room to time the arc over the blade
@@ -2750,6 +2817,17 @@ public final class CourseGenerator {
             if (roll == 0) {
                 h = hz(Element.Type.SAW_V, mid + r(-0.1f, 0.1f), top + 0.35f, 0f, z);
                 h.amp = r(1.5f, 2.3f); h.period = r(2.6f, 3.6f) - 0.5f * inten;
+            } else if (roll == 1 && rnd.nextFloat() < PENDULUM_SHARE) {
+                // pendulum experiment (owner directive 2026-10-28): a spiked ball on a chain swings across the gap in place of a saw blade. It takes the saw's
+                // place with every one of the saw's guards (no uphill gap, wide take-off deck, no bee, cannon or roaming creature beside it, the gap kept
+                // short), and the same proofs: the link's timing window, the whole-slice hit-free witness and the hazard boxes. Its lowest point sits where
+                // the saw blade rides, so a normal jump arc clears it there; the ball rises at the ends of its swing and also covers the gap's edges,
+                // so the move is timed to the ball, not to a spot. Its sweep is the saw's own travel for this gap, so its lethal box is the saw's and never
+                // reaches over the decks either side (hazardOk); a short chain keeps the swing visible, shorter (and so faster) higher up, at its natural period.
+                h = hz(Element.Type.PENDULUM, mid, top + 0.65f + r(0f, 0.15f), 0f, z);
+                float sweep = Math.max(0.2f, Math.min(0.45f, g / 2f - 0.92f)) + Element.SAW_R - Element.BALL_R;
+                h.len = r(1.1f, 1.4f) - 0.15f * inten; h.amp = (float) StrictMath.asin(sweep / h.len); h.period = (float) (2.0 * StrictMath.PI * StrictMath.sqrt(h.len / 9.81));
+                GenTrace.tally("pendulum_offered");
             } else if (roll == 1) {
                 h = hz(Element.Type.SAW_H, mid, top + 0.62f + r(0f, 0.2f), 0f, z);      // blade top 1.17-1.37 m above the higher ledge: a normal jump arc clears it near its top
                 h.amp = Math.max(0.2f, Math.min(0.45f, g / 2f - 0.92f)); h.period = r(2.6f, 3.4f) - 0.4f * inten;
@@ -2786,8 +2864,12 @@ public final class CourseGenerator {
         float uR = last.s + last.w / 2f, dy = r(0f, 0.6f);
         float gapIn = reach(dy) * lerp(0.5f, 0.85f, d) * (1f - 0.03f * attempt);
         int roll = wantCreature ? 4 : P.adaptiveVariety() ? varRoll(MID_ROLL_FAM, 5, last.y) : rnd.nextInt(5);
-        if (roll == 4 && enfCalm()) roll = 2;          // PUNISHER: no crab deck next to an Enforcer encounter
-        if (roll == 1 && creatureReaches(c.size())) roll = 2;      // Build 79: no floor saw where a skull, blob or crab can roam onto it (see sawsClearOfCreatures)
+        GenTrace.tally("trap_pick_" + MID_ROLL_NAMES[roll]);          // (experiment diagnostics, observe-only)
+        if (roll == 4 && enfCalm()) {          // PUNISHER: no crab deck next to an Enforcer encounter
+            roll = redraw(MID_ROLL_FAM, new int[]{0, 1, 3}, last.y);          // experiment: a trap deck instead (spike mat, floor saw, crusher), by the variety memory
+            GenTrace.tally("redraw_crabs_enforcer_near_to_" + MID_ROLL_NAMES[roll]);
+        }
+        if (roll == 1 && creatureReaches(c.size())) { GenTrace.tally("spikeblock_from_floorsaw_creature_reach"); roll = 2; }      // Build 79: no floor saw where a skull, blob or crab can roam onto it (see sawsClearOfCreatures)
         int crabs = roll == 4 ? 2 + (rnd.nextFloat() < inten * 0.7f ? 1 : 0) + (rnd.nextFloat() < late(last.y) * 0.6f ? 1 : 0) + T.hard : 0;      // (PUNISHER one more, NEVER GONNA HAPPEN two)      // Build 79 (owner): never fewer than two crabs, more higher up
         float w = roll == 4 ? 9f + 2f * (crabs - 2) : 8f;
         Element p = plat(Element.Type.STATIC, uR + gapIn + w / 2f, last.y + dy, w, z);

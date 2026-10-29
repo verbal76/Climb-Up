@@ -1,0 +1,48 @@
+category,kpi,threshold,build82,build83_initial,build83_final,delta,result
+1. Enemy pressure,"Enemy-lane pressure, NORMAL",Build 82 ref.,558,not run,531,−4.8%,WATCH
+1. Enemy pressure,"Enemy-lane pressure, PUNISHER",Build 82 ref.,900,861 (same seeds as Build 82: −2.8%),865,−3.9%,WATCH (within seed variation)
+1. Enemy pressure,"Enemy-lane pressure, NGH",Build 82 ref.,"1,289 (seed 7301: 1,220)","1,049 (seed 7301: −14%)","1,096",−15.0%,FAIL (now on 3 seeds)
+1. Enemy pressure,NGH castle 9 / castle 10 enemy lane,Build 82 ref.,154 / 137,117 / 113,112 / 128,−27% / −7%,FAIL (castle 9) / WATCH (castle 10)
+1. Enemy pressure,Enemies placed (N / P / NGH),Build 82 ref.,371 / 597 / 738,– / 604 / 674,364 / 605 / 692,−2% / +1% / −6%,PASS / PASS / WATCH
+2. Enemy variety,PUNISHER crabs / skulls / bees / blobs,Build 82 ref.,303 / 121 / 89 / 72,345 / 112 / 74 / 60,334 / 105 / 88 / 65,+10% / −13% / −1% / −10%,WATCH (towards crabs)
+2. Enemy variety,NGH crabs / skulls / bees / blobs,Build 82 ref.,273 / 204 / 92 / 147,303 / 137 / 84 / 128 (1 seed),317 / 158 / 74 / 123,+16% / −23% / −20% / −16%,FAIL (the harder creatures are displaced by crabs)
+2. Enemy variety,Creature-deck acceptance (N / P / NGH),Build 82 ref.,62.5% / 55.2% / 56.7%,– / 48.2% / 38.1%,58.5% / 49.4% / 42.9%,−4 / −6 / −14 pts,WATCH / WATCH / FAIL
+2. Enemy variety,Trap-module acceptance (N / P / NGH),Build 82 ref.,62.3% / 57.9% / 54.6%,– / 42.4% / 32.7%,55.9% / 45.5% / 36.3%,−6 / −12 / −18 pts,WATCH / FAIL / FAIL
+2. Enemy variety,Enforcers (P / NGH),Build 82 ref.,12.0 / 20.9,12.7 / 22.0,12.3 / 20.7,+2% / −1%,PASS
+3. Difficulty progression,Mode ordering at every castle,must hold,yes,not measurable (one mode per run),yes,–,PASS
+3. Difficulty progression,"Separation erosion, PUNISHER over NORMAL",≤ 25%,29.7%,not measurable,88.4%,–,FAIL
+3. Difficulty progression,"Separation erosion, NGH over PUNISHER",≤ 25%,61.4%,not measurable,29.0%,improved,FAIL
+3. Difficulty progression,Ramp castle 1 → 10 (N / P / NGH),Build 82 ref.,+43% / +35% / +17%,– / +23% / +28%,+34% / +14% / +10%,flatter in every mode,FAIL
+3. Difficulty progression,Castle 10 total (N / P / NGH),Build 82 ref.,"869 / 1,002 / 1,108","– / 984 / 1,087","913 / 936 / 1,023",+5% / −7% / −8%,PASS / FAIL / FAIL
+3. Difficulty progression,"NGH castle 10 against its provisional 1,210 target","provisional, not absolute","1,108","1,087","1,023",further from it,WATCH
+3. Difficulty progression,Castles below the previous castle (N / P / NGH),Build 82 ref.,1 / 2 / 1,– / 2 / 1,2 / 3 / 3,more,WATCH
+3. Difficulty progression,"Castle-to-castle swing, sd of steps (N / P / NGH)",Build 82 ref.,25.7 / 23.6 / 18.1,– / 13.4 / 32.1,44.2 / 29.3 / 13.5,+72% / +24% / −25%,FAIL / WATCH / PASS
+4. Hazard variety,"Hazard-family entropy, bits (N / P / NGH)",Build 82 ref.,2.70 / 2.74 / 2.63,– / 2.89 / 2.82,2.84 / 2.90 / 2.85,+5–8%,PASS
+4. Hazard variety,Spike-block share of hazards,Build 82 ref.,28.5% / 32.8% / 35.7%,– / 30.0% / 31.5%,26.9% / 29.4% / 29.4%,−2 to −6 pts,PASS (still the top family: WATCH)
+4. Hazard variety,"Spike blocks per 25 m window, mean / max",Build 82 ref.,"1.33/6, 1.93/13, 2.68/13","– , 1.58/7, 2.06/8","1.21/7, 1.55/6, 1.95/8",lower,PASS
+4. Hazard variety,Windows with ≥2 spike blocks,Build 82 ref.,37.5% / 54.4% / 70.2%,– / 47.1% / 62.0%,34.7% / 46.6% / 58.2%,lower,PASS
+4. Hazard variety,"Spike blocks offered as stand-ins for unplaceable saws, against those chosen on purpose",none set,not measured in Build 82's tallies,– / 3.8× / 5.7×,2.9× / 4.4× / 6.1×,–,WATCH (owner observation)
+5. Advanced movement,Route links using a mechanic (N / P / NGH),Build 82 ref.,38.0% / 19.4% / 12.6%,– / 38.5% / 34.5%,51.3% / 38.7% / 32.1%,+13 / +19 / +20 pts,PASS
+5. Advanced movement,25 m windows where the solver's witness traversed a mechanic,Build 82 ref.,99.9% / 93.3% / 84.1%,NOT RUN (solver off),99.8% / 100% / 99.7%,up,PASS (solver-proven)
+5. Advanced movement,Witness-traversed pads per course (N / P / NGH),Build 82 ref.,83 / 51 / –,NOT RUN,249 / 273 / –,×3 / ×5,PASS
+5. Advanced movement,Plain-deck take-off share,Build 82 ref.,80.0% / 89.7% / 93.2%,– / 79.4% / 81.4%,72.9% / 79.4% / 82.6%,−7 / −10 / −11 pts,"PASS (still dominant: WATCH, owner observation)"
+5. Advanced movement,Terrain-lane growth castle 1 → 10,Build 82 ref.,+22% / +34% / +20%,– / +18% / +27%,+13% / +11% / +10%,flatter,FAIL
+6. Generator efficiency,Module tries per course (N / P / NGH),Build 82 ref.,"10,185 / 15,018 / 16,063","– / 10,551 / 13,869 (1 seed)","6,873 / 9,743 / 12,916",−33% / −35% / −20%,PASS
+6. Generator efficiency,"Modules accepted, share of tries",Build 82 ref.,27.3% / 19.3% / 18.5%,– / 25.2% / 19.1%,38.8% / 27.3% / 20.6%,up,PASS
+6. Generator efficiency,Discarded later by the whole-slice witness,Build 82 ref.,2.3% / 4.0% / 4.4%,– / 9.0% / 10.9%,5.4% / 7.6% / 9.5%,×2,WATCH
+6. Generator efficiency,"Refused by the spiral-clearance check (pads, vertical movers, falling elevators)",Build 82 ref.,96–99.5%,80–89%,74–86%,−13 to −25 pts,"PASS (improved; still the main loss of variety: WATCH, owner observation)"
+6. Generator efficiency,Generation failures,0,0,0,0,–,PASS
+6. Generator efficiency,Avalanches placed (P / NGH),about Build 82 (owner),23.2 / 28.1,9.7 / 7,11.0 / 10.3,−53% / −63%,FAIL (primary blocker)
+6. Generator efficiency,"Avalanches refused as unfair, per course (P / NGH)",Build 82 ref.,"1.7 / 4 (same seed, owner figures)",16.3 / 34,53 / 113 unfair verdicts; 12.3 / 28.3 dropped,–,FAIL
+7. Route quality,Branching: fork-module share of route links,Build 82 ref.,6.7% / 13.3% / 12.6%,– / 14.5% / 14.2%,7.2% / 14.3% / 14.1%,+0.5 to +1.5 pts,PASS
+7. Route quality,"Route travel per castle interval, m",Build 82 ref.,"2,968 / 3,285 / 3,529","– / 3,135 / 3,223","2,925 / 3,118 / 3,254",−1% / −5% / −8%,WATCH
+7. Route quality,Route links per castle interval,Build 82 ref.,554 / 627 / 667,– / 553 / 560,525 / 552 / 571,−5% / −12% / −14%,WATCH
+7. Route quality,Variety flags against the 30-course baseline,0,–,not compared,0,–,PASS
+7. Route quality,Repetition: longest same-signature run per castle,Build 82 ref.,not in Build 82's per-castle comparison (different seeds),–,8.6 / 11.8 / 11.6 links,–,NOT VERIFIED (against Build 82)
+8. Reliability,Slices proven solvable,all,"2,096 / 2,096",NOT RUN,626 / 626,–,PASS
+8. Reliability,Generation failures / unknown or unsolvable verdicts / integrity violations,0,0 / 0 / 0,0 / – / 0,0 / 0 / 0,–,PASS
+8. Reliability,"Witness setbacks (fair encounters, including avalanche hits)",0,0,NOT RUN,0,–,PASS
+8. Reliability,"Determinism, bundled replay, regression suite (full CI)",green,green (1123a32),–,running,–,NOT VERIFIED (pending)
+8. Reliability,"Generation time, s per course (P / NGH)",Build 82 ref.,260 / 302 (seed 7301: 153 / 355),"1,304 / 1,530",551 / 476,×2.1 / ×1.6,FAIL (much better than Initial: −58% / −69%)
+8. Reliability,"Solver time, s per course (N / P / NGH)",Build 82 ref.,10 / 16 / 24,NOT RUN,12 / 24 / 30,+20–50%,WATCH
+8. Reliability,"Peak heap, MB",Build 82 ref.,180 / 209 / 187,– / 190 / 182,179 / 183 / 194,±4%,PASS

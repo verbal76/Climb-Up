@@ -115,6 +115,7 @@ public final class LaneReport {
     /** PUNISHER Enforcers and spike-block avalanches per slice (owner 2026-10-27): placed (by tier / block count), refused and dropped by the generator,
      *  and what happened when the solver climbed the slice (Sim's report-only counters). Columns: see encounters.csv's header. */
     final List<String[]> encounterRows = new ArrayList<>();
+    final List<String[]> countRows = new ArrayList<>();          // experiment 2026-10-28: {slice, castle, tally, count} for every GenTrace tally (refusal reasons, pendulum offers)
     static final String ENCOUNTER_HEADER = "run,slice,y0,castle,enforcers_yellow,enforcers_orange,enforcers_red,enforcer_decks,enforcer_unfair,enforcer_dropped,avalanches,avalanche_blocks,avalanche_unfair,avalanche_dropped,"
         + "solved,enf_kick_tries,enf_kick_hits,enf_swat_tries,enf_swat_hits,enf_retreats,enf_falls,avl_fired,avl_skipped_cooldown,avl_blocks_released,avl_blocks_near_player,avl_blocks_in_traversal_area,avl_block_knocks,avl_hits,setbacks,enforcers_planned,avalanches_planned,avl_ricochets,avl_peak_active,avl_blocks_5,avl_blocks_6,avl_blocks_7,hot_window_guard,"
         + "enf_robots_alerted,enf_swats_considered,enf_swats_declined,enf_swats_risky,enf_land_own_deck,enf_land_neighbour_deck,enf_hops,enf_fall_edge,enf_fall_chase,enf_fall_no_deck";
@@ -247,6 +248,7 @@ public final class LaneReport {
                 encounterTelemetry(k, f, tr, rep);
                 { String[] r = new String[FALLBACK_KEYS.length + 3]; r[0] = "" + k; r[1] = f3(f.yBase + f.c.get(0).y); r[2] = "" + castleOf(f.yBase + f.c.get(0).y);
                   for (int i = 0; i < FALLBACK_KEYS.length; i++) r[i + 3] = "" + tr.counts.getOrDefault(FALLBACK_KEYS[i], 0); fallbackRows.add(r); }
+                for (Map.Entry<String, Integer> e : tr.counts.entrySet()) countRows.add(new String[]{"" + k, "" + castleOf(f.yBase + f.c.get(0).y), e.getKey(), "" + e.getValue()});          // experiment 2026-10-28: every generator tally, observe-only
                 forkTelemetry(k, f, tr);
                 safetyTelemetry(k, f, t);
                 v2.add(f.c, (float) f.yBase);
@@ -660,6 +662,7 @@ public final class LaneReport {
                     capacityColumns(pr, n, partial, P.progression() ? P.target(n, 1) - lane[n][1] : Double.NaN)));
             }
         }
+        try (PrintWriter w = pw(out, "counts.csv")) { w.println("run,slice,castle,tally,count"); for (String[] r : countRows) w.println(run + "," + String.join(",", r)); }
         try (PrintWriter w = pw(out, "encounters.csv")) { w.println(ENCOUNTER_HEADER); for (String[] r : encounterRows) w.println(String.join(",", r)); }
         try (PrintWriter w = pw(out, "castles.csv")) {
             w.println("run,mode,seed,castle,lane,windows,mean,median,min,max,sd,q1,q3,raw_sum,adj_sum,high_spike_windows,low_gap_windows,solver_links_failed,solver_links_unreached,solver_time_s,flags");

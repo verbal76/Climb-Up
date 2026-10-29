@@ -1282,3 +1282,53 @@ Source: docs/verification/CONSOLIDATED_AUDIT_REPORT.md (DC1-DC10) and docs/verif
 The owner accepted the measured erosion of the mode separation for Build 82: 29.7% PUNISHER/NORMAL and 61.4% NGH/PUNISHER, against the 25%
 standard. Next build: NGH castles 9-10 and the separation erosion, as a generation change with its own rules version, CI run and campaign. The
 playtest build is on hold at the owner's request.
+
+## Build 83 avalanche overhaul (owner directive 2026-10-29; rules 18, branch experiment/pendulums)
+
+Owner answers before any code: the trigger reads the climber's measured real speed (the stick stays direction-only, one run speed); NOT GONNA
+HAPPEN drops 9-12 blocks; the warning is the rumble only; the work stacks on the rules 17 experiment and shares its one final CI.
+
+- **Counts.** PUNISHER 8-10 blocks (rules 12-17: 4-5), NGH 9-12 (5-7), NORMAL 2 (unchanged). Avalanches per castle are unchanged: the plan
+  makes the same random draws, so only the block count moves. Element.AVL_MAX 7 -> 12; saves with 5 or 7 block slots are widened on load.
+- **Physics (PUNISHER and NGH, Sim.stepRigid).** Each block is a rigid cube (half side = collision radius) with mass and moment of inertia. A
+  contact acts at the touching corner or face; the impulse there (restitution 0.58-0.80 per block, Coulomb friction 0.45-0.75) changes velocity
+  and spin together. A corner landing tumbles; a spinning block throws itself off line on its next bounce. Deck sides act as walls. Blocks hit
+  each other mass-weighted with restitution 0.82 and friction that trades spin. Contacts under 0.9 m/s do not bounce, so blocks can come to
+  rest. Four sub-steps per step; speed capped at 22 m/s and 1,500 deg/s; StrictMath trigonometry. Gravity and drop height are unchanged. Of
+  the blocks, 35% are aimed: they land where the climber's own velocity carries them, 0.6-2.6 m ahead along the route. The rest come down over
+  the four decks ahead, thrown back down the route (70%) or up it. NORMAL keeps its gentler rules 12 physics: its two blocks were approved as
+  they are.
+- **Trigger (every mode, Sim.avlReached).** Standing on the trigger deck fires it, as before. Otherwise, from up to 12 m short of the deck's
+  near edge along the route (5 m below to 3 m above the deck), it fires once the climber's real speed toward the deck would bring them there
+  within the blocks' fall time (0.96 s from 11 m) plus 0.30 s. Flying over the deck fires it too, so a launch that skips the deck cannot dodge
+  it. A spot fires once (state 1); turning back cannot fire it again. Reaching it by prediction during the cooldown waits; landing on the deck
+  during the cooldown spends it, as before.
+- **No warning.** The 1.4 s wait, the flashing arrows and the "LOOK UP!" popup are gone. The first block breaks loose 0.05 s after the trigger,
+  the rest 0.07-0.16 s apart (NORMAL 0.35 s). The rumble (sound, shake if motion is allowed, vibration if enabled) plays as they break loose.
+  Its "[RUMBLE ABOVE]" caption shows only with captions on, like every caption (spec section 12). Impacts kick up grit, which reduced motion
+  turns off.
+- **Fairness proofs.** An avalanche is now proven from two decks before its trigger, so the proof climber arrives at full speed and the lead
+  fires as it would in a real climb. PUNISHER is now also proven for every extra arrival delay (0.7, 1.6, 2.9 s), as NGH already was. An
+  unprovable spot is tried elsewhere, then dropped, as before.
+- **Frequency correction (owner addendum 2026-10-29: restore about Build 82 frequency without weakening the avalanches).** Cause: the rigid
+  blocks never came to rest. Three to eight of them kept rocking on the route until their 12 s life ran out, so the fairness proof found no
+  clean move off the trigger deck ("no plan" with 6-9 blocks live). About a third of the refused spots also fail with no avalanche at all;
+  those stretches cannot be proven either way. Two narrow corrections were kept:
+  (1) Slow-contact settling (Element.AVL_SETTLE_V 1.2 m/s, AVL_SETTLE_W 200 deg/s, AVL_SETTLE_K 0.85). A block touching a deck below both
+  limits loses 15% of its motion per sub-step. The route clears in 5-7 s. Violence is unchanged where it matters: on PUNISHER seed 7301
+  there are 41-72 rebounds, 25-50 tumbles and 26-55 ricochets per avalanche.
+  (2) The planner waits for a live avalanche nearby the way a person would: 24 waits 0.45 s apart (Autopilot.AVL_WAIT_STEP), inside a trial
+  8 s longer than usual (AVL_TRIAL_EXTRA). The solver uses the same planner, so the proof claims nothing the solver cannot play.
+  Avalanches placed / dropped to 1,200 m (seed 7301, local, generation only, no solver):
+
+  | Mode | Before | After both corrections | Build 82 |
+  |---|---|---|---|
+  | PUNISHER | 3 / 8 | 9 / 2 | about 8 |
+  | NGH | not measured | 2 / 6 | about 10 |
+
+  NGH is not restored. A third change was tried and reverted because it changed nothing: letting the proof try the solver's other standing
+  spots on the trigger deck (counts identical to the run before). NGH's remaining refusals are "no plan" two decks past the trigger with 8-9
+  blocks still moving. Under the owner's nine-course directive no further correction is made. The shortfall is reported as a finding.
+- **Steam demo (for the record):** demo App ID 5526730 (Windows depot 5526731, Linux depot 5526732); full game App ID 5427130
+  (https://store.steampowered.com/app/5427130/). The demo is with Valve for review; the official Steam logo is still to be added. Branch
+  demo/build-82 and the submitted demo are not touched by this work.

@@ -1142,7 +1142,7 @@ public final class WorldRenderer implements Disposable {
     private void drawHazard(Element h, float t, float camS, float time, boolean done) {
         float dipY = h.ridesAnchor() || h.type == Element.Type.BLOB ? anchorDip(h) : 0f;
         float cs = h.type == Element.Type.CANNON ? h.s + h.dir * h.len * 0.5f : h.s;
-        float half = h.type == Element.Type.AIMED ? 17f : h.type == Element.Type.CANNON ? h.len * 0.5f + 1.5f + CANNON_OFFSCREEN : (h.type == Element.Type.SAW_H ? h.amp + 1.5f : h.type == Element.Type.SKULL || h.type == Element.Type.BLOB ? h.w * 0.5f + 1.5f : 2f);
+        float half = h.type == Element.Type.AIMED ? 17f : h.type == Element.Type.CANNON ? h.len * 0.5f + 1.5f + CANNON_OFFSCREEN : (h.type == Element.Type.SAW_H ? h.amp + 1.5f : h.type == Element.Type.PENDULUM ? h.len + 1.5f : h.type == Element.Type.SKULL || h.type == Element.Type.BLOB ? h.w * 0.5f + 1.5f : 2f);
         float cy = h.type == Element.Type.SAW_V ? h.y + h.amp * 0.5f : h.y;
         if (rsim != null && rhz >= 0 && rhz < rsim.mobState.length) {       // Build 79: creatures roam to the decks either side of their own: cull them where they are
             if (h.type == Element.Type.CRAB) { cs = rsim.crabAt(rhz, h); cy = rsim.crabY(rhz, h); half = 2f; }
@@ -1153,6 +1153,16 @@ public final class WorldRenderer implements Disposable {
             case SAW_H: {
                 drawBox(h.s, h.y - 0.05f - dipY, 0.25f, camS, h.amp * 2f + 1.2f, 0.1f, 0.14f, 0.3f, 0.32f, 0.4f);
                 drawPack("hazard_saw", h.sAt(t), h.yAt(t) - dipY, 0.25f, camS, PK, PK, PK, 0f, -time * 600f);
+                break;
+            }
+            case PENDULUM: {
+                // pendulum experiment (2026-10-28): a spiked ball on a chain from a beam above the gap; the ball is drawn exactly where the simulation's
+                // hit disc is (Element.sAt/yAt, BALL_R), the chain is drawn as short links from the pivot to the ball, all at the play plane's depth
+                float px = h.s, py = h.y + h.len, bx = h.sAt(t), by = h.yAt(t);
+                drawBox(px, py, 0.25f, camS, 1.6f, 0.18f, 0.5f, 0.14f, 0.3f, 0.32f);
+                drawBox(px, py - 0.1f, 0.25f, camS, 0.22f, 0.22f, 0.22f, 0.3f, 0.32f, 0.4f);
+                for (int k = 1; k <= 7; k++) { float f = k / 8f; drawBox(px + (bx - px) * f, py + (by - py) * f - 0.05f, 0.25f, camS, 0.09f, 0.09f, 0.09f, 0.42f, 0.42f, 0.48f); }
+                drawPack("spikyball", bx, by, 0.25f, camS, 0.6f, 0.6f, 0.6f, 0f, -bx * 160f);
                 break;
             }
             case SAW_V: {
@@ -1394,20 +1404,15 @@ public final class WorldRenderer implements Disposable {
                 break;
             }
             case AVALANCHE: {
-                // spike-block avalanche (owner 2026-10-27): during the warning a flashing down arrow (a shape, not only a colour) and falling grit mark
-                // each block's column; then the cube_spikes blocks fall, bounce and tumble, turning as the simulation spins them
+                // spike-block avalanche (owner 2026-10-27; rules 18, owner 2026-10-29: no warning arrows - the falling blocks are the warning): the
+                // cube_spikes blocks fall, bounce and tumble, turning as the simulation spins them, kicking up grit where they strike hard
                 if (rsim == null) break;
                 for (int b = 0; b < Element.AVL_MAX; b++) {
                     float[] k = rsim.avalancheBlock(rhz, h, b);
-                    if (k == null) continue;
-                    if (k[3] == 2f) {
-                        float ay = k[1] - Element.AVL_DROP + 3.2f, blink = (time * 6f) % 1f < 0.6f ? 1f : 0.35f;
-                        drawPack("arrow_up", k[0], ay + 1.4f, 0.3f, camS, 0.42f * blink, 0.42f, 0.42f, 0f, 180f);
-                        if (quality > 0 && MathUtils.randomBoolean(0.35f)) { ambCol.set(0.75f, 0.68f, 0.55f, 1f); particles.spawn(k[0] + MathUtils.random(-0.4f, 0.4f), ay + 4.5f, 0f, -3f, ambCol, MathUtils.random(0.05f, 0.1f), -6f, 0.7f); }
-                    } else {
-                        float sc = AVL_SCALE * k[4] / Element.AVL_R;          // (NOT GONNA HAPPEN blocks each have their own size: drawn at their collision radius)
-                        drawPack("cube_spikes", k[0], k[1], 0f, camS, sc, sc, sc, 25f, -k[2]);
-                    }
+                    if (k == null || k[3] != 1f) continue;
+                    float sc = AVL_SCALE * k[4] / Element.AVL_R;          // (NOT GONNA HAPPEN blocks each have their own size: drawn at their collision radius)
+                    drawPack("cube_spikes", k[0], k[1], 0f, camS, sc, sc, sc, 25f, k[2]);          // (rules 18: the simulation's angle is counter-clockwise as seen, +arc to the right: roll matches it, so a tumble turns the way it rolls)
+                    if (k[5] > 4f && quality > 0 && !reducedMotion) for (int q = 0; q < 3; q++) { ambCol.set(0.78f, 0.7f, 0.56f, 1f); particles.spawn(k[0] + MathUtils.random(-0.35f, 0.35f), k[1] - k[4], MathUtils.random(-0.2f, 0.2f), MathUtils.random(1f, 3f), ambCol, MathUtils.random(0.05f, 0.11f), -9f, 0.5f); }
                 }
                 break;
             }

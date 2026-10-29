@@ -143,17 +143,19 @@ public final class RunSnapshot {
         if (hKey == null || hState == null || hState.length != hKey.length * Sim.HAZ_STATE || !fin(slipCd)) return false;
         for (float f : hState) if (!fin(f)) return false;
         if (aKey == null || aState == null || !fin(lastAvlT)) return false;
-        if (aState.length == aKey.length * AVL_W_R13 && AVL_W_R13 != Sim.AVL_W) aState = widenAvl(aState, aKey.length);          // a save from before rules 14 (5 block slots)
+        if (aState.length == aKey.length * AVL_W_R13 && AVL_W_R13 != Sim.AVL_W) aState = widenAvl(aState, aKey.length, AVL_W_R13);          // a save from before rules 14 (5 block slots)
+        else if (aState.length == aKey.length * AVL_W_R17 && AVL_W_R17 != Sim.AVL_W) aState = widenAvl(aState, aKey.length, AVL_W_R17);     // rules 14-17 (7 block slots)
         if (aState.length != aKey.length * Sim.AVL_W) return false;
         for (float f : aState) if (!fin(f)) return false;
         return true;
     }
 
     /** Rules 12-13 kept 5 block slots per avalanche (2 + 5 x Sim.AVL_B floats); rules 14 keeps Element.AVL_MAX. The extra slots of an old save are empty. */
-    static final int AVL_W_R13 = 2 + 5 * Sim.AVL_B;
-    static float[] widenAvl(float[] old, int n) {
+    static final int AVL_W_R13 = 2 + 5 * Sim.AVL_B, AVL_W_R17 = 2 + 7 * Sim.AVL_B;          // (rules 14-17 kept 7 slots; rules 18 keeps 12)
+    static float[] widenAvl(float[] old, int n) { return widenAvl(old, n, AVL_W_R13); }
+    static float[] widenAvl(float[] old, int n, int oldW) {
         float[] w = new float[n * Sim.AVL_W];
-        for (int i = 0; i < n; i++) System.arraycopy(old, i * AVL_W_R13, w, i * Sim.AVL_W, AVL_W_R13);
+        for (int i = 0; i < n; i++) System.arraycopy(old, i * oldW, w, i * Sim.AVL_W, oldW);
         return w;
     }
 

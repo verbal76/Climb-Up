@@ -12,7 +12,7 @@ public final class Sim {
     public static final int EV_JUMP = 1, EV_LAND = 2, EV_BOUNCE = 4, EV_GRAB = 8, EV_PULL = 16, EV_CRUMBLE = 32,
             EV_CHECKPOINT = 64, EV_RESPAWN = 128, EV_WIN = 256, EV_ROPE = 512, EV_CABLE = 1024, EV_FALL_NEAR = 2048, EV_HIT = 4096, EV_KEY = 8192, EV_DOOR = 16384, EV_BLOCKED = 32768, EV_CLUB = 65536, EV_SWING = 131072, EV_SHOVE = 262144, EV_CRAB_OFF = 524288, EV_FINISH = 1048576, EV_AIM = 2097152,
             EV_DASH = 4194304, EV_BLOB_JUMP = 8388608, EV_BLOB_LAND = 16777216, EV_SQUASH = 33554432, EV_LAUNCH = 67108864, EV_SLIP = 134217728,
-            EV_ENF_ALERT = 268435456, EV_ENF_JUMP = 536870912, EV_ENF_HIT = 1073741824, EV_AVL_WARN = Integer.MIN_VALUE;          // (EV_AVL_WARN: an avalanche's warning starts - the sign bit, the last free one)   // (2026-10-27 PUNISHER Enforcer: it starts its chase; it jumps (a swat or its leap away))   // Build 71: a skull starts a dash, a blob leaps, a blob lands, you were squashed, a skull or a tipping bridge launched you
+            EV_ENF_ALERT = 268435456, EV_ENF_JUMP = 536870912, EV_ENF_HIT = 1073741824, EV_AVL_WARN = Integer.MIN_VALUE;          // (EV_AVL_WARN: an avalanche breaks loose - rules 18: no warning before it - the sign bit, the last free one)   // (2026-10-27 PUNISHER Enforcer: it starts its chase; it jumps (a swat or its leap away))   // Build 71: a skull starts a dash, a blob leaps, a blob lands, you were squashed, a skull or a tipping bridge launched you
 
     public final Course course;
     public final Tuning T;
@@ -257,7 +257,7 @@ public final class Sim {
         landSpeed = o.landSpeed; events = o.events; assistForgive = o.assistForgive; ps0 = o.ps0; py0 = o.py0; teleported = o.teleported;
         es0 = o.es0.clone(); ey0 = o.ey0.clone(); es1 = o.es1.clone(); ey1 = o.ey1.clone(); edy = o.edy.clone();
         crumbleT = o.crumbleT.clone(); gone = o.gone.clone(); goneT = o.goneT.clone(); padSquash = o.padSquash.clone(); tilt = o.tilt.clone(); onT = o.onT.clone();
-        clubTime = o.clubTime; swingT = o.swingT; shoveCd = o.shoveCd; crabS = o.crabS; crabY = o.crabY; keys = o.keys; keysFree = o.keysFree; featDone = o.featDone.clone(); aimAng = o.aimAng.clone(); aimFireT = o.aimFireT.clone(); aimArmed = o.aimArmed.clone(); crabPos = o.crabPos.clone(); crabVel = o.crabVel.clone(); crabMode = o.crabMode.clone(); crabStuck = o.crabStuck.clone(); crabCool = o.crabCool.clone(); crabTurn = o.crabTurn.clone(); crabSeen = o.crabSeen.clone(); mobState = o.mobState.clone(); mobT = o.mobT.clone(); mobS = o.mobS.clone(); mobY = o.mobY.clone(); mobDir = o.mobDir.clone(); mobTgt = o.mobTgt.clone(); mobSeen = o.mobSeen.clone(); deckOff = o.deckOff.clone(); crabJump = o.crabJump.clone(); crabFrom = o.crabFrom.clone(); crabFromDeck = o.crabFromDeck.clone(); crabFall = o.crabFall.clone(); aimYaw = o.aimYaw.clone(); avl = o.avl.clone(); lastAvlT = o.lastAvlT; avlImpacts = o.avlImpacts; avlKnocks = o.avlKnocks; enfKickTries = o.enfKickTries; enfKickHits = o.enfKickHits; enfSwatTries = o.enfSwatTries; enfSwatHits = o.enfSwatHits; enfRetreats = o.enfRetreats; enfFalls = o.enfFalls; enfAlerts = o.enfAlerts; enfSwatConsidered = o.enfSwatConsidered; enfSwatRejected = o.enfSwatRejected; enfSwatRisky = o.enfSwatRisky; enfLandOwn = o.enfLandOwn; enfLandNear = o.enfLandNear; enfHops = o.enfHops; enfFallEdge = o.enfFallEdge; enfFallChase = o.enfFallChase; enfFallNoDeck = o.enfFallNoDeck; avlFired = o.avlFired; avlSkipped = o.avlSkipped; avlReleased = o.avlReleased; avlNear = o.avlNear; avlArea = o.avlArea; avlHits = o.avlHits; avlRicochets = o.avlRicochets; avlPeak = o.avlPeak; squashT = o.squashT; slipCd = o.slipCd; finishedRun = o.finishedRun; lastGateNo = o.lastGateNo; lastKeyColor = o.lastKeyColor; lastGateColor = o.lastGateColor;
+        clubTime = o.clubTime; swingT = o.swingT; shoveCd = o.shoveCd; crabS = o.crabS; crabY = o.crabY; keys = o.keys; keysFree = o.keysFree; featDone = o.featDone.clone(); aimAng = o.aimAng.clone(); aimFireT = o.aimFireT.clone(); aimArmed = o.aimArmed.clone(); crabPos = o.crabPos.clone(); crabVel = o.crabVel.clone(); crabMode = o.crabMode.clone(); crabStuck = o.crabStuck.clone(); crabCool = o.crabCool.clone(); crabTurn = o.crabTurn.clone(); crabSeen = o.crabSeen.clone(); mobState = o.mobState.clone(); mobT = o.mobT.clone(); mobS = o.mobS.clone(); mobY = o.mobY.clone(); mobDir = o.mobDir.clone(); mobTgt = o.mobTgt.clone(); mobSeen = o.mobSeen.clone(); deckOff = o.deckOff.clone(); crabJump = o.crabJump.clone(); crabFrom = o.crabFrom.clone(); crabFromDeck = o.crabFromDeck.clone(); crabFall = o.crabFall.clone(); aimYaw = o.aimYaw.clone(); avl = o.avl.clone(); lastAvlT = o.lastAvlT; avlImpacts = o.avlImpacts; avlKnocks = o.avlKnocks; enfKickTries = o.enfKickTries; enfKickHits = o.enfKickHits; enfSwatTries = o.enfSwatTries; enfSwatHits = o.enfSwatHits; enfRetreats = o.enfRetreats; enfFalls = o.enfFalls; enfAlerts = o.enfAlerts; enfSwatConsidered = o.enfSwatConsidered; enfSwatRejected = o.enfSwatRejected; enfSwatRisky = o.enfSwatRisky; enfLandOwn = o.enfLandOwn; enfLandNear = o.enfLandNear; enfHops = o.enfHops; enfFallEdge = o.enfFallEdge; enfFallChase = o.enfFallChase; enfFallNoDeck = o.enfFallNoDeck; avlFired = o.avlFired; avlSkipped = o.avlSkipped; avlReleased = o.avlReleased; avlNear = o.avlNear; avlArea = o.avlArea; avlHits = o.avlHits; avlRicochets = o.avlRicochets; avlPeak = o.avlPeak; avlTrigT = o.avlTrigT; avlTrigV = o.avlTrigV; avlTrigDist = o.avlTrigDist; avlFirstImpactT = o.avlFirstImpactT; avlFirstNearT = o.avlFirstNearT; avlRebounds = o.avlRebounds; avlTumbles = o.avlTumbles; squashT = o.squashT; slipCd = o.slipCd; finishedRun = o.finishedRun; lastGateNo = o.lastGateNo; lastKeyColor = o.lastKeyColor; lastGateColor = o.lastGateColor;
         act = o.act; hz = o.hz; winLo = o.winLo; winHi = o.winHi; invuln = o.invuln; hits = o.hits; hitS = o.hitS; hitY = o.hitY;
         humanHold = o.humanHold; heldX = o.heldX; heldY = o.heldY; heldXT = o.heldXT; heldYT = o.heldYT;
         motion = o.motion; motionGen = o.motionGen; mstep = o.mstep;
@@ -1069,17 +1069,73 @@ public final class Sim {
         return deckY(j);
     }
 
+    /**
+     * Rules 18 (owner Build 83 avalanche overhaul, 2026-10-29): has the climber reached avalanche e's trigger, or are they moving toward it fast
+     * enough to get there before its blocks could come down? Standing on the trigger deck fires it, as before. Otherwise, within AVL_LEAD_MAX m
+     * short of the deck's near edge (along the route), AVL_LEAD_BELOW below to AVL_LEAD_ABOVE above it, the climber's real speed toward it gives
+     * the time they need to get there; once that is no more than the blocks' fall time (+ AVL_LEAD_PAD) it fires. Flying over the deck (a jump or a
+     * launch that never lands on it) fires it too. A faster climber is met earlier: a run fires a few metres short, a launch from the deck before.
+     * Each spot fires once (its state goes to 1), whatever the climber does next.
+     */
+    private boolean avlReached(int a0) {
+        if (mode == Mode.GROUND && onElem == a0) return true;
+        float dir = avlDir(a0);
+        if (dir == 0f) return false;
+        Element d = course.get(a0);
+        float dy = y - deckY(a0);
+        if (dy < -Element.AVL_LEAD_BELOW || dy > Element.AVL_LEAD_ABOVE) return false;
+        float over = Math.abs(course.dsWrap(es1[a0], s));
+        if (mode == Mode.AIR && over <= d.halfW() && dy >= -0.5f) return true;
+        float dist = course.dsWrap(es1[a0] - dir * d.halfW(), s) * dir, v = vx * dir;
+        if (dist <= 0f || dist > Element.AVL_LEAD_MAX || v <= 0.3f) return false;
+        return dist / v <= avlFallTime() + Element.AVL_LEAD0 + Element.AVL_LEAD_PAD;
+    }
+    /** The way along the tower the route runs through trigger deck a0 (+1 or -1; 0 when it cannot tell). */
+    private float avlDir(int a0) {
+        int p = deck(a0, -1), n = deck(a0, 1);
+        float d = p >= 0 ? course.dsWrap(es1[a0], es1[p]) : (n >= 0 ? course.dsWrap(es1[n], es1[a0]) : 0f);
+        return d > 0f ? 1f : (d < 0f ? -1f : 0f);
+    }
+    /** Seconds a block takes to come down AVL_DROP m from rest. */
+    private static float avlFallTime() { return (float) Math.sqrt(2f * Element.AVL_DROP / Element.AVL_G); }
+    /** Rules 18 measurements of the last avalanche fired (reports and tests only): when, the climber's speed toward it (m/s), how far short of the
+     *  trigger deck's edge they were (m, 0 on it), the first hard deck impact after it fired and the first block within 2.5 m of the body (s, -1 none). */
+    public float avlTrigT = -1f, avlTrigV, avlTrigDist, avlFirstImpactT = -1f, avlFirstNearT = -1f;
+    /** Rules 18 counters: rebounds (deck or wall contacts that throw the block back off at more than 1.5 m/s) and tumbles (contacts that changed a
+     *  block's spin by more than 180 deg/s: a corner landing, a glancing knock). */
+    public int avlRebounds, avlTumbles;
+
+    private void avlMeasure(int a0) {
+        float dir = avlDir(a0), dist = dir == 0f ? 0f : course.dsWrap(es1[a0] - dir * course.get(a0).halfW(), s) * dir;
+        avlTrigT = time; avlTrigV = vx * dir; avlTrigDist = Math.max(0f, dist); avlFirstImpactT = -1f; avlFirstNearT = -1f;
+    }
+
+    /** The route decks an avalanche's blocks can touch (offsets -8..8 from its trigger deck; -1 where there is none or it cannot be hit), looked up once
+     *  per step (rules 18 profiling: walking the route for every block, sub-step and deck was 60% of generation time). Scratch, not state. */
+    private final int[] avlDk = new int[17];
+    /** ... and, for the rigid blocks, each deck's arc offset from the trigger deck, half width and top this step (a ramp or seesaw: NaN, its top is per point). */
+    private final float[] avlDo = new float[17], avlDw = new float[17], avlDt = new float[17];
+    private void avlNearDecks(int a0) {
+        float as = es1[a0];
+        for (int dd = -8; dd <= 8; dd++) {
+            int j = deck(a0, dd), k = dd + 8; avlDk[k] = avlDeck(j) ? j : -1;
+            if (avlDk[k] < 0) continue;
+            Element d = course.get(j);
+            avlDo[k] = course.dsWrap(es1[j], as); avlDw[k] = d.halfW(); avlDt[k] = d.type == Element.Type.RAMP || d.type == Element.Type.SEESAW ? Float.NaN : deckY(j);
+        }
+    }
+
     private void stepAvalanche(Element e, int idx) {
-        if (e.skin == 1) { stepChaos(e, idx); return; }          // NOT GONNA HAPPEN's own blocks (rules 14); the code below is NORMAL's and PUNISHER's, unchanged
+        if (e.skin == 1 || e.skin == 2) { stepRigid(e, idx); return; }          // rules 18: NOT GONNA HAPPEN (1) and PUNISHER (2) rigid cubes; the code below is NORMAL's
         int o = idx * AVL_W, a0 = e.anchor;
         if (o + AVL_W > avl.length || a0 < 0 || a0 >= course.size()) return;
         float st = avl[o];
         if (st == 2f) { if (idx < featDone.length) featDone[idx] = true; return; }          // (DC3: spent is resolved, so it stays spent across a slice unload: Tower keeps featDone)
         if (idx < featDone.length && featDone[idx]) { avl[o] = 2f; return; }
         if (st == 0f) {
-            if (!(mode == Mode.GROUND && onElem == a0)) return;
-            if (time - lastAvlT < e.period) { avl[o] = 2f; avlSkipped++; return; }          // reached during the cooldown: this spot is spent, it never fires later
-            avl[o] = 1f; avl[o + 1] = 0f; lastAvlT = time; events |= EV_AVL_WARN; avlFired++;
+            if (!avlReached(a0)) return;
+            if (time - lastAvlT < e.period) { if (mode == Mode.GROUND && onElem == a0) { avl[o] = 2f; avlSkipped++; } return; }          // reached during the cooldown: this spot is spent, it never fires later (a lead during the cooldown waits)
+            avl[o] = 1f; avl[o + 1] = 0f; lastAvlT = time; events |= EV_AVL_WARN; avlFired++; avlMeasure(a0);
             int n = Math.max(1, Math.min(Element.AVL_MAX, Math.round(e.len)));
             float ay = course.get(a0).y;
             for (int b = 0; b < Element.AVL_MAX; b++) {
@@ -1094,11 +1150,12 @@ public final class Sim {
                 avl[p] = ds; avl[p + 1] = deckY(j) - ay + Element.AVL_DROP + 2.5f * avlRand(e, b, 2);
                 avl[p + 2] = -(0.6f + 2.4f * avlRand(e, b, 3)); avl[p + 3] = -1.5f * avlRand(e, b, 4);
                 avl[p + 4] = 90f * avlRand(e, b, 5); avl[p + 5] = (avlRand(e, b, 6) - 0.5f) * 500f;
-                avl[p + 6] = 2f; avl[p + 7] = Element.AVL_WARN + b * Element.AVL_STAGGER + 0.25f * avlRand(e, b, 7);
+                avl[p + 6] = 2f; avl[p + 7] = Element.AVL_LEAD0 + b * Element.AVL_STAGGER + 0.25f * avlRand(e, b, 7);          // (rules 18: no warning wait)
             }
             return;
         }
         avl[o + 1] += DT;
+        avlNearDecks(a0);
         float clock = avl[o + 1], ay = course.get(a0).y, as = es1[a0], g = Element.AVL_G, R = Element.AVL_R;
         int live = 0;
         for (int b = 0; b < Element.AVL_MAX; b++) {
@@ -1108,8 +1165,8 @@ public final class Sim {
             avl[p + 3] -= g * DT; avl[p] += avl[p + 2] * DT; avl[p + 1] += avl[p + 3] * DT; avl[p + 4] += avl[p + 5] * DT;
             avlTouched = -1;
             for (int dd = -8; dd <= 8; dd++) {          // the decks: tops (ramps on their slope) and sides
-                int j = deck(a0, dd); if (j < 0) continue;
-                if (!avlDeck(j)) continue;
+                int j = avlDk[dd + 8];
+                if (j < 0) continue;
                 Element d = course.get(j);
                 float hw = d.halfW(), x = course.dsWrap(as + avl[p], es1[j]), by = ay + avl[p + 1];
                 float cx = Math.max(-hw, Math.min(hw, x)), top = avlTop(j, cx), cy = Math.max(top - Element.AVL_SLAB, Math.min(top, by));
@@ -1122,7 +1179,7 @@ public final class Sim {
                 float push = R - dist; avl[p] += nx * push; avl[p + 1] += ny * push; if (avlTouched < 0 || Math.abs(j - a0) < Math.abs(avlTouched - a0)) avlTouched = j;
                 float vn = avl[p + 2] * nx + avl[p + 3] * ny;
                 if (vn < 0f) {
-                    if (vn < -3f) avlImpacts++;
+                    if (vn < -3f) { avlImpacts++; if (avlFirstImpactT < 0f) avlFirstImpactT = time - avlTrigT; }
                     avl[p + 2] -= (1f + Element.AVL_E) * vn * nx; avl[p + 3] -= (1f + Element.AVL_E) * vn * ny;
                     float tx = -ny, vt = avl[p + 2] * tx + avl[p + 3] * nx;          // along the surface: friction, and it rolls
                     float keep = vt * (Element.AVL_FRICTION - 1f);
@@ -1145,7 +1202,7 @@ public final class Sim {
                 }
             }
             int fl = (int) avl[p + 8];          // flags: 1 came near the body, 2 reached the traversal area
-            if ((fl & 1) == 0) { float nx = Math.abs(course.dsWrap(as + avl[p], s)), ny = Math.abs(ay + avl[p + 1] - (y + T.height * 0.5f)); if (nx < 2.5f && ny < 2.5f) { fl |= 1; avlNear++; } }
+            if ((fl & 1) == 0) { float nx = Math.abs(course.dsWrap(as + avl[p], s)), ny = Math.abs(ay + avl[p + 1] - (y + T.height * 0.5f)); if (nx < 2.5f && ny < 2.5f) { fl |= 1; avlNear++; if (avlFirstNearT < 0f) avlFirstNearT = time - avlTrigT; } }
             if ((fl & 2) == 0 && offsetOf(a0, avlTouched, 8) != NONE && offsetOf(a0, avlTouched, 8) >= -1 && offsetOf(a0, avlTouched, 8) <= 4) { fl |= 2; avlArea++; }
             avl[p + 8] = fl; avlTouched = -1;
             float sp2 = avl[p + 2] * avl[p + 2] + avl[p + 3] * avl[p + 3];
@@ -1156,53 +1213,70 @@ public final class Sim {
         if (live == 0) avl[o] = 2f;
     }
 
-    // ---- NOT GONNA HAPPEN avalanche (rules 14, owner 2026-10-27): every block its own size, bounce, friction, launch, spin and ricochet, all seeded
-    /** Block b's collision radius (m): AVL_R for NORMAL/PUNISHER avalanches; NGH blocks 0.32-0.62 m from the avalanche's seed. */
+    // ---- PUNISHER and NOT GONNA HAPPEN avalanches (rules 18, owner Build 83 overhaul 2026-10-29): rigid spiked cubes, seeded, nothing scripted
+    /** Block b's collision radius (m, the cube's half side): AVL_R for NORMAL/PUNISHER avalanches; NGH blocks 0.32-0.62 m from the avalanche's seed. */
     public static float avlRadius(Element e, int b) { return e.skin == 1 ? Element.AVL_CR0 + Element.AVL_CR1 * avlRand(e, b, 10) : Element.AVL_R; }
-    /** NGH block b: restitution off decks, tangential friction kept per contact, ricochet kick (m/s, signed). */
-    private static float chaosE(Element e, int b) { return 0.28f + 0.34f * avlRand(e, b, 11); }
-    private static float chaosF(Element e, int b) { return 0.66f + 0.28f * avlRand(e, b, 12); }
-    private static float chaosKick(Element e, int b) { return (avlRand(e, b, 16) < 0.5f ? -1f : 1f) * (0.4f + 1.2f * avlRand(e, b, 15)); }
-    /** NGH ricochets so far (a hard deck impact that also kicked the block sideways; reports and tests only) and the most blocks falling at once. */
+    /** Rules 18 block b: restitution off decks and walls, and its friction coefficient (each block its own, from the seed). */
+    private static float rigidE(Element e, int b) { return Element.AVL_HE0 + Element.AVL_HE1 * avlRand(e, b, 11); }
+    private static float rigidMu(Element e, int b) { return Element.AVL_HMU0 + Element.AVL_HMU1 * avlRand(e, b, 12); }
+    /** Hard rebounds (a deck or wall impact faster than AVL_RICOCHET m/s; reports and tests only) and the most blocks falling at once. */
     public int avlRicochets, avlPeak;
+    private static final float DEG = (float) (Math.PI / 180.0), RAD = (float) (180.0 / Math.PI);
+    /** Presentation only (never read by the simulation, not saved): the hardest deck strike of each block of avalanche avlStrikeIdx in the last step (m/s). */
+    private final float[] avlStrike = new float[Element.AVL_MAX]; private int avlStrikeIdx = -1;
+    /** -1..1: which corner (or, near 0, the face between two) of a cube touches along a contact direction component u (soft, so a face lies flat). */
+    private static float avlCorner(float u) { return Math.max(-1f, Math.min(1f, u * 5f)); }
 
     /**
-     * NOT GONNA HAPPEN's avalanche: the same trigger, cooldown, warning and scoring as every avalanche, then 5-7 blocks released AVL_SPACE0-AVL_SPACE1 s
-     * apart (each gap seeded), each with its own radius, mass (radius cubed), restitution, friction, launch velocity (either way along the tower),
-     * spin direction and speed, and ricochet response; blocks collide with the decks (ramps on their slope), with each other (mass-weighted, momentum
-     * conserving) and the body (avalancheHits, per-block radius). Each step is split into AVL_SUB sub-steps so no block moves more than a fraction of its
-     * radius per sub-step at the speeds it can reach (no tunnelling through a 0.6 m deck slab or another block). Pure simulation state: deterministic.
+     * PUNISHER's and NOT GONNA HAPPEN's avalanche: the trigger and cooldown every avalanche has (avlReached), then 8-10 (PUNISHER) or 9-12 (NGH)
+     * blocks break loose AVL_GAP0-AVL_GAP1 s apart, the first AVL_LEAD0 s after the trigger. AVL_AIM of them come down where the climber will be
+     * (their real velocity carried over the fall, landing a little ahead along the route), the rest over the decks ahead, thrown back down the route
+     * toward the climber or (some) up it. Every block is a rigid cube with mass and moment of inertia: a contact acts at the corner or face that
+     * touches, the impulse there (restitution, Coulomb friction) changes both its velocity and its spin, so corner landings tumble, a spinning block
+     * kicks itself off line on the next bounce, and blocks bounce down stairs, off deck sides (walls) and off each other (mass-weighted, momentum
+     * conserving, with friction between them that trades spin). AVL_HSUB sub-steps per step keep fast blocks from passing through decks or each other.
+     * Pure simulation state and fixed arithmetic (StrictMath for the trigonometry): the same on every platform.
      */
-    private void stepChaos(Element e, int idx) {
+    private void stepRigid(Element e, int idx) {
         int o = idx * AVL_W, a0 = e.anchor;
         if (o + AVL_W > avl.length || a0 < 0 || a0 >= course.size()) return;
         float st = avl[o];
-        if (st == 2f) { if (idx < featDone.length) featDone[idx] = true; return; }          // (DC3: spent is resolved, so it stays spent across a slice unload: Tower keeps featDone)
+        if (st == 2f) { if (idx < featDone.length) featDone[idx] = true; return; }
         if (idx < featDone.length && featDone[idx]) { avl[o] = 2f; return; }
         if (st == 0f) {
-            if (!(mode == Mode.GROUND && onElem == a0)) return;
-            if (time - lastAvlT < e.period) { avl[o] = 2f; avlSkipped++; return; }
-            avl[o] = 1f; avl[o + 1] = 0f; lastAvlT = time; events |= EV_AVL_WARN; avlFired++;
+            if (!avlReached(a0)) return;
+            if (time - lastAvlT < e.period) { if (mode == Mode.GROUND && onElem == a0) { avl[o] = 2f; avlSkipped++; } return; }
+            avl[o] = 1f; avl[o + 1] = 0f; lastAvlT = time; events |= EV_AVL_WARN; avlFired++; avlMeasure(a0);
             int n = Math.max(1, Math.min(Element.AVL_MAX, Math.round(e.len)));
-            float ay = course.get(a0).y, rel = Element.AVL_WARN;
+            float ay = course.get(a0).y, rel = Element.AVL_LEAD0, dir = avlDir(a0), fall = avlFallTime();
+            if (dir == 0f) dir = 1f;
             for (int b = 0; b < Element.AVL_MAX; b++) {
                 int p = o + 2 + b * AVL_B;
                 for (int q = 0; q < AVL_B; q++) avl[p + q] = 0f;
                 if (b >= n) continue;
-                int kk = 1 + (int) (avlRand(e, b, 0) * 3.99f), j = deck(a0, kk); while (kk > 1 && !avlDeck(j)) j = deck(a0, --kk);
-                if (!avlDeck(j)) j = a0;
-                Element d = course.get(j);
-                float ds = course.dsWrap(es1[j], es1[a0]) + (avlRand(e, b, 1) - 0.5f) * Math.max(0.4f, d.w - 0.8f);
-                avl[p] = ds; avl[p + 1] = deckY(j) - ay + Element.AVL_DROP + 2.5f * avlRand(e, b, 2);
-                avl[p + 2] = (avlRand(e, b, 3) < 0.7f ? -1f : 1f) * (0.4f + 3.0f * avlRand(e, b, 13)); avl[p + 3] = -2.5f * avlRand(e, b, 4);
-                avl[p + 4] = 90f * avlRand(e, b, 5); avl[p + 5] = (avlRand(e, b, 6) < 0.5f ? -1f : 1f) * (200f + 500f * avlRand(e, b, 14));
+                if (avlRand(e, b, 20) < Element.AVL_AIM) {          // aimed: where the climber's own motion takes them by the time it is down, a little ahead
+                    float lead = vx * (rel + fall) + dir * (Element.AVL_AIM0 + (Element.AVL_AIM1 - Element.AVL_AIM0) * avlRand(e, b, 21));
+                    lead = Math.max(-10f, Math.min(10f, lead));
+                    avl[p] = course.dsWrap(s + lead, es1[a0]); avl[p + 1] = y - ay + Element.AVL_DROP + 1.2f * avlRand(e, b, 2);
+                    avl[p + 2] = (avlRand(e, b, 3) - 0.5f) * 0.8f; avl[p + 3] = -1.2f * avlRand(e, b, 4);
+                } else {          // over one of the decks ahead, thrown back down the route (70%) or on up it
+                    int kk = 1 + (int) (avlRand(e, b, 0) * 3.99f), j = deck(a0, kk); while (kk > 1 && !avlDeck(j)) j = deck(a0, --kk);
+                    if (!avlDeck(j)) j = a0;
+                    Element d = course.get(j);
+                    avl[p] = course.dsWrap(es1[j], es1[a0]) + (avlRand(e, b, 1) - 0.5f) * Math.max(0.4f, d.w - 0.8f);
+                    avl[p + 1] = deckY(j) - ay + Element.AVL_DROP + 2.5f * avlRand(e, b, 2);
+                    avl[p + 2] = (avlRand(e, b, 13) < 0.7f ? -dir : dir) * (0.8f + 3.4f * avlRand(e, b, 3)); avl[p + 3] = -2.5f * avlRand(e, b, 4);
+                }
+                avl[p + 4] = 90f * avlRand(e, b, 5); avl[p + 5] = (avlRand(e, b, 6) < 0.5f ? -1f : 1f) * (150f + 550f * avlRand(e, b, 14));
                 avl[p + 6] = 2f; avl[p + 7] = rel;
-                rel += Element.AVL_SPACE0 + (Element.AVL_SPACE1 - Element.AVL_SPACE0) * avlRand(e, b, 7);
+                rel += Element.AVL_GAP0 + (Element.AVL_GAP1 - Element.AVL_GAP0) * avlRand(e, b, 7);
             }
             return;
         }
         avl[o + 1] += DT;
-        float clock = avl[o + 1], ay = course.get(a0).y, as = es1[a0], g = Element.AVL_G, h = DT / Element.AVL_SUB;
+        avlStrikeIdx = idx; java.util.Arrays.fill(avlStrike, 0f);
+        avlNearDecks(a0);
+        float clock = avl[o + 1], ay = course.get(a0).y, as = es1[a0], g = Element.AVL_G, h = DT / Element.AVL_HSUB;
         int live = 0, falling = 0;
         for (int b = 0; b < Element.AVL_MAX; b++) {
             int p = o + 2 + b * AVL_B;
@@ -1210,51 +1284,78 @@ public final class Sim {
             if (avl[p + 6] == 1f) falling++;
         }
         avlPeak = Math.max(avlPeak, falling);
-        for (int sub = 0; sub < Element.AVL_SUB; sub++) {
+        for (int sub = 0; sub < Element.AVL_HSUB; sub++) {
             for (int b = 0; b < Element.AVL_MAX; b++) {
                 int p = o + 2 + b * AVL_B;
                 if (avl[p + 6] != 1f) continue;
-                float R = avlRadius(e, b), E = chaosE(e, b), F = chaosF(e, b);
-                avl[p + 3] -= g * h; avl[p] += avl[p + 2] * h; avl[p + 1] += avl[p + 3] * h; avl[p + 4] += avl[p + 5] * h;
-                for (int dd = -8; dd <= 8; dd++) {
-                    int j = deck(a0, dd);
-                    if (!avlDeck(j)) continue;
+                float R = avlRadius(e, b), E = rigidE(e, b), MU = rigidMu(e, b), iM = 1f / (R * R), iI = iM * 1.5f / (R * R);          // a square: m ~ side^2, I = m side^2 / 6
+                avl[p + 3] -= g * h; avl[p] += avl[p + 2] * h; avl[p + 1] += avl[p + 3] * h; avl[p + 4] = (avl[p + 4] + avl[p + 5] * h) % 360f;
+                float reach = R * 1.4143f, by = ay + avl[p + 1];
+                boolean touched = false;
+                for (int dd = -8; dd <= 8; dd++) {          // the decks: tops (ramps on their slope), sides (walls) and corners
+                    int k = dd + 8, j = avlDk[k];
+                    if (j < 0) continue;
+                    float hw = avlDw[k], x = avl[p] - avlDo[k];
+                    if (x - hw >= reach || -x - hw >= reach) continue;          // (out of reach along the tower: no contact possible)
+                    float t0 = avlDt[k];
+                    if (t0 == t0 && (by - t0 >= reach || t0 - Element.AVL_SLAB - by >= reach)) continue;          // (a flat deck: out of reach above or below)
                     Element d = course.get(j);
-                    float hw = d.halfW(), x = course.dsWrap(as + avl[p], es1[j]), by = ay + avl[p + 1];
-                    float cx = Math.max(-hw, Math.min(hw, x)), top = avlTop(j, cx), cy = Math.max(top - Element.AVL_SLAB, Math.min(top, by));
+                    float cx = Math.max(-hw, Math.min(hw, x)), top = t0 == t0 ? t0 : avlTop(j, cx), cy = Math.max(top - Element.AVL_SLAB, Math.min(top, by));
                     float dx = x - cx, dy = by - cy, d2 = dx * dx + dy * dy;
-                    if (d2 >= R * R) continue;
+                    if (d2 >= reach * reach) continue;
                     float dist = (float) Math.sqrt(d2), nx, ny;
                     if (dist > 1e-5f) { nx = dx / dist; ny = dy / dist; } else { nx = 0f; ny = 1f; dist = 0f; }
                     if (d.type == Element.Type.RAMP && ny > 0.5f) { float sl = d.rampSlope(time), l = (float) Math.sqrt(1f + sl * sl); nx = -sl / l; ny = 1f / l; }
-                    float push = R - dist; avl[p] += nx * push; avl[p + 1] += ny * push;
+                    // the cube's touching corner (or face): its offset r from the centre, and how far the cube reaches toward the deck along -n
+                    float th = avl[p + 4] * DEG, c = (float) StrictMath.cos(th), sn = (float) StrictMath.sin(th);
+                    float lx = -(nx * c + ny * sn), ly = -(-nx * sn + ny * c), px = R * avlCorner(lx), py = R * avlCorner(ly);
+                    float rx = px * c - py * sn, ry = px * sn + py * c, sup = -(rx * nx + ry * ny), pen = sup - dist;
+                    if (pen <= 0f) continue;
+                    avl[p] += nx * pen; avl[p + 1] += ny * pen; touched = true;
                     int fl = (int) avl[p + 8]; if ((fl & 2) == 0 && dd >= -1 && dd <= 4) { avl[p + 8] = fl | 2; avlArea++; }
-                    float vn = avl[p + 2] * nx + avl[p + 3] * ny;
-                    if (vn < 0f) {
-                        if (vn < -3f) avlImpacts++;
-                        avl[p + 2] -= (1f + E) * vn * nx; avl[p + 3] -= (1f + E) * vn * ny;
-                        float tx = -ny, vt = avl[p + 2] * tx + avl[p + 3] * nx, keep = vt * (F - 1f);
-                        avl[p + 2] += keep * tx; avl[p + 3] += keep * nx;
-                        if (vn < -Element.AVL_RICOCHET) { float k = chaosKick(e, b) * Math.min(1f, -vn / 12f); avl[p + 2] += k * tx; avl[p + 3] += k * nx; avlRicochets++; }          // a hard hit throws it off line: each block its own way
-                        avl[p + 5] = -(avl[p + 2] * tx + avl[p + 3] * nx) / R * 57.29578f;
-                    }
+                    float w = avl[p + 5] * DEG, vcx = avl[p + 2] - w * ry, vcy = avl[p + 3] + w * rx, vn = vcx * nx + vcy * ny;
+                    if (vn >= 0f) continue;
+                    if (vn < -3f) { avlImpacts++; if (avlFirstImpactT < 0f) avlFirstImpactT = time - avlTrigT; avlStrike[b] = Math.max(avlStrike[b], -vn); }
+                    if (vn < -Element.AVL_RICOCHET) avlRicochets++;
+                    float rn = rx * ny - ry * nx, ee = vn > -Element.AVL_HREST ? 0f : E, jn = -(1f + ee) * vn / (iM + rn * rn * iI);
+                    float w0 = w;
+                    avl[p + 2] += jn * nx * iM; avl[p + 3] += jn * ny * iM; w += rn * jn * iI;
+                    float tx = -ny, ty = nx; vcx = avl[p + 2] - w * ry; vcy = avl[p + 3] + w * rx;
+                    float vt = vcx * tx + vcy * ty, rt = rx * ty - ry * tx, jt = -vt / (iM + rt * rt * iI), lim = MU * jn;
+                    jt = Math.max(-lim, Math.min(lim, jt));
+                    avl[p + 2] += jt * tx * iM; avl[p + 3] += jt * ty * iM; w += rt * jt * iI;
+                    avl[p + 5] = w * RAD;
+                    if (avl[p + 2] * nx + avl[p + 3] * ny > 1.5f) avlRebounds++;
+                    if (Math.abs(w - w0) * RAD > 180f) avlTumbles++;
                 }
-                for (int c = b + 1; c < Element.AVL_MAX; c++) {          // block on block: mass ~ radius cubed, momentum conserved
-                    int q = o + 2 + c * AVL_B;
+                for (int q2 = b + 1; q2 < Element.AVL_MAX; q2++) {          // block on block: mass ~ side squared, momentum conserved, friction trades spin
+                    int q = o + 2 + q2 * AVL_B;
                     if (avl[q + 6] != 1f) continue;
-                    float Rc = avlRadius(e, c), rr = R + Rc;
+                    float Rb = avlRadius(e, b) * 1.15f, Rc = avlRadius(e, q2) * 1.15f, rr = Rb + Rc;
                     float dx = avl[p] - avl[q], dy = avl[p + 1] - avl[q + 1], d2 = dx * dx + dy * dy;
                     if (d2 >= rr * rr || d2 < 1e-10f) continue;
-                    float mb = R * R * R, mc = Rc * Rc * Rc, wb = mc / (mb + mc), wc = mb / (mb + mc);
-                    float dist = (float) Math.sqrt(d2), nx = dx / dist, ny = dy / dist, pen = rr - dist;
+                    float ib = 1f / (Rb * Rb), ic = 1f / (Rc * Rc), iIb = ib * 1.5f / (Rb * Rb), iIc = ic * 1.5f / (Rc * Rc);
+                    float dist = (float) Math.sqrt(d2), nx = dx / dist, ny = dy / dist, pen = rr - dist, wb = ib / (ib + ic), wc = ic / (ib + ic);
                     avl[p] += nx * pen * wb; avl[p + 1] += ny * pen * wb; avl[q] -= nx * pen * wc; avl[q + 1] -= ny * pen * wc;
                     float vn = (avl[p + 2] - avl[q + 2]) * nx + (avl[p + 3] - avl[q + 3]) * ny;
-                    if (vn < 0f) {
-                        float eb = 0.5f * (chaosE(e, b) + chaosE(e, c)) + 0.12f, jn = -(1f + eb) * vn;
-                        avl[p + 2] += jn * wb * nx; avl[p + 3] += jn * wb * ny; avl[q + 2] -= jn * wc * nx; avl[q + 3] -= jn * wc * ny;
-                        avlKnocks++; if (vn < -3f) avlImpacts++;
-                    }
+                    if (vn >= 0f) continue;
+                    float jn = -(1f + Element.AVL_HEB) * vn / (ib + ic);
+                    avl[p + 2] += jn * nx * ib; avl[p + 3] += jn * ny * ib; avl[q + 2] -= jn * nx * ic; avl[q + 3] -= jn * ny * ic;
+                    // friction at the contact (b's point -Rb n, c's +Rc n): slip = relative tangential speed there, including both spins
+                    float tx = -ny, ty = nx, wB = avl[p + 5] * DEG, wC = avl[q + 5] * DEG;
+                    float vt = (avl[p + 2] - avl[q + 2]) * tx + (avl[p + 3] - avl[q + 3]) * ty - wB * Rb - wC * Rc;
+                    float jt = -vt / (ib + ic + Rb * Rb * iIb + Rc * Rc * iIc), lim = Element.AVL_HMUB * jn;
+                    jt = Math.max(-lim, Math.min(lim, jt));
+                    avl[p + 2] += jt * tx * ib; avl[p + 3] += jt * ty * ib; avl[q + 2] -= jt * tx * ic; avl[q + 3] -= jt * ty * ic;
+                    avl[p + 5] = (wB - Rb * jt * iIb) * RAD; avl[q + 5] = (wC - Rc * jt * iIc) * RAD;
+                    if (vn < -1f) avlKnocks++; if (vn < -3f) avlImpacts++;          // (a knock is a real collision, not blocks settling against each other)
                 }
+                float v2 = avl[p + 2] * avl[p + 2] + avl[p + 3] * avl[p + 3];
+                if (touched && v2 < Element.AVL_SETTLE_V * Element.AVL_SETTLE_V && Math.abs(avl[p + 5]) < Element.AVL_SETTLE_W) {          // a slow block lying on a deck settles (no endless rocking on a face or corner)
+                    avl[p + 2] *= Element.AVL_SETTLE_K; avl[p + 3] *= Element.AVL_SETTLE_K; avl[p + 5] *= Element.AVL_SETTLE_K; v2 *= Element.AVL_SETTLE_K * Element.AVL_SETTLE_K;
+                }
+                if (v2 > Element.AVL_VMAX * Element.AVL_VMAX) { float k = Element.AVL_VMAX / (float) Math.sqrt(v2); avl[p + 2] *= k; avl[p + 3] *= k; }
+                avl[p + 5] = Math.max(-Element.AVL_WMAX, Math.min(Element.AVL_WMAX, avl[p + 5]));
             }
         }
         for (int b = 0; b < Element.AVL_MAX; b++) {
@@ -1262,9 +1363,9 @@ public final class Sim {
             if (avl[p + 6] == 2f) { live++; continue; }
             if (avl[p + 6] != 1f) continue;
             int fl = (int) avl[p + 8];
-            if ((fl & 1) == 0) { float nx = Math.abs(course.dsWrap(as + avl[p], s)), ny = Math.abs(ay + avl[p + 1] - (y + T.height * 0.5f)); if (nx < 2.5f && ny < 2.5f) { avl[p + 8] = fl | 1; avlNear++; } }
+            if ((fl & 1) == 0) { float nx = Math.abs(course.dsWrap(as + avl[p], s)), ny = Math.abs(ay + avl[p + 1] - (y + T.height * 0.5f)); if (nx < 2.5f && ny < 2.5f) { avl[p + 8] = fl | 1; avlNear++; if (avlFirstNearT < 0f) avlFirstNearT = time - avlTrigT; } }
             float sp2 = avl[p + 2] * avl[p + 2] + avl[p + 3] * avl[p + 3];
-            avl[p + 7] = sp2 < 0.09f ? avl[p + 7] + DT : 0f;
+            avl[p + 7] = sp2 < 0.09f && Math.abs(avl[p + 5]) < 30f ? avl[p + 7] + DT : 0f;
             if (avl[p + 1] < -Element.AVL_FLOOR || clock > Element.AVL_LIFE || avl[p + 7] > Element.AVL_REST || Math.abs(avl[p]) > 30f) { avl[p + 6] = 0f; continue; }
             live++;
         }
@@ -1282,18 +1383,23 @@ public final class Sim {
             if (e.skin == 1) R = avlRadius(e, b);
             float dx = Math.max(0f, Math.abs(course.dsWrap(es1[a0] + avl[p], s)) - hw), by = ay + avl[p + 1];
             float dy = by < lo ? lo - by : (by > hi ? by - hi : 0f);
-            if (dx * dx + dy * dy < R * R) { hitFromS = es1[a0] + avl[p]; return true; }
+            if (dx * dx + dy * dy < R * R) { hitFromS = es1[a0] + avl[p]; lastAvlHitV = (float) Math.sqrt(avl[p + 2] * avl[p + 2] + avl[p + 3] * avl[p + 3]); lastAvlHitAge = avl[o + 1]; return true; }
         }
         return false;
     }
 
+    /** Diagnostics only (never read by the simulation): the speed (m/s) of the last avalanche block that hit the body, and how long its avalanche had run (s). */
+    public float lastAvlHitV, lastAvlHitAge;
+    /** Diagnostics: block b's speed (m/s). */
+    public float avalancheBlockSpeed(int hi, int b) { int p = hi * AVL_W + 2 + b * AVL_B; return (hi + 1) * AVL_W <= avl.length ? (float) Math.sqrt(avl[p + 2] * avl[p + 2] + avl[p + 3] * avl[p + 3]) : 0f; }
     /** Avalanche state for the renderer and reports: 0 not reached, 1 under way, 2 spent. */
     public int avalancheState(int hi) { return (hi + 1) * AVL_W <= avl.length ? (int) avl[hi * AVL_W] : 0; }
-    /** Block b: {arc, height, angle (deg), status (1 falling, 2 about to drop), collision radius} in world terms, or null when it is not there. */
+    /** Block b: {arc, height, angle (deg), status (1 falling, 2 about to drop), collision radius, impact speed (m/s) of a deck strike this step (0 none)}
+     *  in world terms, or null when it is not there. */
     public float[] avalancheBlock(int hi, Element e, int b) {
         int o = hi * AVL_W, p = o + 2 + b * AVL_B;
         if ((hi + 1) * AVL_W > avl.length || avl[o] != 1f || e.anchor < 0 || e.anchor >= course.size() || avl[p + 6] == 0f) return null;
-        return new float[]{course.wrap(es1[e.anchor] + avl[p]), course.get(e.anchor).y + avl[p + 1], avl[p + 4], avl[p + 6], avlRadius(e, b)};
+        return new float[]{course.wrap(es1[e.anchor] + avl[p]), course.get(e.anchor).y + avl[p + 1], avl[p + 4], avl[p + 6], avlRadius(e, b), hi == avlStrikeIdx && b < avlStrike.length ? avlStrike[b] : 0f};
     }
 
     /** Enforcer state for the renderer and reports (0 not started, 1 waiting, 2 chasing, 3 kicking, 4 swatting, 5 hopping, 6 leaving, 7 falling, 8 leaping away). */

@@ -1,6 +1,7 @@
 name: Demo courses (scan candidate seeds)
 # DIAGNOSTIC ONLY (docs/DEMO.md): builds candidate demo stages (castle 2 to castle 3, plus headroom) with the real generator on the chosen branch,
 # runs the slice solver on every slice of the section, and prints one scored line per seed. Publishes nothing, changes nothing.
+# (Pushes to demo/** that touch this file run the default scan; ci.yml does not run on demo branches.)
 on:
   workflow_dispatch:
     inputs:

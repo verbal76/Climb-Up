@@ -1404,20 +1404,15 @@ public final class WorldRenderer implements Disposable {
                 break;
             }
             case AVALANCHE: {
-                // spike-block avalanche (owner 2026-10-27): during the warning a flashing down arrow (a shape, not only a colour) and falling grit mark
-                // each block's column; then the cube_spikes blocks fall, bounce and tumble, turning as the simulation spins them
+                // spike-block avalanche (owner 2026-10-27; rules 18, owner 2026-10-29: no warning arrows - the falling blocks are the warning): the
+                // cube_spikes blocks fall, bounce and tumble, turning as the simulation spins them, kicking up grit where they strike hard
                 if (rsim == null) break;
                 for (int b = 0; b < Element.AVL_MAX; b++) {
                     float[] k = rsim.avalancheBlock(rhz, h, b);
-                    if (k == null) continue;
-                    if (k[3] == 2f) {
-                        float ay = k[1] - Element.AVL_DROP + 3.2f, blink = (time * 6f) % 1f < 0.6f ? 1f : 0.35f;
-                        drawPack("arrow_up", k[0], ay + 1.4f, 0.3f, camS, 0.42f * blink, 0.42f, 0.42f, 0f, 180f);
-                        if (quality > 0 && MathUtils.randomBoolean(0.35f)) { ambCol.set(0.75f, 0.68f, 0.55f, 1f); particles.spawn(k[0] + MathUtils.random(-0.4f, 0.4f), ay + 4.5f, 0f, -3f, ambCol, MathUtils.random(0.05f, 0.1f), -6f, 0.7f); }
-                    } else {
-                        float sc = AVL_SCALE * k[4] / Element.AVL_R;          // (NOT GONNA HAPPEN blocks each have their own size: drawn at their collision radius)
-                        drawPack("cube_spikes", k[0], k[1], 0f, camS, sc, sc, sc, 25f, -k[2]);
-                    }
+                    if (k == null || k[3] != 1f) continue;
+                    float sc = AVL_SCALE * k[4] / Element.AVL_R;          // (NOT GONNA HAPPEN blocks each have their own size: drawn at their collision radius)
+                    drawPack("cube_spikes", k[0], k[1], 0f, camS, sc, sc, sc, 25f, k[2]);          // (rules 18: the simulation's angle is counter-clockwise as seen, +arc to the right: roll matches it, so a tumble turns the way it rolls)
+                    if (k[5] > 4f && quality > 0 && !reducedMotion) for (int q = 0; q < 3; q++) { ambCol.set(0.78f, 0.7f, 0.56f, 1f); particles.spawn(k[0] + MathUtils.random(-0.35f, 0.35f), k[1] - k[4], MathUtils.random(-0.2f, 0.2f), MathUtils.random(1f, 3f), ambCol, MathUtils.random(0.05f, 0.11f), -9f, 0.5f); }
                 }
                 break;
             }

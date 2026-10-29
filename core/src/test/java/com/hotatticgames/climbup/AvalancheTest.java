@@ -6,8 +6,8 @@ import com.hotatticgames.climbup.sim.*;
 import org.junit.Test;
 
 /**
- * Spike-block avalanche physics (owner 2026-10-27): one deterministic implementation for every mode. The blocks wait out a warning, drop from above,
- * bounce off the decks and each other, tumble back down past the trigger deck and are cleaned up; a spot fires once, and only after the cooldown.
+ * Spike-block avalanche physics (owner 2026-10-27; NORMAL's, which rules 18 keeps): the blocks break loose at once (rules 18: no warning), drop from
+ * above, bounce off the decks and each other, tumble back down past the trigger deck and are cleaned up; a spot fires once, and only after the cooldown.
  */
 public class AvalancheTest {
     /** A staircase up the tower: the trigger deck 0, then four decks rising ahead of it. */
@@ -43,12 +43,12 @@ public class AvalancheTest {
         return out;
     }
 
-    @Test public void blocksWarnFallBounceTumblePastAndAreCleanedUpTheSameWayEveryTime() throws Exception {
+    @Test public void blocksFallBounceTumblePastAndAreCleanedUpTheSameWayEveryTime() throws Exception {
         Tuning t = TestUtil.tuning();
         float[] a = run(t, 5, 0.37f), b = run(t, 5, 0.37f);
         assertArrayEquals("same seed, same inputs: the same avalanche", a, b, 0f);
         assertTrue("the blocks hit the decks (impacts " + a[0] + ")", a[0] >= 3f);
-        assertTrue("no block is live before the warning has run (" + a[3] + ")", a[3] >= Element.AVL_WARN - 1e-3f);
+        assertTrue("no warning wait: the first block is loose at once (" + a[3] + ")", a[3] > 0f && a[3] <= Element.AVL_LEAD0 + 0.25f + 2f * Sim.DT);
         assertTrue("they tumble down past the trigger deck (lowest " + a[1] + ")", a[1] < -2f);
         assertTrue("and are all cleaned up (ended at " + a[2] + ")", a[2] > 0f && a[2] < Element.AVL_LIFE + 1f);
         float[] other = run(t, 5, 0.81f);
@@ -96,7 +96,7 @@ public class AvalancheTest {
         assertTrue("blocks collide with each other (" + knocks + " knocks over ten seeds)", knocks > 0);
     }
 
-    /** The plan per castle interval: NORMAL none before castle 9 and two blocks at most; PUNISHER two or three, of 4-5 blocks; NOT GONNA HAPPEN (rules 14) three or four of 5-7. */
+    /** The plan per castle interval: NORMAL none before castle 9 and two blocks at most; PUNISHER two or three, of 8-10 blocks; NOT GONNA HAPPEN three or four of 9-12 (rules 18). */
     @Test public void thePlanKeepsEachModesLimits() throws Exception {
         Tuning t = TestUtil.tuning(); float sp = t.castleSpacing;
         int n9 = 0, n10 = 0;
@@ -106,7 +106,7 @@ public class AvalancheTest {
             float[][] ngh = CourseGenerator.avalanchePlan(seed, n, sp, DifficultyProfile.NGH.avalanches());          // rules 14 (owner 2026-10-27)
             assertTrue("NOT GONNA HAPPEN: three or four a castle interval (" + ngh.length + ")", ngh.length >= 3 && ngh.length <= 4);
             for (float[] a : ngh) {
-                assertTrue("NGH: 5-7 blocks (" + a[1] + ")", a[1] >= 5f && a[1] <= 7f && a[1] == Math.round(a[1]) && a[1] <= Element.AVL_MAX);
+                assertTrue("NGH: 9-12 blocks (" + a[1] + ")", a[1] >= 9f && a[1] <= 12f && a[1] == Math.round(a[1]) && a[1] <= Element.AVL_MAX);
                 assertTrue("NGH cooldown 15-45 s", a[2] >= 15f && a[2] <= 45f);
                 assertTrue("inside its castle interval", a[0] > sp * (n - 1) && a[0] < sp * n);
             }
@@ -117,7 +117,7 @@ public class AvalancheTest {
             for (float[] a : nor) { assertEquals("NORMAL: two blocks", 2f, a[1], 0f); assertTrue(a[2] >= 30f && a[2] <= 90f); }
             assertTrue("PUNISHER: two or three a castle interval (" + pun.length + ")", pun.length >= 2 && pun.length <= 3);
             for (float[] a : pun) {
-                assertTrue("PUNISHER: 4-5 blocks", a[1] == 4f || a[1] == 5f);
+                assertTrue("PUNISHER: 8-10 blocks (" + a[1] + ")", a[1] >= 8f && a[1] <= 10f && a[1] == Math.round(a[1]));
                 assertTrue("cooldown 30-90 s", a[2] >= 30f && a[2] <= 90f);
                 assertTrue("inside its castle interval", a[0] > sp * (n - 1) && a[0] < sp * n);
             }

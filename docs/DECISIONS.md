@@ -1282,3 +1282,31 @@ Source: docs/verification/CONSOLIDATED_AUDIT_REPORT.md (DC1-DC10) and docs/verif
 The owner accepted the measured erosion of the mode separation for Build 82: 29.7% PUNISHER/NORMAL and 61.4% NGH/PUNISHER, against the 25%
 standard. Next build: NGH castles 9-10 and the separation erosion, as a generation change with its own rules version, CI run and campaign. The
 playtest build is on hold at the owner's request.
+
+## Build 83 avalanche overhaul (owner directive 2026-10-29; rules 18, branch experiment/pendulums)
+
+Owner answers before any code: the trigger reads the climber's measured real speed (the stick stays direction-only, one run speed); NOT GONNA
+HAPPEN drops 9-12 blocks; the warning is the rumble only; the work stacks on the rules 17 experiment and shares its one final CI.
+
+- **Counts.** PUNISHER 8-10 blocks (rules 12-17: 4-5), NGH 9-12 (5-7), NORMAL 2 (unchanged). Avalanches per castle are unchanged: the plan
+  makes the same random draws, so only the block count moves. Element.AVL_MAX 7 -> 12; saves with 5 or 7 block slots are widened on load.
+- **Physics (PUNISHER and NGH, Sim.stepRigid).** Each block is a rigid cube (half side = collision radius) with mass and moment of inertia. A
+  contact acts at the touching corner or face; the impulse there (restitution 0.58-0.80 per block, Coulomb friction 0.45-0.75) changes velocity
+  and spin together. A corner landing tumbles; a spinning block throws itself off line on its next bounce. Deck sides act as walls. Blocks hit
+  each other mass-weighted with restitution 0.82 and friction that trades spin. Contacts under 0.9 m/s do not bounce, so blocks can come to
+  rest. Four sub-steps per step; speed capped at 22 m/s and 1,500 deg/s; StrictMath trigonometry. Gravity and drop height are unchanged. Of
+  the blocks, 35% are aimed: they land where the climber's own velocity carries them, 0.6-2.6 m ahead along the route. The rest come down over
+  the four decks ahead, thrown back down the route (70%) or up it. NORMAL keeps its gentler rules 12 physics: its two blocks were approved as
+  they are.
+- **Trigger (every mode, Sim.avlReached).** Standing on the trigger deck fires it, as before. Otherwise, from up to 12 m short of the deck's
+  near edge along the route (5 m below to 3 m above the deck), it fires once the climber's real speed toward the deck would bring them there
+  within the blocks' fall time (0.96 s from 11 m) plus 0.30 s. Flying over the deck fires it too, so a launch that skips the deck cannot dodge
+  it. A spot fires once (state 1); turning back cannot fire it again. Reaching it by prediction during the cooldown waits; landing on the deck
+  during the cooldown spends it, as before.
+- **No warning.** The 1.4 s wait, the flashing arrows and the "LOOK UP!" popup are gone. The first block breaks loose 0.05 s after the trigger,
+  the rest 0.07-0.16 s apart (NORMAL 0.35 s). The rumble (sound, shake if motion is allowed, vibration if enabled) plays as they break loose.
+  Its "[RUMBLE ABOVE]" caption shows only with captions on, like every caption (spec section 12). Impacts kick up grit, which reduced motion
+  turns off.
+- **Fairness proofs.** An avalanche is now proven from two decks before its trigger, so the proof climber arrives at full speed and the lead
+  fires as it would in a real climb. PUNISHER is now also proven for every extra arrival delay (0.7, 1.6, 2.9 s), as NGH already was. An
+  unprovable spot is tried elsewhere, then dropped, as before.

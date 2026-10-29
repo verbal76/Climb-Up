@@ -633,7 +633,7 @@ public final class PlayScreen extends ScreenAdapter {
         if ((ev & Sim.EV_SLIP) != 0) { g.audio.play("slip", 1f, 1.45f + MathUtils.random(0.2f)); pop("WHOA!", Color.WHITE); say("[SQUEAK]"); vibrate(15, 2); }      // a squeaky-shoe skid on ice (sfx.json "slip")
         if ((ev & Sim.EV_DASH) != 0) { g.audio.play("dash", 0.9f, 1f); say("[WHOOSH]"); }
         if ((ev & Sim.EV_ENF_ALERT) != 0) { g.audio.play("enf_alert", 0.85f, 1f); say("[ROBOT ALERT]"); }          // PUNISHER: an Enforcer has seen you
-        if ((ev & Sim.EV_AVL_WARN) != 0) { g.audio.play("slam", 0.7f, 0.6f); g.audio.playPack("hit_brick", 0.5f, 0.5f); world.shake(0.25f); vibrate(40, 2); pop("LOOK UP!", Color.WHITE); say("[RUMBLE ABOVE]"); }          // an avalanche: its warning
+        if ((ev & Sim.EV_AVL_WARN) != 0) { g.audio.play("slam", 0.7f, 0.6f); g.audio.playPack("hit_brick", 0.5f, 0.5f); world.shake(0.25f); vibrate(40, 2); say("[RUMBLE ABOVE]"); }          // an avalanche breaks loose (rules 18, owner 2026-10-29: the rumble only - no popup, no arrows; the caption only with captions on)
         if (sim.avlImpacts != avlHeard) { if (sim.avlImpacts > avlHeard && avlT <= 0f) { avlT = 0.12f; g.audio.play("slam", 0.55f, 0.85f + MathUtils.random(0.3f)); g.audio.playPack("hit_brick", 0.35f, 0.9f); say("[BLOCKS CRASH]"); } avlHeard = sim.avlImpacts; }
         if ((ev & Sim.EV_ENF_HIT) != 0) { g.audio.play("enf_hit", 1f, 0.95f + MathUtils.random(0.1f)); say("[ROBOT KICK]"); }          // its kick or swat landed (the launch itself sounds below)
         if ((ev & Sim.EV_ENF_JUMP) != 0) { g.audio.play("enf_jet", 0.8f, 0.95f + MathUtils.random(0.1f)); say("[JETS]"); }          // its swat jump or its leap away

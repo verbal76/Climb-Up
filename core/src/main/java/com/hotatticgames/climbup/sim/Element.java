@@ -254,18 +254,35 @@ public final class Element {
     public static final float ENF_SAFE = 0.5f;
     // ---- spike-block avalanche (one physics for every mode: only the count and how often differ)
     /** Most blocks in one avalanche; a block's collision radius (the cube_spikes body, m). */
-    public static final int AVL_MAX = 7;          // (5 until rules 14: NORMAL and PUNISHER still drop at most 5; NOT GONNA HAPPEN 5-7)
+    public static final int AVL_MAX = 12;          // (5 until rules 14, 7 until rules 18; rules 18: NORMAL 2, PUNISHER 8-10, NOT GONNA HAPPEN 9-12)
     public static final float AVL_R = 0.45f;
-    /** NOT GONNA HAPPEN blocks (rules 14): radius AVL_CR0 + AVL_CR1 x seed (0.32-0.62 m); release gaps AVL_SPACE0-AVL_SPACE1 s; physics sub-steps per
-     *  simulation step; deck impacts faster than AVL_RICOCHET m/s also throw the block sideways (its seeded ricochet). */
-    public static final float AVL_CR0 = 0.32f, AVL_CR1 = 0.30f, AVL_SPACE0 = 0.20f, AVL_SPACE1 = 0.30f, AVL_RICOCHET = 5f;
-    public static final int AVL_SUB = 3;
-    /** Warning before the first block is released (s), the gap between releases (s), and how far above its target deck a block starts (m: above the screen). */
-    public static final float AVL_WARN = 1.4f, AVL_STAGGER = 0.35f, AVL_DROP = 11f;
+    /** NOT GONNA HAPPEN blocks (rules 14): radius AVL_CR0 + AVL_CR1 x seed (0.32-0.62 m); a deck impact faster than AVL_RICOCHET m/s counts as a hard rebound. */
+    public static final float AVL_CR0 = 0.32f, AVL_CR1 = 0.30f, AVL_RICOCHET = 5f;
+    /** NORMAL: the gap between releases (s); every mode: how far above its target deck a block starts (m: above the screen). (Rules 12-17 also waited
+     *  1.4 s of warning before the first block; rules 18 has none.) */
+    public static final float AVL_STAGGER = 0.35f, AVL_DROP = 11f;
     /** Block physics: gravity (m/s^2), bounce restitution off decks and off each other, tangential friction kept per contact, deck slab thickness (m). */
     public static final float AVL_G = 24f, AVL_E = 0.42f, AVL_EB = 0.55f, AVL_FRICTION = 0.82f, AVL_SLAB = 0.6f;
     /** A block is gone when it has fallen this far below the trigger deck (m), after this long (s), or after resting this long (s). */
     public static final float AVL_FLOOR = 16f, AVL_LIFE = 12f, AVL_REST = 0.6f;
+    /**
+     * Rules 18 (owner Build 83 avalanche overhaul, 2026-10-29): no warning. The first block breaks loose AVL_LEAD0 s after the trigger and the rest follow
+     * AVL_GAP0-AVL_GAP1 s apart (each gap seeded). The trigger leads a moving climber: it fires once the time they need to reach the trigger deck's
+     * near edge (their real speed toward it) is no more than the blocks' fall time plus AVL_LEAD_PAD, up to AVL_LEAD_MAX m ahead of that edge, and only
+     * from AVL_LEAD_BELOW m below to AVL_LEAD_ABOVE m above the deck. Standing still, it fires on the deck itself as before. NORMAL keeps its gentler physics.
+     */
+    public static final float AVL_LEAD0 = 0.05f, AVL_GAP0 = 0.07f, AVL_GAP1 = 0.16f, AVL_LEAD_PAD = 0.25f, AVL_LEAD_MAX = 12f, AVL_LEAD_BELOW = 5f, AVL_LEAD_ABOVE = 3f;
+    /**
+     * Rules 18 PUNISHER and NOT GONNA HAPPEN blocks are rigid cubes (half side = collision radius): a contact acts at the cube's corner or face that
+     * touches, so a corner landing turns the fall into spin and a spinning block throws itself off line (impulses with angular momentum and Coulomb
+     * friction). Restitution AVL_HE0 + AVL_HE1 x seed off decks and walls, friction coefficient AVL_HMU0 + AVL_HMU1 x seed, block on block AVL_HEB with
+     * friction AVL_HMUB; contacts slower than AVL_HREST m/s do not bounce (blocks can come to rest). Speeds are capped at AVL_VMAX m/s and AVL_WMAX deg/s;
+     * AVL_HSUB sub-steps per simulation step (no tunnelling). AVL_AIM: share of the blocks aimed where the climber will be when they come down, landing
+     * AVL_AIM0-AVL_AIM1 m ahead of them along the route (so a climber who keeps running meets them, one who checks their speed can dodge).
+     */
+    public static final float AVL_HE0 = 0.58f, AVL_HE1 = 0.22f, AVL_HMU0 = 0.45f, AVL_HMU1 = 0.30f, AVL_HEB = 0.82f, AVL_HMUB = 0.35f, AVL_HREST = 0.9f;
+    public static final float AVL_VMAX = 22f, AVL_WMAX = 1500f, AVL_AIM = 0.35f, AVL_AIM0 = 0.6f, AVL_AIM1 = 2.6f;
+    public static final int AVL_HSUB = 4;
     /** Leaving: it runs up the tower at ENF_EXIT_RUN and leaps away (m/s); once ENF_GONE_Y above its deck (or falling for ENF_FALL_T s) it is gone. */
     public static final float ENF_EXIT_RUN = 7f, ENF_EXIT_VX = 6f, ENF_EXIT_VY = 13f, ENF_GONE_Y = 10f, ENF_FALL_T = 2f;
 

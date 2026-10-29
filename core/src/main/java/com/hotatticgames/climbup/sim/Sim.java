@@ -382,8 +382,9 @@ public final class Sim {
         falls++; invuln = 0.7f;
         lastPad = -1;          // Build 72: a launch from a pad before the fall is history; left set, the next hop off the checkpoint read as that pad's launch
         events |= EV_RESPAWN; teleported = true;
-        // restore crumbled platforms so a retry is never stale or soft-locked
-        java.util.Arrays.fill(crumbleT, -1f);
+        // restore crumbled platforms so a retry is never stale or soft-locked - except a bridge's fallen planks, which stay gone for the climb (rules 19,
+        // owner decision 2026-10-29; the generator proves every holed bridge with its holes open, so a retry is never soft-locked by them)
+        for (int i = 0; i < crumbleT.length; i++) crumbleT[i] = i < course.size() && course.get(i).holed() && crumbleT[i] >= Element.HOLE_DELAY ? Element.HOLE_DONE : -1f;
         java.util.Arrays.fill(gone, false);
         resetEncounters(idx);
         spawnAtCheckpoint(idx);
@@ -565,10 +566,9 @@ public final class Sim {
                 ey0[i] = e.y + e.rampSlope(time - dt) * x; ey1[i] = e.y + e.rampSlope(time) * x; edy[i] = e.rampSlope(time) * x - e.rampSlope(time - dt) * x;
             }
             if (padSquash[i] > 0) padSquash[i] = Math.max(0, padSquash[i] - dt);
-            if (e.holed() && crumbleT[i] >= 0f) {             // Build 79: its holes open HOLE_DELAY after you land, stay open crumbleRespawn, then the planks are back
-                float c0 = crumbleT[i]; crumbleT[i] += dt;
+            if (e.holed() && crumbleT[i] >= 0f && crumbleT[i] < Element.HOLE_DONE) {             // Build 79: its holes open HOLE_DELAY after you land; rules 19 (owner): the planks never come back
+                float c0 = crumbleT[i]; crumbleT[i] = Math.min(Element.HOLE_DONE, crumbleT[i] + dt);
                 if (c0 < Element.HOLE_DELAY && crumbleT[i] >= Element.HOLE_DELAY) events |= EV_CRUMBLE;
-                if (crumbleT[i] >= Element.HOLE_DELAY + T.crumbleRespawn && !(mode == Mode.GROUND && onElem == i)) crumbleT[i] = -1f;
             }
             if (e.crumbles()) {
                 if (gone[i]) { goneT[i] -= dt; if (goneT[i] <= 0) { gone[i] = false; crumbleT[i] = -1f; } }

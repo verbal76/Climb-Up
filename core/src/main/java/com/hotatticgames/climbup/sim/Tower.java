@@ -142,6 +142,10 @@ public final class Tower {
     /** R6: the first slice of a climb could not be built (the seed is never changed to hide it). */
     public static final class FirstSliceFailed extends IllegalStateException { public FirstSliceFailed(String m) { super(m); } }
     private final java.util.HashSet<Long> doneFeat = new java.util.HashSet<>();      // keys taken, gates opened, crabs knocked off: remembered across unloading a slice
+    /** Rules 19 (owner decision 2026-10-29): bridges whose planks have fallen out (stable element keys); they stay damaged across unloading, respawns and saves. */
+    private final java.util.HashSet<Long> holesGone = new java.util.HashSet<>();
+    /** The bit that marks a damaged bridge's element key among the done keys a save carries (the save format is unchanged; hazard keys never use it). */
+    static final long BRIDGE_DONE = 1L << 62;
     public int openedUpTo;                                // castles up to this number are open, wherever the player later falls to
 
     /**
@@ -340,6 +344,7 @@ public final class Tower {
     private void rebuildFor(Sim sim, int lo, int hi, double newOriginY, double newOriginS) {
         sim.deferRespawn = true;
         for (int i = 0; i < hazKey.length && i < sim.featDone.length; i++) if (sim.featDone[i]) doneFeat.add(hazKey[i]);
+        for (int i = 0; i < elemKey.length && i < world.size(); i++) if (sim.holesOpen(i)) holesGone.add(elemKey[i]);
         Remap m = rebuild(lo, hi, newOriginY, newOriginS);
         sim.rebase(m);
         applyDone(sim);
@@ -352,6 +357,7 @@ public final class Tower {
             Element h = world.hazards.get(i);
             if (doneFeat.contains(hazKey[i]) || (h.type == Element.Type.GATE && h.skin > 0 && h.skin <= openedUpTo)) sim.featDone[i] = true;
         }
+        for (int i = 0; i < world.size() && i < elemKey.length && i < sim.crumbleT.length; i++) if (holesGone.contains(elemKey[i]) && world.get(i).holed()) sim.crumbleT[i] = Element.HOLE_DONE;
     }
 
     /** Rebuilds the window around an absolute height (used by tests and by anything that must place the player somewhere else). */
@@ -375,9 +381,11 @@ public final class Tower {
     public java.util.List<Long> doneKeys(Sim sim) {
         java.util.HashSet<Long> out = new java.util.HashSet<>(doneFeat);
         for (int i = 0; i < hazKey.length && i < sim.featDone.length; i++) if (sim.featDone[i]) out.add(hazKey[i]);
+        for (long k : holesGone) out.add(k | BRIDGE_DONE);
+        for (int i = 0; i < elemKey.length && i < world.size(); i++) if (sim.holesOpen(i)) out.add(elemKey[i] | BRIDGE_DONE);
         java.util.ArrayList<Long> l = new java.util.ArrayList<>(out); java.util.Collections.sort(l); return l;
     }
-    public void addDone(long[] keys) { for (long k : keys) doneFeat.add(k); }
+    public void addDone(long[] keys) { for (long k : keys) { if ((k & BRIDGE_DONE) != 0) holesGone.add(k & ~BRIDGE_DONE); else doneFeat.add(k); } }
 
     /** Moves the resident window (and the floating origin) around an absolute height without a simulation to remap: for a tower that is about to get its sim, as when a saved climb is restored. */
     public void windowAroundAbs(double centreAbs) {

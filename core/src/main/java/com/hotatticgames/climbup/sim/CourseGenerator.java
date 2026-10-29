@@ -2446,11 +2446,31 @@ public final class CourseGenerator {
             if (i < n0 - 1 && th <= threatBefore[i - thFrom] + 1e-4f) continue;          // over before this module, and no worse with it
             ok = false; failThreat++;
         }
+        if (ok && !holedBridgesHold(n0)) { ok = false; failPlan++; why("plan_bridge_holes_open"); GenTrace.tally("bridge_holes_open_refused"); }
         if (!ok) { while (c.size() > n0) c.elements.remove(c.size() - 1); while (c.hazards.size() > h0) c.hazards.remove(c.hazards.size() - 1); }
         else { for (int i = Math.max(0, n0 - 1); i < c.size() - 1; i++) setLinkNeed(i, minMargin); if (!hz.isEmpty()) hazardsPlaced += hz.size(); }
         hazardTried += hz.isEmpty() ? 0 : 1;
         crabWhy(hz, ok, w0); pendulumWhy(hz, ok, w0);
         return ok;
+    }
+
+    /**
+     * Rules 19 (owner decision 2026-10-29): a bridge's fallen planks never come back, so a climber who dies after crossing it, or comes back to it, meets it
+     * with its holes open. Every holed bridge of the module is proven that way too: onto it from the platform before, and on from where that move really
+     * lands, with every plank that drops out already gone. (Its layout keeps the landing sections and the take-off section and never opens two holes side by
+     * side, so this holds in practice; the proof makes it a guarantee.)
+     */
+    private boolean holedBridgesHold(int n0) {
+        for (int i = Math.max(1, n0); i < c.size() - 1; i++) {
+            if (!c.get(i).holed() || c.get(i).anchor >= 0) continue;
+            Sim base = Sim.startOn(c, T, i - 1); base.crumbleT[i] = Element.HOLE_DONE;
+            Autopilot.Result in = Autopilot.plan(base, i - 1, false);
+            if (!in.ok) return false;
+            Sim at = Autopilot.trialEnd(base, i - 1, in.factory, 12f);
+            if (at == null) return false;
+            if (at.onElem == i && !Autopilot.plan(at, i, false).ok) return false;
+        }
+        return true;
     }
 
     /** The hazards already placed before this module's own (its hazards are the last {@code hz.size()} of the course's). */

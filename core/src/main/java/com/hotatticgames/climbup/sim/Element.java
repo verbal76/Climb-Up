@@ -91,6 +91,8 @@ public final class Element {
     /** Build 79 (owner: some bridges drop plank sections when you land, leaving holes to jump): a fixed wooden bridge (STATIC skin 1) whose sections set in {@code color}
      *  (a bit mask; the deck is cut into holeSections() equal sections from its -s end, each about HOLE_SEC long) fall out HOLE_DELAY after you land on it. */
     public static final float HOLE_SEC = 1.3f, HOLE_DELAY = 0.45f;
+    /** Rules 19 (owner decision 2026-10-29): a bridge's planks that fall out are gone for the rest of the climb; its crumble clock rests here once they have fallen (Sim, Tower, saves). */
+    public static final float HOLE_DONE = HOLE_DELAY + 2f;
     public boolean holed() { return type == Type.STATIC && skin == 1 && color != 0; }
     public int holeSections() { return Math.max(1, (int) (w / HOLE_SEC)); }
     /** True when x (from the deck's centre, along the lane) is over a hole section, at least {@code margin} in from its edges (a negative margin reaches past them). */

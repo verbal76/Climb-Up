@@ -42,7 +42,7 @@ public class AvalancheOverhaulTest {
         float edge = c.get(3).s - c.get(3).halfW(), far = c.get(4).s + c.get(4).halfW();
         StringBuilder tr = new StringBuilder();
         for (int i = 0; i < (int) (seconds / Sim.DT); i++) {
-            in.clear(); if (ap == Approach.ACCEL || ap == Approach.RUN || ap == Approach.LAUNCH) in.moveX = 1f;
+            in.clear(); if ((ap == Approach.ACCEL || ap == Approach.RUN || ap == Approach.LAUNCH) && s.s < c.get(7).s) in.moveX = 1f;          // (and stop on deck 7: the course ends at deck 8)
             s.events = 0; s.step(in);
             if ((s.events & Sim.EV_AVL_WARN) != 0) r.fires++;
             if (r.arriveT < 0f && s.s >= edge) r.arriveT = s.time;
@@ -69,7 +69,7 @@ public class AvalancheOverhaulTest {
         float fall = (float) Math.sqrt(2f * Element.AVL_DROP / Element.AVL_G);
         for (int skin : new int[]{2, 1, 0}) {
             Run acc = run(t, Approach.ACCEL, 10, 0.37f, skin, 4f, true), runr = run(t, Approach.RUN, 10, 0.37f, skin, 4f, true), lau = run(t, Approach.LAUNCH, 10, 0.37f, skin, 4f, true);
-            for (Run r : new Run[]{acc, runr, lau}) assertEquals("fires exactly once", 1, r.fires);
+            for (Run r : new Run[]{acc, runr, lau}) { assertEquals("fires exactly once", 1, r.fires); assertEquals("no fall", 0, r.s.falls); }
             assertTrue("skin " + skin + ": the lead distance grows with speed (" + acc.s.avlTrigDist + " < " + runr.s.avlTrigDist + " < " + lau.s.avlTrigDist + ")",
                     acc.s.avlTrigDist < runr.s.avlTrigDist && runr.s.avlTrigDist < lau.s.avlTrigDist);
             assertTrue("running: substantially earlier, several metres short (" + runr.s.avlTrigDist + ")", runr.s.avlTrigDist > 4f);
@@ -101,7 +101,7 @@ public class AvalancheOverhaulTest {
         Sim s = Sim.startOn(c, t, 0); s.invuln = 1e9f; s.vx = t.runSpeed;
         InputState in = new InputState(); int fires = 0;
         for (int i = 0; i < (int) (8f / Sim.DT); i++) {
-            in.clear(); float tt = i * Sim.DT; in.moveX = tt < 0.5f ? 1f : (tt < 0.9f ? -1f : 1f);          // toward it, away (staying on the first deck), toward it again and on across
+            in.clear(); float tt = i * Sim.DT; in.moveX = tt < 0.5f ? 1f : (tt < 0.9f ? -1f : (s.s < c.get(7).s ? 1f : 0f));          // toward it, away (staying on the first deck), toward it again and on across to deck 7
             s.events = 0; s.step(in); if ((s.events & Sim.EV_AVL_WARN) != 0) fires++;
         }
         assertEquals("no fall (a respawn rightly resets encounters ahead of the checkpoint)", 0, s.falls);

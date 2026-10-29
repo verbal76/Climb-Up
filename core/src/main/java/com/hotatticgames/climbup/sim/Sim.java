@@ -1110,6 +1110,21 @@ public final class Sim {
         avlTrigT = time; avlTrigV = vx * dir; avlTrigDist = Math.max(0f, dist); avlFirstImpactT = -1f; avlFirstNearT = -1f;
     }
 
+    /** The route decks an avalanche's blocks can touch (offsets -8..8 from its trigger deck; -1 where there is none or it cannot be hit), looked up once
+     *  per step (rules 18 profiling: walking the route for every block, sub-step and deck was 60% of generation time). Scratch, not state. */
+    private final int[] avlDk = new int[17];
+    /** ... and, for the rigid blocks, each deck's arc offset from the trigger deck, half width and top this step (a ramp or seesaw: NaN, its top is per point). */
+    private final float[] avlDo = new float[17], avlDw = new float[17], avlDt = new float[17];
+    private void avlNearDecks(int a0) {
+        float as = es1[a0];
+        for (int dd = -8; dd <= 8; dd++) {
+            int j = deck(a0, dd), k = dd + 8; avlDk[k] = avlDeck(j) ? j : -1;
+            if (avlDk[k] < 0) continue;
+            Element d = course.get(j);
+            avlDo[k] = course.dsWrap(es1[j], as); avlDw[k] = d.halfW(); avlDt[k] = d.type == Element.Type.RAMP || d.type == Element.Type.SEESAW ? Float.NaN : deckY(j);
+        }
+    }
+
     private void stepAvalanche(Element e, int idx) {
         if (e.skin == 1 || e.skin == 2) { stepRigid(e, idx); return; }          // rules 18: NOT GONNA HAPPEN (1) and PUNISHER (2) rigid cubes; the code below is NORMAL's
         int o = idx * AVL_W, a0 = e.anchor;
@@ -1140,6 +1155,7 @@ public final class Sim {
             return;
         }
         avl[o + 1] += DT;
+        avlNearDecks(a0);
         float clock = avl[o + 1], ay = course.get(a0).y, as = es1[a0], g = Element.AVL_G, R = Element.AVL_R;
         int live = 0;
         for (int b = 0; b < Element.AVL_MAX; b++) {
@@ -1149,8 +1165,8 @@ public final class Sim {
             avl[p + 3] -= g * DT; avl[p] += avl[p + 2] * DT; avl[p + 1] += avl[p + 3] * DT; avl[p + 4] += avl[p + 5] * DT;
             avlTouched = -1;
             for (int dd = -8; dd <= 8; dd++) {          // the decks: tops (ramps on their slope) and sides
-                int j = deck(a0, dd); if (j < 0) continue;
-                if (!avlDeck(j)) continue;
+                int j = avlDk[dd + 8];
+                if (j < 0) continue;
                 Element d = course.get(j);
                 float hw = d.halfW(), x = course.dsWrap(as + avl[p], es1[j]), by = ay + avl[p + 1];
                 float cx = Math.max(-hw, Math.min(hw, x)), top = avlTop(j, cx), cy = Math.max(top - Element.AVL_SLAB, Math.min(top, by));
@@ -1259,6 +1275,7 @@ public final class Sim {
         }
         avl[o + 1] += DT;
         avlStrikeIdx = idx; java.util.Arrays.fill(avlStrike, 0f);
+        avlNearDecks(a0);
         float clock = avl[o + 1], ay = course.get(a0).y, as = es1[a0], g = Element.AVL_G, h = DT / Element.AVL_HSUB;
         int live = 0, falling = 0;
         for (int b = 0; b < Element.AVL_MAX; b++) {
@@ -1273,13 +1290,17 @@ public final class Sim {
                 if (avl[p + 6] != 1f) continue;
                 float R = avlRadius(e, b), E = rigidE(e, b), MU = rigidMu(e, b), iM = 1f / (R * R), iI = iM * 1.5f / (R * R);          // a square: m ~ side^2, I = m side^2 / 6
                 avl[p + 3] -= g * h; avl[p] += avl[p + 2] * h; avl[p + 1] += avl[p + 3] * h; avl[p + 4] = (avl[p + 4] + avl[p + 5] * h) % 360f;
+                float reach = R * 1.4143f, by = ay + avl[p + 1];
                 for (int dd = -8; dd <= 8; dd++) {          // the decks: tops (ramps on their slope), sides (walls) and corners
-                    int j = deck(a0, dd);
-                    if (!avlDeck(j)) continue;
+                    int k = dd + 8, j = avlDk[k];
+                    if (j < 0) continue;
+                    float hw = avlDw[k], x = avl[p] - avlDo[k];
+                    if (x - hw >= reach || -x - hw >= reach) continue;          // (out of reach along the tower: no contact possible)
+                    float t0 = avlDt[k];
+                    if (t0 == t0 && (by - t0 >= reach || t0 - Element.AVL_SLAB - by >= reach)) continue;          // (a flat deck: out of reach above or below)
                     Element d = course.get(j);
-                    float hw = d.halfW(), x = course.dsWrap(as + avl[p], es1[j]), by = ay + avl[p + 1];
-                    float cx = Math.max(-hw, Math.min(hw, x)), top = avlTop(j, cx), cy = Math.max(top - Element.AVL_SLAB, Math.min(top, by));
-                    float dx = x - cx, dy = by - cy, d2 = dx * dx + dy * dy, reach = R * 1.4143f;
+                    float cx = Math.max(-hw, Math.min(hw, x)), top = t0 == t0 ? t0 : avlTop(j, cx), cy = Math.max(top - Element.AVL_SLAB, Math.min(top, by));
+                    float dx = x - cx, dy = by - cy, d2 = dx * dx + dy * dy;
                     if (d2 >= reach * reach) continue;
                     float dist = (float) Math.sqrt(d2), nx, ny;
                     if (dist > 1e-5f) { nx = dx / dist; ny = dy / dist; } else { nx = 0f; ny = 1f; dist = 0f; }

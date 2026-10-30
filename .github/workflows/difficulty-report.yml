@@ -165,6 +165,7 @@ jobs:
           read -r -a EXTRA <<< "$CERT_ARGS"
           python3 tools/ci/cert_package.py certification parts --variety-dir baseline --manifest-extra "run_attempt=$GITHUB_RUN_ATTEMPT" "${EXTRA[@]}"
           python3 tools/ci/cert_package.py --selftest certification
+          python3 tools/ci/cert_scorecard.py certification/Upwardly_Build83_Certification | tee -a "$GITHUB_STEP_SUMMARY"          # readable in the log without downloading the artifact
       - uses: actions/upload-artifact@v4
         if: ${{ always() && inputs.certify == '1' }}
         with:

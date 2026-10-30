@@ -40,7 +40,13 @@ public final class Element {
          * past you. {@code phase} seeds each block's start (position, delay, speed, spin). Single use: a spot that fires, or is reached during the
          * cooldown, never fires again. A block that hits you knocks you away like any hazard.
          */
-        AVALANCHE }
+        AVALANCHE,
+        /**
+         * Rules 19 (owner directive 2026-10-29): a TARZAN SWING - a rope hanging from a pivot at (s, y), {@code len} long, swinging from side to side
+         * as a pendulum, {@code amp} radians either way of straight down, once every {@code period} seconds ({@code phase}). Its end is only in reach
+         * while it swings toward you; the climber rides it and lets go with Jump, keeping the rope's motion. (Appended last: types are stored by number.)
+         */
+        TARZAN }
 
     public Type type;
     public int zone;
@@ -84,13 +90,25 @@ public final class Element {
     public boolean crumbles() { return type == Type.CRUMBLE || (type == Type.RAMP && skin == 1) || (skin == 1 && (type == Type.MOVE_H || type == Type.MOVE_V || type == Type.SWING)); }
     /** How thick the platform's block is below its top (matches the renderer: wide blocks and the goal are 1 m, narrow ones 0.5 m). Its sides are edges: see Sim.stepAir. */
     public float slab() { return w >= 5f || type == Type.GOAL ? 1f : 0.5f; }
-    public boolean isPlatform() { return type != Type.ROPE && type != Type.CABLE && !isHazard(); }
+    public boolean isPlatform() { return type != Type.ROPE && type != Type.CABLE && type != Type.TARZAN && !isHazard(); }
+    /** A Tarzan swing's angle from straight down at time t (radians; positive swings toward +s) and how fast it changes (rad/s). */
+    public float tarzanAngle(float t) { return amp * (float) StrictMath.sin(ang(t)); }
+    public float tarzanRate(float t) { return amp * (float) (2 * Math.PI / period) * (float) StrictMath.cos(ang(t)); }
     /** True for anything that changes with time (planner sweeps its phase). */
     /** Build 72 (owner): the spinning ramp (RAMP skin 3, was the sinking ramp) turns flat on its centre like a record: one turn every {@code period} seconds. */
     public boolean spins() { return type == Type.RAMP && skin == 3; }
+    /**
+     * Rules 19 TURBO RAMP (owner directive 2026-10-29): RAMP skin 5 with a booster at its top. Running off the top fires the climber out at
+     * {@link #turboAngle} above the horizontal (radians, toward the ramp's uphill side) at {@link #turboSpeed} m/s; see Sim.turboT.
+     */
+    public boolean turbo() { return type == Type.RAMP && skin == 5; }
+    public float turboAngle() { return period; }
+    public float turboSpeed() { return phase; }
     /** Build 79 (owner: some bridges drop plank sections when you land, leaving holes to jump): a fixed wooden bridge (STATIC skin 1) whose sections set in {@code color}
      *  (a bit mask; the deck is cut into holeSections() equal sections from its -s end, each about HOLE_SEC long) fall out HOLE_DELAY after you land on it. */
     public static final float HOLE_SEC = 1.3f, HOLE_DELAY = 0.45f;
+    /** Rules 19 (owner decision 2026-10-29): a bridge's planks that fall out are gone for the rest of the climb; its crumble clock rests here once they have fallen (Sim, Tower, saves). */
+    public static final float HOLE_DONE = HOLE_DELAY + 2f;
     public boolean holed() { return type == Type.STATIC && skin == 1 && color != 0; }
     public int holeSections() { return Math.max(1, (int) (w / HOLE_SEC)); }
     /** True when x (from the deck's centre, along the lane) is over a hole section, at least {@code margin} in from its edges (a negative margin reaches past them). */
@@ -117,7 +135,7 @@ public final class Element {
     public float rampSlope(float t) { return spins() ? amp * (float) StrictMath.cos(spinAngle(t)) : amp; }
 
     public boolean isMoving() {
-        switch (type) { case MOVE_H: case MOVE_V: case MOVE_Z: case SWING: case SAW_H: case SAW_V: case PENDULUM: case CANNON: case SPIKE_TRAP: case SPIKE_DROP: case CRAB: case BEE: case MORTAR: case AIMED: case SKULL: case BLOB: case ENFORCER: case AVALANCHE: return true; default: return false; }
+        switch (type) { case MOVE_H: case MOVE_V: case MOVE_Z: case SWING: case SAW_H: case SAW_V: case PENDULUM: case CANNON: case SPIKE_TRAP: case SPIKE_DROP: case CRAB: case BEE: case MORTAR: case AIMED: case SKULL: case BLOB: case ENFORCER: case AVALANCHE: case TARZAN: return true; default: return false; }
     }
 
     public static final float CANNON_FLIGHT = 0.7f;      // fraction of the cycle the cycle's ball takes to cross the lane (its launch speed)
@@ -254,18 +272,39 @@ public final class Element {
     public static final float ENF_SAFE = 0.5f;
     // ---- spike-block avalanche (one physics for every mode: only the count and how often differ)
     /** Most blocks in one avalanche; a block's collision radius (the cube_spikes body, m). */
-    public static final int AVL_MAX = 7;          // (5 until rules 14: NORMAL and PUNISHER still drop at most 5; NOT GONNA HAPPEN 5-7)
+    public static final int AVL_MAX = 12;          // (5 until rules 14, 7 until rules 18; rules 18: NORMAL 2, PUNISHER 8-10, NOT GONNA HAPPEN 9-12)
     public static final float AVL_R = 0.45f;
-    /** NOT GONNA HAPPEN blocks (rules 14): radius AVL_CR0 + AVL_CR1 x seed (0.32-0.62 m); release gaps AVL_SPACE0-AVL_SPACE1 s; physics sub-steps per
-     *  simulation step; deck impacts faster than AVL_RICOCHET m/s also throw the block sideways (its seeded ricochet). */
-    public static final float AVL_CR0 = 0.32f, AVL_CR1 = 0.30f, AVL_SPACE0 = 0.20f, AVL_SPACE1 = 0.30f, AVL_RICOCHET = 5f;
-    public static final int AVL_SUB = 3;
-    /** Warning before the first block is released (s), the gap between releases (s), and how far above its target deck a block starts (m: above the screen). */
-    public static final float AVL_WARN = 1.4f, AVL_STAGGER = 0.35f, AVL_DROP = 11f;
+    /** NOT GONNA HAPPEN blocks (rules 14): radius AVL_CR0 + AVL_CR1 x seed (0.32-0.62 m); a deck impact faster than AVL_RICOCHET m/s counts as a hard rebound. */
+    public static final float AVL_CR0 = 0.32f, AVL_CR1 = 0.30f, AVL_RICOCHET = 5f;
+    /** NORMAL: the gap between releases (s); every mode: how far above its target deck a block starts (m: above the screen). (Rules 12-17 also waited
+     *  1.4 s of warning before the first block; rules 18 has none.) */
+    public static final float AVL_STAGGER = 0.35f, AVL_DROP = 11f;
     /** Block physics: gravity (m/s^2), bounce restitution off decks and off each other, tangential friction kept per contact, deck slab thickness (m). */
     public static final float AVL_G = 24f, AVL_E = 0.42f, AVL_EB = 0.55f, AVL_FRICTION = 0.82f, AVL_SLAB = 0.6f;
     /** A block is gone when it has fallen this far below the trigger deck (m), after this long (s), or after resting this long (s). */
     public static final float AVL_FLOOR = 16f, AVL_LIFE = 12f, AVL_REST = 0.6f;
+    /**
+     * Rules 18 (owner Build 83 avalanche overhaul, 2026-10-29): no warning. The first block breaks loose AVL_LEAD0 s after the trigger and the rest follow
+     * AVL_GAP0-AVL_GAP1 s apart (each gap seeded). The trigger leads a moving climber: it fires once the time they need to reach the trigger deck's
+     * near edge (their real speed toward it) is no more than the blocks' fall time plus AVL_LEAD_PAD, up to AVL_LEAD_MAX m ahead of that edge, and only
+     * from AVL_LEAD_BELOW m below to AVL_LEAD_ABOVE m above the deck. Standing still, it fires on the deck itself as before. NORMAL keeps its gentler physics.
+     */
+    public static final float AVL_LEAD0 = 0.05f, AVL_GAP0 = 0.07f, AVL_GAP1 = 0.16f, AVL_LEAD_PAD = 0.25f, AVL_LEAD_MAX = 12f, AVL_LEAD_BELOW = 5f, AVL_LEAD_ABOVE = 3f;
+    /**
+     * Rules 18 PUNISHER and NOT GONNA HAPPEN blocks are rigid cubes (half side = collision radius): a contact acts at the cube's corner or face that
+     * touches, so a corner landing turns the fall into spin and a spinning block throws itself off line (impulses with angular momentum and Coulomb
+     * friction). Restitution AVL_HE0 + AVL_HE1 x seed off decks and walls, friction coefficient AVL_HMU0 + AVL_HMU1 x seed, block on block AVL_HEB with
+     * friction AVL_HMUB; contacts slower than AVL_HREST m/s do not bounce (blocks can come to rest). Speeds are capped at AVL_VMAX m/s and AVL_WMAX deg/s;
+     * AVL_HSUB sub-steps per simulation step (no tunnelling). AVL_AIM: share of the blocks aimed where the climber will be when they come down, landing
+     * AVL_AIM0-AVL_AIM1 m ahead of them along the route (so a climber who keeps running meets them, one who checks their speed can dodge).
+     */
+    public static final float AVL_HE0 = 0.58f, AVL_HE1 = 0.22f, AVL_HMU0 = 0.45f, AVL_HMU1 = 0.30f, AVL_HEB = 0.82f, AVL_HMUB = 0.35f, AVL_HREST = 0.9f;
+    public static final float AVL_VMAX = 22f, AVL_WMAX = 1500f, AVL_AIM = 0.35f, AVL_AIM0 = 0.6f, AVL_AIM1 = 2.6f;
+    public static final int AVL_HSUB = 4;
+    /** Rules 18 settling (avalanche frequency investigation): a rigid block touching a deck slower than AVL_SETTLE_V m/s and AVL_SETTLE_W deg/s loses
+     *  (1 - AVL_SETTLE_K) of its speed and spin each sub-step, so it comes to rest (and is cleaned up after AVL_REST) instead of rocking on its corners
+     *  for the rest of its life. Hard impacts, ricochets and tumbles are faster than this and keep their full physics. */
+    public static final float AVL_SETTLE_V = 1.2f, AVL_SETTLE_W = 200f, AVL_SETTLE_K = 0.85f;
     /** Leaving: it runs up the tower at ENF_EXIT_RUN and leaps away (m/s); once ENF_GONE_Y above its deck (or falling for ENF_FALL_T s) it is gone. */
     public static final float ENF_EXIT_RUN = 7f, ENF_EXIT_VX = 6f, ENF_EXIT_VY = 13f, ENF_GONE_Y = 10f, ENF_FALL_T = 2f;
 

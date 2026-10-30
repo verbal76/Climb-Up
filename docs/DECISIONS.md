@@ -1282,3 +1282,235 @@ Source: docs/verification/CONSOLIDATED_AUDIT_REPORT.md (DC1-DC10) and docs/verif
 The owner accepted the measured erosion of the mode separation for Build 82: 29.7% PUNISHER/NORMAL and 61.4% NGH/PUNISHER, against the 25%
 standard. Next build: NGH castles 9-10 and the separation erosion, as a generation change with its own rules version, CI run and campaign. The
 playtest build is on hold at the owner's request.
+
+## Build 83 avalanche overhaul (owner directive 2026-10-29; rules 18, branch experiment/pendulums)
+
+Owner answers before any code: the trigger reads the climber's measured real speed (the stick stays direction-only, one run speed); NOT GONNA
+HAPPEN drops 9-12 blocks; the warning is the rumble only; the work stacks on the rules 17 experiment and shares its one final CI.
+
+- **Counts.** PUNISHER 8-10 blocks (rules 12-17: 4-5), NGH 9-12 (5-7), NORMAL 2 (unchanged). Avalanches per castle are unchanged: the plan
+  makes the same random draws, so only the block count moves. Element.AVL_MAX 7 -> 12; saves with 5 or 7 block slots are widened on load.
+- **Physics (PUNISHER and NGH, Sim.stepRigid).** Each block is a rigid cube (half side = collision radius) with mass and moment of inertia. A
+  contact acts at the touching corner or face; the impulse there (restitution 0.58-0.80 per block, Coulomb friction 0.45-0.75) changes velocity
+  and spin together. A corner landing tumbles; a spinning block throws itself off line on its next bounce. Deck sides act as walls. Blocks hit
+  each other mass-weighted with restitution 0.82 and friction that trades spin. Contacts under 0.9 m/s do not bounce, so blocks can come to
+  rest. Four sub-steps per step; speed capped at 22 m/s and 1,500 deg/s; StrictMath trigonometry. Gravity and drop height are unchanged. Of
+  the blocks, 35% are aimed: they land where the climber's own velocity carries them, 0.6-2.6 m ahead along the route. The rest come down over
+  the four decks ahead, thrown back down the route (70%) or up it. NORMAL keeps its gentler rules 12 physics: its two blocks were approved as
+  they are.
+- **Trigger (every mode, Sim.avlReached).** Standing on the trigger deck fires it, as before. Otherwise, from up to 12 m short of the deck's
+  near edge along the route (5 m below to 3 m above the deck), it fires once the climber's real speed toward the deck would bring them there
+  within the blocks' fall time (0.96 s from 11 m) plus 0.30 s. Flying over the deck fires it too, so a launch that skips the deck cannot dodge
+  it. A spot fires once (state 1); turning back cannot fire it again. Reaching it by prediction during the cooldown waits; landing on the deck
+  during the cooldown spends it, as before.
+- **No warning.** The 1.4 s wait, the flashing arrows and the "LOOK UP!" popup are gone. The first block breaks loose 0.05 s after the trigger,
+  the rest 0.07-0.16 s apart (NORMAL 0.35 s). The rumble (sound, shake if motion is allowed, vibration if enabled) plays as they break loose.
+  Its "[RUMBLE ABOVE]" caption shows only with captions on, like every caption (spec section 12). Impacts kick up grit, which reduced motion
+  turns off.
+- **Fairness proofs.** An avalanche is now proven from two decks before its trigger, so the proof climber arrives at full speed and the lead
+  fires as it would in a real climb. PUNISHER is now also proven for every extra arrival delay (0.7, 1.6, 2.9 s), as NGH already was. An
+  unprovable spot is tried elsewhere, then dropped, as before.
+- **Frequency correction (owner addendum 2026-10-29: restore about Build 82 frequency without weakening the avalanches).** Cause: the rigid
+  blocks never came to rest. Three to eight of them kept rocking on the route until their 12 s life ran out, so the fairness proof found no
+  clean move off the trigger deck ("no plan" with 6-9 blocks live). About a third of the refused spots also fail with no avalanche at all;
+  those stretches cannot be proven either way. Two narrow corrections were kept:
+  (1) Slow-contact settling (Element.AVL_SETTLE_V 1.2 m/s, AVL_SETTLE_W 200 deg/s, AVL_SETTLE_K 0.85). A block touching a deck below both
+  limits loses 15% of its motion per sub-step. The route clears in 5-7 s. Violence is unchanged where it matters: on PUNISHER seed 7301
+  there are 41-72 rebounds, 25-50 tumbles and 26-55 ricochets per avalanche.
+  (2) The planner waits for a live avalanche nearby the way a person would: 24 waits 0.45 s apart (Autopilot.AVL_WAIT_STEP), inside a trial
+  8 s longer than usual (AVL_TRIAL_EXTRA). The solver uses the same planner, so the proof claims nothing the solver cannot play.
+  Avalanches placed / dropped to 1,200 m (seed 7301, local, generation only, no solver):
+
+  | Mode | Before | After both corrections | Build 82 |
+  |---|---|---|---|
+  | PUNISHER | 3 / 8 | 9 / 2 | about 8 |
+  | NGH | not measured | 2 / 6 | about 10 |
+
+  NGH is not restored. A third change was tried and reverted because it changed nothing: letting the proof try the solver's other standing
+  spots on the trigger deck (counts identical to the run before). NGH's remaining refusals are "no plan" two decks past the trigger with 8-9
+  blocks still moving. Under the owner's nine-course directive no further correction is made. The shortfall is reported as a finding.
+- **Steam demo (for the record):** demo App ID 5526730 (Windows depot 5526731, Linux depot 5526732); full game App ID 5427130
+  (https://store.steampowered.com/app/5427130/). The demo is with Valve for review; the official Steam logo is still to be added. Branch
+  demo/build-82 and the submitted demo are not touched by this work.
+
+## Rules 19 owner decisions (2026-10-29, branch fix/build-83-root-causes)
+
+- **C1 shortcut rule (correction):** two platforms of different spiral revolutions clash when the upper one is within the lower one's measured
+  ordinary reach (T5 tables, + 0.5 m), anywhere along the arc. Intended route links and branches are never cross-revolution pairs, so C1 does not
+  touch them (DescentRouteC1Test). Evidence: docs/verification/build83/T5_FINDINGS.md.
+- **Emergent movement, category C (owner answer 1):** C1 and the layer spacing guard ordinary movement only. Skull launches, ridden spike drops,
+  collision knock-backs and timed rebounds may reach later revolutions; the generator does not prevent them and never relies on them.
+- **New mechanics in every mode (owner answer 1):** descents, lowered pads, Tarzan swings and turbo ramps appear in NORMAL, PUNISHER and NGH;
+  difficulty comes from geometry and timing, the physics is the same in every mode.
+- **Visuals (owner answer 1):** procedural and existing CC0/original assets (narrow bar platforms, a rope swinging from a beam, a booster block).
+- **Frequencies (owner answer 1):** a modest start (about 1 in 4 eligible pad/rope/narrow modules get a descent variant; Tarzan swings and turbo
+  ramps take about the old share of spinning ramps and ski jumps), measured and adjusted with the owner.
+- **Spinning ramps** (RAMP skin 3) are no longer generated; Sim and the renderer still play them for earlier saves and replays.
+- **Bridge planks** that fall out stay gone for the climb (respawns, slice unload/reload, saves); holed bridges are proven with their holes open.
+- **Timed rebound jump:** a fresh airborne Jump press arms a 100 ms window (provisional, within the owner's 80-120 ms); contact with a crab,
+  bee, cannon ball, aimed shot, mortar round or saw inside it adds a jump impulse to the contact's normal outcome. **Owner decision
+  (2026-10-29 consolidated correction):** a rebound is recorded apart (Sim.rebounds) as a skill move; the contact itself stays recorded (a
+  rebound off a hazard still increments Sim.hits, its historical meaning, and grants the usual 0.7 s invulnerability).
+- **A hit is not a failure (owner consolidated correction 2026-10-29).** There is no health bar. Every proof that used to reject a move on
+  `falls + hits` (link trials and their arrival, the generator's chain proofs, key detours, fork branches, the whole-course witness) now
+  rejects it on a fall only (`Autopilot.lost`); the move must still arrive standing, hanging or pulled up on a later route element, so a
+  knock onto a dead end, back down, or nowhere still fails. Order of evaluation per link: clean moves (always preferred, searched first);
+  then moves that take an ordinary knock and still arrive; then a bounded timed-rebound search (the first 8 moves that meet something,
+  pressed afresh 1, 3 and 5 steps before the contact - at most 24 extra trials). A knock or rebound link needs at least 2 working moves
+  (`MIN_COLLISION_SUCCESSES`): one frame is not a route. The checks that choose a clear moment to go (clearOfEverything, rehearsals, lineups,
+  waits, SafeStart) still avoid hits, so the solver waits for a clean chance when one exists; a move chosen knowing it takes a knock is
+  judged by its outcome there too. `-Dclimb.hitStrict=true` restores the old rule for comparisons. Accounting: Sim.hits (hazard knocks,
+  unchanged), Sim.shoves (creature shoves, new), Sim.rebounds; Report.hitsTaken/shoves/rebounds/hitLinks/reboundLinks; generator tallies
+  r19_why_*. Audit finding: creature shoves never counted as hits, so crab/bee/blob/skull/Enforcer contacts were already judged by outcome;
+  the over-strict path was lethal-hazard contact (saws, cannon balls, spikes, avalanche blocks).
+- **Tarzan swing save/restore (owner decision 2026-10-29):** run.json stores the grip distance down the rope (`hasTarzanR`, `tarzanR` =
+  Sim.tarzanR) with the attachment mode and the rope's element key; the rope's place comes from the course and the saved clock. Restore
+  clamps the grip to the rope and hangs the climber there wherever the rope has swung to (position and velocity from the swing). A file with
+  Mode TARZAN but no grip (none were released) is projected onto the rope's direction at the saved time (never height alone); hands more than
+  0.5 m off the rope refuse the snapshot (checkpoint resume). A swing just let go of is not caught again for 1 s (you fly beside it; it used
+  to re-catch you 0.3 s after letting go): `tarzanLastKey`/`tarzanAgainT`, optional in run.json.
+- **Reports and probes grow courses exactly as the game does** (GameGrowth = Tower.grow backtracking); chunkFramed alone reported stops the
+  game recovers from.
+- **Turbo ramp (owner directive 2026-10-29; engineering values provisional):** RAMP skin 5 with a booster at its top. Running off the top fires
+  the climber out at the ramp's own launch angle (0.15-0.55 rad) and speed (11-15 m/s); for 0.55 s the flight is powered (launch speed held, no
+  air drag or steering, gravity at 30%), a long, flat, fast flight. A fresh Jump press in powered flight cancels it: 35% of the forward speed is
+  kept, gravity and air control return, the climber stays airborne (no snap, no teleport). Held or buffered presses never cancel; a press on the
+  ramp is an ordinary jump. The cancel press is not also a rebound press. Any knock or shove, landing or catch ends the turbo, so collisions
+  behave as ever. Generation: half of the ski-jump share of second-world ramps; the landing deck lies at 95% (easiest) to 70% (hardest) of the
+  full uncancelled flight, so harder climbs need the cancel; 4 m decks at low difficulty. Planner: TurboPolicy (ride it out, or cancel at
+  0.05-0.5 s). Save: run.json turboT (optional). Visual: an orange-tinted ramp with a dark booster and glowing chevrons at its top.
+  -Dclimb.turboOff=true turns generation off for comparisons. Fixtures: TurboRampTest (9).
+- **Tarzan swings and turbo ramps from the first world's second half (owner decision 2026-10-30):** from about 500 m (half of the 1000 m
+  first world) at half the second world's rate (swings 1 in 8 ramp draws, turbo ramps 1 in 10), the full rate from the second world. The
+  1000 m KPI study (owner audit 2026-10-30, KPI 16 FAIL: one swing in three courses) found the modules were simply never drawn below 1000 m.
+- **Tarzan refusal diagnosis (KPI audit recommendation 1):** in isolation the module is proven every time (TarzanModuleProbe: 120/120 catches
+  and rides, link margins 0.27-0.35 vs 0.07 needed). In context every refusal was a spiral-layer clearance: the swing's clearance box was
+  over-sized (2.4 m below the rope's end where the rider's feet hang 1.15 m; 0.8 m arc pad) - now the body's real extent - and the module
+  travels sideways without climbing, so its landing deck met the 9.5 m launcher spacing of the revolution below; its landing may now sit up to
+  1.6 m higher (reached by letting go on the upswing). Seed 7322 to 1750 m: swings placed 2 -> 5 (accepted 2/19 -> 5/16), body refusals 10 -> 0;
+  the remaining refusals are the shortcut spacing rule, kept. Refusals now trace as why_TARZAN_* / why_TURBO_*; diag_summary reports them
+  with the r19_ acceptance tallies (section R19) and counts TARZAN in KPI 16.
+- **KPI 7 progression direction (owner, 2026-10-30):** each difficulty should show meaningful escalation through all ten castles, with about
+  30-40% total growth as a flexible reference, not a rigid numerical gate. Recorded as design direction; no progression balancing is done
+  during the NGH generation-cost investigation (owner instruction).
+- **Plan cache (overnight priority A, owner authorisation 2026-10-30; speed only, `-Dclimb.planCache=off|shadow|on`; default **on** since the generator directive of 2026-10-30, `off` is the emergency switch):**
+  `PlanCache` answers a repeated `Autopilot.planTo` inside one slice attempt from a stored result. The key is the whole starting simulation
+  object graph (every climber, element-state, hazard-state and creature field, the course with every element and hazard, the tuning) encoded
+  by reflection plus the call's flags and the planner switches; it is matched by comparing the full key, never by hash alone. Only the
+  motion-cache handle is left out (every trial installs its own and the cache is value-transparent). The planner draws no random numbers; its
+  report tallies are recorded with each entry and replayed on a hit; each hit returns a fresh copy of the result (callers modify it). Shadow
+  mode computes every plan and compares a would-be hit field by field, by the chosen move's policy and replayed trial, by the tallies and by the
+  untouched start state. Evidence (PlanCacheProbe, GameGrowth with backtracking, off vs shadow vs on: slice bytes, every module attempt,
+  failures, all tallies except the wall-clock `avalanche_proof_ms`): NORMAL 7322/1/5, PUNISHER 7322/2/3, NGH 7322/1/2 identical, 0 shadow
+  mismatches; 10-17% less generation time (NGH 7322 0.795 -> 0.680 s/m). A scope clears itself at 2 M ints of keys (about 8 MB) so a phone generating
+  slices stays bounded; class ids in the key encoder come from an atomic counter (parallel test threads).
+- **Early geometric rejection (overnight priority C; speed only; default **on** since the generator directive of 2026-10-30, `-Dclimb.earlyReject=false` restores proof-first order):** the encounter-conflict rule and
+  NORMAL's threat budget read only geometry and hazards and every commit check must pass, so they now may run before a module's proofs
+  (`geometryRefuses`). The same modules are kept and refused (PlanCacheProbe "early" modes: NORMAL 7322/5/1, PUNISHER 7322/2, NGH 7322 slices
+  and module outcomes identical). Diagnostics differ for a refused module whose proofs would also have failed (counted as conflict/threat, not
+  plan; its proofs' tallies are not raised), so the refusal is attributed explicitly: the tally `early_refused_conflict` / `early_refused_threat` counts such refusals,
+  `GenTrace.Module.earlyRejected` marks the module and the lane report's modules.csv carries a `refused_early` column. KPI comparability:
+  acceptance KPIs count modules kept and refused, which are unchanged; only the refusal-reason breakdown and proof tallies (plans, plan_ms)
+  of doubly-refused modules move, and `refused_early` says exactly how many. Saving: NORMAL seed 5 0.649 -> 0.236 s/m
+  (61% of its time was proving modules the conflict/threat rules then refused), NORMAL 1 -24%, PUNISHER 7322 -6%, NGH 7322 ~0.
+- **Avalanche encounter-check cost (overnight priority B):** measured, not changed. 99% of an avalanche chainClean is planning (the 24-wait
+  sweep with 8 s longer trials under live blocks: about 0.41 s per plan vs 0.06 s for other encounters); walking the climber through costs
+  almost nothing; there are no exact repeats to reuse (each arrival delay and each re-proof after a module is a different start or course).
+  NGH 7322: 40 s of 189 s. Profile (JFR): the avalanche rigid step (24%, mostly StrictMath cos/sin of block angles) and crab deck lookups (28%).
+  Computing each block's cos/sin once per substep was bit-identical (cross-build signatures) but no faster (one deck contact per substep), so
+  it was reverted. No other provably exact reduction was found without shortening the search, which the directive forbids.
+- **Phase 3 NGH hazard acceptance (generator directive 2026-10-30):** refusal causes classified at full height (run 41053445468): the spiral-layer
+  rule refuses 37-81% of NGH hazard modules (MORTAR and DROPS 81%), and the leading layer cause for every module kind is a deck within 9.5 m above a
+  launcher of the revolution below, mostly missing by 0.25 m or less. A shape adaptation that keeps every rule (`-Dclimb.mortarAdapt`: lift a mortar
+  row deck up to 1 m past a lower-layer clash; 7db5825) raised mortar acceptance only 6.9% -> 7.2% at full height (run 41062643253): layer refusals
+  became hazard-box refusals. It stays off (default generation unchanged). The launcher spacing rule is the owner's shortcut protection and was not
+  changed; relaxing it is an owner decision.
+- **Slope-aware progression (S2, `-Dclimb.progSlope`):** full-height A/B (runs 41053445468 / 41053449567) showed no improvement in dips or growth;
+  it stays off (docs/PROGRESSION_CONTROLLER_AUDIT.md section 7).
+- **Geometry audit outcome (owner decision 2026-10-30): option C plus the pad-gap fix.** `assets/data/tuning.json` radius 10 -> 11.5
+  (circumference 62.8 -> 72.3 m) and C1's pad reach table holds 10.25 m at every edge gap up to 2 m (it was 8.25 / 9.5 m there; pads in
+  generated courses reached decks 9.53-10.29 m up at those gaps, refused by neither rule). The 9.5 m blanket is unchanged; the `measured` and
+  `lowreach` layer-rule switches stay off. Evidence: docs/geometry_audit/GEOMETRY_AUDIT_REPORT.md (radius 11.5: +17-25 % hazards, mortar rows
+  x2 in PUNISHER/NGH, castle growth +37 / +26 / +17 %, solve=1 run 41089449890 100 % PROVEN_SOLVABLE on 9 courses; cost: ~10 % longer route,
+  +20-60 % generation time). Radius is frozen for over-the-air updates, so this ships only in a full build. Every course changes: the rules bump,
+  fingerprint and bundled replays follow at the final freeze, as already planned for rules 19. `Tuning.java`'s default radius stays 10 (the
+  defaults already differ from tuning.json; tests that build `new Tuning()` keep their fixed geometry). LayerSpacingTest now expects a pad 9.6 m
+  below a deck to be refused (C1) and 10.8 m to be allowed; ShortcutReachTest pins the audit's pad pairs.
+
+## Mechanic-introduction pop-ups (owner playtest, branch visual/build83-atmosphere, awaiting owner review) - 2026-10-30
+Owner: the ramp pop-up stayed too long and sat over the route. Contextual tips are now a compact top-edge banner (between the height plate and
+the pause button, `ui/TipBanner`), one short line per mechanic (`TipCatalog.brief`; the full text is kept and shown in the pause menu's LAST TIP
+panel), 2.5 s with a short fade (the locked-castle tip 4 s), closed by a tap on it, TAB, or the controller's BACK button (never while those are
+bound to a gameplay action). One at a time with a 1.2 s gap; the tip waits, hidden with its clock stopped, while an event toast or the world
+banner holds the top band (keeps Build 63's separate bands). The seen list (`SaveData.shownTips`, same keys) is respected; a tip is marked seen
+only when it starts. The club pickup toast is short and its how-to became the one-time `club` tip (tips off: as before). UI only: the banner never
+writes the InputState; replays and the simulation are unchanged. Details and the audit table: docs/TIPS_UX_REPORT.md.
+- **Mortar plinth (owner 2026-10-30, cosmetic, visual branch):** the 2 m slate block drawn under every mortar reached 6.3 m below the path, into
+  the spiral revolution below (the owner's "giant black box"). It is now a 0.45 m plinth under the cap (`WorldRenderer.MORTAR_PLINTH`); the
+  assembly ends about 4.8 m below the path. The mouth stays where the simulation fires from; nothing below the mouth is part of any clearance
+  rule, so generation, the simulation and replays are unchanged. A side-cannon-style slab was not used: 2.6 m wide, it would nearly fill the
+  2.2-3 m gap and read as a landable deck. Before/after: docs/visual/mortar_plinth_1280x720_below.png (seed 1, slice 3, ~214 m; AtmosShot
+  gained `-Dclimb.chain=true` to render a slice at its real height).
+- **Depth mover end posts removed (owner playtest 2026-10-30, cosmetic, visual branch):** the depth mover (MOVE_Z) drew two 0.9 m posts beside
+  the ends of its travel rail, offset to the platform's left edge, that read as floating mounts. `WorldRenderer.drawDepthRail` now draws only the
+  rail (whose brightness still shows when the platform is in the climber's plane); the moving platform is unchanged. The posts were renderer
+  boxes only (no element, hazard, collision box or generator rule refers to them), so movement range, speed, timing, collision, solver and
+  placement are unchanged. Before/after at 250 / 750 / 2750 / 4250 m, three moments each (seed 7): docs/visual/depth_mover_posts_*.png.
+
+## Build 83 audio polish: louder effects, real headroom, distinct cues (owner directive "GAME JUICE, SOUND DESIGN & AUDIO POLISH", branch `av/build83-audio`, 2026-10-30)
+
+Full measurements, before/after tables and the inventory: `docs/AUDIO_POLISH_REPORT.md`. Presentation only: nothing under `sim/`, `tuning.json`,
+collision, input timing, replays or determinism fixtures changed; every new cue is derived from existing event bits or public counters.
+
+- **Why effects were quiet at 10 (measured, not guessed):** (1) libGDX clamps a Sound's volume to 1.0 and the slider was `volume x step/10`, so
+  10 could never be louder than the files; (2) many pack clips were very spiky (sample peaks at or above 0 dBFS but only -20..-28 LUFS loud: the
+  grab, bounce-pad clang, landing thuds, UI click, footsteps), and the CI's dynamic `loudnorm` left the Minifantasy clips up to +1.6 dBFS (clipping)
+  with variants of one sound 4.5 dB apart; (3) **desktop only:** libGDX places a centred mono effect where OpenAL Soft renders it **7.9 dB down per
+  channel** (calibrated with a 1 kHz tone through the OpenAL Soft wave writer), while the stereo music and Android's SoundPool play at file level.
+- **Mastering (`tools/audio/master_sfx.py`, outputs `assets/audio/mastered/` + `assets/data/sfx_levels.json`; originals untouched):** trim, gain to a
+  per-class in-game target (loudest 100 ms, K-weighted: major -9.5, action -11.5, texture -15.5 LUFS at the caller's loudest volume, from
+  `assets/data/sfx_mix.json`), oversampled soft clip of spikes only (at most 6 dB) and a look-ahead limiter (at most 6 dB) to -1 dBTP. A file that
+  would need more stays short of its target (listed in the report). Set `"mastered": false` in `sfx_mix.json` or delete the folder to go back.
+- **Licensed Minifantasy clips:** `tools/ci/fetch_pack_sfx.sh` now applies fixed per-clip gains (measured from the pinned pack, sha256 unchanged)
+  and a limiter instead of `loudnorm`; still 20 clips, still never committed.
+- **EFFECTS VOLUME curve (`audio/SfxMix`):** 0 = silence; 1..10 in equal 3.1 dB steps from -28 dB to 0 dB (was 1 = -20 dB and only 6 dB between 5
+  and 10). Saved values keep their meaning (same number = same slider position); no settings migration was needed. Music is unchanged and independent.
+- **Bus safety (`SfxMix`):** per-sound copy caps and gaps (data), a 14-voice budget (under Android's 24 streams and OpenAL's 16 sources), equal-power
+  scaling of pile-ups, a peak budget so effects starting within 100 ms cannot sum past full scale, and a 6 dB / 0.35 s duck of texture sounds
+  (steps, creaks, buzzes, hum) under major cues so warnings stay audible in busy scenes.
+- **Desktop level fix (`desktop/OpenAlLevels`):** each effect voice is made non-spatial (AL_SOFT_source_spatialize; the game never pans) and given
+  the measured 4.5 dB back as OpenAL source gain, so a PC plays effects at the same level as a phone. `-Dclimb.noAlLevels=true` turns it off.
+- **Sound identity fixes:** the saw used the rope's creak clip (now its own whir); the pull-up "huup" used the spike trap's snap clips (now the
+  per-character voice again); the bounce pad's thin clang -> an original sprung "boing"; respawn's whoosh (also a jump whoosh) -> a short rising
+  shimmer; menu click -> "select" blip, back/cancel -> a matching falling "back" blip. Previous mappings are kept in `sfx.json` `_build82`.
+- **New cues (original, `tools/audio/gen_cues83.py`):** turbo-ramp booster + its fizzle when cancelled, timed-rebound ping, rope-catch creak,
+  cable-catch ring, ledge hand slap, cable hand-over-hand zip, hard-landing thump, personal-best sting (only with SHOW BEST TIMES on).
+- **Juice (`fx/Juice`, presentation only, own generator):** rope fibres / cable sparks / ledge grit on a catch, hard-landing dust ring, turbo
+  launch flash + exhaust trail, fizzle puff, rebound star, personal-best confetti. No new shake, flash or hit-stop. Off with REDUCED MOTION and at
+  LOW graphics quality.
+- **Cosmetic randomness:** variant picks and pitch/volume variation in audio now come from `SfxMix`'s own generator (and Juice's), not MathUtils;
+  the simulation never used either (PlayDeterminismTest's guard is unchanged).
+- **Build 83 master execution (owner directive and supplement, 2026-10-30): campaign seeds and package inspection.** The nine-course KPI
+  campaign uses seeds **1, 2, 3** (the owner's written campaign specification of 2026-10-27: "seeds 1, 2, 3 ... seeds fixed in advance"); the
+  c8ef538 validation's 7321-7323 were that run's choice, not a recorded specification, so comparisons with it are made per mode, not per seed.
+  The geometry and validation runs of 2026-10-30 used 1, 2, 7322 and are design evidence, not campaign evidence. `tools/ci/inspect_package.py`
+  (run after the certification package in difficulty-report.yml) prints what the package really holds: ZIP CRC and SHA-256 against the
+  manifest, every manifest hash, each KPI's class (measured-complete, measured-incomplete, analyst judgment, unavailable) with its missing
+  inputs named, the drawn share of every chart (a near-blank chart is flagged), every table's rows and empty cells, PDF pages and the
+  dashboard's offline state. Reporting only; nothing in generation or gameplay changed.
+- **Build 83 candidate frozen as RULES_VERSION 19 (owner master execution directive part 6, 2026-10-30).** Rules 19 = the C1 cross-revolution
+  reach rule with the pad gap fix (pads keep their 10.25 m measured reach at edge gaps up to 2 m), emergent hazard-assisted movement neither
+  prevented nor relied on, a hit is not a failure, the timed rebound jump, Tarzan swings and turbo ramps from 500 m, descents and lowered pads in
+  every mode, no new spinning ramps, fallen planks stay gone, tower radius 11.5 m (tuning.json), the blanket 9.5 m rule retained (no layerRule
+  switch), atmosphere off. Generation fingerprint **b0c5646446610a0274e036ab** (rules 18: 3e79526889137dc34e1edeb9), read from DeterminismTest's
+  GENERATION_FINGERPRINT line, not chosen. Bundled seed-12 replay re-recorded with `ReplayTool record` on this source: 5,000 m, 10 doors, no
+  respawns, **no harness skips**, finish step 412,631 (clock 412,632 = 1:54:37.200), events d960b50ec8e81d71c651ae23, states
+  f043865b313609d77387b1bd; ReplayCheck and BundledReplayTest expect these values. The presentation merges (visual 9ca2c67, audio 856e79a) touch no
+  simulation, generator, tuning or replay file. Gem midpoint and run spread at radius 11.5 (GemSpreadProbe, local): spread hi/lo 1.184 (test >= 1.100;
+  radius 10 gave 1.067), seed 8 gem 1 -3.12 m (radius 10: +5.35 m), worst of 16 gems 3.34 m (test 4.5 m); no threshold or test changed.
+  CI 41095330974 on 72c0a6d (radius 11.5 + pad fix, before the freeze): 588 core tests, 3 failures - the fingerprint and bundled replay (both
+  refreshed here; its GENERATION_FINGERPRINT line is the same b0c5646446610a0274e036ab as the integrated source, so the presentation merges change no
+  generation) and TowerPrepareTest.onceReadyStartingTheClimbDoesNotGenerate ("prepared start 428 ms vs 2043 ms"). Root cause of the last: the test
+  timed seed 34's slice 0 and waited 3x that for seed 35's to be prepared; at radius 11.5 seed 35's costs about 3.5x seed 34's (measured locally
+  69-71 s vs 19-20 s on a loaded machine), so it was not ready yet. The test now times the seed it prepares; its 5x assertion and claim are
+  unchanged. The gem midpoint and run-spread tests pass at radius 11.5.

@@ -566,6 +566,41 @@
    "solver_status": "NOT VERIFIED",
    "proof_status": "NOT VERIFIED",
    "note": "Never used by the solver."
+  },
+  {
+   "id": "MV-45",
+   "name": "Tarzan swing: catch, ride, release, drop off (rules 19)",
+   "source": "Sim.attachTarzan / Sim TARZAN mode / Autopilot.TarzanPolicy",
+   "sim_tests": [
+    "TarzanSwingTest#theRopeIsCaughtWhereItIsNow",
+    "TarzanSwingTest#theClimberRidesTheRope",
+    "TarzanSwingTest#whenYouLetGoDecidesWhereYouFly",
+    "TarzanSwingTest#downAtTheRopesEndDropsOff",
+    "TarzanSwingTest#aSwingLetGoOfIsNotCaughtAgainAtOnce",
+    "TarzanSwingTest#swingsAreDeterministicAndCopiesContinueExactly",
+    "TarzanSaveRestoreTest"
+   ],
+   "sim_status": "VERIFIED",
+   "solver_status": "PARTIALLY VERIFIED",
+   "proof_status": "PARTIALLY VERIFIED",
+   "note": "Planner samples 24 release times over one period (TarzanPolicy); proven in isolation 120/120 (TarzanModuleProbe) and in generated slices; a full ten-castle campaign on rules 19 is still pending."
+  },
+  {
+   "id": "MV-46",
+   "name": "Turbo ramp: powered launch and fresh-press cancel (rules 19, RAMP skin 5)",
+   "source": "Sim.stepGround / Sim.step / Sim.stepAir (turboT) / Autopilot.TurboPolicy",
+   "sim_tests": [
+    "TurboRampTest#runningOffTheTopFiresTheBooster",
+    "TurboRampTest#aFreshPressCancelsTheTurbo",
+    "TurboRampTest#holdingJumpThroughTheLaunchNeverCancels",
+    "TurboRampTest#aKnockEndsTheTurbo",
+    "TurboRampTest#turboFlightsAreDeterministic",
+    "TurboRampTest#thePlannerCancelsToLandShortOfTheFullFlight"
+   ],
+   "sim_status": "VERIFIED",
+   "solver_status": "PARTIALLY VERIFIED",
+   "proof_status": "PARTIALLY VERIFIED",
+   "note": "No new element type or mode: a RAMP with skin 5 launching into AIR."
   }
  ],
  "transitions": [
@@ -883,6 +918,24 @@
    "mechanic": "MV-05",
    "solver_initiates": false,
    "solver_recognises": true
+  },
+  {
+   "id": "TR-36",
+   "frm": "AIR",
+   "to": "TARZAN",
+   "trigger": "catch the swinging rope where it is now (not the swing just let go of, for 1 s)",
+   "mechanic": "MV-45",
+   "solver_initiates": true,
+   "solver_recognises": true
+  },
+  {
+   "id": "TR-37",
+   "frm": "TARZAN",
+   "to": "AIR",
+   "trigger": "let go (jump) or drop off the rope's end",
+   "mechanic": "MV-45",
+   "solver_initiates": true,
+   "solver_recognises": true
   }
  ],
  "modes": [
@@ -892,7 +945,8 @@
   "CABLE",
   "LEDGE",
   "PULLUP",
-  "BEAM"
+  "BEAM",
+  "TARZAN"
  ],
  "element_types": [
   "STATIC",
@@ -925,7 +979,8 @@
   "SKULL",
   "BLOB",
   "ENFORCER",
-  "AVALANCHE"
+  "AVALANCHE",
+  "TARZAN"
  ],
  "removed_transitions": [
   {

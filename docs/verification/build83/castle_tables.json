@@ -1,0 +1,1990 @@
+{
+"b82": {
+"NORMAL": {
+"p3": [
+{
+"castle": 1,
+"enemy_lane": 31.85,
+"hazard_lane": 82.2,
+"terrain": 482.6,
+"total": 607.4,
+"enemies": 20.6,
+"BEE": 3.5,
+"BLO": 0.6,
+"CRA": 12.4,
+"SKU": 4.1
+},
+{
+"castle": 2,
+"enemy_lane": 40.55,
+"hazard_lane": 126.8,
+"terrain": 486.4,
+"total": 668.1,
+"enemies": 28.4,
+"BEE": 5.4,
+"BLO": 1.2,
+"CRA": 17.9,
+"SKU": 3.9
+},
+{
+"castle": 3,
+"enemy_lane": 31.48,
+"hazard_lane": 108.4,
+"terrain": 502.1,
+"total": 658.6,
+"enemies": 19.7,
+"BEE": 3.9,
+"BLO": 0.8,
+"CRA": 10.9,
+"SKU": 4.1
+},
+{
+"castle": 4,
+"enemy_lane": 43.69,
+"hazard_lane": 120.5,
+"terrain": 504.3,
+"total": 688.3,
+"enemies": 30.0,
+"BEE": 3.3,
+"BLO": 1.9,
+"CRA": 19.4,
+"SKU": 5.4
+},
+{
+"castle": 5,
+"enemy_lane": 60.0,
+"hazard_lane": 139.0,
+"terrain": 525.2,
+"total": 748.6,
+"enemies": 39.5,
+"BEE": 7.2,
+"BLO": 2.3,
+"CRA": 22.1,
+"SKU": 7.9
+},
+{
+"castle": 6,
+"enemy_lane": 63.27,
+"hazard_lane": 132.5,
+"terrain": 540.9,
+"total": 762.4,
+"enemies": 42.6,
+"BEE": 7.2,
+"BLO": 2.3,
+"CRA": 25.0,
+"SKU": 8.1
+},
+{
+"castle": 7,
+"enemy_lane": 61.98,
+"hazard_lane": 149.9,
+"terrain": 532.3,
+"total": 772.7,
+"enemies": 41.2,
+"BEE": 5.4,
+"BLO": 3.6,
+"CRA": 23.8,
+"SKU": 8.4
+},
+{
+"castle": 8,
+"enemy_lane": 66.33,
+"hazard_lane": 151.4,
+"terrain": 554.9,
+"total": 801.1,
+"enemies": 44.7,
+"BEE": 5.7,
+"BLO": 3.7,
+"CRA": 26.6,
+"SKU": 8.7
+},
+{
+"castle": 9,
+"enemy_lane": 76.64,
+"hazard_lane": 166.8,
+"terrain": 588.2,
+"total": 865.4,
+"enemies": 48.5,
+"BEE": 7.7,
+"BLO": 5.9,
+"CRA": 25.1,
+"SKU": 9.8
+},
+{
+"castle": 10,
+"enemy_lane": 81.9,
+"hazard_lane": 164.4,
+"terrain": 589.4,
+"total": 868.6,
+"enemies": 55.7,
+"BEE": 8.4,
+"BLO": 7.6,
+"CRA": 29.5,
+"SKU": 10.2
+}
+],
+"p3c": [
+{
+"castle": 1,
+"creature": [
+8.0,
+4.8
+],
+"trap": [
+30.0,
+19.0
+],
+"haz": [
+44.0,
+30.1
+],
+"enforcer": [
+0.0,
+0.0
+]
+},
+{
+"castle": 2,
+"creature": [
+8.0,
+5.2
+],
+"trap": [
+36.0,
+19.6
+],
+"haz": [
+52.0,
+31.2
+],
+"enforcer": [
+0.0,
+0.0
+]
+},
+{
+"castle": 3,
+"creature": [
+7.0,
+4.9
+],
+"trap": [
+27.0,
+18.0
+],
+"haz": [
+43.0,
+30.2
+],
+"enforcer": [
+0.0,
+0.0
+]
+},
+{
+"castle": 4,
+"creature": [
+12.0,
+7.3
+],
+"trap": [
+34.0,
+24.7
+],
+"haz": [
+43.0,
+30.2
+],
+"enforcer": [
+0.0,
+0.0
+]
+},
+{
+"castle": 5,
+"creature": [
+16.0,
+10.3
+],
+"trap": [
+42.0,
+26.8
+],
+"haz": [
+58.0,
+39.5
+],
+"enforcer": [
+0.0,
+0.0
+]
+},
+{
+"castle": 6,
+"creature": [
+17.0,
+10.7
+],
+"trap": [
+46.0,
+27.6
+],
+"haz": [
+66.0,
+39.0
+],
+"enforcer": [
+0.0,
+0.0
+]
+},
+{
+"castle": 7,
+"creature": [
+18.0,
+12.0
+],
+"trap": [
+44.0,
+26.7
+],
+"haz": [
+69.0,
+42.4
+],
+"enforcer": [
+0.0,
+0.0
+]
+},
+{
+"castle": 8,
+"creature": [
+22.0,
+12.5
+],
+"trap": [
+43.0,
+26.6
+],
+"haz": [
+62.0,
+39.1
+],
+"enforcer": [
+0.0,
+0.0
+]
+},
+{
+"castle": 9,
+"creature": [
+24.0,
+15.8
+],
+"trap": [
+48.0,
+31.5
+],
+"haz": [
+72.0,
+44.0
+],
+"enforcer": [
+0.0,
+0.0
+]
+},
+{
+"castle": 10,
+"creature": [
+30.0,
+17.8
+],
+"trap": [
+60.0,
+34.8
+],
+"haz": [
+82.0,
+43.0
+],
+"enforcer": [
+0.0,
+0.0
+]
+}
+],
+"p4": {
+"route travel m": "2968 / 2953 / 2766-3424 / sd 123 / CV 0.041",
+"horizontal m": "2790 / 2766 / 2577-3250 / sd 128 / CV 0.046",
+"rise m": "539 / 538 / 527-585 / sd 9 / CV 0.016",
+"drop m": "43 / 42 / 32-54 / sd 5 / CV 0.107",
+"dips (>0.3 m)": "49 / 50 / 40-62 / sd 5 / CV 0.102",
+"route links": "554 / 557 / 514-617 / sd 19 / CV 0.034"
+}
+},
+"PUNISHER": {
+"p3": [
+{
+"castle": 1,
+"enemy_lane": 71.97,
+"hazard_lane": 144.4,
+"terrain": 497.5,
+"total": 739.8,
+"enemies": 53.7,
+"BEE": 13.6,
+"BLO": 2.2,
+"CRA": 30.0,
+"ENF": 1.1,
+"SKU": 6.8
+},
+{
+"castle": 2,
+"enemy_lane": 69.16,
+"hazard_lane": 164.1,
+"terrain": 525.7,
+"total": 784.8,
+"enemies": 48.3,
+"BEE": 7.8,
+"BLO": 2.7,
+"CRA": 27.1,
+"ENF": 0.9,
+"SKU": 9.8
+},
+{
+"castle": 3,
+"enemy_lane": 63.08,
+"hazard_lane": 135.4,
+"terrain": 549.8,
+"total": 776.9,
+"enemies": 39.9,
+"BEE": 5.4,
+"BLO": 4.2,
+"CRA": 20.4,
+"ENF": 1.0,
+"SKU": 8.9
+},
+{
+"castle": 4,
+"enemy_lane": 69.68,
+"hazard_lane": 150.8,
+"terrain": 574.8,
+"total": 826.4,
+"enemies": 44.3,
+"BEE": 6.8,
+"BLO": 3.8,
+"CRA": 22.4,
+"ENF": 1.3,
+"SKU": 10.0
+},
+{
+"castle": 5,
+"enemy_lane": 94.31,
+"hazard_lane": 180.6,
+"terrain": 580.8,
+"total": 886.8,
+"enemies": 63.0,
+"BEE": 10.0,
+"BLO": 7.5,
+"CRA": 31.8,
+"ENF": 1.3,
+"SKU": 12.4
+},
+{
+"castle": 6,
+"enemy_lane": 93.67,
+"hazard_lane": 171.1,
+"terrain": 578.9,
+"total": 875.6,
+"enemies": 62.9,
+"BEE": 8.4,
+"BLO": 7.9,
+"CRA": 32.7,
+"ENF": 1.2,
+"SKU": 12.7
+},
+{
+"castle": 7,
+"enemy_lane": 102.2,
+"hazard_lane": 171.4,
+"terrain": 603.6,
+"total": 911.0,
+"enemies": 68.4,
+"BEE": 9.4,
+"BLO": 8.9,
+"CRA": 35.6,
+"ENF": 1.2,
+"SKU": 13.3
+},
+{
+"castle": 8,
+"enemy_lane": 107.02,
+"hazard_lane": 178.0,
+"terrain": 635.5,
+"total": 955.8,
+"enemies": 69.3,
+"BEE": 10.2,
+"BLO": 9.6,
+"CRA": 34.4,
+"ENF": 1.3,
+"SKU": 13.8
+},
+{
+"castle": 9,
+"enemy_lane": 114.29,
+"hazard_lane": 185.4,
+"terrain": 646.2,
+"total": 981.7,
+"enemies": 69.3,
+"BEE": 7.2,
+"BLO": 12.5,
+"CRA": 31.4,
+"ENF": 1.5,
+"SKU": 16.7
+},
+{
+"castle": 10,
+"enemy_lane": 115.07,
+"hazard_lane": 181.3,
+"terrain": 668.9,
+"total": 1001.7,
+"enemies": 77.9,
+"BEE": 9.8,
+"BLO": 12.7,
+"CRA": 37.5,
+"ENF": 1.2,
+"SKU": 16.7
+}
+],
+"p3c": [
+{
+"castle": 1,
+"creature": [
+15.0,
+9.1
+],
+"trap": [
+54.0,
+33.2
+],
+"haz": [
+83.0,
+48.8
+],
+"enforcer": [
+1.0,
+1.1
+]
+},
+{
+"castle": 2,
+"creature": [
+20.0,
+12.5
+],
+"trap": [
+40.0,
+25.0
+],
+"haz": [
+58.0,
+37.6
+],
+"enforcer": [
+1.0,
+0.9
+]
+},
+{
+"castle": 3,
+"creature": [
+20.0,
+13.1
+],
+"trap": [
+37.0,
+26.0
+],
+"haz": [
+52.0,
+36.5
+],
+"enforcer": [
+1.0,
+1.0
+]
+},
+{
+"castle": 4,
+"creature": [
+21.0,
+13.8
+],
+"trap": [
+38.0,
+25.1
+],
+"haz": [
+55.0,
+37.8
+],
+"enforcer": [
+2.0,
+1.3
+]
+},
+{
+"castle": 5,
+"creature": [
+37.0,
+20.3
+],
+"trap": [
+51.0,
+33.3
+],
+"haz": [
+79.0,
+45.5
+],
+"enforcer": [
+2.0,
+1.3
+]
+},
+{
+"castle": 6,
+"creature": [
+33.0,
+20.9
+],
+"trap": [
+50.0,
+30.7
+],
+"haz": [
+75.0,
+45.9
+],
+"enforcer": [
+1.0,
+1.2
+]
+},
+{
+"castle": 7,
+"creature": [
+46.0,
+22.7
+],
+"trap": [
+60.0,
+29.3
+],
+"haz": [
+99.0,
+50.4
+],
+"enforcer": [
+1.0,
+1.2
+]
+},
+{
+"castle": 8,
+"creature": [
+54.0,
+23.7
+],
+"trap": [
+65.0,
+30.2
+],
+"haz": [
+105.0,
+49.3
+],
+"enforcer": [
+2.0,
+1.3
+]
+},
+{
+"castle": 9,
+"creature": [
+52.0,
+29.2
+],
+"trap": [
+58.0,
+31.2
+],
+"haz": [
+91.0,
+47.8
+],
+"enforcer": [
+2.0,
+1.5
+]
+},
+{
+"castle": 10,
+"creature": [
+55.0,
+29.7
+],
+"trap": [
+64.0,
+35.6
+],
+"haz": [
+94.0,
+46.9
+],
+"enforcer": [
+2.0,
+1.2
+]
+}
+],
+"p4": {
+"route travel m": "3285 / 3274 / 2962-3737 / sd 142 / CV 0.043",
+"horizontal m": "3149 / 3140 / 2817-3614 / sd 148 / CV 0.047",
+"rise m": "527 / 526 / 513-563 / sd 8 / CV 0.015",
+"drop m": "29 / 29 / 20-40 / sd 4 / CV 0.148",
+"dips (>0.3 m)": "31 / 31 / 19-47 / sd 5 / CV 0.162",
+"route links": "627 / 626 / 579-701 / sd 22 / CV 0.034"
+}
+},
+"NGH": {
+"p3": [
+{
+"castle": 1,
+"enemy_lane": 120.87,
+"hazard_lane": 188.7,
+"terrain": 598.3,
+"total": 943.5,
+"enemies": 71.5,
+"BEE": 11.0,
+"BLO": 10.2,
+"CRA": 29.1,
+"ENF": 2.0,
+"SKU": 19.2
+},
+{
+"castle": 2,
+"enemy_lane": 110.11,
+"hazard_lane": 199.3,
+"terrain": 578.9,
+"total": 925.4,
+"enemies": 60.2,
+"BEE": 10.0,
+"BLO": 10.8,
+"CRA": 20.0,
+"ENF": 2.1,
+"SKU": 17.3
+},
+{
+"castle": 3,
+"enemy_lane": 101.7,
+"hazard_lane": 169.2,
+"terrain": 647.7,
+"total": 955.0,
+"enemies": 54.8,
+"BEE": 8.4,
+"BLO": 10.7,
+"CRA": 17.9,
+"ENF": 2.0,
+"SKU": 15.8
+},
+{
+"castle": 4,
+"enemy_lane": 101.49,
+"hazard_lane": 179.0,
+"terrain": 661.4,
+"total": 979.1,
+"enemies": 54.5,
+"BEE": 5.4,
+"BLO": 12.9,
+"CRA": 18.2,
+"ENF": 1.7,
+"SKU": 16.3
+},
+{
+"castle": 5,
+"enemy_lane": 130.61,
+"hazard_lane": 209.1,
+"terrain": 620.3,
+"total": 996.9,
+"enemies": 74.6,
+"BEE": 8.8,
+"BLO": 15.7,
+"CRA": 27.0,
+"ENF": 2.0,
+"SKU": 21.1
+},
+{
+"castle": 6,
+"enemy_lane": 135.45,
+"hazard_lane": 210.4,
+"terrain": 663.4,
+"total": 1045.7,
+"enemies": 80.3,
+"BEE": 11.2,
+"BLO": 17.0,
+"CRA": 31.1,
+"ENF": 2.3,
+"SKU": 18.7
+},
+{
+"castle": 7,
+"enemy_lane": 145.95,
+"hazard_lane": 208.6,
+"terrain": 665.6,
+"total": 1057.1,
+"enemies": 85.1,
+"BEE": 8.8,
+"BLO": 16.7,
+"CRA": 34.4,
+"ENF": 2.0,
+"SKU": 23.2
+},
+{
+"castle": 8,
+"enemy_lane": 152.16,
+"hazard_lane": 208.5,
+"terrain": 692.6,
+"total": 1090.4,
+"enemies": 86.0,
+"BEE": 8.4,
+"BLO": 18.1,
+"CRA": 31.8,
+"ENF": 2.3,
+"SKU": 25.4
+},
+{
+"castle": 9,
+"enemy_lane": 153.57,
+"hazard_lane": 217.5,
+"terrain": 697.1,
+"total": 1106.0,
+"enemies": 84.2,
+"BEE": 11.2,
+"BLO": 19.1,
+"CRA": 27.4,
+"ENF": 2.1,
+"SKU": 24.4
+},
+{
+"castle": 10,
+"enemy_lane": 137.21,
+"hazard_lane": 218.6,
+"terrain": 715.3,
+"total": 1108.1,
+"enemies": 86.9,
+"BEE": 9.0,
+"BLO": 16.2,
+"CRA": 36.5,
+"ENF": 2.4,
+"SKU": 22.8
+}
+],
+"p3c": [
+{
+"castle": 1,
+"creature": [
+52.0,
+29.6
+],
+"trap": [
+54.0,
+26.5
+],
+"haz": [
+106.0,
+61.9
+],
+"enforcer": [
+2.0,
+2.0
+]
+},
+{
+"castle": 2,
+"creature": [
+49.0,
+28.3
+],
+"trap": [
+36.0,
+21.3
+],
+"haz": [
+82.0,
+52.9
+],
+"enforcer": [
+2.0,
+2.1
+]
+},
+{
+"castle": 3,
+"creature": [
+41.0,
+26.7
+],
+"trap": [
+26.0,
+15.8
+],
+"haz": [
+69.0,
+46.3
+],
+"enforcer": [
+3.0,
+2.0
+]
+},
+{
+"castle": 4,
+"creature": [
+44.0,
+29.2
+],
+"trap": [
+28.0,
+17.8
+],
+"haz": [
+67.0,
+43.9
+],
+"enforcer": [
+2.0,
+1.7
+]
+},
+{
+"castle": 5,
+"creature": [
+65.0,
+36.8
+],
+"trap": [
+45.0,
+24.5
+],
+"haz": [
+98.0,
+53.1
+],
+"enforcer": [
+2.0,
+2.0
+]
+},
+{
+"castle": 6,
+"creature": [
+69.0,
+35.8
+],
+"trap": [
+46.0,
+24.8
+],
+"haz": [
+109.0,
+61.1
+],
+"enforcer": [
+3.0,
+2.3
+]
+},
+{
+"castle": 7,
+"creature": [
+75.0,
+40.0
+],
+"trap": [
+44.0,
+25.6
+],
+"haz": [
+101.0,
+51.6
+],
+"enforcer": [
+2.0,
+2.0
+]
+},
+{
+"castle": 8,
+"creature": [
+77.0,
+43.5
+],
+"trap": [
+47.0,
+23.0
+],
+"haz": [
+110.0,
+57.6
+],
+"enforcer": [
+3.0,
+2.3
+]
+},
+{
+"castle": 9,
+"creature": [
+76.0,
+43.6
+],
+"trap": [
+51.0,
+27.1
+],
+"haz": [
+114.0,
+60.3
+],
+"enforcer": [
+3.0,
+2.1
+]
+},
+{
+"castle": 10,
+"creature": [
+74.0,
+39.4
+],
+"trap": [
+48.0,
+25.8
+],
+"haz": [
+113.0,
+59.5
+],
+"enforcer": [
+3.0,
+2.4
+]
+}
+],
+"p4": {
+"route travel m": "3529 / 3518 / 3240-4245 / sd 159 / CV 0.045",
+"horizontal m": "3413 / 3403 / 3103-4103 / sd 164 / CV 0.048",
+"rise m": "523 / 521 / 510-609 / sd 11 / CV 0.021",
+"drop m": "24 / 24 / 14-33 / sd 4 / CV 0.161",
+"dips (>0.3 m)": "24 / 24 / 12-33 / sd 5 / CV 0.194",
+"route links": "667 / 665 / 610-783 / sd 26 / CV 0.039"
+}
+}
+},
+"b83": {
+"NORMAL": {
+"p3": [
+{
+"castle": 1,
+"enemy_lane": 19.83,
+"hazard_lane": 73.8,
+"terrain": 575.0,
+"total": 680.2,
+"enemies": 15.7,
+"BEE": 2.0,
+"BLO": 0.3,
+"CRA": 11.7,
+"SKU": 1.7
+},
+{
+"castle": 2,
+"enemy_lane": 39.92,
+"hazard_lane": 126.3,
+"terrain": 541.0,
+"total": 721.8,
+"enemies": 25.7,
+"BEE": 5.0,
+"BLO": 1.3,
+"CRA": 14.0,
+"SKU": 5.3
+},
+{
+"castle": 3,
+"enemy_lane": 42.5,
+"hazard_lane": 96.7,
+"terrain": 568.4,
+"total": 725.6,
+"enemies": 27.3,
+"BEE": 5.3,
+"BLO": 1.3,
+"CRA": 15.7,
+"SKU": 5.0
+},
+{
+"castle": 4,
+"enemy_lane": 40.25,
+"hazard_lane": 150.8,
+"terrain": 594.7,
+"total": 808.0,
+"enemies": 26.0,
+"BEE": 5.3,
+"BLO": 3.3,
+"CRA": 13.7,
+"SKU": 3.7
+},
+{
+"castle": 5,
+"enemy_lane": 51.17,
+"hazard_lane": 117.4,
+"terrain": 573.5,
+"total": 763.0,
+"enemies": 36.3,
+"BEE": 4.0,
+"BLO": 2.7,
+"CRA": 24.3,
+"SKU": 5.3
+},
+{
+"castle": 6,
+"enemy_lane": 61.17,
+"hazard_lane": 146.9,
+"terrain": 610.2,
+"total": 843.9,
+"enemies": 48.0,
+"BEE": 5.0,
+"BLO": 3.0,
+"CRA": 33.7,
+"SKU": 6.3
+},
+{
+"castle": 7,
+"enemy_lane": 56.67,
+"hazard_lane": 131.9,
+"terrain": 592.9,
+"total": 808.5,
+"enemies": 35.0,
+"BEE": 3.3,
+"BLO": 4.7,
+"CRA": 18.7,
+"SKU": 8.3
+},
+{
+"castle": 8,
+"enemy_lane": 68.92,
+"hazard_lane": 173.1,
+"terrain": 600.4,
+"total": 872.7,
+"enemies": 47.0,
+"BEE": 5.7,
+"BLO": 4.0,
+"CRA": 28.3,
+"SKU": 9.0
+},
+{
+"castle": 9,
+"enemy_lane": 75.0,
+"hazard_lane": 137.5,
+"terrain": 640.4,
+"total": 880.1,
+"enemies": 54.0,
+"BEE": 9.7,
+"BLO": 5.7,
+"CRA": 31.3,
+"SKU": 7.3
+},
+{
+"castle": 10,
+"enemy_lane": 75.5,
+"hazard_lane": 152.7,
+"terrain": 652.4,
+"total": 913.0,
+"enemies": 49.3,
+"BEE": 5.3,
+"BLO": 9.0,
+"CRA": 25.3,
+"SKU": 9.7
+}
+],
+"p3c": [
+{
+"castle": 1,
+"creature": [
+5.0,
+2.0
+],
+"trap": [
+31.0,
+18.7
+],
+"haz": [
+43.0,
+28.3
+],
+"enforcer": [
+0.0,
+0.0
+]
+},
+{
+"castle": 2,
+"creature": [
+11.0,
+7.0
+],
+"trap": [
+34.0,
+20.0
+],
+"haz": [
+49.0,
+28.0
+],
+"enforcer": [
+0.0,
+0.0
+]
+},
+{
+"castle": 3,
+"creature": [
+10.0,
+6.3
+],
+"trap": [
+31.0,
+17.3
+],
+"haz": [
+53.0,
+32.7
+],
+"enforcer": [
+0.0,
+0.0
+]
+},
+{
+"castle": 4,
+"creature": [
+9.0,
+7.0
+],
+"trap": [
+34.0,
+23.7
+],
+"haz": [
+53.0,
+34.0
+],
+"enforcer": [
+0.0,
+0.0
+]
+},
+{
+"castle": 5,
+"creature": [
+17.0,
+8.0
+],
+"trap": [
+40.0,
+22.7
+],
+"haz": [
+65.0,
+36.0
+],
+"enforcer": [
+0.0,
+0.0
+]
+},
+{
+"castle": 6,
+"creature": [
+19.0,
+9.7
+],
+"trap": [
+54.0,
+26.7
+],
+"haz": [
+78.0,
+41.0
+],
+"enforcer": [
+0.0,
+0.0
+]
+},
+{
+"castle": 7,
+"creature": [
+22.0,
+13.0
+],
+"trap": [
+52.0,
+22.0
+],
+"haz": [
+78.0,
+33.3
+],
+"enforcer": [
+0.0,
+0.0
+]
+},
+{
+"castle": 8,
+"creature": [
+22.0,
+13.3
+],
+"trap": [
+51.0,
+31.3
+],
+"haz": [
+75.0,
+39.7
+],
+"enforcer": [
+0.0,
+0.0
+]
+},
+{
+"castle": 9,
+"creature": [
+21.0,
+13.0
+],
+"trap": [
+58.0,
+28.7
+],
+"haz": [
+83.0,
+40.7
+],
+"enforcer": [
+0.0,
+0.0
+]
+},
+{
+"castle": 10,
+"creature": [
+32.0,
+19.0
+],
+"trap": [
+49.0,
+31.3
+],
+"haz": [
+76.0,
+42.3
+],
+"enforcer": [
+0.0,
+0.0
+]
+}
+],
+"p4": {
+"route travel m": "2925 / 2910 / 2781-3289 / sd 117 / CV 0.040",
+"horizontal m": "2731 / 2715 / 2580-3088 / sd 117 / CV 0.043",
+"rise m": "535 / 534 / 523-574 / sd 10 / CV 0.018",
+"drop m": "37 / 35 / 30-51 / sd 6 / CV 0.155",
+"dips (>0.3 m)": "45 / 42 / 35-65 / sd 8 / CV 0.171",
+"route links": "525 / 526 / 475-560 / sd 23 / CV 0.044"
+}
+},
+"PUNISHER": {
+"p3": [
+{
+"castle": 1,
+"enemy_lane": 73.0,
+"hazard_lane": 145.1,
+"terrain": 578.5,
+"total": 824.4,
+"enemies": 56.0,
+"BEE": 10.7,
+"BLO": 2.7,
+"CRA": 35.3,
+"ENF": 1.0,
+"SKU": 6.3
+},
+{
+"castle": 2,
+"enemy_lane": 48.25,
+"hazard_lane": 159.6,
+"terrain": 613.2,
+"total": 845.7,
+"enemies": 38.0,
+"BEE": 4.0,
+"BLO": 1.3,
+"CRA": 26.3,
+"ENF": 1.0,
+"SKU": 5.3
+},
+{
+"castle": 3,
+"enemy_lane": 73.25,
+"hazard_lane": 128.5,
+"terrain": 580.6,
+"total": 810.7,
+"enemies": 41.3,
+"BEE": 9.3,
+"BLO": 3.7,
+"CRA": 16.0,
+"ENF": 1.3,
+"SKU": 11.0
+},
+{
+"castle": 4,
+"enemy_lane": 66.42,
+"hazard_lane": 150.1,
+"terrain": 607.6,
+"total": 851.1,
+"enemies": 40.0,
+"BEE": 5.3,
+"BLO": 5.7,
+"CRA": 18.7,
+"ENF": 1.3,
+"SKU": 9.0
+},
+{
+"castle": 5,
+"enemy_lane": 97.42,
+"hazard_lane": 166.8,
+"terrain": 582.7,
+"total": 877.2,
+"enemies": 68.7,
+"BEE": 12.0,
+"BLO": 5.0,
+"CRA": 38.3,
+"ENF": 1.0,
+"SKU": 12.3
+},
+{
+"castle": 6,
+"enemy_lane": 93.33,
+"hazard_lane": 150.5,
+"terrain": 619.8,
+"total": 893.7,
+"enemies": 67.0,
+"BEE": 8.0,
+"BLO": 7.0,
+"CRA": 39.3,
+"ENF": 1.0,
+"SKU": 11.7
+},
+{
+"castle": 7,
+"enemy_lane": 99.96,
+"hazard_lane": 160.1,
+"terrain": 612.2,
+"total": 903.7,
+"enemies": 68.7,
+"BEE": 10.7,
+"BLO": 8.3,
+"CRA": 36.3,
+"ENF": 1.3,
+"SKU": 12.0
+},
+{
+"castle": 8,
+"enemy_lane": 100.83,
+"hazard_lane": 162.1,
+"terrain": 672.5,
+"total": 968.3,
+"enemies": 72.7,
+"BEE": 10.7,
+"BLO": 10.3,
+"CRA": 40.3,
+"ENF": 1.3,
+"SKU": 10.0
+},
+{
+"castle": 9,
+"enemy_lane": 101.12,
+"hazard_lane": 174.1,
+"terrain": 641.6,
+"total": 949.6,
+"enemies": 74.3,
+"BEE": 8.0,
+"BLO": 9.7,
+"CRA": 43.7,
+"ENF": 1.7,
+"SKU": 11.3
+},
+{
+"castle": 10,
+"enemy_lane": 111.62,
+"hazard_lane": 147.4,
+"terrain": 644.0,
+"total": 935.5,
+"enemies": 78.3,
+"BEE": 9.3,
+"BLO": 11.7,
+"CRA": 40.3,
+"ENF": 1.3,
+"SKU": 15.7
+}
+],
+"p3c": [
+{
+"castle": 1,
+"creature": [
+21.0,
+9.0
+],
+"trap": [
+63.0,
+28.7
+],
+"haz": [
+101.0,
+55.7
+],
+"enforcer": [
+2.0,
+1.0
+]
+},
+{
+"castle": 2,
+"creature": [
+18.0,
+6.7
+],
+"trap": [
+49.0,
+21.0
+],
+"haz": [
+82.0,
+44.0
+],
+"enforcer": [
+1.0,
+1.0
+]
+},
+{
+"castle": 3,
+"creature": [
+20.0,
+14.7
+],
+"trap": [
+38.0,
+22.7
+],
+"haz": [
+59.0,
+39.3
+],
+"enforcer": [
+2.0,
+1.3
+]
+},
+{
+"castle": 4,
+"creature": [
+24.0,
+14.7
+],
+"trap": [
+39.0,
+22.0
+],
+"haz": [
+61.0,
+36.0
+],
+"enforcer": [
+2.0,
+1.3
+]
+},
+{
+"castle": 5,
+"creature": [
+33.0,
+17.7
+],
+"trap": [
+70.0,
+33.3
+],
+"haz": [
+101.0,
+44.0
+],
+"enforcer": [
+1.0,
+1.0
+]
+},
+{
+"castle": 6,
+"creature": [
+36.0,
+18.7
+],
+"trap": [
+69.0,
+30.7
+],
+"haz": [
+108.0,
+42.3
+],
+"enforcer": [
+2.0,
+1.0
+]
+},
+{
+"castle": 7,
+"creature": [
+41.0,
+20.3
+],
+"trap": [
+69.0,
+31.0
+],
+"haz": [
+103.0,
+43.7
+],
+"enforcer": [
+2.0,
+1.3
+]
+},
+{
+"castle": 8,
+"creature": [
+44.0,
+20.7
+],
+"trap": [
+76.0,
+34.0
+],
+"haz": [
+105.0,
+41.0
+],
+"enforcer": [
+2.0,
+1.3
+]
+},
+{
+"castle": 9,
+"creature": [
+49.0,
+21.0
+],
+"trap": [
+72.0,
+37.0
+],
+"haz": [
+109.0,
+42.0
+],
+"enforcer": [
+2.0,
+1.7
+]
+},
+{
+"castle": 10,
+"creature": [
+61.0,
+28.0
+],
+"trap": [
+89.0,
+28.3
+],
+"haz": [
+138.0,
+42.0
+],
+"enforcer": [
+3.0,
+1.3
+]
+}
+],
+"p4": {
+"route travel m": "3118 / 3119 / 2958-3455 / sd 98 / CV 0.031",
+"horizontal m": "2941 / 2937 / 2784-3271 / sd 97 / CV 0.033",
+"rise m": "527 / 525 / 515-564 / sd 9 / CV 0.016",
+"drop m": "30 / 29 / 24-37 / sd 3 / CV 0.115",
+"dips (>0.3 m)": "34 / 33 / 27-43 / sd 4 / CV 0.126",
+"route links": "552 / 551 / 516-583 / sd 17 / CV 0.031"
+}
+},
+"NGH": {
+"p3": [
+{
+"castle": 1,
+"enemy_lane": 106.58,
+"hazard_lane": 174.9,
+"terrain": 618.8,
+"total": 932.7,
+"enemies": 74.7,
+"BEE": 10.0,
+"BLO": 8.7,
+"CRA": 40.0,
+"ENF": 2.0,
+"SKU": 14.0
+},
+{
+"castle": 2,
+"enemy_lane": 98.15,
+"hazard_lane": 189.3,
+"terrain": 617.9,
+"total": 937.6,
+"enemies": 64.0,
+"BEE": 7.3,
+"BLO": 9.7,
+"CRA": 31.3,
+"ENF": 2.0,
+"SKU": 13.7
+},
+{
+"castle": 3,
+"enemy_lane": 95.58,
+"hazard_lane": 163.0,
+"terrain": 658.9,
+"total": 950.5,
+"enemies": 59.0,
+"BEE": 12.0,
+"BLO": 9.0,
+"CRA": 24.3,
+"ENF": 1.7,
+"SKU": 12.0
+},
+{
+"castle": 4,
+"enemy_lane": 101.08,
+"hazard_lane": 170.2,
+"terrain": 667.0,
+"total": 973.0,
+"enemies": 53.7,
+"BEE": 7.3,
+"BLO": 13.7,
+"CRA": 15.3,
+"ENF": 1.7,
+"SKU": 15.7
+},
+{
+"castle": 5,
+"enemy_lane": 106.5,
+"hazard_lane": 194.0,
+"terrain": 638.4,
+"total": 971.9,
+"enemies": 72.7,
+"BEE": 5.3,
+"BLO": 10.3,
+"CRA": 39.7,
+"ENF": 2.0,
+"SKU": 15.3
+},
+{
+"castle": 6,
+"enemy_lane": 118.58,
+"hazard_lane": 199.5,
+"terrain": 646.1,
+"total": 1000.7,
+"enemies": 71.7,
+"BEE": 8.7,
+"BLO": 16.3,
+"CRA": 28.3,
+"ENF": 2.0,
+"SKU": 16.3
+},
+{
+"castle": 7,
+"enemy_lane": 117.23,
+"hazard_lane": 200.3,
+"terrain": 667.6,
+"total": 1022.2,
+"enemies": 72.0,
+"BEE": 7.3,
+"BLO": 14.3,
+"CRA": 31.3,
+"ENF": 2.0,
+"SKU": 17.0
+},
+{
+"castle": 8,
+"enemy_lane": 112.0,
+"hazard_lane": 212.9,
+"terrain": 679.1,
+"total": 1039.5,
+"enemies": 71.7,
+"BEE": 5.3,
+"BLO": 13.3,
+"CRA": 34.7,
+"ENF": 2.7,
+"SKU": 15.7
+},
+{
+"castle": 9,
+"enemy_lane": 112.08,
+"hazard_lane": 203.7,
+"terrain": 671.1,
+"total": 1023.8,
+"enemies": 67.7,
+"BEE": 7.3,
+"BLO": 11.3,
+"CRA": 29.0,
+"ENF": 2.3,
+"SKU": 17.7
+},
+{
+"castle": 10,
+"enemy_lane": 128.25,
+"hazard_lane": 177.2,
+"terrain": 681.8,
+"total": 1022.7,
+"enemies": 85.3,
+"BEE": 3.3,
+"BLO": 16.0,
+"CRA": 43.0,
+"ENF": 2.3,
+"SKU": 20.7
+}
+],
+"p3c": [
+{
+"castle": 1,
+"creature": [
+62.0,
+23.3
+],
+"trap": [
+81.0,
+27.3
+],
+"haz": [
+162.0,
+60.7
+],
+"enforcer": [
+3.0,
+2.0
+]
+},
+{
+"castle": 2,
+"creature": [
+58.0,
+23.7
+],
+"trap": [
+61.0,
+21.0
+],
+"haz": [
+131.0,
+53.7
+],
+"enforcer": [
+3.0,
+2.0
+]
+},
+{
+"castle": 3,
+"creature": [
+40.0,
+21.0
+],
+"trap": [
+34.0,
+14.3
+],
+"haz": [
+97.0,
+50.3
+],
+"enforcer": [
+3.0,
+1.7
+]
+},
+{
+"castle": 4,
+"creature": [
+52.0,
+29.7
+],
+"trap": [
+41.0,
+17.3
+],
+"haz": [
+96.0,
+44.3
+],
+"enforcer": [
+3.0,
+1.7
+]
+},
+{
+"castle": 5,
+"creature": [
+59.0,
+26.0
+],
+"trap": [
+63.0,
+28.3
+],
+"haz": [
+125.0,
+49.0
+],
+"enforcer": [
+3.0,
+2.0
+]
+},
+{
+"castle": 6,
+"creature": [
+99.0,
+33.0
+],
+"trap": [
+80.0,
+24.3
+],
+"haz": [
+186.0,
+61.3
+],
+"enforcer": [
+3.0,
+2.0
+]
+},
+{
+"castle": 7,
+"creature": [
+70.0,
+31.7
+],
+"trap": [
+59.0,
+29.3
+],
+"haz": [
+131.0,
+56.3
+],
+"enforcer": [
+3.0,
+2.0
+]
+},
+{
+"castle": 8,
+"creature": [
+77.0,
+29.7
+],
+"trap": [
+86.0,
+23.3
+],
+"haz": [
+180.0,
+48.0
+],
+"enforcer": [
+6.0,
+2.7
+]
+},
+{
+"castle": 9,
+"creature": [
+69.0,
+29.0
+],
+"trap": [
+68.0,
+22.3
+],
+"haz": [
+144.0,
+55.3
+],
+"enforcer": [
+3.0,
+2.3
+]
+},
+{
+"castle": 10,
+"creature": [
+77.0,
+37.0
+],
+"trap": [
+68.0,
+25.0
+],
+"haz": [
+136.0,
+48.7
+],
+"enforcer": [
+3.0,
+2.3
+]
+}
+],
+"p4": {
+"route travel m": "3254 / 3247 / 3069-3449 / sd 98 / CV 0.030",
+"horizontal m": "3089 / 3084 / 2905-3276 / sd 97 / CV 0.031",
+"rise m": "524 / 522 / 511-555 / sd 9 / CV 0.016",
+"drop m": "26 / 24 / 16-40 / sd 5 / CV 0.180",
+"dips (>0.3 m)": "26 / 26 / 17-39 / sd 5 / CV 0.180",
+"route links": "571 / 574 / 536-612 / sd 18 / CV 0.031"
+}
+}
+}
+}

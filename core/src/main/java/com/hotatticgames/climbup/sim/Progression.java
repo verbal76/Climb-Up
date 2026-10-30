@@ -245,8 +245,11 @@ public final class Progression {
      * builds it". Each is 1 + GAIN * relative error (target - measured) / target, from the previous castle and, once enough of it is built, the
      * castle in progress, clamped to the profile's bounds. No previous castle and too little of this one: no correction.
      */
-    public float[] factors(int n, DifficultyProfile P, float spacing) {
+    public float[] factors(int n, DifficultyProfile P, float spacing) { return factors(n, P, spacing, null); }
+    /** As {@link #factors(int, DifficultyProfile, float)}; also writes the requested (unbounded) factors into {@code requested} when given (reports, KPI 7B). */
+    public float[] factors(int n, DifficultyProfile P, float spacing, float[] requested) {
         float[] f = {1f, 1f, 1f, 1f};
+        if (requested != null) java.util.Arrays.fill(requested, 1f);
         if (!P.progression()) return f;
         float[] prevAcc = null; int prevN = n - 1;
         float[] partial = null; float frac = 0f;
@@ -256,18 +259,65 @@ public final class Progression {
         } else if (n == castle + 1) {          // a slice climbing into the next castle: the castle in progress stands for its predecessor
             if (progress(spacing) >= 0.5f) prevAcc = cur;
         }
-        if (prevAcc == null && partial == null) return n == 1 ? P.initialFactors() : f;          // castle 1 before a third of it is built: the profile's starting point
+        if (prevAcc == null && partial == null) { if (n == 1) { f = P.initialFactors(); if (requested != null) System.arraycopy(f, 0, requested, 0, 4); } return f; }          // castle 1 before a third of it is built: the profile's starting point
         for (int k = 0; k < 4; k++) {
             double e = 0, wsum = 0;
-            if (prevAcc != null) { double tg = P.target(prevN, k); if (tg > 0) { e += (1 - PARTIAL_WEIGHT * (partial != null ? 1 : 0)) * (tg - prevAcc[k]) / tg; wsum += 1 - PARTIAL_WEIGHT * (partial != null ? 1 : 0); } }
-            if (partial != null) { double tg = P.target(n, k) * frac; if (tg > 0) { double w = prevAcc != null ? PARTIAL_WEIGHT : 1; e += w * (tg - partial[k]) / tg; wsum += w; } }
+            if (prevAcc != null) {
+                double tg = P.target(prevN, k);
+                if (tg > 0) {
+                    double w = 1 - PARTIAL_WEIGHT * (partial != null ? 1 : 0);
+                    if (SLOPE) {          // the shortfall against the level planned for castle n, carried back to castle n-1's scale
+                        double tn = P.target(n, k), want = planned(n, k, prevAcc[k], P);
+                        e += w * (want * tg / tn - prevAcc[k]) / (want * tg / tn);
+                    } else e += w * (tg - prevAcc[k]) / tg;
+                    wsum += w;
+                }
+            }
+            if (partial != null) {
+                double tg = (SLOPE && prevAcc != null ? planned(n, k, prevAcc[k], P) : P.target(n, k)) * frac;
+                if (tg > 0) { double w = prevAcc != null ? PARTIAL_WEIGHT : 1; e += w * (tg - partial[k]) / tg; wsum += w; }
+            }
             if (wsum <= 0) continue;
             e /= wsum;
+            if (requested != null) requested[k] = (float) (1 + GAIN * e);
             if (k == H && P.capacityControl()) { f[k] = hazardControl(n, P, (float) (1 + GAIN * e))[1]; continue; }
             f[k] = (float) Math.max(P.factorLo(k), Math.min(P.factorHi(k), 1 + GAIN * e));
         }
         return f;
     }
+
+    /**
+     * Reports only (KPI 7B): the factors the controller requested (before its bounds) at the start of castle {@code n}, from the previous castle's
+     * completed record {@code prev} (layout of {@link #completed}; null for castle 1). This is {@link #factors}' own arithmetic for a castle with too
+     * little of itself built to count; NGH hazards give the request before capacity control.
+     */
+    public static float[] startRequest(int n, float[] prev, DifficultyProfile P) {
+        float[] q = {1f, 1f, 1f, 1f};
+        if (!P.progression()) return q;
+        if (prev == null) return n == 1 ? P.initialFactors() : q;
+        for (int k = 0; k < 4; k++) {
+            double tg = P.target(n - 1, k), e;
+            if (!(tg > 0)) continue;
+            if (SLOPE) { double tn = P.target(n, k), want = planned(n, k, prev[1 + k], P); e = 1 * (want * tg / tn - prev[1 + k]) / (want * tg / tn); }
+            else e = 1 * (tg - prev[1 + k]) / tg;
+            q[k] = (float) (1 + GAIN * e);
+        }
+        return q;
+    }
+
+    /**
+     * Slope-aware progression (owner generator directive 2026-10-30, KPI 7B; behind -Dclimb.progSlope until validated): the level castle n is
+     * steered toward in category k is its target, or the previous castle's measured level plus at least {@link #SLOPE_KEEP} of the planned rise,
+     * whichever is higher. A castle that came out under target is corrected exactly as before (the target is the higher of the two); one that came
+     * out over it is no longer followed by an easier castle, only by a smaller rise, so an over-hot start cannot flatten the climb.
+     */
+    static double planned(int n, int k, double prevMeasured, DifficultyProfile P) {
+        double tn = P.target(n, k), rise = Math.max(0.0, tn - P.target(n - 1, k));
+        return Math.max(tn, prevMeasured + SLOPE_KEEP * rise);
+    }
+    static boolean SLOPE = Boolean.getBoolean("climb.progSlope");
+    /** The share of the planned castle-to-castle rise a castle keeps above an over-target predecessor (PROVISIONAL). */
+    static final double SLOPE_KEEP = 0.5;
 
     // ------------------------------------------------------------------ capacity-aware hazard escalation (NGH)
     /** Escalation per castle above the previous castle's applied factor, while acceptance holds (PROVISIONAL). */
@@ -312,8 +362,9 @@ public final class Progression {
         else if (n == castle + 1) { if (progress(spacing) >= 0.5f) prevAcc = cur; }
         if (prevAcc == null && partial == null) return new float[]{f[H], f[H], HC_NONE};
         double e = 0, wsum = 0;
-        if (prevAcc != null) { double tg = P.target(prevN, H); if (tg > 0) { double w = 1 - PARTIAL_WEIGHT * (partial != null ? 1 : 0); e += w * (tg - prevAcc[H]) / tg; wsum += w; } }
-        if (partial != null) { double tg = P.target(n, H) * frac; if (tg > 0) { double w = prevAcc != null ? PARTIAL_WEIGHT : 1; e += w * (tg - partial[H]) / tg; wsum += w; } }
+        if (prevAcc != null) { double tg = P.target(prevN, H); if (tg > 0) { double w = 1 - PARTIAL_WEIGHT * (partial != null ? 1 : 0);
+            if (SLOPE) { double ref = planned(n, H, prevAcc[H], P) * tg / P.target(n, H); e += w * (ref - prevAcc[H]) / ref; } else e += w * (tg - prevAcc[H]) / tg; wsum += w; } }
+        if (partial != null) { double tg = (SLOPE && prevAcc != null ? planned(n, H, prevAcc[H], P) : P.target(n, H)) * frac; if (tg > 0) { double w = prevAcc != null ? PARTIAL_WEIGHT : 1; e += w * (tg - partial[H]) / tg; wsum += w; } }
         if (wsum <= 0) return new float[]{f[H], f[H], HC_NONE};
         return hazardControl(n, P, (float) (1 + GAIN * e / wsum));
     }

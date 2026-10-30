@@ -17,6 +17,11 @@ on:
       baseline_run: { description: 'Earlier Difficulty report run (any commit) to compare variety, ropes and difficulty against (its lanes-mode-* artifacts)', required: false, default: '' }
       consolidate_only: { description: '1 = rebuild only the report from include_run''s stored courses (no gate, no course jobs; for a consolidation that failed after its courses passed)', required: false, default: '0' }
       campaign: { description: 'Campaign charts tag (A = NORMAL+PUNISHER, B = NGH; owner 2026-10-27): A1-A9 or B1-B9 from this run''s courses', required: false, default: '' }
+      jvm_props: { description: 'Diagnostics only: extra JVM -D properties for the course jobs (e.g. -Dclimb.diagAvl=true -Dclimb.diagAvlFrom=1)', required: false, default: '' }
+      geometry_compare: { description: 'Geometry audit only (owner 2026-10-30): JSON object label -> earlier Difficulty report run id, e.g. {"baseline":"123","r11_5":"456"}; compares their courses (geometry_audit.py) and runs nothing else', required: false, default: '' }
+      probe_jobs: { description: 'Diagnostics only (T5): JSON list of T5Probe argument strings, one job each (e.g. ["reach STATIC PAD", "audit 2 7321 30"]); runs instead of the report', required: false, default: '' }
+      certify: { description: '1 = also build the certification package (tools/ci/cert_package.py: KPI measurements, charts, dashboard, PDFs, ZIP) as the certification-package artifact', required: false, default: '' }
+      cert_args: { description: 'Certification only: extra cert_package.py arguments, e.g. --evidence ci_conclusion=success --evidence ci_sha=<sha> --overrides <repo path to evaluation_overrides.json>', required: false, default: '' }
   push:
     branches: [build-74-determinism]
     paths:
@@ -35,7 +40,7 @@ permissions:
   actions: read
 jobs:
   gate:          # one shared validation gate for every course job (was repeated in each)
-    if: inputs.consolidate_only != '1'
+    if: inputs.consolidate_only != '1' && inputs.probe_jobs == '' && inputs.geometry_compare == ''
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -73,15 +78,42 @@ jobs:
             cd core && java -Xmx3g -cp "build/classes/java/main:build/classes/java/test:$GDX" com.hotatticgames.climbup.sim.GenBench ../assets/data/tuning.json ${{ matrix.mode }} ${{ matrix.seed }} ${{ inputs.top || '5000' }} ../report/genbench-${{ matrix.mode }}-${{ matrix.seed }}.csv | tee ../report/genbench-${{ matrix.mode }}-${{ matrix.seed }}.txt
             exit 0
           fi
-          cd core && java -Xmx3g -cp "build/classes/java/main:build/classes/java/test:$GDX" com.hotatticgames.climbup.sim.LaneReport ../assets/data/tuning.json ${{ inputs.top || '5000' }} ${{ matrix.mode }} ${{ matrix.seed }} ../report
+          cd core && java ${{ inputs.jvm_props }} -Xmx3g -cp "build/classes/java/main:build/classes/java/test:$GDX" com.hotatticgames.climbup.sim.LaneReport ../assets/data/tuning.json ${{ inputs.top || '5000' }} ${{ matrix.mode }} ${{ matrix.seed }} ../report
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: lanes-mode-${{ matrix.mode }}-seed-${{ matrix.seed }}
           path: report/
+  probe:          # T5 diagnostics (owner master directive 2026-10-29): physics reach, solver parity and course audits on the real Sim; publishes nothing
+    if: inputs.probe_jobs != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    strategy:
+      fail-fast: false
+      matrix:
+        args: ${{ fromJSON(inputs.probe_jobs || '["ceiling"]') }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '17' }
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Compile
+        run: ./gradlew :core:testClasses --no-daemon -q
+      - name: T5 probe ${{ matrix.args }}
+        timeout-minutes: 280
+        run: |
+          GDX=$(find ~/.gradle -name 'gdx-1.14.2.jar' | head -1)
+          mkdir -p t5
+          cd core && java ${{ inputs.jvm_props }} -Xmx3g -cp "build/classes/java/main:build/classes/java/test:$GDX" com.hotatticgames.climbup.sim.T5Probe ${{ matrix.args }} ../t5
+          echo "----- CSV -----"; cat ../t5/*.csv
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: t5-${{ strategy.job-index }}
+          path: t5/
   consolidate:
     needs: report
-    if: always() && inputs.bench != '1'
+    if: always() && inputs.bench != '1' && inputs.probe_jobs == '' && inputs.geometry_compare == ''
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -112,6 +144,7 @@ jobs:
             python3 tools/ci/campaign_charts.py "${{ inputs.campaign }}" "Campaign ${{ inputs.campaign }} ($(git rev-parse --short HEAD))" baseline/campaign_${{ inputs.campaign }} $(dirname $(find parts -name castle_control.csv | sort))
           fi
           EXPECT_MODES='${{ inputs.modes || '["0","1","2"]' }}' EXPECT_SEEDS='${{ inputs.seeds || '["1","2"]' }}' python3 tools/ci/batch_summary.py baseline/batch $(dirname $(find parts -name gate.json | sort))          # owner 2026-10-28: mode curves, seed spread, reliability
+          python3 tools/ci/diag_summary.py parts baseline/DIAG.md || echo "diag_summary failed (diagnostics only)"          # owner 2026-10-28: generator diagnostics (P1-P4) printed to the log
           cat baseline/batch/BATCH.md >> "$GITHUB_STEP_SUMMARY"
           cat baseline/INDEX.md >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
@@ -119,3 +152,62 @@ jobs:
         with:
           name: difficulty-baseline-3lane
           path: baseline/
+      # Geometry audit (owner directive 2026-10-30): courses written with -Dclimb.geomAudit=true carry geometry_samples.csv
+      - name: Geometry audit (when the courses carry geometry tables)
+        if: always()
+        run: |
+          if ls parts/*/geometry_samples.csv >/dev/null 2>&1; then
+            pip install --quiet matplotlib
+            python3 tools/ci/geometry_audit.py geometry "run=parts" | tee -a "$GITHUB_STEP_SUMMARY"
+          else echo "no geometry tables in this run"; fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: geometry-audit
+          path: geometry/
+          if-no-files-found: ignore
+      # Certification package (owner KPI framework, docs/CERTIFICATION_PACKAGE.md): only when dispatched with certify = 1; runs after the steps
+      # above even if one of them failed, so an incomplete campaign is still reported (as NOT VERIFIED / FAIL, never as a pass)
+      - name: Certification package
+        if: ${{ always() && inputs.certify == '1' }}
+        env:
+          EXPECT_MODES: ${{ inputs.modes || '["0","1","2"]' }}
+          EXPECT_SEEDS: ${{ inputs.seeds || '["1","2"]' }}
+          DISPATCH_INPUTS: ${{ toJSON(inputs) }}
+          CERT_ARGS: ${{ inputs.cert_args }}
+        run: |
+          pip install --quiet matplotlib
+          read -r -a EXTRA <<< "$CERT_ARGS"
+          python3 tools/ci/cert_package.py certification parts --variety-dir baseline --manifest-extra "run_attempt=$GITHUB_RUN_ATTEMPT" "${EXTRA[@]}"
+          python3 tools/ci/cert_package.py --selftest certification
+          python3 tools/ci/cert_scorecard.py certification/Upwardly_Build83_Certification | tee -a "$GITHUB_STEP_SUMMARY"          # readable in the log without downloading the artifact
+          python3 tools/ci/inspect_package.py certification | tee -a "$GITHUB_STEP_SUMMARY"          # what the package really holds: zip/manifest integrity, every KPI, chart ink, table rows, PDFs, dashboard
+      - uses: actions/upload-artifact@v4
+        if: ${{ always() && inputs.certify == '1' }}
+        with:
+          name: certification-package
+          path: certification/
+  geometry_compare:          # owner directive 2026-10-30: candidates from earlier runs side by side (the first label is the baseline)
+    if: inputs.geometry_compare != ''
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download each candidate's courses and compare
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CANDIDATES: ${{ inputs.geometry_compare }}
+        run: |
+          pip install --quiet matplotlib
+          ARGS=$(python3 -c 'import json,os; d=json.loads(os.environ["CANDIDATES"]); print(" ".join(f"{k}={v}" for k,v in d.items()))')
+          LABELS=""
+          for kv in $ARGS; do
+            lab="${kv%%=*}"; id="${kv#*=}"
+            gh run download "$id" --repo "$GITHUB_REPOSITORY" --pattern 'lanes-mode-*' --dir "cand/$lab"
+            LABELS="$LABELS $lab=cand/$lab"
+          done
+          python3 tools/ci/geometry_audit.py geometry_compare $LABELS | tee -a "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: geometry-compare
+          path: geometry_compare/

@@ -12,7 +12,7 @@ public final class Lanes {
 
     public static Lane lane(Element.Type k) {
         switch (k) {
-            case STATIC: case CRUMBLE: case MOVE_H: case MOVE_V: case MOVE_Z: case SWING: case PAD: case ROPE: case CABLE: case SPRING: case SEESAW: case RAMP:
+            case STATIC: case CRUMBLE: case MOVE_H: case MOVE_V: case MOVE_Z: case SWING: case PAD: case ROPE: case CABLE: case SPRING: case SEESAW: case RAMP: case TARZAN:
                 return Lane.TERRAIN;
             case SAW_H: case SAW_V: case PENDULUM: case CANNON: case AIMED: case MORTAR: case SPIKE_TRAP: case SPIKE_BLOCK: case SPIKE_DROP: case AVALANCHE:
                 return Lane.HAZARDS;
@@ -34,10 +34,11 @@ public final class Lanes {
             case SWING: return "Swinging traversal platforms";
             case PAD: return "Bounce/launch pads";
             case ROPE: return "Climbable ropes";
+            case TARZAN: return "Tarzan swings: a rope swinging from a pivot, caught mid-swing and let go of to fly (rules 19)";
             case CABLE: return "Traversal cables";
             case SPRING: return "Angled launching springs";
             case SEESAW: return "Tilting platforms and balance bridges";
-            case RAMP: return "Sloped surfaces: 0 plain, 1 crumbling, 2 shaking/bouncy, 3 spinning, 4 conveyor/downhill";
+            case RAMP: return "Sloped surfaces: 0 plain, 1 crumbling, 2 shaking/bouncy, 3 spinning (rules 19: no longer generated), 4 conveyor/downhill, 5 turbo (booster launch, cancellable)";
             case SAW_H: return "Horizontal saw";
             case SAW_V: return "Vertical saw";
             case PENDULUM: return "Swinging hazard";

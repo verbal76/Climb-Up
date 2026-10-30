@@ -41,7 +41,10 @@ public final class WorldRenderer implements Disposable {
     private final Tuning T;
     private final Course course;
     private final Models models;
-    private final ModelBatch batch = new ModelBatch(new com.badlogic.gdx.graphics.g3d.utils.DefaultShaderProvider(Grade.config(boneConfig())));      // Build 72: colour-graded
+    /** Atmosphere prototype (null unless the -Dclimb.atmos master switch is on; see {@link Atmos}). */
+    private final Atmos atmos = Atmos.ENABLED ? new Atmos() : null;
+    private AtmosMotes atmosMotes;
+    private final ModelBatch batch = new ModelBatch(atmos != null ? atmos.provider(boneConfig()) : new com.badlogic.gdx.graphics.g3d.utils.DefaultShaderProvider(Grade.config(boneConfig())));      // Build 72: colour-graded
     private final PerspectiveCamera cam = new PerspectiveCamera(40f, 16, 9);
     private final Environment env = new Environment();
     private final DirectionalLight sun = new DirectionalLight(), fillL = new DirectionalLight(), bounceL = new DirectionalLight();
@@ -133,6 +136,7 @@ public final class WorldRenderer implements Disposable {
         camY -= dy; renderY -= dy; heroY -= dy;
         for (Flung f : flung) f.y -= dy;
         particles.shiftY(dy);
+        if (atmosMotes != null) atmosMotes.shiftY(dy);
         originY = newOriginY; originS = newOriginS;
     }
 
@@ -208,6 +212,15 @@ public final class WorldRenderer implements Disposable {
                         sl.roll = th; sl.belt = true; sl.beltSpan = L; sl.beltSlope = e.amp; ps.add(sl);
                     }
                     for (int sd = -1; sd <= 1; sd += 2) { Part rl = boxPart(sd * L / 2f, sd * e.amp * L / 2f - 0.02f, 0f, 0.22f, 0.22f, 1.35f, roller); rl.roll = 45f; ps.add(rl); }
+                }
+                if (e.turbo()) {            // rules 19: the turbo booster at the top - a dark launcher tilted to its launch angle with glowing orange chevrons, seen from afar
+                    float dir = e.amp >= 0f ? 1f : -1f, xTop = dir * (e.w / 2f - 0.3f), yTop = e.amp * xTop, ang = e.turboAngle() * MathUtils.radiansToDegrees * dir;
+                    Color body = new Color(0.16f, 0.17f, 0.22f, 1f), hot = new Color(1f, 0.45f, 0.08f, 1f);
+                    Part b = boxPart(xTop, yTop + 0.16f, 0f, 0.62f, 0.3f, 1.4f, body); b.roll = ang; ps.add(b);
+                    for (int k = 0; k < 2; k++) {
+                        Part ch = boxPart(xTop - dir * 0.14f + dir * k * 0.26f, yTop + 0.33f + k * 0.02f, 0f, 0.1f, 0.06f, 1.2f, hot); ch.roll = ang;
+                        ch.inst.materials.get(0).set(ColorAttribute.createEmissive(hot.r * 0.8f, hot.g * 0.8f, hot.b * 0.8f, 1f)); ps.add(ch);
+                    }
                 }
                 break;
             }
@@ -314,6 +327,16 @@ public final class WorldRenderer implements Disposable {
                 for (int sd = -1; sd <= 1; sd += 2)                                     // two upright posts, flush behind the lane, flanking the rope (vertical, not splayed)
                     ps.add(boxPart(sd * 1.05f, -0.55f, 0.85f, 0.22f, 1.7f, 0.22f, beam));
                 ps.add(boxPart(0f, 0.0f, 0.85f, 2.32f, 0.16f, 0.16f, railC));           // back cross-rail tying the two posts together
+                break;
+            }
+            case TARZAN: {
+                // rules 19: the ROPE's look, hanging from a fixed beam; the rope and its knots swing about the pivot each frame (drawElement)
+                Color rope = ROPE_COLOR, beam = new Color(0.45f, 0.30f, 0.18f, 1f), railC = new Color(0.40f, 0.27f, 0.16f, 1f);
+                ps.add(boxPart(0, -e.len * 0.5f, 0, 0.11f, e.len, 0.11f, rope));
+                for (int k = 1; k <= (int) e.len; k++) ps.add(boxPart(0, -k + 0.5f, 0, 0.2f, 0.12f, 0.2f, new Color(0.7f, 0.52f, 0.28f, 1f)));
+                Part b0 = boxPart(0f, 0.12f, 0.45f, 2.5f, 0.26f, 0.95f, beam); b0.fixed = true; ps.add(b0);
+                for (int sd = -1; sd <= 1; sd += 2) { Part pp = boxPart(sd * 1.05f, -0.55f, 0.85f, 0.22f, 1.7f, 0.22f, beam); pp.fixed = true; ps.add(pp); }
+                Part rl = boxPart(0f, 0.0f, 0.85f, 2.32f, 0.16f, 0.16f, railC); rl.fixed = true; ps.add(rl);
                 break;
             }
             case CABLE: {
@@ -444,9 +467,9 @@ public final class WorldRenderer implements Disposable {
         for (int j = 0; j < course.size(); j++) {
             if (j == idx) continue;
             Element o = course.get(j);
-            boolean rope = o.type == Element.Type.ROPE;
+            boolean rope = o.type == Element.Type.ROPE || o.type == Element.Type.TARZAN;
             if (!rope && !o.isPlatform()) continue;
-            if (Math.abs(course.dsWrap(o.s, e.s)) > span + (rope ? 0.8f : o.halfW())) continue;
+            if (Math.abs(course.dsWrap(o.s, e.s)) > span + (rope ? 0.8f + (o.type == Element.Type.TARZAN ? o.len * (float) Math.sin(Math.min(1.5f, o.amp)) : 0f) : o.halfW())) continue;
             float top = rope ? o.y + 1.2f : o.y + (o.type == Element.Type.MOVE_V ? Math.abs(o.amp) : 0f);
             if (rope && o.y - o.len < e.y && top > e.y - base) return 0f;              // a rope running up past the platform: no rock in its way
             if (top >= e.y - 0.05f) continue;
@@ -566,6 +589,12 @@ public final class WorldRenderer implements Disposable {
         Palette.blend(Palette.BOUNCE, zoneF, lc); hBounce.color.set(lc);
         Palette.blend(Palette.RIM, zoneF, lc); hRim.color.set(lc.r * 0.95f, lc.g * 0.95f, lc.b * 0.95f, 1f);
         ((ColorAttribute) env.get(ColorAttribute.Fog)).color.set(skyBot).lerp(skyTop, 0.25f);
+        if (atmos != null) {          // atmosphere prototype: the castle's colour on the sky (and, unless colourblind-safe colours are on, the world's lights - never the hero's), plus this frame's haze, mist and glow
+            atmos.frame(zoneF, camY + originY, T.castleSpacing, T.zoneHeight * T.zoneCount, quality, colourblind, gold, skyTop, skyMid, skyBot);
+            ((ColorAttribute) env.get(ColorAttribute.Fog)).color.set(skyBot).lerp(skyTop, 0.25f);
+            float[] lk = atmos.light;
+            ((ColorAttribute) env.get(ColorAttribute.AmbientLight)).color.mul(lk[0], lk[1], lk[2], 1f); sun.color.mul(lk[0], lk[1], lk[2], 1f);
+        }
 
         // camera
         float sh = 0;
@@ -578,6 +607,7 @@ public final class WorldRenderer implements Disposable {
             else k++;
         }
         if (quality > 0 && !reducedMotion) ambientMotes(dt, zoneF, ps);
+        if (atmos != null) { if (atmosMotes == null) atmosMotes = new AtmosMotes(models); atmosMotes.update(frameDt, zoneF, ps, camY, quality >= 2 && !reducedMotion); }
         float pullT = (!reducedMotion && sim.mode == Sim.Mode.AIR && sim.vy < -10f) ? MathUtils.clamp((-sim.vy - 10f) / 14f, 0f, 1f) * 2.4f : 0f;       // pull back in a long fall to see where you will land
         camPull += (pullT - camPull) * Math.min(1f, 3f * dt);
         cam.position.set(sh * 0.1f, camY + (CAM_DIST < 6f ? -0.6f : 2.2f) + sh * 0.1f, CAM_DIST + camPull);
@@ -590,6 +620,7 @@ public final class WorldRenderer implements Disposable {
         Gdx.gl.glClearColor(skyBot.r, skyBot.g, skyBot.b, 1f);
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT | GL20.GL_DEPTH_BUFFER_BIT);
         bg.render(sb, shapes, skyTop, skyMid, skyBot, ps, bgY, zoneF, T.circumference(), reducedMotion, time);
+        if (atmos != null) atmos.drawSky(shapes, cam.viewportWidth, cam.viewportHeight);       // atmosphere prototype: deeper zenith, haze rising from below (under the sun glow and the far layer)
         Gdx.gl.glClear(GL20.GL_DEPTH_BUFFER_BIT);
         if (quality > 0 && GfxHooks.skyEffects) bg.renderGlow(sb, zoneF);
         if (quality > 0) {                 // planets and sky ships far behind the tower (wide-range camera, drawn first)
@@ -602,6 +633,7 @@ public final class WorldRenderer implements Disposable {
             if (space.scanSound) scanPending = true;
             farCam.viewportWidth = cam.viewportWidth; farCam.viewportHeight = cam.viewportHeight; farCam.fieldOfView = cam.fieldOfView;
             farCam.position.set(cam.position); farCam.direction.set(cam.direction); farCam.up.set(cam.up); farCam.update();
+            if (atmos != null) Atmos.fogFarLayer(space.env, ((ColorAttribute) env.get(ColorAttribute.Fog)).color);       // atmosphere prototype: the far layer takes the haze
             if (GfxHooks.skyEffects) { batch.begin(farCam); space.renderFar(batch, ps, bgY, zoneF); batch.end(); }
             Gdx.gl.glClear(GL20.GL_DEPTH_BUFFER_BIT);
         }
@@ -622,8 +654,8 @@ public final class WorldRenderer implements Disposable {
             if (e.isMoving()) { // interpolate moving platforms
                 es = sim.es0[i] + course.dsWrap(sim.es1[i], sim.es0[i]) * alpha; ey = sim.ey0[i] + (sim.ey1[i] - sim.ey0[i]) * alpha;
             }
-            float vy = e.type == Element.Type.ROPE ? e.y - e.len * 0.5f : ey;
-            if (!visible(es, vy, ps, e.type == Element.Type.CABLE ? e.w * 0.5f : 3f)) continue;
+            float vy = e.type == Element.Type.ROPE || e.type == Element.Type.TARZAN ? e.y - e.len * 0.5f : ey;
+            if (!visible(es, vy, ps, e.type == Element.Type.CABLE ? e.w * 0.5f : e.type == Element.Type.TARZAN ? 3f + e.len : 3f)) continue;
             if (!v.built) build(i);
             drawElement(sim, i, v, es, ey, ps, time);
         }
@@ -639,6 +671,7 @@ public final class WorldRenderer implements Disposable {
         drawFlung(dt, ps);
         if (showPlayer) drawPlayer(sim, dt, time, ps, py, alpha);
         particles.render(batch, env, ps, T, course);
+        if (atmosMotes != null && quality >= 2 && !reducedMotion) atmosMotes.render(batch, env, ps, T, course);
         batch.end();
         drawShadows(sim, alpha, ps, py, zoneF);
         if (scaled) endScaledScene();
@@ -725,6 +758,11 @@ public final class WorldRenderer implements Disposable {
             }
             switch (e.type) {
                 case ROPE: y = e.y; break;
+                case TARZAN: {
+                    y = e.y;
+                    if (!p.fixed) { float th = e.tarzanAngle(sim.time), c = (float) Math.cos(th), sn = (float) Math.sin(th), u0 = du, v0 = dy; du = u0 * c - v0 * sn; dy = u0 * sn + v0 * c; roll = p.roll + th * MathUtils.radiansToDegrees; }
+                    break;
+                }
                 case SWING: {
                     // platform hangs from a pivot: ropes are drawn separately below
                     break;
@@ -751,7 +789,7 @@ public final class WorldRenderer implements Disposable {
             }
             if (e.type == Element.Type.PAD && p.dy > -0.05f) { float sq = sim.padSquash[i] / 0.25f; dy = p.dy - 0.18f * sq; }
             if (p.tintAttr != null && e.type == Element.Type.RAMP && p.fixed == false && p.tinted == false && p.color == null) {
-                if (e.skin == 1) p.tintAttr.color.set(1f, 0.78f, 0.6f, 1f); else if (e.skin == 2) p.tintAttr.color.set(1f, 0.9f, 0.55f, 1f); else if (e.skin == 4) p.tintAttr.color.set(0.62f, 0.64f, 0.70f, 1f); else if (e.skin == 3) p.tintAttr.color.set(0.8f, 0.95f, 1f, 1f); else p.tintAttr.color.set(Color.WHITE);
+                if (e.skin == 1) p.tintAttr.color.set(1f, 0.78f, 0.6f, 1f); else if (e.skin == 2) p.tintAttr.color.set(1f, 0.9f, 0.55f, 1f); else if (e.skin == 4) p.tintAttr.color.set(0.62f, 0.64f, 0.70f, 1f); else if (e.skin == 5) p.tintAttr.color.set(1f, 0.66f, 0.52f, 1f); else if (e.skin == 3) p.tintAttr.color.set(0.8f, 0.95f, 1f, 1f); else p.tintAttr.color.set(Color.WHITE);
             } else if (p.tintAttr != null) {
                 if (p.color != null && p.fall) p.tintAttr.color.set(p.color);          // crumbling tiles keep their warm tint
                 else if (p.tinted) p.tintAttr.color.set(tint);
@@ -837,6 +875,8 @@ public final class WorldRenderer implements Disposable {
      * the mortar lay on its side (owner's PC report).
      */
     public static final float CANNON_AXIS_UP = 1.02f * PK, CANNON_WHEEL_R = 0.94f * PK;
+    /** Height of the short plinth under a mortar's cap (cosmetic only; the simulation fires from the mouth, 3 m below the path, and nothing below the mouth is part of any clearance rule). */
+    static final float MORTAR_PLINTH = 0.45f;
     /** Pedestal height under a side cannon: its barrel axis flies the ball 2.35 above the slab, the wheels stand on the 0.16 cap sunk 0.04 into it. */
     public static final float CANNON_LIFT = 2.35f - CANNON_AXIS_UP - CANNON_WHEEL_R - 0.16f + 0.04f;
     /** The same under an aimed turret, whose axis sits 2.0 above its slab. */
@@ -1065,8 +1105,7 @@ public final class WorldRenderer implements Disposable {
     private void drawDepthRail(Element e, float es, float ey, float camS, float t) {
         float z = e.zAt(t), live = Math.abs(z) <= Element.Z_REACH ? 1f : 0f;
         drawBox(es, ey - 0.62f, -e.amp * 0.0f, camS, 0.12f, 0.1f, e.amp * 2f + 1.6f, 0.30f + 0.5f * live, 0.34f + 0.4f * live, 0.44f);
-        drawBox(es - e.halfW() - 0.2f, ey - 0.62f, e.amp + 0.8f, camS, 0.2f, 0.9f, 0.2f, 0.3f, 0.32f, 0.4f);
-        drawBox(es - e.halfW() - 0.2f, ey - 0.62f, -e.amp - 0.8f, camS, 0.2f, 0.9f, 0.2f, 0.3f, 0.32f, 0.4f);
+        // (no end posts: the two 0.9 m posts that stood beside the rail's ends read as stray mounts; owner playtest 2026-10-30)
     }
 
     /** A coloured block placed in a rig's model space (the base transform already holds its position, yaw, tilt and scale). */
@@ -1142,7 +1181,7 @@ public final class WorldRenderer implements Disposable {
     private void drawHazard(Element h, float t, float camS, float time, boolean done) {
         float dipY = h.ridesAnchor() || h.type == Element.Type.BLOB ? anchorDip(h) : 0f;
         float cs = h.type == Element.Type.CANNON ? h.s + h.dir * h.len * 0.5f : h.s;
-        float half = h.type == Element.Type.AIMED ? 17f : h.type == Element.Type.CANNON ? h.len * 0.5f + 1.5f + CANNON_OFFSCREEN : (h.type == Element.Type.SAW_H ? h.amp + 1.5f : h.type == Element.Type.SKULL || h.type == Element.Type.BLOB ? h.w * 0.5f + 1.5f : 2f);
+        float half = h.type == Element.Type.AIMED ? 17f : h.type == Element.Type.CANNON ? h.len * 0.5f + 1.5f + CANNON_OFFSCREEN : (h.type == Element.Type.SAW_H ? h.amp + 1.5f : h.type == Element.Type.PENDULUM ? h.len + 1.5f : h.type == Element.Type.SKULL || h.type == Element.Type.BLOB ? h.w * 0.5f + 1.5f : 2f);
         float cy = h.type == Element.Type.SAW_V ? h.y + h.amp * 0.5f : h.y;
         if (rsim != null && rhz >= 0 && rhz < rsim.mobState.length) {       // Build 79: creatures roam to the decks either side of their own: cull them where they are
             if (h.type == Element.Type.CRAB) { cs = rsim.crabAt(rhz, h); cy = rsim.crabY(rhz, h); half = 2f; }
@@ -1153,6 +1192,16 @@ public final class WorldRenderer implements Disposable {
             case SAW_H: {
                 drawBox(h.s, h.y - 0.05f - dipY, 0.25f, camS, h.amp * 2f + 1.2f, 0.1f, 0.14f, 0.3f, 0.32f, 0.4f);
                 drawPack("hazard_saw", h.sAt(t), h.yAt(t) - dipY, 0.25f, camS, PK, PK, PK, 0f, -time * 600f);
+                break;
+            }
+            case PENDULUM: {
+                // pendulum experiment (2026-10-28): a spiked ball on a chain from a beam above the gap; the ball is drawn exactly where the simulation's
+                // hit disc is (Element.sAt/yAt, BALL_R), the chain is drawn as short links from the pivot to the ball, all at the play plane's depth
+                float px = h.s, py = h.y + h.len, bx = h.sAt(t), by = h.yAt(t);
+                drawBox(px, py, 0.25f, camS, 1.6f, 0.18f, 0.5f, 0.14f, 0.3f, 0.32f);
+                drawBox(px, py - 0.1f, 0.25f, camS, 0.22f, 0.22f, 0.22f, 0.3f, 0.32f, 0.4f);
+                for (int k = 1; k <= 7; k++) { float f = k / 8f; drawBox(px + (bx - px) * f, py + (by - py) * f - 0.05f, 0.25f, camS, 0.09f, 0.09f, 0.09f, 0.42f, 0.42f, 0.48f); }
+                drawPack("spikyball", bx, by, 0.25f, camS, 0.6f, 0.6f, 0.6f, 0f, -bx * 160f);
                 break;
             }
             case SAW_V: {
@@ -1237,7 +1286,7 @@ public final class WorldRenderer implements Disposable {
                 // a cannon sunk in the ground below the path with its cradle tipped straight up on its wheels; the muzzle tip is where the ball (h.y) leaves from and falls back into
                 float[] mz = mouthFromAxle(0f, 90f, mouthTmp);                                       // tipped up: the mouth is a barrel's length above the axle and a barrel-axis height to its left
                 float axle = h.y - mz[1], capBot = axle - CANNON_WHEEL_R - 0.14f;
-                drawBox(h.s, capBot - 2.0f, 0f, camS, 1.5f, 2.0f, 1.3f, 0.34f, 0.31f, 0.40f);
+                drawBox(h.s, capBot - MORTAR_PLINTH, 0f, camS, 1.5f, MORTAR_PLINTH, 1.3f, 0.34f, 0.31f, 0.40f);          // (owner 2026-10-30: was a 2 m block reaching 6.3 m below the path, into the revolution below)
                 drawBox(h.s, capBot, 0f, camS, 1.7f, 0.18f, 1.5f, 0.30f, 0.27f, 0.36f);
                 if (!HAZ_NO_BODY) drawCannon(h.s - mz[0], axle, 0f, camS, 0f, 90f);                 // so the axle stands to the right of h.s and the mouth exactly on it
                 float charge = h.mortarCharge(t);           // the reload pause: the muzzle glows brighter and brighter, then the ball bursts out (warning for the timing)
@@ -1394,20 +1443,15 @@ public final class WorldRenderer implements Disposable {
                 break;
             }
             case AVALANCHE: {
-                // spike-block avalanche (owner 2026-10-27): during the warning a flashing down arrow (a shape, not only a colour) and falling grit mark
-                // each block's column; then the cube_spikes blocks fall, bounce and tumble, turning as the simulation spins them
+                // spike-block avalanche (owner 2026-10-27; rules 18, owner 2026-10-29: no warning arrows - the falling blocks are the warning): the
+                // cube_spikes blocks fall, bounce and tumble, turning as the simulation spins them, kicking up grit where they strike hard
                 if (rsim == null) break;
                 for (int b = 0; b < Element.AVL_MAX; b++) {
                     float[] k = rsim.avalancheBlock(rhz, h, b);
-                    if (k == null) continue;
-                    if (k[3] == 2f) {
-                        float ay = k[1] - Element.AVL_DROP + 3.2f, blink = (time * 6f) % 1f < 0.6f ? 1f : 0.35f;
-                        drawPack("arrow_up", k[0], ay + 1.4f, 0.3f, camS, 0.42f * blink, 0.42f, 0.42f, 0f, 180f);
-                        if (quality > 0 && MathUtils.randomBoolean(0.35f)) { ambCol.set(0.75f, 0.68f, 0.55f, 1f); particles.spawn(k[0] + MathUtils.random(-0.4f, 0.4f), ay + 4.5f, 0f, -3f, ambCol, MathUtils.random(0.05f, 0.1f), -6f, 0.7f); }
-                    } else {
-                        float sc = AVL_SCALE * k[4] / Element.AVL_R;          // (NOT GONNA HAPPEN blocks each have their own size: drawn at their collision radius)
-                        drawPack("cube_spikes", k[0], k[1], 0f, camS, sc, sc, sc, 25f, -k[2]);
-                    }
+                    if (k == null || k[3] != 1f) continue;
+                    float sc = AVL_SCALE * k[4] / Element.AVL_R;          // (NOT GONNA HAPPEN blocks each have their own size: drawn at their collision radius)
+                    drawPack("cube_spikes", k[0], k[1], 0f, camS, sc, sc, sc, 25f, k[2]);          // (rules 18: the simulation's angle is counter-clockwise as seen, +arc to the right: roll matches it, so a tumble turns the way it rolls)
+                    if (k[5] > 4f && quality > 0 && !reducedMotion) for (int q = 0; q < 3; q++) { ambCol.set(0.78f, 0.7f, 0.56f, 1f); particles.spawn(k[0] + MathUtils.random(-0.35f, 0.35f), k[1] - k[4], MathUtils.random(-0.2f, 0.2f), MathUtils.random(1f, 3f), ambCol, MathUtils.random(0.05f, 0.11f), -9f, 0.5f); }
                 }
                 break;
             }

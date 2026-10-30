@@ -48,6 +48,7 @@ public final class Scenario implements ApplicationListener {
         File data = new File(args.length > 0 ? args[0] : "build/scenario/data"), shots = new File(args.length > 1 ? args[1] : "build/scenario/shots");
         deleteTree(data); data.mkdirs(); shots.mkdirs();      // every run starts from a first-time install
         Lwjgl3ApplicationConfiguration c = new Lwjgl3ApplicationConfiguration();
+        OpenAlLevels.install();          // as DesktopLauncher does (Build 83)
         c.setTitle("Upwardly scenario"); c.setWindowedMode(1280, 720); c.useVsync(false); c.setForegroundFPS(60); c.disableAudio(Boolean.getBoolean("scenario.noaudio"));
         Scenario s = new Scenario(data, shots);
         new Lwjgl3Application(s, c);

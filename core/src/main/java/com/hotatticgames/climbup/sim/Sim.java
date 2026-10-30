@@ -5,14 +5,14 @@ package com.hotatticgames.climbup.sim;
  * No rendering or engine dependencies; cloneable so tests and the course validator can look ahead.
  */
 public final class Sim {
-    public enum Mode { GROUND, AIR, ROPE, CABLE, LEDGE, PULLUP, BEAM }
+    public enum Mode { GROUND, AIR, ROPE, CABLE, LEDGE, PULLUP, BEAM, TARZAN }
 
     public static final float DT = 1f / 60f, SWING_TIME = 0.34f;
     // event bits
     public static final int EV_JUMP = 1, EV_LAND = 2, EV_BOUNCE = 4, EV_GRAB = 8, EV_PULL = 16, EV_CRUMBLE = 32,
             EV_CHECKPOINT = 64, EV_RESPAWN = 128, EV_WIN = 256, EV_ROPE = 512, EV_CABLE = 1024, EV_FALL_NEAR = 2048, EV_HIT = 4096, EV_KEY = 8192, EV_DOOR = 16384, EV_BLOCKED = 32768, EV_CLUB = 65536, EV_SWING = 131072, EV_SHOVE = 262144, EV_CRAB_OFF = 524288, EV_FINISH = 1048576, EV_AIM = 2097152,
             EV_DASH = 4194304, EV_BLOB_JUMP = 8388608, EV_BLOB_LAND = 16777216, EV_SQUASH = 33554432, EV_LAUNCH = 67108864, EV_SLIP = 134217728,
-            EV_ENF_ALERT = 268435456, EV_ENF_JUMP = 536870912, EV_ENF_HIT = 1073741824, EV_AVL_WARN = Integer.MIN_VALUE;          // (EV_AVL_WARN: an avalanche's warning starts - the sign bit, the last free one)   // (2026-10-27 PUNISHER Enforcer: it starts its chase; it jumps (a swat or its leap away))   // Build 71: a skull starts a dash, a blob leaps, a blob lands, you were squashed, a skull or a tipping bridge launched you
+            EV_ENF_ALERT = 268435456, EV_ENF_JUMP = 536870912, EV_ENF_HIT = 1073741824, EV_AVL_WARN = Integer.MIN_VALUE;          // (EV_AVL_WARN: an avalanche breaks loose - rules 18: no warning before it - the sign bit, the last free one)   // (2026-10-27 PUNISHER Enforcer: it starts its chase; it jumps (a swat or its leap away))   // Build 71: a skull starts a dash, a blob leaps, a blob lands, you were squashed, a skull or a tipping bridge launched you
 
     public final Course course;
     public final Tuning T;
@@ -45,6 +45,39 @@ public final class Sim {
     public int falls;
     public float landSpeed;          // for squash feedback
     public int events;               // accumulated since last consumeEvents()
+    /** Events that no longer fit in {@link #events} (all 32 bits are taken): accumulated since the last {@link #consumeEvents2}. */
+    public int events2;
+    public static final int EV2_REBOUND = 1, EV2_TURBO = 2, EV2_TURBO_CANCEL = 4;
+    /**
+     * Rules 19 timed rebound jump (owner directive 2026-10-29): a fresh Jump press in the air arms it for REBOUND_WINDOW seconds; if the climber then
+     * touches a reboundable creature or projectile, that contact's normal outcome (shove or knock-back) is kept and a jump impulse is added to it,
+     * mostly upward for a contact from above. Without the press nothing changes. Not saved (it lasts a tenth of a second).
+     */
+    public float reboundBuf;
+    /** Rules 19 Tarzan swing: how far down the swinging rope the climber's hands hold it (m from the pivot). */
+    public float tarzanR;
+    /** The Tarzan swing let go of last and how long it stays out of reach: you fly beside a swinging rope, and it is not caught again at once. */
+    public int tarzanLast = -1; public float tarzanAgainT;
+    static final float TARZAN_REGRAB = 1.0f;
+    /**
+     * Rules 19 turbo flight (owner directive 2026-10-29): seconds of powered flight left after a turbo ramp's launch. While it lasts the launch
+     * holds its speed (no air drag or steering) and gravity pulls at TURBO_GRAVITY of its usual strength: a long, flat, fast flight. A fresh Jump
+     * press cancels it (TURBO_CANCEL_KEEP of the forward speed is kept, gravity and air control return); a held or buffered press never does. Any
+     * contact (a hazard's knock, a creature's shove), a landing or a catch ends it, so collisions behave as ever.
+     */
+    public float turboT;
+    static final float TURBO_POWER = 0.55f, TURBO_GRAVITY = 0.3f, TURBO_CANCEL_KEEP = 0.35f;
+    public int turboLaunches, turboCancels;
+    /** Upward speed a Jump adds on letting go of a Tarzan swing, as a share of a jump (the rope's own motion is kept). Provisional. */
+    static final float TARZAN_RELEASE_UP = 0.55f;
+    public int rebounds;
+    /**
+     * Rules 19 accounting (owner correction 2026-10-29): creature shoves taken (crab, bee, blob squash, skull launch, Enforcer kick or swat). With
+     * {@link #hits} (hazard knocks, its historical meaning kept) they are every physical contact; {@link #rebounds} counts the contacts a timed press
+     * turned into a rebound (still a contact, recorded apart). Diagnostics only: no rule reads it.
+     */
+    public int shoves;
+    static final float REBOUND_WINDOW = 0.10f, REBOUND_GAIN = 1.0f;
     public float ps0, py0;           // player position at the start of the last step (render interpolation)
     public boolean deferRespawn, respawnPending;    // a managed world window: the respawn is completed by Tower.maintain
     public float floorOverride = Float.NaN;          // managed window: the height of the lowest platform of the WHOLE tower (the resident part is not all of it)
@@ -116,6 +149,8 @@ public final class Sim {
     public float hitS, hitY;                      // where the last hit happened (effects)
     /** Arc position of the part of the hazard that touched the body in the last {@link #hazardHit} that returned true (the ball, the blade where it rides now, the falling block). */
     private float hitFromS = Float.NaN;
+    /** Where the touching part of the last hazard hit was (arc and height), kept for the timed rebound after knockOff clears hitFromS. */
+    private float hitFromS2 = Float.NaN, hitFromY = Float.NaN;
     /** Seconds a knock-off keeps the hands from grabbing again (owner correction 2026-10-27, DC4: knocked off a rope, the climber re-grabbed it the next frame and was hit again every 0.72 s). */
     static final float KNOCK_LOCKOUT = 0.3f;
     public int[] act;                // planner window: element indices simulated (null = everything)
@@ -257,7 +292,8 @@ public final class Sim {
         landSpeed = o.landSpeed; events = o.events; assistForgive = o.assistForgive; ps0 = o.ps0; py0 = o.py0; teleported = o.teleported;
         es0 = o.es0.clone(); ey0 = o.ey0.clone(); es1 = o.es1.clone(); ey1 = o.ey1.clone(); edy = o.edy.clone();
         crumbleT = o.crumbleT.clone(); gone = o.gone.clone(); goneT = o.goneT.clone(); padSquash = o.padSquash.clone(); tilt = o.tilt.clone(); onT = o.onT.clone();
-        clubTime = o.clubTime; swingT = o.swingT; shoveCd = o.shoveCd; crabS = o.crabS; crabY = o.crabY; keys = o.keys; keysFree = o.keysFree; featDone = o.featDone.clone(); aimAng = o.aimAng.clone(); aimFireT = o.aimFireT.clone(); aimArmed = o.aimArmed.clone(); crabPos = o.crabPos.clone(); crabVel = o.crabVel.clone(); crabMode = o.crabMode.clone(); crabStuck = o.crabStuck.clone(); crabCool = o.crabCool.clone(); crabTurn = o.crabTurn.clone(); crabSeen = o.crabSeen.clone(); mobState = o.mobState.clone(); mobT = o.mobT.clone(); mobS = o.mobS.clone(); mobY = o.mobY.clone(); mobDir = o.mobDir.clone(); mobTgt = o.mobTgt.clone(); mobSeen = o.mobSeen.clone(); deckOff = o.deckOff.clone(); crabJump = o.crabJump.clone(); crabFrom = o.crabFrom.clone(); crabFromDeck = o.crabFromDeck.clone(); crabFall = o.crabFall.clone(); aimYaw = o.aimYaw.clone(); avl = o.avl.clone(); lastAvlT = o.lastAvlT; avlImpacts = o.avlImpacts; avlKnocks = o.avlKnocks; enfKickTries = o.enfKickTries; enfKickHits = o.enfKickHits; enfSwatTries = o.enfSwatTries; enfSwatHits = o.enfSwatHits; enfRetreats = o.enfRetreats; enfFalls = o.enfFalls; enfAlerts = o.enfAlerts; enfSwatConsidered = o.enfSwatConsidered; enfSwatRejected = o.enfSwatRejected; enfSwatRisky = o.enfSwatRisky; enfLandOwn = o.enfLandOwn; enfLandNear = o.enfLandNear; enfHops = o.enfHops; enfFallEdge = o.enfFallEdge; enfFallChase = o.enfFallChase; enfFallNoDeck = o.enfFallNoDeck; avlFired = o.avlFired; avlSkipped = o.avlSkipped; avlReleased = o.avlReleased; avlNear = o.avlNear; avlArea = o.avlArea; avlHits = o.avlHits; avlRicochets = o.avlRicochets; avlPeak = o.avlPeak; squashT = o.squashT; slipCd = o.slipCd; finishedRun = o.finishedRun; lastGateNo = o.lastGateNo; lastKeyColor = o.lastKeyColor; lastGateColor = o.lastGateColor;
+        reboundBuf = o.reboundBuf; rebounds = o.rebounds; shoves = o.shoves; turboT = o.turboT; turboLaunches = o.turboLaunches; turboCancels = o.turboCancels; tarzanR = o.tarzanR; tarzanLast = o.tarzanLast; tarzanAgainT = o.tarzanAgainT;
+        clubTime = o.clubTime; swingT = o.swingT; shoveCd = o.shoveCd; crabS = o.crabS; crabY = o.crabY; keys = o.keys; keysFree = o.keysFree; featDone = o.featDone.clone(); aimAng = o.aimAng.clone(); aimFireT = o.aimFireT.clone(); aimArmed = o.aimArmed.clone(); crabPos = o.crabPos.clone(); crabVel = o.crabVel.clone(); crabMode = o.crabMode.clone(); crabStuck = o.crabStuck.clone(); crabCool = o.crabCool.clone(); crabTurn = o.crabTurn.clone(); crabSeen = o.crabSeen.clone(); mobState = o.mobState.clone(); mobT = o.mobT.clone(); mobS = o.mobS.clone(); mobY = o.mobY.clone(); mobDir = o.mobDir.clone(); mobTgt = o.mobTgt.clone(); mobSeen = o.mobSeen.clone(); deckOff = o.deckOff.clone(); crabJump = o.crabJump.clone(); crabFrom = o.crabFrom.clone(); crabFromDeck = o.crabFromDeck.clone(); crabFall = o.crabFall.clone(); aimYaw = o.aimYaw.clone(); avl = o.avl.clone(); lastAvlT = o.lastAvlT; avlImpacts = o.avlImpacts; avlKnocks = o.avlKnocks; enfKickTries = o.enfKickTries; enfKickHits = o.enfKickHits; enfSwatTries = o.enfSwatTries; enfSwatHits = o.enfSwatHits; enfRetreats = o.enfRetreats; enfFalls = o.enfFalls; enfAlerts = o.enfAlerts; enfSwatConsidered = o.enfSwatConsidered; enfSwatRejected = o.enfSwatRejected; enfSwatRisky = o.enfSwatRisky; enfLandOwn = o.enfLandOwn; enfLandNear = o.enfLandNear; enfHops = o.enfHops; enfFallEdge = o.enfFallEdge; enfFallChase = o.enfFallChase; enfFallNoDeck = o.enfFallNoDeck; avlFired = o.avlFired; avlSkipped = o.avlSkipped; avlReleased = o.avlReleased; avlNear = o.avlNear; avlArea = o.avlArea; avlHits = o.avlHits; avlRicochets = o.avlRicochets; avlPeak = o.avlPeak; avlTrigT = o.avlTrigT; avlTrigV = o.avlTrigV; avlTrigDist = o.avlTrigDist; avlFirstImpactT = o.avlFirstImpactT; avlFirstNearT = o.avlFirstNearT; avlRebounds = o.avlRebounds; avlTumbles = o.avlTumbles; squashT = o.squashT; slipCd = o.slipCd; finishedRun = o.finishedRun; lastGateNo = o.lastGateNo; lastKeyColor = o.lastKeyColor; lastGateColor = o.lastGateColor;
         act = o.act; hz = o.hz; winLo = o.winLo; winHi = o.winHi; invuln = o.invuln; hits = o.hits; hitS = o.hitS; hitY = o.hitY;
         humanHold = o.humanHold; heldX = o.heldX; heldY = o.heldY; heldXT = o.heldXT; heldYT = o.heldYT;
         motion = o.motion; motionGen = o.motionGen; mstep = o.mstep;
@@ -310,6 +346,7 @@ public final class Sim {
     }
 
     public int consumeEvents() { int e = events; events = 0; return e; }
+    public int consumeEvents2() { int e = events2; events2 = 0; return e; }
     /** The side entry in progress (see trackSideEntry): {platform, side}, for saving a climb mid-catch (DC3). */
     public int[] sideEntry() { return new int[]{sideIn, sideDir}; }
     public void setSideEntry(int platform, int side) { sideIn = platform; sideDir = side >= 0 ? 1 : -1; }
@@ -363,12 +400,30 @@ public final class Sim {
     private void knockOff() {
         // away from what touched you (DC4: the hazard's home was used, so a body between a carried saw's home and the saw itself was thrown through it)
         float side = hitBy == null ? 0f : course.dsWrap(s, Float.isNaN(hitFromS) ? hitBy.sAt(time) : hitFromS);
-        hitFromS = Float.NaN;
-        mode = Mode.AIR; onElem = -1; coyote = 0; jumpBuf = 0; lockout = Math.max(lockout, KNOCK_LOCKOUT);
+        hitFromS2 = hitFromS; hitFromS = Float.NaN;
+        mode = Mode.AIR; onElem = -1; coyote = 0; jumpBuf = 0; lockout = Math.max(lockout, KNOCK_LOCKOUT); turboT = 0f;          // (rules 19: a knock ends a turbo flight)
         vx = (side >= 0f ? 1f : -1f) * T.hitKnockSide; vy = T.hitKnockUp; invuln = 0.7f;      // tuning.json: hitKnockSide / hitKnockUp
+        if (hitBy != null && reboundable(hitBy.type)) tryRebound(hitFromS2, hitFromY);          // (a timed press turns the knock into a rebound; it is still a hit)
+    }
+    /** Hazards a timed press rebounds off (creatures go through their own shoves): cannon balls, aimed shots, mortar rounds, saws. */
+    static boolean reboundable(Element.Type t) { return t == Element.Type.CANNON || t == Element.Type.AIMED || t == Element.Type.MORTAR || t == Element.Type.SAW_H || t == Element.Type.SAW_V; }
+    /**
+     * The timed rebound (see {@link #reboundBuf}): with a fresh press armed, adds a jump impulse to the outcome this contact already gave - all of it
+     * upward for a contact from straight above (the sideways part of the shove is damped), half of it for a contact from the side.
+     */
+    private void tryRebound(float objS, float objY) {
+        if (reboundBuf <= 0f || Float.isNaN(objS)) return;
+        float dx = course.dsWrap(s, objS), dy = y + T.height * 0.5f - objY, d = (float) Math.sqrt(dx * dx + dy * dy);
+        float ny = d > 1e-4f ? Math.max(0f, dy / d) : 1f;
+        vy += T.jumpVel * REBOUND_GAIN * (0.5f + 0.5f * ny);
+        vx *= 1f - 0.6f * ny;
+        reboundBuf = 0f; jumpBuf = 0f; rebounds++; events2 |= EV2_REBOUND;
     }
 
-    /** Falls to the checkpoint plus hazard knock-offs: any of them means a move was not clean (the solver and the generator proofs reject such moves). */
+    /**
+     * Falls to the checkpoint plus hazard knock-offs. Rules 19 (owner correction 2026-10-29): no longer what fails a move - the planner and the
+     * generator's proofs judge a move by its outcome (Autopilot.lost: falls); this count still tells clean moves from ones that took a knock.
+     */
     public int setbacks() { return falls + hits; }
 
     /** Falling past the lowest platform of the tower (or being sent back for any reason): back to the checkpoint. A sim whose world window is managed (see Tower.maintain) only flags it, because the checkpoint's slice may need to be loaded first. */
@@ -382,8 +437,9 @@ public final class Sim {
         falls++; invuln = 0.7f;
         lastPad = -1;          // Build 72: a launch from a pad before the fall is history; left set, the next hop off the checkpoint read as that pad's launch
         events |= EV_RESPAWN; teleported = true;
-        // restore crumbled platforms so a retry is never stale or soft-locked
-        java.util.Arrays.fill(crumbleT, -1f);
+        // restore crumbled platforms so a retry is never stale or soft-locked - except a bridge's fallen planks, which stay gone for the climb (rules 19,
+        // owner decision 2026-10-29; the generator proves every holed bridge with its holes open, so a retry is never soft-locked by them)
+        for (int i = 0; i < crumbleT.length; i++) crumbleT[i] = i < course.size() && course.get(i).holed() && crumbleT[i] >= Element.HOLE_DELAY ? Element.HOLE_DONE : -1f;
         java.util.Arrays.fill(gone, false);
         resetEncounters(idx);
         spawnAtCheckpoint(idx);
@@ -418,7 +474,7 @@ public final class Sim {
             }
         }
         if (avlReset) lastAvlT = -1e9f;
-        shoveCd = 0f; swingT = 0f; squashT = 0f; slipCd = 0f;
+        shoveCd = 0f; swingT = 0f; squashT = 0f; slipCd = 0f; reboundBuf = 0f;
     }
 
     /**
@@ -498,7 +554,7 @@ public final class Sim {
 
     public boolean attachedTo(int idx) {
         if (idx < 0) return false;
-        return ((mode == Mode.GROUND || mode == Mode.LEDGE || mode == Mode.ROPE || mode == Mode.CABLE || mode == Mode.BEAM) && onElem == idx);
+        return ((mode == Mode.GROUND || mode == Mode.LEDGE || mode == Mode.ROPE || mode == Mode.CABLE || mode == Mode.BEAM || mode == Mode.TARZAN) && onElem == idx);
     }
 
     // ---------------------------------------------------------------- step
@@ -565,10 +621,9 @@ public final class Sim {
                 ey0[i] = e.y + e.rampSlope(time - dt) * x; ey1[i] = e.y + e.rampSlope(time) * x; edy[i] = e.rampSlope(time) * x - e.rampSlope(time - dt) * x;
             }
             if (padSquash[i] > 0) padSquash[i] = Math.max(0, padSquash[i] - dt);
-            if (e.holed() && crumbleT[i] >= 0f) {             // Build 79: its holes open HOLE_DELAY after you land, stay open crumbleRespawn, then the planks are back
-                float c0 = crumbleT[i]; crumbleT[i] += dt;
+            if (e.holed() && crumbleT[i] >= 0f && crumbleT[i] < Element.HOLE_DONE) {             // Build 79: its holes open HOLE_DELAY after you land; rules 19 (owner): the planks never come back
+                float c0 = crumbleT[i]; crumbleT[i] = Math.min(Element.HOLE_DONE, crumbleT[i] + dt);
                 if (c0 < Element.HOLE_DELAY && crumbleT[i] >= Element.HOLE_DELAY) events |= EV_CRUMBLE;
-                if (crumbleT[i] >= Element.HOLE_DELAY + T.crumbleRespawn && !(mode == Mode.GROUND && onElem == i)) crumbleT[i] = -1f;
             }
             if (e.crumbles()) {
                 if (gone[i]) { goneT[i] -= dt; if (goneT[i] <= 0) { gone[i] = false; crumbleT[i] = -1f; } }
@@ -578,7 +633,12 @@ public final class Sim {
 
         if (mode != Mode.AIR) sideIn = -1;
         if (in.jumpPressed) jumpBuf = T.jumpBuffer + assistForgive; else jumpBuf = Math.max(0, jumpBuf - dt);
+        if (in.jumpPressed && mode == Mode.AIR) reboundBuf = REBOUND_WINDOW; else reboundBuf = Math.max(0f, reboundBuf - dt);          // (a fresh press only: holding Jump never re-arms it)
+        if (turboT > 0f && in.jumpPressed && mode == Mode.AIR) {          // rules 19: a fresh press in powered flight cancels it (and is not also a rebound press or a buffered jump)
+            turboT = 0f; vx *= TURBO_CANCEL_KEEP; reboundBuf = 0f; jumpBuf = 0f; turboCancels++; events2 |= EV2_TURBO_CANCEL;
+        }
         if (lockout > 0) lockout = Math.max(0, lockout - dt);
+        if (tarzanAgainT > 0) { tarzanAgainT = Math.max(0f, tarzanAgainT - dt); if (tarzanAgainT == 0f) tarzanLast = -1; }
 
         switch (mode) {
             case GROUND: if (onElem < 0 && onSlab >= 0) stepSlab(in, dt); else stepGround(in, dt); break;
@@ -588,7 +648,9 @@ public final class Sim {
             case LEDGE: stepLedge(in, dt); break;
             case PULLUP: stepPull(dt); break;
             case BEAM: stepBeam(in, dt); break;
+            case TARZAN: stepTarzan(in, dt); break;
         }
+        if (mode != Mode.AIR) turboT = 0f;          // landed, caught something: the turbo is over
         prevJumpHeld = in.jumpHeld;
         s = course.wrap(s);
         if (y > maxHeight) maxHeight = y;
@@ -644,7 +706,8 @@ public final class Sim {
         }
         if (shoveCd <= 0f && invuln <= 0f && Math.abs(dx) < 0.55f + hw && y < cy + 0.62f && y + T.height > cy + 0.05f && (mode == Mode.GROUND || mode == Mode.AIR)) {
             float side = Math.signum(dx); if (side == 0f) side = -facing;
-            vx = side * 9f; vy = Math.max(vy, 6f); mode = Mode.AIR; onElem = -1; lockout = 0.3f; jumpedUp = false; coyote = 0f; shoveCd = 0.9f; events |= EV_SHOVE;
+            vx = side * 9f; vy = Math.max(vy, 6f); mode = Mode.AIR; onElem = -1; lockout = 0.3f; jumpedUp = false; coyote = 0f; shoveCd = 0.9f; shoves++; turboT = 0f; events |= EV_SHOVE;
+            tryRebound(cs, cy + 0.35f);          // (the crab's body centre)
         }
     }
     /** Build 79: a bridge's plank holes are open (see Element.holed); you drop through one once your middle is HOLE_FOOT inside its edges. */
@@ -662,7 +725,8 @@ public final class Sim {
         }
         if (shoveCd <= 0f && invuln <= 0f && Math.abs(dx) < Element.BEE_R + hw && by + Element.BEE_R > y + 0.1f && by - Element.BEE_R < y + T.height - 0.05f && (mode == Mode.GROUND || mode == Mode.AIR)) {
             float side = Math.signum(dx); if (side == 0f) side = -facing;
-            vx = side * Element.BEE_PUSH_X; vy = Math.max(vy, Element.BEE_PUSH_Y); mode = Mode.AIR; onElem = -1; lockout = 0.25f; jumpedUp = false; coyote = 0f; shoveCd = 1.0f; events |= EV_SHOVE;
+            vx = side * Element.BEE_PUSH_X; vy = Math.max(vy, Element.BEE_PUSH_Y); mode = Mode.AIR; onElem = -1; lockout = 0.25f; jumpedUp = false; coyote = 0f; shoveCd = 1.0f; shoves++; turboT = 0f; events |= EV_SHOVE;
+            tryRebound(bs, by);
         }
     }
     private final float[] beeTmp = new float[2], beeEnv = new float[4];
@@ -800,7 +864,7 @@ public final class Sim {
                 float cy = dY + mobY[idx], dx = course.dsWrap(s, mobS[idx]);
                 if (shoveCd <= 0f && invuln <= 0f && Math.abs(dx) < Element.SKULL_R + hw && cy - Element.SKULL_R < y + T.height && cy + Element.SKULL_R > y + 0.05f && (mode == Mode.GROUND || mode == Mode.AIR)) {
                     vx = mobDir[idx] * Element.SKULL_LAUNCH_X; vy = Math.max(vy, Element.SKULL_LAUNCH_Y); mode = Mode.AIR; onElem = -1; coyote = 0f; lockout = 0.35f; jumpedUp = false; shoveCd = 0.9f;
-                    events |= EV_SHOVE | EV_LAUNCH;
+                    shoves++; turboT = 0f; events |= EV_SHOVE | EV_LAUNCH;
                 }
                 break;
             }
@@ -898,7 +962,7 @@ public final class Sim {
                     float ahead = dx * mobDir[idx];
                     if (ahead > -Element.ENF_HALF - hw && ahead < Element.ENF_HALF + hw + Element.ENF_KICK_REACH[tier] && y < dY + 1.3f && y + T.height > dY + 0.1f) {
                         vx = mobDir[idx] * Element.ENF_KICK_X; vy = Math.max(vy, Element.ENF_KICK_Y); mode = Mode.AIR; onElem = -1; coyote = 0f; lockout = 0.3f; jumpedUp = false; shoveCd = 0.9f;
-                        events |= EV_SHOVE | EV_LAUNCH | EV_ENF_HIT; enfKickHits++;
+                        shoves++; turboT = 0f; events |= EV_SHOVE | EV_LAUNCH | EV_ENF_HIT; enfKickHits++;
                     }
                 }
                 if (t >= wu + act + rec) { mobState[idx] = 2; mobT[idx] = 0f; }
@@ -927,7 +991,7 @@ public final class Sim {
                 float cy = dY + mobY[idx], bx = course.dsWrap(s, mobS[idx]);
                 if (shoveCd <= 0f && invuln <= 0f && (mode == Mode.GROUND || mode == Mode.AIR) && Math.abs(bx) < Element.ENF_HALF + hw + 0.25f && y < cy + Element.ENF_H + Element.ENF_REACH_UP && y + T.height > cy) {      // (DC4: hanging on a rope, cable or ledge is out of a creature's reach, as for every other creature)
                     vx = (bx >= 0f ? 1f : -1f) * Element.ENF_SWAT_X; vy = Math.min(vy, Element.ENF_SWAT_Y); mode = Mode.AIR; onElem = -1; coyote = 0f; lockout = 0.3f; jumpedUp = false; shoveCd = 0.9f;
-                    events |= EV_SHOVE | EV_LAUNCH | EV_ENF_HIT; enfSwatHits++;
+                    shoves++; turboT = 0f; events |= EV_SHOVE | EV_LAUNCH | EV_ENF_HIT; enfSwatHits++;
                 }
                 if (crabVel[idx] < 0f) {
                     int q = enfTouch(j, a0, n, prevY, mobY[idx], mobS[idx]);
@@ -1069,17 +1133,73 @@ public final class Sim {
         return deckY(j);
     }
 
+    /**
+     * Rules 18 (owner Build 83 avalanche overhaul, 2026-10-29): has the climber reached avalanche e's trigger, or are they moving toward it fast
+     * enough to get there before its blocks could come down? Standing on the trigger deck fires it, as before. Otherwise, within AVL_LEAD_MAX m
+     * short of the deck's near edge (along the route), AVL_LEAD_BELOW below to AVL_LEAD_ABOVE above it, the climber's real speed toward it gives
+     * the time they need to get there; once that is no more than the blocks' fall time (+ AVL_LEAD_PAD) it fires. Flying over the deck (a jump or a
+     * launch that never lands on it) fires it too. A faster climber is met earlier: a run fires a few metres short, a launch from the deck before.
+     * Each spot fires once (its state goes to 1), whatever the climber does next.
+     */
+    private boolean avlReached(int a0) {
+        if (mode == Mode.GROUND && onElem == a0) return true;
+        float dir = avlDir(a0);
+        if (dir == 0f) return false;
+        Element d = course.get(a0);
+        float dy = y - deckY(a0);
+        if (dy < -Element.AVL_LEAD_BELOW || dy > Element.AVL_LEAD_ABOVE) return false;
+        float over = Math.abs(course.dsWrap(es1[a0], s));
+        if (mode == Mode.AIR && over <= d.halfW() && dy >= -0.5f) return true;
+        float dist = course.dsWrap(es1[a0] - dir * d.halfW(), s) * dir, v = vx * dir;
+        if (dist <= 0f || dist > Element.AVL_LEAD_MAX || v <= 0.3f) return false;
+        return dist / v <= avlFallTime() + Element.AVL_LEAD0 + Element.AVL_LEAD_PAD;
+    }
+    /** The way along the tower the route runs through trigger deck a0 (+1 or -1; 0 when it cannot tell). */
+    private float avlDir(int a0) {
+        int p = deck(a0, -1), n = deck(a0, 1);
+        float d = p >= 0 ? course.dsWrap(es1[a0], es1[p]) : (n >= 0 ? course.dsWrap(es1[n], es1[a0]) : 0f);
+        return d > 0f ? 1f : (d < 0f ? -1f : 0f);
+    }
+    /** Seconds a block takes to come down AVL_DROP m from rest. */
+    private static float avlFallTime() { return (float) Math.sqrt(2f * Element.AVL_DROP / Element.AVL_G); }
+    /** Rules 18 measurements of the last avalanche fired (reports and tests only): when, the climber's speed toward it (m/s), how far short of the
+     *  trigger deck's edge they were (m, 0 on it), the first hard deck impact after it fired and the first block within 2.5 m of the body (s, -1 none). */
+    public float avlTrigT = -1f, avlTrigV, avlTrigDist, avlFirstImpactT = -1f, avlFirstNearT = -1f;
+    /** Rules 18 counters: rebounds (deck or wall contacts that throw the block back off at more than 1.5 m/s) and tumbles (contacts that changed a
+     *  block's spin by more than 180 deg/s: a corner landing, a glancing knock). */
+    public int avlRebounds, avlTumbles;
+
+    private void avlMeasure(int a0) {
+        float dir = avlDir(a0), dist = dir == 0f ? 0f : course.dsWrap(es1[a0] - dir * course.get(a0).halfW(), s) * dir;
+        avlTrigT = time; avlTrigV = vx * dir; avlTrigDist = Math.max(0f, dist); avlFirstImpactT = -1f; avlFirstNearT = -1f;
+    }
+
+    /** The route decks an avalanche's blocks can touch (offsets -8..8 from its trigger deck; -1 where there is none or it cannot be hit), looked up once
+     *  per step (rules 18 profiling: walking the route for every block, sub-step and deck was 60% of generation time). Scratch, not state. */
+    private final int[] avlDk = new int[17];
+    /** ... and, for the rigid blocks, each deck's arc offset from the trigger deck, half width and top this step (a ramp or seesaw: NaN, its top is per point). */
+    private final float[] avlDo = new float[17], avlDw = new float[17], avlDt = new float[17];
+    private void avlNearDecks(int a0) {
+        float as = es1[a0];
+        for (int dd = -8; dd <= 8; dd++) {
+            int j = deck(a0, dd), k = dd + 8; avlDk[k] = avlDeck(j) ? j : -1;
+            if (avlDk[k] < 0) continue;
+            Element d = course.get(j);
+            avlDo[k] = course.dsWrap(es1[j], as); avlDw[k] = d.halfW(); avlDt[k] = d.type == Element.Type.RAMP || d.type == Element.Type.SEESAW ? Float.NaN : deckY(j);
+        }
+    }
+
     private void stepAvalanche(Element e, int idx) {
-        if (e.skin == 1) { stepChaos(e, idx); return; }          // NOT GONNA HAPPEN's own blocks (rules 14); the code below is NORMAL's and PUNISHER's, unchanged
+        if (e.skin == 1 || e.skin == 2) { stepRigid(e, idx); return; }          // rules 18: NOT GONNA HAPPEN (1) and PUNISHER (2) rigid cubes; the code below is NORMAL's
         int o = idx * AVL_W, a0 = e.anchor;
         if (o + AVL_W > avl.length || a0 < 0 || a0 >= course.size()) return;
         float st = avl[o];
         if (st == 2f) { if (idx < featDone.length) featDone[idx] = true; return; }          // (DC3: spent is resolved, so it stays spent across a slice unload: Tower keeps featDone)
         if (idx < featDone.length && featDone[idx]) { avl[o] = 2f; return; }
         if (st == 0f) {
-            if (!(mode == Mode.GROUND && onElem == a0)) return;
-            if (time - lastAvlT < e.period) { avl[o] = 2f; avlSkipped++; return; }          // reached during the cooldown: this spot is spent, it never fires later
-            avl[o] = 1f; avl[o + 1] = 0f; lastAvlT = time; events |= EV_AVL_WARN; avlFired++;
+            if (!avlReached(a0)) return;
+            if (time - lastAvlT < e.period) { if (mode == Mode.GROUND && onElem == a0) { avl[o] = 2f; avlSkipped++; } return; }          // reached during the cooldown: this spot is spent, it never fires later (a lead during the cooldown waits)
+            avl[o] = 1f; avl[o + 1] = 0f; lastAvlT = time; events |= EV_AVL_WARN; avlFired++; avlMeasure(a0);
             int n = Math.max(1, Math.min(Element.AVL_MAX, Math.round(e.len)));
             float ay = course.get(a0).y;
             for (int b = 0; b < Element.AVL_MAX; b++) {
@@ -1094,11 +1214,12 @@ public final class Sim {
                 avl[p] = ds; avl[p + 1] = deckY(j) - ay + Element.AVL_DROP + 2.5f * avlRand(e, b, 2);
                 avl[p + 2] = -(0.6f + 2.4f * avlRand(e, b, 3)); avl[p + 3] = -1.5f * avlRand(e, b, 4);
                 avl[p + 4] = 90f * avlRand(e, b, 5); avl[p + 5] = (avlRand(e, b, 6) - 0.5f) * 500f;
-                avl[p + 6] = 2f; avl[p + 7] = Element.AVL_WARN + b * Element.AVL_STAGGER + 0.25f * avlRand(e, b, 7);
+                avl[p + 6] = 2f; avl[p + 7] = Element.AVL_LEAD0 + b * Element.AVL_STAGGER + 0.25f * avlRand(e, b, 7);          // (rules 18: no warning wait)
             }
             return;
         }
         avl[o + 1] += DT;
+        avlNearDecks(a0);
         float clock = avl[o + 1], ay = course.get(a0).y, as = es1[a0], g = Element.AVL_G, R = Element.AVL_R;
         int live = 0;
         for (int b = 0; b < Element.AVL_MAX; b++) {
@@ -1108,8 +1229,8 @@ public final class Sim {
             avl[p + 3] -= g * DT; avl[p] += avl[p + 2] * DT; avl[p + 1] += avl[p + 3] * DT; avl[p + 4] += avl[p + 5] * DT;
             avlTouched = -1;
             for (int dd = -8; dd <= 8; dd++) {          // the decks: tops (ramps on their slope) and sides
-                int j = deck(a0, dd); if (j < 0) continue;
-                if (!avlDeck(j)) continue;
+                int j = avlDk[dd + 8];
+                if (j < 0) continue;
                 Element d = course.get(j);
                 float hw = d.halfW(), x = course.dsWrap(as + avl[p], es1[j]), by = ay + avl[p + 1];
                 float cx = Math.max(-hw, Math.min(hw, x)), top = avlTop(j, cx), cy = Math.max(top - Element.AVL_SLAB, Math.min(top, by));
@@ -1122,7 +1243,7 @@ public final class Sim {
                 float push = R - dist; avl[p] += nx * push; avl[p + 1] += ny * push; if (avlTouched < 0 || Math.abs(j - a0) < Math.abs(avlTouched - a0)) avlTouched = j;
                 float vn = avl[p + 2] * nx + avl[p + 3] * ny;
                 if (vn < 0f) {
-                    if (vn < -3f) avlImpacts++;
+                    if (vn < -3f) { avlImpacts++; if (avlFirstImpactT < 0f) avlFirstImpactT = time - avlTrigT; }
                     avl[p + 2] -= (1f + Element.AVL_E) * vn * nx; avl[p + 3] -= (1f + Element.AVL_E) * vn * ny;
                     float tx = -ny, vt = avl[p + 2] * tx + avl[p + 3] * nx;          // along the surface: friction, and it rolls
                     float keep = vt * (Element.AVL_FRICTION - 1f);
@@ -1145,7 +1266,7 @@ public final class Sim {
                 }
             }
             int fl = (int) avl[p + 8];          // flags: 1 came near the body, 2 reached the traversal area
-            if ((fl & 1) == 0) { float nx = Math.abs(course.dsWrap(as + avl[p], s)), ny = Math.abs(ay + avl[p + 1] - (y + T.height * 0.5f)); if (nx < 2.5f && ny < 2.5f) { fl |= 1; avlNear++; } }
+            if ((fl & 1) == 0) { float nx = Math.abs(course.dsWrap(as + avl[p], s)), ny = Math.abs(ay + avl[p + 1] - (y + T.height * 0.5f)); if (nx < 2.5f && ny < 2.5f) { fl |= 1; avlNear++; if (avlFirstNearT < 0f) avlFirstNearT = time - avlTrigT; } }
             if ((fl & 2) == 0 && offsetOf(a0, avlTouched, 8) != NONE && offsetOf(a0, avlTouched, 8) >= -1 && offsetOf(a0, avlTouched, 8) <= 4) { fl |= 2; avlArea++; }
             avl[p + 8] = fl; avlTouched = -1;
             float sp2 = avl[p + 2] * avl[p + 2] + avl[p + 3] * avl[p + 3];
@@ -1156,53 +1277,70 @@ public final class Sim {
         if (live == 0) avl[o] = 2f;
     }
 
-    // ---- NOT GONNA HAPPEN avalanche (rules 14, owner 2026-10-27): every block its own size, bounce, friction, launch, spin and ricochet, all seeded
-    /** Block b's collision radius (m): AVL_R for NORMAL/PUNISHER avalanches; NGH blocks 0.32-0.62 m from the avalanche's seed. */
+    // ---- PUNISHER and NOT GONNA HAPPEN avalanches (rules 18, owner Build 83 overhaul 2026-10-29): rigid spiked cubes, seeded, nothing scripted
+    /** Block b's collision radius (m, the cube's half side): AVL_R for NORMAL/PUNISHER avalanches; NGH blocks 0.32-0.62 m from the avalanche's seed. */
     public static float avlRadius(Element e, int b) { return e.skin == 1 ? Element.AVL_CR0 + Element.AVL_CR1 * avlRand(e, b, 10) : Element.AVL_R; }
-    /** NGH block b: restitution off decks, tangential friction kept per contact, ricochet kick (m/s, signed). */
-    private static float chaosE(Element e, int b) { return 0.28f + 0.34f * avlRand(e, b, 11); }
-    private static float chaosF(Element e, int b) { return 0.66f + 0.28f * avlRand(e, b, 12); }
-    private static float chaosKick(Element e, int b) { return (avlRand(e, b, 16) < 0.5f ? -1f : 1f) * (0.4f + 1.2f * avlRand(e, b, 15)); }
-    /** NGH ricochets so far (a hard deck impact that also kicked the block sideways; reports and tests only) and the most blocks falling at once. */
+    /** Rules 18 block b: restitution off decks and walls, and its friction coefficient (each block its own, from the seed). */
+    private static float rigidE(Element e, int b) { return Element.AVL_HE0 + Element.AVL_HE1 * avlRand(e, b, 11); }
+    private static float rigidMu(Element e, int b) { return Element.AVL_HMU0 + Element.AVL_HMU1 * avlRand(e, b, 12); }
+    /** Hard rebounds (a deck or wall impact faster than AVL_RICOCHET m/s; reports and tests only) and the most blocks falling at once. */
     public int avlRicochets, avlPeak;
+    private static final float DEG = (float) (Math.PI / 180.0), RAD = (float) (180.0 / Math.PI);
+    /** Presentation only (never read by the simulation, not saved): the hardest deck strike of each block of avalanche avlStrikeIdx in the last step (m/s). */
+    private final float[] avlStrike = new float[Element.AVL_MAX]; private int avlStrikeIdx = -1;
+    /** -1..1: which corner (or, near 0, the face between two) of a cube touches along a contact direction component u (soft, so a face lies flat). */
+    private static float avlCorner(float u) { return Math.max(-1f, Math.min(1f, u * 5f)); }
 
     /**
-     * NOT GONNA HAPPEN's avalanche: the same trigger, cooldown, warning and scoring as every avalanche, then 5-7 blocks released AVL_SPACE0-AVL_SPACE1 s
-     * apart (each gap seeded), each with its own radius, mass (radius cubed), restitution, friction, launch velocity (either way along the tower),
-     * spin direction and speed, and ricochet response; blocks collide with the decks (ramps on their slope), with each other (mass-weighted, momentum
-     * conserving) and the body (avalancheHits, per-block radius). Each step is split into AVL_SUB sub-steps so no block moves more than a fraction of its
-     * radius per sub-step at the speeds it can reach (no tunnelling through a 0.6 m deck slab or another block). Pure simulation state: deterministic.
+     * PUNISHER's and NOT GONNA HAPPEN's avalanche: the trigger and cooldown every avalanche has (avlReached), then 8-10 (PUNISHER) or 9-12 (NGH)
+     * blocks break loose AVL_GAP0-AVL_GAP1 s apart, the first AVL_LEAD0 s after the trigger. AVL_AIM of them come down where the climber will be
+     * (their real velocity carried over the fall, landing a little ahead along the route), the rest over the decks ahead, thrown back down the route
+     * toward the climber or (some) up it. Every block is a rigid cube with mass and moment of inertia: a contact acts at the corner or face that
+     * touches, the impulse there (restitution, Coulomb friction) changes both its velocity and its spin, so corner landings tumble, a spinning block
+     * kicks itself off line on the next bounce, and blocks bounce down stairs, off deck sides (walls) and off each other (mass-weighted, momentum
+     * conserving, with friction between them that trades spin). AVL_HSUB sub-steps per step keep fast blocks from passing through decks or each other.
+     * Pure simulation state and fixed arithmetic (StrictMath for the trigonometry): the same on every platform.
      */
-    private void stepChaos(Element e, int idx) {
+    private void stepRigid(Element e, int idx) {
         int o = idx * AVL_W, a0 = e.anchor;
         if (o + AVL_W > avl.length || a0 < 0 || a0 >= course.size()) return;
         float st = avl[o];
-        if (st == 2f) { if (idx < featDone.length) featDone[idx] = true; return; }          // (DC3: spent is resolved, so it stays spent across a slice unload: Tower keeps featDone)
+        if (st == 2f) { if (idx < featDone.length) featDone[idx] = true; return; }
         if (idx < featDone.length && featDone[idx]) { avl[o] = 2f; return; }
         if (st == 0f) {
-            if (!(mode == Mode.GROUND && onElem == a0)) return;
-            if (time - lastAvlT < e.period) { avl[o] = 2f; avlSkipped++; return; }
-            avl[o] = 1f; avl[o + 1] = 0f; lastAvlT = time; events |= EV_AVL_WARN; avlFired++;
+            if (!avlReached(a0)) return;
+            if (time - lastAvlT < e.period) { if (mode == Mode.GROUND && onElem == a0) { avl[o] = 2f; avlSkipped++; } return; }
+            avl[o] = 1f; avl[o + 1] = 0f; lastAvlT = time; events |= EV_AVL_WARN; avlFired++; avlMeasure(a0);
             int n = Math.max(1, Math.min(Element.AVL_MAX, Math.round(e.len)));
-            float ay = course.get(a0).y, rel = Element.AVL_WARN;
+            float ay = course.get(a0).y, rel = Element.AVL_LEAD0, dir = avlDir(a0), fall = avlFallTime();
+            if (dir == 0f) dir = 1f;
             for (int b = 0; b < Element.AVL_MAX; b++) {
                 int p = o + 2 + b * AVL_B;
                 for (int q = 0; q < AVL_B; q++) avl[p + q] = 0f;
                 if (b >= n) continue;
-                int kk = 1 + (int) (avlRand(e, b, 0) * 3.99f), j = deck(a0, kk); while (kk > 1 && !avlDeck(j)) j = deck(a0, --kk);
-                if (!avlDeck(j)) j = a0;
-                Element d = course.get(j);
-                float ds = course.dsWrap(es1[j], es1[a0]) + (avlRand(e, b, 1) - 0.5f) * Math.max(0.4f, d.w - 0.8f);
-                avl[p] = ds; avl[p + 1] = deckY(j) - ay + Element.AVL_DROP + 2.5f * avlRand(e, b, 2);
-                avl[p + 2] = (avlRand(e, b, 3) < 0.7f ? -1f : 1f) * (0.4f + 3.0f * avlRand(e, b, 13)); avl[p + 3] = -2.5f * avlRand(e, b, 4);
-                avl[p + 4] = 90f * avlRand(e, b, 5); avl[p + 5] = (avlRand(e, b, 6) < 0.5f ? -1f : 1f) * (200f + 500f * avlRand(e, b, 14));
+                if (avlRand(e, b, 20) < Element.AVL_AIM) {          // aimed: where the climber's own motion takes them by the time it is down, a little ahead
+                    float lead = vx * (rel + fall) + dir * (Element.AVL_AIM0 + (Element.AVL_AIM1 - Element.AVL_AIM0) * avlRand(e, b, 21));
+                    lead = Math.max(-10f, Math.min(10f, lead));
+                    avl[p] = course.dsWrap(s + lead, es1[a0]); avl[p + 1] = y - ay + Element.AVL_DROP + 1.2f * avlRand(e, b, 2);
+                    avl[p + 2] = (avlRand(e, b, 3) - 0.5f) * 0.8f; avl[p + 3] = -1.2f * avlRand(e, b, 4);
+                } else {          // over one of the decks ahead, thrown back down the route (70%) or on up it
+                    int kk = 1 + (int) (avlRand(e, b, 0) * 3.99f), j = deck(a0, kk); while (kk > 1 && !avlDeck(j)) j = deck(a0, --kk);
+                    if (!avlDeck(j)) j = a0;
+                    Element d = course.get(j);
+                    avl[p] = course.dsWrap(es1[j], es1[a0]) + (avlRand(e, b, 1) - 0.5f) * Math.max(0.4f, d.w - 0.8f);
+                    avl[p + 1] = deckY(j) - ay + Element.AVL_DROP + 2.5f * avlRand(e, b, 2);
+                    avl[p + 2] = (avlRand(e, b, 13) < 0.7f ? -dir : dir) * (0.8f + 3.4f * avlRand(e, b, 3)); avl[p + 3] = -2.5f * avlRand(e, b, 4);
+                }
+                avl[p + 4] = 90f * avlRand(e, b, 5); avl[p + 5] = (avlRand(e, b, 6) < 0.5f ? -1f : 1f) * (150f + 550f * avlRand(e, b, 14));
                 avl[p + 6] = 2f; avl[p + 7] = rel;
-                rel += Element.AVL_SPACE0 + (Element.AVL_SPACE1 - Element.AVL_SPACE0) * avlRand(e, b, 7);
+                rel += Element.AVL_GAP0 + (Element.AVL_GAP1 - Element.AVL_GAP0) * avlRand(e, b, 7);
             }
             return;
         }
         avl[o + 1] += DT;
-        float clock = avl[o + 1], ay = course.get(a0).y, as = es1[a0], g = Element.AVL_G, h = DT / Element.AVL_SUB;
+        avlStrikeIdx = idx; java.util.Arrays.fill(avlStrike, 0f);
+        avlNearDecks(a0);
+        float clock = avl[o + 1], ay = course.get(a0).y, as = es1[a0], g = Element.AVL_G, h = DT / Element.AVL_HSUB;
         int live = 0, falling = 0;
         for (int b = 0; b < Element.AVL_MAX; b++) {
             int p = o + 2 + b * AVL_B;
@@ -1210,51 +1348,78 @@ public final class Sim {
             if (avl[p + 6] == 1f) falling++;
         }
         avlPeak = Math.max(avlPeak, falling);
-        for (int sub = 0; sub < Element.AVL_SUB; sub++) {
+        for (int sub = 0; sub < Element.AVL_HSUB; sub++) {
             for (int b = 0; b < Element.AVL_MAX; b++) {
                 int p = o + 2 + b * AVL_B;
                 if (avl[p + 6] != 1f) continue;
-                float R = avlRadius(e, b), E = chaosE(e, b), F = chaosF(e, b);
-                avl[p + 3] -= g * h; avl[p] += avl[p + 2] * h; avl[p + 1] += avl[p + 3] * h; avl[p + 4] += avl[p + 5] * h;
-                for (int dd = -8; dd <= 8; dd++) {
-                    int j = deck(a0, dd);
-                    if (!avlDeck(j)) continue;
+                float R = avlRadius(e, b), E = rigidE(e, b), MU = rigidMu(e, b), iM = 1f / (R * R), iI = iM * 1.5f / (R * R);          // a square: m ~ side^2, I = m side^2 / 6
+                avl[p + 3] -= g * h; avl[p] += avl[p + 2] * h; avl[p + 1] += avl[p + 3] * h; avl[p + 4] = (avl[p + 4] + avl[p + 5] * h) % 360f;
+                float reach = R * 1.4143f, by = ay + avl[p + 1];
+                boolean touched = false;
+                for (int dd = -8; dd <= 8; dd++) {          // the decks: tops (ramps on their slope), sides (walls) and corners
+                    int k = dd + 8, j = avlDk[k];
+                    if (j < 0) continue;
+                    float hw = avlDw[k], x = avl[p] - avlDo[k];
+                    if (x - hw >= reach || -x - hw >= reach) continue;          // (out of reach along the tower: no contact possible)
+                    float t0 = avlDt[k];
+                    if (t0 == t0 && (by - t0 >= reach || t0 - Element.AVL_SLAB - by >= reach)) continue;          // (a flat deck: out of reach above or below)
                     Element d = course.get(j);
-                    float hw = d.halfW(), x = course.dsWrap(as + avl[p], es1[j]), by = ay + avl[p + 1];
-                    float cx = Math.max(-hw, Math.min(hw, x)), top = avlTop(j, cx), cy = Math.max(top - Element.AVL_SLAB, Math.min(top, by));
+                    float cx = Math.max(-hw, Math.min(hw, x)), top = t0 == t0 ? t0 : avlTop(j, cx), cy = Math.max(top - Element.AVL_SLAB, Math.min(top, by));
                     float dx = x - cx, dy = by - cy, d2 = dx * dx + dy * dy;
-                    if (d2 >= R * R) continue;
+                    if (d2 >= reach * reach) continue;
                     float dist = (float) Math.sqrt(d2), nx, ny;
                     if (dist > 1e-5f) { nx = dx / dist; ny = dy / dist; } else { nx = 0f; ny = 1f; dist = 0f; }
                     if (d.type == Element.Type.RAMP && ny > 0.5f) { float sl = d.rampSlope(time), l = (float) Math.sqrt(1f + sl * sl); nx = -sl / l; ny = 1f / l; }
-                    float push = R - dist; avl[p] += nx * push; avl[p + 1] += ny * push;
+                    // the cube's touching corner (or face): its offset r from the centre, and how far the cube reaches toward the deck along -n
+                    float th = avl[p + 4] * DEG, c = (float) StrictMath.cos(th), sn = (float) StrictMath.sin(th);
+                    float lx = -(nx * c + ny * sn), ly = -(-nx * sn + ny * c), px = R * avlCorner(lx), py = R * avlCorner(ly);
+                    float rx = px * c - py * sn, ry = px * sn + py * c, sup = -(rx * nx + ry * ny), pen = sup - dist;
+                    if (pen <= 0f) continue;
+                    avl[p] += nx * pen; avl[p + 1] += ny * pen; touched = true;
                     int fl = (int) avl[p + 8]; if ((fl & 2) == 0 && dd >= -1 && dd <= 4) { avl[p + 8] = fl | 2; avlArea++; }
-                    float vn = avl[p + 2] * nx + avl[p + 3] * ny;
-                    if (vn < 0f) {
-                        if (vn < -3f) avlImpacts++;
-                        avl[p + 2] -= (1f + E) * vn * nx; avl[p + 3] -= (1f + E) * vn * ny;
-                        float tx = -ny, vt = avl[p + 2] * tx + avl[p + 3] * nx, keep = vt * (F - 1f);
-                        avl[p + 2] += keep * tx; avl[p + 3] += keep * nx;
-                        if (vn < -Element.AVL_RICOCHET) { float k = chaosKick(e, b) * Math.min(1f, -vn / 12f); avl[p + 2] += k * tx; avl[p + 3] += k * nx; avlRicochets++; }          // a hard hit throws it off line: each block its own way
-                        avl[p + 5] = -(avl[p + 2] * tx + avl[p + 3] * nx) / R * 57.29578f;
-                    }
+                    float w = avl[p + 5] * DEG, vcx = avl[p + 2] - w * ry, vcy = avl[p + 3] + w * rx, vn = vcx * nx + vcy * ny;
+                    if (vn >= 0f) continue;
+                    if (vn < -3f) { avlImpacts++; if (avlFirstImpactT < 0f) avlFirstImpactT = time - avlTrigT; avlStrike[b] = Math.max(avlStrike[b], -vn); }
+                    if (vn < -Element.AVL_RICOCHET) avlRicochets++;
+                    float rn = rx * ny - ry * nx, ee = vn > -Element.AVL_HREST ? 0f : E, jn = -(1f + ee) * vn / (iM + rn * rn * iI);
+                    float w0 = w;
+                    avl[p + 2] += jn * nx * iM; avl[p + 3] += jn * ny * iM; w += rn * jn * iI;
+                    float tx = -ny, ty = nx; vcx = avl[p + 2] - w * ry; vcy = avl[p + 3] + w * rx;
+                    float vt = vcx * tx + vcy * ty, rt = rx * ty - ry * tx, jt = -vt / (iM + rt * rt * iI), lim = MU * jn;
+                    jt = Math.max(-lim, Math.min(lim, jt));
+                    avl[p + 2] += jt * tx * iM; avl[p + 3] += jt * ty * iM; w += rt * jt * iI;
+                    avl[p + 5] = w * RAD;
+                    if (avl[p + 2] * nx + avl[p + 3] * ny > 1.5f) avlRebounds++;
+                    if (Math.abs(w - w0) * RAD > 180f) avlTumbles++;
                 }
-                for (int c = b + 1; c < Element.AVL_MAX; c++) {          // block on block: mass ~ radius cubed, momentum conserved
-                    int q = o + 2 + c * AVL_B;
+                for (int q2 = b + 1; q2 < Element.AVL_MAX; q2++) {          // block on block: mass ~ side squared, momentum conserved, friction trades spin
+                    int q = o + 2 + q2 * AVL_B;
                     if (avl[q + 6] != 1f) continue;
-                    float Rc = avlRadius(e, c), rr = R + Rc;
+                    float Rb = avlRadius(e, b) * 1.15f, Rc = avlRadius(e, q2) * 1.15f, rr = Rb + Rc;
                     float dx = avl[p] - avl[q], dy = avl[p + 1] - avl[q + 1], d2 = dx * dx + dy * dy;
                     if (d2 >= rr * rr || d2 < 1e-10f) continue;
-                    float mb = R * R * R, mc = Rc * Rc * Rc, wb = mc / (mb + mc), wc = mb / (mb + mc);
-                    float dist = (float) Math.sqrt(d2), nx = dx / dist, ny = dy / dist, pen = rr - dist;
+                    float ib = 1f / (Rb * Rb), ic = 1f / (Rc * Rc), iIb = ib * 1.5f / (Rb * Rb), iIc = ic * 1.5f / (Rc * Rc);
+                    float dist = (float) Math.sqrt(d2), nx = dx / dist, ny = dy / dist, pen = rr - dist, wb = ib / (ib + ic), wc = ic / (ib + ic);
                     avl[p] += nx * pen * wb; avl[p + 1] += ny * pen * wb; avl[q] -= nx * pen * wc; avl[q + 1] -= ny * pen * wc;
                     float vn = (avl[p + 2] - avl[q + 2]) * nx + (avl[p + 3] - avl[q + 3]) * ny;
-                    if (vn < 0f) {
-                        float eb = 0.5f * (chaosE(e, b) + chaosE(e, c)) + 0.12f, jn = -(1f + eb) * vn;
-                        avl[p + 2] += jn * wb * nx; avl[p + 3] += jn * wb * ny; avl[q + 2] -= jn * wc * nx; avl[q + 3] -= jn * wc * ny;
-                        avlKnocks++; if (vn < -3f) avlImpacts++;
-                    }
+                    if (vn >= 0f) continue;
+                    float jn = -(1f + Element.AVL_HEB) * vn / (ib + ic);
+                    avl[p + 2] += jn * nx * ib; avl[p + 3] += jn * ny * ib; avl[q + 2] -= jn * nx * ic; avl[q + 3] -= jn * ny * ic;
+                    // friction at the contact (b's point -Rb n, c's +Rc n): slip = relative tangential speed there, including both spins
+                    float tx = -ny, ty = nx, wB = avl[p + 5] * DEG, wC = avl[q + 5] * DEG;
+                    float vt = (avl[p + 2] - avl[q + 2]) * tx + (avl[p + 3] - avl[q + 3]) * ty - wB * Rb - wC * Rc;
+                    float jt = -vt / (ib + ic + Rb * Rb * iIb + Rc * Rc * iIc), lim = Element.AVL_HMUB * jn;
+                    jt = Math.max(-lim, Math.min(lim, jt));
+                    avl[p + 2] += jt * tx * ib; avl[p + 3] += jt * ty * ib; avl[q + 2] -= jt * tx * ic; avl[q + 3] -= jt * ty * ic;
+                    avl[p + 5] = (wB - Rb * jt * iIb) * RAD; avl[q + 5] = (wC - Rc * jt * iIc) * RAD;
+                    if (vn < -1f) avlKnocks++; if (vn < -3f) avlImpacts++;          // (a knock is a real collision, not blocks settling against each other)
                 }
+                float v2 = avl[p + 2] * avl[p + 2] + avl[p + 3] * avl[p + 3];
+                if (touched && v2 < Element.AVL_SETTLE_V * Element.AVL_SETTLE_V && Math.abs(avl[p + 5]) < Element.AVL_SETTLE_W) {          // a slow block lying on a deck settles (no endless rocking on a face or corner)
+                    avl[p + 2] *= Element.AVL_SETTLE_K; avl[p + 3] *= Element.AVL_SETTLE_K; avl[p + 5] *= Element.AVL_SETTLE_K; v2 *= Element.AVL_SETTLE_K * Element.AVL_SETTLE_K;
+                }
+                if (v2 > Element.AVL_VMAX * Element.AVL_VMAX) { float k = Element.AVL_VMAX / (float) Math.sqrt(v2); avl[p + 2] *= k; avl[p + 3] *= k; }
+                avl[p + 5] = Math.max(-Element.AVL_WMAX, Math.min(Element.AVL_WMAX, avl[p + 5]));
             }
         }
         for (int b = 0; b < Element.AVL_MAX; b++) {
@@ -1262,13 +1427,36 @@ public final class Sim {
             if (avl[p + 6] == 2f) { live++; continue; }
             if (avl[p + 6] != 1f) continue;
             int fl = (int) avl[p + 8];
-            if ((fl & 1) == 0) { float nx = Math.abs(course.dsWrap(as + avl[p], s)), ny = Math.abs(ay + avl[p + 1] - (y + T.height * 0.5f)); if (nx < 2.5f && ny < 2.5f) { avl[p + 8] = fl | 1; avlNear++; } }
+            if ((fl & 1) == 0) { float nx = Math.abs(course.dsWrap(as + avl[p], s)), ny = Math.abs(ay + avl[p + 1] - (y + T.height * 0.5f)); if (nx < 2.5f && ny < 2.5f) { avl[p + 8] = fl | 1; avlNear++; if (avlFirstNearT < 0f) avlFirstNearT = time - avlTrigT; } }
             float sp2 = avl[p + 2] * avl[p + 2] + avl[p + 3] * avl[p + 3];
-            avl[p + 7] = sp2 < 0.09f ? avl[p + 7] + DT : 0f;
+            avl[p + 7] = sp2 < 0.09f && Math.abs(avl[p + 5]) < 30f ? avl[p + 7] + DT : 0f;
             if (avl[p + 1] < -Element.AVL_FLOOR || clock > Element.AVL_LIFE || avl[p + 7] > Element.AVL_REST || Math.abs(avl[p]) > 30f) { avl[p + 6] = 0f; continue; }
             live++;
+            if (DIAG_AVL_ENV) avlEnv(e, p, a0);
         }
         if (live == 0) avl[o] = 2f;
+    }
+
+    /** Diagnostics only (S1-C, owner directive 2026-10-29; off unless climb.diagAvlEnv is set, and then only inside generation proofs): where the blocks really go. */
+    static final boolean DIAG_AVL_ENV = Boolean.getBoolean("climb.diagAvlEnv");
+    /**
+     * Tallies a falling block's 2 m cell relative to the trigger deck, and the first time it passes through the body (standing room included) of an
+     * element of another revolution (blocks collide only with the trigger route's nearby decks), with whether the generator's lethal box covered it.
+     */
+    private void avlEnv(Element e, int p, int a0) {
+        if (GenTrace.GEN.get() == null) return;
+        GenTrace.tally("t4env_" + (int) Math.floor(avl[p] / 2f) + "_" + (int) Math.floor(avl[p + 1] / 2f));
+        if (((int) avl[p + 8] & 8) != 0) return;
+        Element d = course.get(a0);
+        float bs = d.s + avl[p], by = d.y + avl[p + 1], half = course.circumference * 0.5f;
+        float hs = CourseGenerator.hzS(e), hh = CourseGenerator.hzHalf(e), lo = CourseGenerator.hzLo(e), hi = CourseGenerator.hzHi(e);
+        for (Element f : course.elements) {
+            if (Math.abs(bs - f.s) < half || !(Math.abs(course.dsWrap(bs, f.s)) < CourseGenerator.arcHalf(f) && by > CourseGenerator.vLo(f) && by < CourseGenerator.vHi(f))) continue;
+            avl[p + 8] = (int) avl[p + 8] | 8;
+            boolean inBox = Math.abs(course.dsWrap(hs, f.s)) < hh + CourseGenerator.arcHalf(f) && lo < CourseGenerator.vHi(f) && hi > CourseGenerator.vLo(f);
+            GenTrace.tally("t4envthru_" + f.type + "_" + (inBox ? "inbox" : "outside_box"));
+            return;
+        }
     }
 
     /** A falling block overlaps the body (a disc against the body's box). */
@@ -1282,18 +1470,23 @@ public final class Sim {
             if (e.skin == 1) R = avlRadius(e, b);
             float dx = Math.max(0f, Math.abs(course.dsWrap(es1[a0] + avl[p], s)) - hw), by = ay + avl[p + 1];
             float dy = by < lo ? lo - by : (by > hi ? by - hi : 0f);
-            if (dx * dx + dy * dy < R * R) { hitFromS = es1[a0] + avl[p]; return true; }
+            if (dx * dx + dy * dy < R * R) { hitFromS = es1[a0] + avl[p]; lastAvlHitV = (float) Math.sqrt(avl[p + 2] * avl[p + 2] + avl[p + 3] * avl[p + 3]); lastAvlHitAge = avl[o + 1]; return true; }
         }
         return false;
     }
 
+    /** Diagnostics only (never read by the simulation): the speed (m/s) of the last avalanche block that hit the body, and how long its avalanche had run (s). */
+    public float lastAvlHitV, lastAvlHitAge;
+    /** Diagnostics: block b's speed (m/s). */
+    public float avalancheBlockSpeed(int hi, int b) { int p = hi * AVL_W + 2 + b * AVL_B; return (hi + 1) * AVL_W <= avl.length ? (float) Math.sqrt(avl[p + 2] * avl[p + 2] + avl[p + 3] * avl[p + 3]) : 0f; }
     /** Avalanche state for the renderer and reports: 0 not reached, 1 under way, 2 spent. */
     public int avalancheState(int hi) { return (hi + 1) * AVL_W <= avl.length ? (int) avl[hi * AVL_W] : 0; }
-    /** Block b: {arc, height, angle (deg), status (1 falling, 2 about to drop), collision radius} in world terms, or null when it is not there. */
+    /** Block b: {arc, height, angle (deg), status (1 falling, 2 about to drop), collision radius, impact speed (m/s) of a deck strike this step (0 none)}
+     *  in world terms, or null when it is not there. */
     public float[] avalancheBlock(int hi, Element e, int b) {
         int o = hi * AVL_W, p = o + 2 + b * AVL_B;
         if ((hi + 1) * AVL_W > avl.length || avl[o] != 1f || e.anchor < 0 || e.anchor >= course.size() || avl[p + 6] == 0f) return null;
-        return new float[]{course.wrap(es1[e.anchor] + avl[p]), course.get(e.anchor).y + avl[p + 1], avl[p + 4], avl[p + 6], avlRadius(e, b)};
+        return new float[]{course.wrap(es1[e.anchor] + avl[p]), course.get(e.anchor).y + avl[p + 1], avl[p + 4], avl[p + 6], avlRadius(e, b), hi == avlStrikeIdx && b < avlStrike.length ? avlStrike[b] : 0f};
     }
 
     /** Enforcer state for the renderer and reports (0 not started, 1 waiting, 2 chasing, 3 kicking, 4 swatting, 5 hopping, 6 leaving, 7 falling, 8 leaping away). */
@@ -1381,7 +1574,7 @@ public final class Sim {
         if (invuln <= 0f && Math.abs(dx) < Element.BLOB_R + hw && y < surf + 1.4f && y > surf - 0.6f && (mode == Mode.GROUND || mode == Mode.AIR)) {      // squashed flat, and knocked away
             float push = dx > 0f ? 1f : dx < 0f ? -1f : -facing;
             vx = push * Element.BLOB_PUSH_X; vy = Math.max(vy, Element.BLOB_PUSH_Y); mode = Mode.AIR; onElem = -1; coyote = 0f; lockout = 0.4f; jumpedUp = false; shoveCd = 0.9f;
-            squashT = 0.45f; events |= EV_SQUASH | EV_SHOVE;
+            squashT = 0.45f; shoves++; turboT = 0f; events |= EV_SQUASH | EV_SHOVE;
         }
     }
     /** Height of the deck surface under the blob (a tipping bridge's plank at the blob's own arc). */
@@ -1645,7 +1838,7 @@ public final class Sim {
         float dx = Math.abs(course.dsWrap(b[0], s)), ddx = Math.max(0f, dx - hw);
         float ddy = b[1] < lo ? lo - b[1] : (b[1] > hiY ? b[1] - hiY : 0f);
         if (ddx * ddx + ddy * ddy >= Element.AIM_R * Element.AIM_R) return false;
-        hitFromS = b[0]; return true;
+        hitFromS = b[0]; hitFromY = b[1]; return true;
     }
 
     // ---------------------------------------------------------------- hazards that ride a moving platform (bug #14)
@@ -1686,7 +1879,7 @@ public final class Sim {
                 for (int back = 0; back < Element.CANNON_TRAIL; back++) {
                     if (!e.cannonBallAlive(time, back)) continue;
                     float dx = Math.abs(course.dsWrap(e.cannonBallS(time, back) + cs, s)), ddx = Math.max(0f, dx - hw);
-                    if (ddx * ddx + ddy * ddy < r * r) { hitFromS = e.cannonBallS(time, back) + cs; return true; }
+                    if (ddx * ddx + ddy * ddy < r * r) { hitFromS = e.cannonBallS(time, back) + cs; hitFromY = cy; return true; }
                 }
                 continue;
             }
@@ -1695,7 +1888,7 @@ public final class Sim {
             int po = hzPose(hz == null ? k : hz[k], e);
             float ePosY = hzv[po + 1];
             float dx = Math.abs(course.dsWrap(hzv[po] + cs, s));
-            hitFromS = hzv[po] + cs;
+            hitFromS = hzv[po] + cs; hitFromY = ePosY + cyOff;
             float r = e.discR();
             if (r > 0f) {
                 float ddx = Math.max(0f, dx - hw), cy = ePosY + cyOff;
@@ -1761,6 +1954,13 @@ public final class Sim {
         // leave the edge?
         Element el = course.get(e);
         float off = Math.abs(course.dsWrap(s, es1[e]));
+        if (el.turbo() && !gone[e] && course.dsWrap(s, es1[e]) * (el.amp >= 0f ? 1f : -1f) > el.halfW() + T.edgeOverhang) {          // rules 19: off the top of a turbo ramp - the booster fires
+            float dir = el.amp >= 0f ? 1f : -1f, ta = el.turboAngle(), v = el.turboSpeed();
+            mode = Mode.AIR; onElem = -1; jumpedUp = false; coyote = 0; jumpBuf = 0f;
+            vx = dir * v * (float) StrictMath.cos(ta); vy = v * (float) StrictMath.sin(ta);
+            turboT = TURBO_POWER; turboLaunches++; events |= EV_BOUNCE; events2 |= EV2_TURBO;
+            return;
+        }
         if (off > el.halfW() + T.edgeOverhang || gone[e] || (holesOpen(e) && el.overHole(course.dsWrap(s, es1[e]), HOLE_FOOT))) {
             mode = Mode.AIR; onElem = -1; vy = Math.min(0, platformVy(e)); jumpedUp = false;
             vx += platformVs(e) * 0.5f;
@@ -1785,11 +1985,13 @@ public final class Sim {
     private void stepAir(InputState in, float dt) {
         // horizontal
         float target = in.moveX * T.runSpeed;
-        if (Math.abs(in.moveX) > 0.05f && !(Math.abs(vx) > Math.abs(target) && Math.signum(vx) == Math.signum(target))) vx = approach(vx, target, T.airAccel * dt);
+        boolean powered = turboT > 0f;
+        if (powered) turboT = Math.max(0f, turboT - dt);          // rules 19: the turbo holds its launch speed (no drag, no steering) while powered
+        else if (Math.abs(in.moveX) > 0.05f && !(Math.abs(vx) > Math.abs(target) && Math.signum(vx) == Math.signum(target))) vx = approach(vx, target, T.airAccel * dt);
         else vx = approach(vx, 0, T.airDrag * dt);      // launched faster than you can run (spring, moving platform): keep it, only drag eases it
         if (Math.abs(in.moveX) > 0.15f) facing = in.moveX > 0 ? 1 : -1;
         // vertical
-        vy -= T.gravity * dt;
+        vy -= T.gravity * (powered ? TURBO_GRAVITY : 1f) * dt;
         if (vy < -T.maxFall) vy = -T.maxFall;
         if (jumpedUp && !in.jumpHeld && vy > T.jumpVel * T.jumpCutMul) vy = T.jumpVel * T.jumpCutMul;
         if (vy <= 0) jumpedUp = false;
@@ -1984,6 +2186,17 @@ public final class Sim {
         for (int k2 = 0, cnt2 = act == null ? course.size() : act.length; k2 < cnt2; k2++) {
             int i = act == null ? k2 : act[k2];
             Element el = course.get(i);
+            if (el.type == Element.Type.TARZAN) {          // rules 19: the rope where it is now, not where it hangs at rest
+                if (i == tarzanLast && tarzanAgainT > 0f) continue;
+                float th = el.tarzanAngle(time), ux = (float) StrictMath.sin(th), uy = -(float) StrictMath.cos(th);
+                float px = course.dsWrap(s, es1[i]), py = hand - el.y, along = px * ux + py * uy, perp = Math.abs(px * uy - py * ux);
+                if (along >= 0.6f && along <= el.len && perp <= T.ropeGrabRadius) {
+                    mode = Mode.TARZAN; onElem = i; tarzanR = along; coyote = 0; jumpBuf = 0; reboundBuf = 0f; events |= EV_GRAB | EV_ROPE;
+                    progress(i); stepTarzan(NO_INPUT, 0f);
+                    return true;
+                }
+                continue;
+            }
             if (el.type == Element.Type.ROPE) {
                 if (Math.abs(course.dsWrap(es1[i], s)) <= T.ropeGrabRadius && hand <= el.y + 0.1f && hand >= el.yBottom()) {
                     mode = Mode.ROPE; onElem = i; vx = vy = 0; s = es1[i]; coyote = 0; jumpBuf = 0; events |= EV_GRAB | EV_ROPE;      // (DC4: no coyote or buffered press carried onto the rope)
@@ -2048,6 +2261,53 @@ public final class Sim {
         // pushing on at the very top: haul up from behind the beam and stand on it (a cliff-style mantle); a firm, held up-push, so a light touch while climbing never yanks you off the rope
         if (y >= yMax - 0.01f && in.moveY > 0.3f) ropeTopT += dt; else ropeTopT = 0f;
         if (ropeTopT >= ROPE_TOP_HOLD) { ropeTopT = 0f; mode = Mode.BEAM; pullT = 0; pullFromY = y; vx = vy = 0; events |= EV_PULL; }
+    }
+
+    private static final InputState NO_INPUT = new InputState();
+    /**
+     * Rules 19 Tarzan swing (owner directive 2026-10-29): the climber hangs where the swinging rope is ({@link #tarzanR} down it from the pivot) and
+     * moves with it - position and velocity are the rope's. Up and down climb it slowly; Jump lets go with the rope's own velocity plus a little lift,
+     * so when you let go decides where you fly; down at its end drops off.
+     */
+    private void stepTarzan(InputState in, float dt) {
+        Element el = course.get(onElem);
+        tarzanR = Math.max(TARZAN_MIN_R, Math.min(el.len, tarzanR - in.moveY * T.climbSpeed * 0.5f * dt));
+        placeOnTarzan();
+        if (Math.abs(in.moveX) > 0.15f) facing = in.moveX > 0 ? 1 : -1; else if (Math.abs(vx) > 0.3f) facing = vx > 0 ? 1 : -1;
+        if (jumpBuf > 0) {
+            tarzanLast = onElem; tarzanAgainT = TARZAN_REGRAB;
+            mode = Mode.AIR; onElem = -1; vy += T.jumpVel * TARZAN_RELEASE_UP; jumpBuf = 0; reboundBuf = 0f; lockout = T.grabLockout; jumpedUp = false; coyote = 0; events |= EV_JUMP;
+            return;
+        }
+        if (in.moveY < -0.7f && tarzanR >= el.len - 0.01f) { tarzanLast = onElem; tarzanAgainT = TARZAN_REGRAB; mode = Mode.AIR; onElem = -1; lockout = T.grabLockout; }
+    }
+
+    static final float TARZAN_MIN_R = 0.8f;
+    /** Hands {@link #tarzanR} down swing {@link #onElem} where it is at {@link #time}: the climber's position and velocity are the rope's. */
+    private void placeOnTarzan() {
+        Element el = course.get(onElem);
+        float th = el.tarzanAngle(time), w = el.tarzanRate(time), sn = (float) StrictMath.sin(th), cs = (float) StrictMath.cos(th);
+        s = course.wrap(es1[onElem] + tarzanR * sn); y = el.y - tarzanR * cs - T.handHeight;
+        vx = tarzanR * cs * w; vy = tarzanR * sn * w;
+    }
+    /**
+     * Rules 19 (owner decision 2026-10-29, save/restore): hangs the climber {@code r} down Tarzan swing {@code idx} (clamped to the rope) wherever the
+     * rope is at the current time, moving with it. Used by a restored save, after the elements are in place.
+     */
+    public void attachTarzan(int idx, float r) {
+        Element el = course.get(idx);
+        mode = Mode.TARZAN; onElem = idx; tarzanR = Math.max(TARZAN_MIN_R, Math.min(el.len, r));
+        placeOnTarzan(); ps0 = s; py0 = y;
+    }
+    /**
+     * How far down Tarzan swing {@code idx} the climber's hands are, by projecting them onto the rope's direction at the current time (not by height
+     * alone: an angled rope's vertical drop is r cos θ), or NaN when the hands are more than {@code tol} off the rope's line or past its ends.
+     */
+    public float tarzanGripFromPosition(int idx, float tol) {
+        Element el = course.get(idx);
+        float th = el.tarzanAngle(time), ux = (float) StrictMath.sin(th), uy = -(float) StrictMath.cos(th);
+        float px = course.dsWrap(s, es1[idx]), py = y + T.handHeight - el.y, along = px * ux + py * uy, perp = Math.abs(px * uy - py * ux);
+        return perp <= tol && along >= 0f && along <= el.len + tol ? along : Float.NaN;
     }
 
     /** True while the climber is still hauling himself over the rope's top beam (as opposed to standing on it). */

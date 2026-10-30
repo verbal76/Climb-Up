@@ -1,5 +1,25 @@
 {
-  "_comment": "Maps a game sound to one or more files from the owner-supplied retro/platformer sound pack (assets/audio/pack/<name>.ogg). One is picked at random each time. Delete an entry to fall back to the built-in synthesized sound. Edit freely, no code change needed. Grunts and the bee buzz stay synthesized (they are pitched per character).",
+  "_comment": "Maps a game sound to one or more files from the owner-supplied retro/platformer sound pack (assets/audio/pack/<name>.ogg); a name starting with @ is one of the game's own effects (assets/audio/<name>.wav). One is picked at random each time (never the same one twice in a row). Delete an entry to fall back to the built-in synthesized sound of the same name. Edit freely, no code change needed. The game plays the mastered copy (assets/audio/mastered/, tools/audio/master_sfx.py) when there is one. Grunts and the bee buzz stay synthesized (they are pitched per character).",
+  "_build82": {
+    "_comment": "Build 83 audio polish changed these entries; put them back to restore the Build 82 sounds.",
+    "saw": [
+      "scratch2"
+    ],
+    "effort": [
+      "snap_1",
+      "snap_2"
+    ],
+    "respawn": [
+      "woosh_3"
+    ],
+    "bounce": [
+      "clang11",
+      "clang10"
+    ],
+    "click": [
+      "click_1"
+    ]
+  },
   "hit": [
     "crunch_1",
     "crunch_2"
@@ -39,13 +59,13 @@
     "crunch_3"
   ],
   "click": [
-    "click_1"
+    "@select"
   ],
   "poof": [
     "woosh_4"
   ],
   "saw": [
-    "scratch2"
+    "@saw"
   ],
   "jump": [
     "woosh_2",
@@ -56,8 +76,7 @@
     "thudd3"
   ],
   "bounce": [
-    "clang11",
-    "clang10"
+    "@boing"
   ],
   "grab": [
     "clickandrelease_1"
@@ -66,15 +85,11 @@
     "snap_3",
     "snap_4"
   ],
-  "effort": [
-    "snap_1",
-    "snap_2"
-  ],
   "checkpoint": [
     "sucesss2"
   ],
   "respawn": [
-    "woosh_3"
+    "@warp"
   ],
   "win": [
     "brass1",

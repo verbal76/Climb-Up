@@ -115,6 +115,7 @@ public final class LaneReport {
     /** PUNISHER Enforcers and spike-block avalanches per slice (owner 2026-10-27): placed (by tier / block count), refused and dropped by the generator,
      *  and what happened when the solver climbed the slice (Sim's report-only counters). Columns: see encounters.csv's header. */
     final List<String[]> encounterRows = new ArrayList<>();
+    final List<String[]> countRows = new ArrayList<>();          // experiment 2026-10-28: {slice, castle, tally, count} for every GenTrace tally (refusal reasons, pendulum offers)
     static final String ENCOUNTER_HEADER = "run,slice,y0,castle,enforcers_yellow,enforcers_orange,enforcers_red,enforcer_decks,enforcer_unfair,enforcer_dropped,avalanches,avalanche_blocks,avalanche_unfair,avalanche_dropped,"
         + "solved,enf_kick_tries,enf_kick_hits,enf_swat_tries,enf_swat_hits,enf_retreats,enf_falls,avl_fired,avl_skipped_cooldown,avl_blocks_released,avl_blocks_near_player,avl_blocks_in_traversal_area,avl_block_knocks,avl_hits,setbacks,enforcers_planned,avalanches_planned,avl_ricochets,avl_peak_active,avl_blocks_5,avl_blocks_6,avl_blocks_7,hot_window_guard,"
         + "enf_robots_alerted,enf_swats_considered,enf_swats_declined,enf_swats_risky,enf_land_own_deck,enf_land_neighbour_deck,enf_hops,enf_fall_edge,enf_fall_chase,enf_fall_no_deck";
@@ -132,6 +133,27 @@ public final class LaneReport {
         for (int q = 0; q < Progression.CAP_K; q++) { at += counts[3 * q]; ok += counts[3 * q + 1]; pts += counts[3 * q + 2]; kind[q] = (int) counts[3 * q + 1] + "/" + (int) counts[3 * q]; }
         return String.join(",", "" + (int) at, "" + (int) ok, f3(at > 0 ? ok / at : Double.NaN), f3(pts), f3(at > 0 ? pts / at : Double.NaN), kind[0], kind[1], kind[2], kind[3],
             f3(hc[0]), f3(hc[1]), f3(hc[0] - hc[1]), Progression.HC_NAMES[Math.max(0, Math.min(3, (int) hc[2]))], f3(short_));
+    }
+
+    /** Modules of each castle's final slice attempts (structures excluded): attempted, refused, refused early (KPI 7B). */
+    final int[][] castleMods = new int[12][3];
+    /**
+     * KPI 7B: the castle-start requested factors (before bounds), which applied factors sat on a bound ("T-lo;E-hi"), growth over the previous castle
+     * and over the first reported castle, the planned (target) rise, the slope error (growth minus {@link Progression#SLOPE_KEEP} of the planned
+     * rise: negative means the castle rose less than the slope law keeps, a dip if growth is negative too), and the castle's module refusals.
+     */
+    String controlColumns(int n, float[] r, float[] prev, double est, double first, DifficultyProfile P) {
+        float[] q = Progression.startRequest(n, prev, P); StringBuilder sat = new StringBuilder();
+        for (int k = 0; k < 4; k++) {
+            float fv = r[1 + Progression.ACC + k];
+            boolean lo = fv <= P.factorLo(k) + 1e-4f, hi = fv >= P.factorHi(k) - 1e-4f && !(k == 1 && P.capacityControl());
+            if (lo || hi) sat.append(sat.length() > 0 ? ";" : "").append("THEX".charAt(k)).append(lo ? "-lo" : "-hi");
+        }
+        double pe = prev == null ? Double.NaN : Progression.total(prev, 1), g = prev == null ? Double.NaN : (est - pe) / pe;
+        double rise = n > 1 && P.progression() ? (P.targetTotal(n) - P.targetTotal(n - 1)) / P.targetTotal(n - 1) : Double.NaN;
+        int[] cm = n < castleMods.length ? castleMods[n] : new int[3];
+        return String.join(",", f3(q[0]), f3(q[1]), f3(q[2]), f3(q[3]), sat.toString(), f3(g), f3(Double.isNaN(first) ? Double.NaN : (est - first) / first), f3(rise),
+            f3(g - Progression.SLOPE_KEEP * rise), "" + Progression.SLOPE, "" + cm[0], "" + cm[1], "" + cm[2]);
     }
 
     void encounterTelemetry(int k, CourseGenerator.Framed f, GenTrace tr, Autopilot.Report rep) {
@@ -200,6 +222,8 @@ public final class LaneReport {
     final DifficultyScore v2;
     private final Set<String> seenHaz = new HashSet<>();
 
+    /** Geometry audit (owner directive 2026-10-30), only with -Dclimb.geomAudit=true: sees every slice; writes its tables after the report. */
+    GeometryAudit geo;
     public LaneReport(Tuning t, int mode, long seed, float top) {
         this.t = t; this.mode = mode; this.seed = seed; this.top = top; v2 = new DifficultyScore(t);
         for (Element.Type k : Element.Type.values()) { Lanes.lane(k); inventory.put(k, new int[3]); }
@@ -216,15 +240,18 @@ public final class LaneReport {
         this.solve = solve; long t0 = System.nanoTime();
         GenTrace.clock = System::nanoTime;          // the reports measure wall time; the sim package itself never reads a clock
         CourseGenerator.Framed f = null; int k = 0;
+        GameGrowth growth = new GameGrowth(seed, t);          // (Group 6, 2026-10-29: slices exactly as the game grows them, backtracking included; chunkFramed alone never backtracked)
         try {
             while (f == null || f.yBase + f.c.get(f.c.routeSize() - 1).y < top) {
-                GenTrace tr = new GenTrace(); GenTrace.GEN.set(tr); long g0 = System.nanoTime(), ga = alloc();
+                long g0 = System.nanoTime(), ga = alloc();
                 CourseGenerator.Framed pf = f;
-                try { f = CourseGenerator.chunkFramed(seed, k, f, t); }
-                catch (RuntimeException e) { for (String s : tr.sliceFailures) sliceFailures.add(new String[]{"" + k, q(s)}); genSeconds += (System.nanoTime() - g0) / 1e9; failedSlice = k; throw e; }          // the slice that stopped generation keeps its attempts' reasons
-                finally { GenTrace.GEN.remove(); }
+                int bt0 = growth.backtracks;
+                try { f = growth.next(); if (GeometryAudit.ON) { if (geo == null) geo = new GeometryAudit(t, MODE[mode] + "-s" + seed); geo.add(f); } }
+                catch (RuntimeException e) { if (growth.failedTrace != null) for (String s : growth.failedTrace.sliceFailures) sliceFailures.add(new String[]{"" + growth.failedSlice, q(s)}); genSeconds += (System.nanoTime() - g0) / 1e9; failedSlice = growth.failedSlice; throw e; }          // the slice that stopped generation keeps its attempts' reasons
+                GenTrace tr = growth.trace;
+                if (growth.backtracks > bt0) tr.counts.merge("generation_backtracks", growth.backtracks - bt0, Integer::sum);
                 integrity(k, pf, f);
-                double gs = (System.nanoTime() - g0) / 1e9; long gal = ga < 0 ? -1 : alloc() - ga; genSeconds += gs;
+                double gs = growth.seconds; long gal = ga < 0 ? -1 : alloc() - ga; genSeconds += gs;
                 GenTrace.Solve st = null; Autopilot.Report rep = null; double secs = Double.NaN; long sal = -1;
                 if (solve) {
                     st = new GenTrace.Solve(); GenTrace.SOLVE.set(st); long s0 = System.nanoTime(), sa = alloc();
@@ -247,6 +274,7 @@ public final class LaneReport {
                 encounterTelemetry(k, f, tr, rep);
                 { String[] r = new String[FALLBACK_KEYS.length + 3]; r[0] = "" + k; r[1] = f3(f.yBase + f.c.get(0).y); r[2] = "" + castleOf(f.yBase + f.c.get(0).y);
                   for (int i = 0; i < FALLBACK_KEYS.length; i++) r[i + 3] = "" + tr.counts.getOrDefault(FALLBACK_KEYS[i], 0); fallbackRows.add(r); }
+                for (Map.Entry<String, Integer> e : tr.counts.entrySet()) countRows.add(new String[]{"" + k, "" + castleOf(f.yBase + f.c.get(0).y), e.getKey(), "" + e.getValue()});          // experiment 2026-10-28: every generator tally, observe-only
                 forkTelemetry(k, f, tr);
                 safetyTelemetry(k, f, t);
                 v2.add(f.c, (float) f.yBase);
@@ -270,8 +298,9 @@ public final class LaneReport {
             int e0 = m.e0 - tr.offset, e1 = m.e1 - tr.offset;
             if (fin && m.ok) { ks[1]++; travMods.add(new String[]{"" + castleOf(m.y), m.kind, m.role}); for (int i = Math.max(0, e0); i < Math.min(c.size(), e1); i++) { owner[i] = id; ownerKind[i] = m.kind; } }
             modules.add(new String[]{id, "" + k, "" + m.attempt, "" + fin, m.kind, m.role, m.picked == null ? "" : m.picked, f3(m.d), f3(m.y), "" + m.ok, "" + e0, "" + e1, "" + (m.h1 - m.h0),
-                "" + m.fails[0], "" + m.fails[1], "" + m.fails[2], "" + m.fails[3], "" + m.fails[4], "" + m.fails[5], f3(m.nanos / 1e6)});
+                "" + m.fails[0], "" + m.fails[1], "" + m.fails[2], "" + m.fails[3], "" + m.fails[4], "" + m.fails[5], f3(m.nanos / 1e6), m.earlyRejected ? "1" : "0"});
             if (!m.ok) { Win w = win(wi(m.y)); w.rejected++; }
+            if (fin && !"STRUCTURE".equals(m.role)) { int cs = Math.max(0, Math.min(castleMods.length - 1, castleOf(m.y))); castleMods[cs][0]++; if (!m.ok) { castleMods[cs][1]++; if (m.earlyRejected) castleMods[cs][2]++; } }
             if ("FALLBACK".equals(m.role) && m.ok && fin) win(wi(m.y)).fallbacks++;
         }
         // elements (index 0 of a later slice is the previous slice's last platform: counted once)
@@ -576,7 +605,7 @@ public final class LaneReport {
                 f3(L.emJump), f3(L.emPosition), f3(L.emWait), f3(L.emCommit), f3(L.emRecover), f3(L.emPursue), f3(L.emScore), q(L.hazards.toString()), q(L.enemies.toString()), L.status, f3(L.solveTime), L.setbacks < 0 ? "" : "" + L.setbacks, "" + L.planFails, q(Arrays.toString(L.windows)), f3(L.solveWall), "" + L.visits));
         }
         try (PrintWriter w = pw(out, "modules.csv")) {
-            w.println("run,id,slice,attempt,final_attempt,kind,role,picked_first,difficulty,y,accepted,e0,e1,hazards_added,refused_layer,refused_hazard,refused_plan,refused_window,refused_conflict,refused_threat,wall_ms");
+            w.println("run,id,slice,attempt,final_attempt,kind,role,picked_first,difficulty,y,accepted,e0,e1,hazards_added,refused_layer,refused_hazard,refused_plan,refused_window,refused_conflict,refused_threat,wall_ms,refused_early");
             for (String[] m : modules) w.println(run + "," + String.join(",", m));
         }
         try (PrintWriter w = pw(out, "solver.csv")) {
@@ -644,22 +673,29 @@ public final class LaneReport {
             w.println("run,castle,status,target_total,target_terrain,target_hazards,target_enemies,target_interaction,est_terrain,est_hazards,est_enemies,est_interaction,est_mitigation,est_total,est_links,est_challenge_links,est_recovery,"
                 + "factor_terrain,factor_hazards,factor_enemies,factor_interaction,lane_terrain,lane_hazards,lane_enemies,lane_interaction,lane_mitigation,lane_total,deviation_from_target,"
                 + "hazard_attempts,hazard_accepted,hazard_acceptance,hazard_points_placed,hazard_points_per_attempt,haz_rows,traps,mortar_rows,drop_rows,"
-                + "hazard_factor_requested,hazard_factor_applied,hazard_factor_lost,hazard_constraint,hazard_short_of_target");
+                + "hazard_factor_requested,hazard_factor_applied,hazard_factor_lost,hazard_constraint,hazard_short_of_target,"
+                // KPI 7B controller observability (generator directive 2026-10-30; appended so readers by column name are unaffected)
+                + "req_terrain,req_hazards,req_enemies,req_interaction,saturated,growth_vs_prev,cum_growth,planned_rise,slope_error,slope_aware,"
+                + "modules_attempted,modules_refused,modules_refused_early");
             DifficultyProfile P = DifficultyProfile.of(t); Progression pr = Progression.of(lastProg);
             double[][] lane = new double[12][6];
             for (Win x : windows.values()) { int cs = castleOf(x.index * WINDOW); lane[cs][0] += x.adj[0]; lane[cs][1] += x.adj[1]; lane[cs][2] += x.adj[2]; lane[cs][3] += x.interaction; lane[cs][4] += x.mitigation; lane[cs][5] += x.total(); }
             List<float[]> recs = new ArrayList<>(); for (int i = 0; i < pr.completedCount(); i++) recs.add(pr.completed(i));
             if (lastProg != null) { float[] cur = pr.current(), r = new float[Progression.REC]; r[0] = pr.castle(); System.arraycopy(cur, 0, r, 1, Progression.ACC); System.arraycopy(pr.lastFactors(), 0, r, 1 + Progression.ACC, 4); recs.add(r); }
+            float[] prevRec = null; double first = Double.NaN;
             for (float[] r : recs) {
                 int n = (int) r[0]; if (n < 1 || n > 10) continue; boolean partial = r == recs.get(recs.size() - 1) && lastProg != null;
+                float[] pr0 = prevRec != null && (int) prevRec[0] == n - 1 ? prevRec : null; prevRec = r;
                 double est = Progression.total(r, 1), tgt = P.progression() ? P.targetTotal(n) : Double.NaN;
                 w.println(String.join(",", MODE[mode] + "-s" + seed, "" + n, partial ? "in_progress" : "complete", f3(tgt), f3(P.progression() ? P.target(n, 0) : Double.NaN), f3(P.progression() ? P.target(n, 1) : Double.NaN), f3(P.progression() ? P.target(n, 2) : Double.NaN), f3(P.progression() ? P.target(n, 3) : Double.NaN),
                     f3(r[1]), f3(r[2]), f3(r[3]), f3(r[4]), f3(r[5]), f3(est), f3(r[1 + Progression.A_LINKS]), f3(r[1 + Progression.A_CHALL]), f3(r[1 + Progression.A_REC]),
                     f3(r[1 + Progression.ACC]), f3(r[2 + Progression.ACC]), f3(r[3 + Progression.ACC]), f3(r[4 + Progression.ACC]),
                     f3(lane[n][0]), f3(lane[n][1]), f3(lane[n][2]), f3(lane[n][3]), f3(lane[n][4]), f3(lane[n][5]), f3(P.progression() ? (lane[n][5] - tgt) / tgt : Double.NaN),
-                    capacityColumns(pr, n, partial, P.progression() ? P.target(n, 1) - lane[n][1] : Double.NaN)));
+                    capacityColumns(pr, n, partial, P.progression() ? P.target(n, 1) - lane[n][1] : Double.NaN), controlColumns(n, r, pr0, est, first, P)));
+                if (n == 1 || Double.isNaN(first)) first = est;
             }
         }
+        try (PrintWriter w = pw(out, "counts.csv")) { w.println("run,slice,castle,tally,count"); for (String[] r : countRows) w.println(run + "," + String.join(",", r)); }
         try (PrintWriter w = pw(out, "encounters.csv")) { w.println(ENCOUNTER_HEADER); for (String[] r : encounterRows) w.println(String.join(",", r)); }
         try (PrintWriter w = pw(out, "castles.csv")) {
             w.println("run,mode,seed,castle,lane,windows,mean,median,min,max,sd,q1,q3,raw_sum,adj_sum,high_spike_windows,low_gap_windows,solver_links_failed,solver_links_unreached,solver_time_s,flags");
@@ -741,6 +777,7 @@ public final class LaneReport {
 
     public static void main(String[] a) throws Exception {
         Tuning base = Tuning.parse(new String(Files.readAllBytes(Paths.get(a[0]))));
+        if (System.getProperty("climb.radius") != null) base.radius = Float.parseFloat(System.getProperty("climb.radius"));          // geometry audit experiments only (layer pitch scales with the circumference)
         int mode = Integer.parseInt(a[2]); long seed = Long.parseLong(a[3]); Path out = Paths.get(a[4]);
         Tuning t = mode == 0 ? base : base.hardCopy(mode);
         LaneReport r = new LaneReport(t, mode, seed, Float.parseFloat(a[1]));
@@ -750,6 +787,7 @@ public final class LaneReport {
             meta.put(kv[0], System.getenv().getOrDefault(kv[1], "local"));
         meta.put("solver_version", "Autopilot.run at commit " + meta.get("commit"));
         r.write(out, meta); r.writeV2(out); VarietyReport.write(r, out);          // gameplay variety, apart from difficulty (owner 2026-10-27)
+        if (r.geo != null) r.geo.write(out);
         System.out.printf(Locale.ROOT, "%s seed %d: reached %.0f m, %d slices, %d windows, %d ledger rows, gen %.0f s, solve %.0f s%s%n", MODE[mode], seed, r.reached, r.slices, r.windows.size(), r.ledger.size(), r.genSeconds, r.solveSeconds, r.stopped == null ? "" : " - " + r.stopped);
         for (Map.Entry<String, String> e : r.verdicts().entrySet()) System.out.println("  " + e.getKey() + ": " + e.getValue());
         // validation gate (owner directive 2026-10-27): the artifacts above are written first; an incomplete course, a solver failure or a geometry

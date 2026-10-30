@@ -19,4 +19,8 @@ public interface GameInput {
     void clear();
     /** True once when the controller the player was using has just been unplugged (the game pauses so the run is not lost); false on platforms without controllers. */
     default boolean controllerLost() { return false; }
+    /** True once when the "close the tip" control was pressed (a control bound to no gameplay action; never fed into the InputState). */
+    default boolean tipDismissPressed() { return false; }
+    /** The short name of that control for the tip banner ("TAB", "B", ...), or null to show none. */
+    default String tipDismissLabel() { return null; }
 }

@@ -124,6 +124,8 @@ public class RampVarietiesTest {
             Autopilot.Report r = Autopilot.run(c, t, 4000f);
             assertTrue("a slice with " + here + " spinning ramps is solvable end to end: " + r.failInfo, r.completed);
         }
-        assertTrue("spinning ramps appear (" + spinners + ")", spinners >= 1);
+        // rules 19 (owner decision 2026-10-29): spinning ramps are no longer generated - Tarzan swings take their share - so none may appear; the
+        // Sim and the renderer still play skin 3, for earlier saves and replays
+        assertEquals("no spinning ramps are generated any more (" + spinners + ")", 0, spinners);
     }
 }

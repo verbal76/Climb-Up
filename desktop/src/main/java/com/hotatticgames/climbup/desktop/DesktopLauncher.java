@@ -20,6 +20,7 @@ public final class DesktopLauncher {
             if (a.startsWith("--exit-after=")) { try { exitAfter = Float.parseFloat(a.substring(13)); } catch (NumberFormatException ignored) { } }
         }
         Lwjgl3ApplicationConfiguration c = new Lwjgl3ApplicationConfiguration();
+        OpenAlLevels.install();          // Build 83: effects at the same level as on Android (see OpenAlLevels)
         c.setTitle(DesktopPlatform.TITLE);
         if (System.getProperty("climb.iconShot") != null) { c.setWindowedMode(256, 256); new Lwjgl3Application(new IconShot(), c); return; }     // dev tool: render a character to a transparent PNG
         assetRoot = assetRoot();

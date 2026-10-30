@@ -84,7 +84,7 @@ public final class PlayersScreen extends ScreenAdapter {
         if (!prompt) {
             if (g.profiles.canAdd()) { if (ui.button("NEW PLAYER", bx, by, newW, bh, true)) { g.audio.play("click"); next = new NameScreen(g, this, home); } }
             else ui.textC(Profiles.MAX_PLAYERS + " PLAYERS IS THE MOST", bx + newW / 2, by + bh / 2 - 10, 3f, Ui.DIM);
-            if (ui.button("BACK", bx + newW + bgap, by, backW, bh)) { g.audio.play("click"); next = home; }
+            if (ui.button("BACK", bx + newW + bgap, by, backW, bh)) { g.audio.play("back"); next = home; }
         }
         if (prompt) deletePrompt(ui, W, H);
         ui.end();
@@ -103,7 +103,7 @@ public final class PlayersScreen extends ScreenAdapter {
         ui.textC("DELETE " + e.name + "?", W / 2, py + ph - 40 - ui.font.height(5f), 5f, Ui.ACCENT);
         ui.textC("THEIR CLIMB AND RECORDS ARE GONE FOR GOOD.", W / 2, py + ph - 120, 3f, Ui.TEXT);
         if (g.profiles.count() == 1) ui.textC("A NEW EMPTY PLAYER TAKES THEIR PLACE.", W / 2, py + ph - 156, 3f, Ui.DIM);
-        if (ui.button("CANCEL", W / 2 - bw - 14, py + 36, bw, bh, true)) { g.audio.play("click"); confirmDelete = -1; }
+        if (ui.button("CANCEL", W / 2 - bw - 14, py + 36, bw, bh, true)) { g.audio.play("back"); confirmDelete = -1; }
         if (ui.button("DELETE", W / 2 + 14, py + 36, bw, bh)) {
             int id = confirmDelete; confirmDelete = -1;
             g.audio.play("click"); g.deletePlayer(id); refresh();

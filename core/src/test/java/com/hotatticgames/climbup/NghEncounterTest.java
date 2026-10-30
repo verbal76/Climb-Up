@@ -6,9 +6,9 @@ import com.hotatticgames.climbup.sim.*;
 import org.junit.Test;
 
 /**
- * NOT GONNA HAPPEN encounters (rules 14, owner directive 2026-10-27): RED Enforcers only, two or three a castle interval from castle 1; avalanches of
- * 5-7 blocks, each with its own seeded size, bounce, friction, launch, spin and ricochet, released 0.20-0.30 s apart, colliding with the decks, each other
- * and the body, never passing through a deck, always cleaned up, and the same every time. NORMAL and PUNISHER keep their own plans and physics.
+ * NOT GONNA HAPPEN encounters (rules 14, owner directive 2026-10-27): RED Enforcers only, two or three a castle interval from castle 1; avalanches
+ * (rules 18, owner 2026-10-29) of 9-12 rigid spiked cubes, each with its own seeded size, bounce, friction, launch and spin, breaking loose at once and
+ * AVL_GAP0-AVL_GAP1 s apart, colliding with the decks, each other and the body, never passing through a deck, always cleaned up, and the same every time.
  */
 public class NghEncounterTest {
     private static Course stairs(Tuning t, int blocks, float phase) {
@@ -47,15 +47,15 @@ public class NghEncounterTest {
         return new Object[]{rel, s, trace.toString()};
     }
 
-    @Test public void fiveSixAndSevenBlocksAllDropSpacedWithinTheirWindowAndAreCleanedUp() throws Exception {
+    @Test public void nineToTwelveBlocksAllBreakLooseAtOnceSpacedWithinTheirWindowAndAreCleanedUp() throws Exception {
         Tuning t = TestUtil.tuning();
-        for (int n = 5; n <= 7; n++) for (float ph = 0.07f; ph < 1f; ph += 0.13f) {
+        for (int n = 9; n <= 12; n++) for (float ph = 0.07f; ph < 1f; ph += 0.13f) {
             Object[] r = run(t, n, ph, true); float[] rel = (float[]) r[0]; Sim s = (Sim) r[1];
             for (int b = 0; b < Element.AVL_MAX; b++) assertEquals("block " + b + " of " + n + " released", b < n, rel[b] >= 0f);
-            assertTrue("the first only after the warning", rel[0] >= Element.AVL_WARN - 1e-3f);
+            assertTrue("no warning wait: the first breaks loose at once (" + rel[0] + ")", rel[0] <= Element.AVL_LEAD0 + 2f * Sim.DT + 1e-4f);
             for (int b = 1; b < n; b++) {
                 float gap = rel[b] - rel[b - 1];
-                assertTrue(n + " blocks, gap " + b + " = " + gap, gap >= Element.AVL_SPACE0 - Sim.DT - 1e-4f && gap <= Element.AVL_SPACE1 + Sim.DT + 1e-4f);
+                assertTrue(n + " blocks, gap " + b + " = " + gap, gap >= Element.AVL_GAP0 - Sim.DT - 1e-4f && gap <= Element.AVL_GAP1 + Sim.DT + 1e-4f);
             }
             assertEquals("all " + n + " counted", n, s.avlReleased);
             assertEquals("and all cleaned up", 2, s.avalancheState(0));
@@ -64,25 +64,25 @@ public class NghEncounterTest {
 
     @Test public void everyBlockHasItsOwnSizeAndMotionAndTheWholeThingIsDeterministic() throws Exception {
         Tuning t = TestUtil.tuning();
-        Object[] a = run(t, 7, 0.37f, true), b = run(t, 7, 0.37f, true);
+        Object[] a = run(t, 12, 0.37f, true), b = run(t, 12, 0.37f, true);
         assertEquals("same seed, same inputs: the same avalanche", a[2], b[2]);
-        assertNotEquals("another seed: other paths", a[2], run(t, 7, 0.61f, true)[2]);
-        Element e = stairs(t, 7, 0.37f).hazards.get(0);
+        assertNotEquals("another seed: other paths", a[2], run(t, 12, 0.61f, true)[2]);
+        Element e = stairs(t, 12, 0.37f).hazards.get(0);
         java.util.Set<Float> radii = new java.util.HashSet<>();
-        for (int k = 0; k < 7; k++) { float R = Sim.avlRadius(e, k); radii.add(R); assertTrue(R >= Element.AVL_CR0 && R <= Element.AVL_CR0 + Element.AVL_CR1); }
-        assertTrue("sizes differ between blocks (" + radii + ")", radii.size() >= 6);
+        for (int k = 0; k < 12; k++) { float R = Sim.avlRadius(e, k); radii.add(R); assertTrue(R >= Element.AVL_CR0 && R <= Element.AVL_CR0 + Element.AVL_CR1); }
+        assertTrue("sizes differ between blocks (" + radii + ")", radii.size() >= 10);
         int ric = 0, knocks = 0, peak = 0;
-        for (float ph = 0.05f; ph < 1f; ph += 0.1f) { Sim s = (Sim) run(t, 7, ph, true)[1]; ric += s.avlRicochets; knocks += s.avlKnocks; peak = Math.max(peak, s.avlPeak); }
+        for (float ph = 0.05f; ph < 1f; ph += 0.1f) { Sim s = (Sim) run(t, 12, ph, true)[1]; ric += s.avlRicochets; knocks += s.avlKnocks; peak = Math.max(peak, s.avlPeak); }
         assertTrue("hard hits ricochet (" + ric + ")", ric > 0);
         assertTrue("blocks knock into each other (" + knocks + ")", knocks > 0);
-        assertTrue("several are in the air at once (peak " + peak + ")", peak >= 4);
+        assertTrue("several are in the air at once (peak " + peak + ")", peak >= 6);
         Element p = new Element(Element.Type.AVALANCHE, 0f, 0f, 3f);
         assertEquals("NORMAL and PUNISHER blocks keep the one radius", Element.AVL_R, Sim.avlRadius(p, 3), 0f);
     }
 
     @Test public void aBlockKnocksYouAway() throws Exception {
         Tuning t = TestUtil.tuning(); int hits = 0;
-        for (float ph = 0.05f; ph < 1f; ph += 0.05f) hits += ((Sim) run(t, 7, ph, false)[1]).avlHits;
+        for (float ph = 0.05f; ph < 1f; ph += 0.05f) hits += ((Sim) run(t, 12, ph, false)[1]).avlHits;
         assertTrue("a block that reaches the body knocks it away (" + hits + " hits)", hits > 0);
     }
 
@@ -118,20 +118,23 @@ public class NghEncounterTest {
      */
     @Test public void nghAvalanchesHoldForEveryArrivalTimeAndSeedOneSliceTenSolves() throws Exception {
         Tuning t = TestUtil.tuning().hardCopy(2);
-        CourseGenerator.Framed f = null; int checked = 0;
-        for (int k = 0; k <= 10; k++) {
+        CourseGenerator.Framed f = null, s10 = null; int checked = 0;
+        for (int k = 0; k <= 10 || (checked == 0 && k <= 30); k++) {          // (rules 18: avalanches are rarer early on; look on until one is placed)
             f = CourseGenerator.chunkFramed(1L, k, f, t);
-            for (Element h : f.c.hazards) if (h.type == Element.Type.AVALANCHE) {
+            if (k == 10) s10 = f;
+            java.util.Set<Integer> seen = new java.util.HashSet<>();
+            for (Element h : f.c.hazards) if (h.type == Element.Type.AVALANCHE && seen.add(h.anchor)) {
                 checked++;
-                for (float w : new float[]{0f, 0.7f, 1.6f, 2.9f}) assertTrue("slice " + k + " avalanche on deck " + h.anchor + " with the climber " + w + " s later", Autopilot.chainClean(f.c, t, h.anchor - 1, h.anchor + 4, w));
+                int from = Math.max(0, h.anchor - 2);          // (rules 18: the generator proves it from two decks before the trigger)
+                for (float w : new float[]{0f, 0.7f, 1.6f, 2.9f}) assertTrue("slice " + k + " avalanche on deck " + h.anchor + " with the climber " + w + " s later", Autopilot.chainClean(f.c, t, from, h.anchor + 4, w));
             }
         }
         assertTrue("avalanches were checked (" + checked + ")", checked > 0);
-        Autopilot.Report r = Autopilot.run(f.c, t, 4000f);
+        Autopilot.Report r = Autopilot.run(s10.c, t, 4000f);
         assertTrue("NGH seed 1 slice 10 solves (link " + r.failedLink + ": " + r.failInfo + ")", r.completed);
     }
 
-    /** Generated NGH slices: every Enforcer red, every avalanche of 5-7 blocks marked for the per-block physics; and generation is deterministic. */
+    /** Generated NGH slices: every Enforcer red, every avalanche of 9-12 blocks (rules 18) marked for the per-block physics; and generation is deterministic. */
     @Test public void generatedNghSlicesCarryRedEnforcersAndChaoticAvalanches() throws Exception {
         Tuning t = TestUtil.tuning().hardCopy(2);
         int enf = 0, avl = 0; StringBuilder a = new StringBuilder(), b = new StringBuilder();
@@ -141,7 +144,7 @@ public class NghEncounterTest {
             a.append(java.util.Arrays.hashCode(SliceCodec.encode(f))); b.append(java.util.Arrays.hashCode(SliceCodec.encode(g)));
             for (Element h : f.c.hazards) {
                 if (h.type == Element.Type.ENFORCER) { enf++; assertEquals("NGH Enforcers are red", 2, h.skin); }
-                if (h.type == Element.Type.AVALANCHE) { avl++; assertEquals("NGH avalanche physics", 1, h.skin); assertTrue(h.len >= 5f && h.len <= 7f); assertTrue(h.period >= 15f && h.period <= 45f); }
+                if (h.type == Element.Type.AVALANCHE) { avl++; assertEquals("NGH avalanche physics", 1, h.skin); assertTrue(h.len >= 9f && h.len <= 12f); assertTrue(h.period >= 15f && h.period <= 45f); }
             }
         }
         assertEquals("deterministic", a.toString(), b.toString());

@@ -278,6 +278,24 @@ public final class CourseGenerator {
     private float r(float lo, float hi) { return lo + (hi - lo) * rnd.nextFloat(); }
     private static float lerp(float a, float b, float t) { return a + (b - a) * t; }
 
+    /** Diagnostics only: -Dclimb.turboOff=true generates no turbo ramps (same-seed comparisons). */
+    static final boolean TURBO_OFF = Boolean.getBoolean("climb.turboOff");
+    /**
+     * Rules 19 turbo ramp module (owner directive 2026-10-29): ramp {@code rp} becomes a turbo ramp (skin 5) whose booster fires the climber out at a
+     * shallow angle (0.15-0.55 rad) and 11-15 m/s; the landing deck lies at a fraction of where the full, uncancelled powered flight would come
+     * down (simulated here with Sim's own powered-flight rules), so harder climbs need the cancel: 95% of the full flight on the easiest, 70% on
+     * the hardest. NORMAL-like low difficulty gets a wider deck. The planner proves it (TurboPolicy samples the cancel moment).
+     */
+    private void turbo(List<Element> l, Element rp, float d, int attempt) {
+        rp.skin = 5; rp.period = r(0.15f, 0.55f); rp.phase = r(11f, 15f);
+        float x0 = rp.s + rp.w / 2f, y0 = rp.y + rp.amp * rp.w / 2f, yl = y0 + r(-1.0f, 0.8f);
+        float vx = rp.phase * (float) StrictMath.cos(rp.period), vy = rp.phase * (float) StrictMath.sin(rp.period), x = 0f, y = 0f, t = 0f;
+        for (int k = 0; k < 600 && !(vy < 0f && y0 + y <= yl); k++) { vy -= T.gravity * (t < Sim.TURBO_POWER ? Sim.TURBO_GRAVITY : 1f) * Sim.DT; x += vx * Sim.DT; y += vy * Sim.DT; t += Sim.DT; }
+        float wB = d < 0.3f ? 4f : 3f, f = lerp(0.95f, 0.7f, d) * r(0.95f, 1f) * (1f - 0.02f * attempt);
+        l.add(plat(Element.Type.STATIC, x0 + Math.max(1.5f + wB / 2f, x * f), yl, wB, rp.zone));
+        GenTrace.tally("module_turbo");
+    }
+
     /** Diagnostics only: -Dclimb.tarzanOff=true generates no Tarzan swings (same-seed comparisons). */
     static final boolean TARZAN_OFF = Boolean.getBoolean("climb.tarzanOff");
     /**
@@ -3251,6 +3269,7 @@ public final class CourseGenerator {
                 l.add(rp);
                 float wB = 3f + rnd.nextInt(2);
                 if (z >= 1 && skin != 4 && rnd.nextInt(10) < 4) {          // (no ski jump off a belt: it would steal the run-up)         // ski jump: leap off the top of the ramp across a gap to a block up there
+                    if (!TURBO_OFF && rnd.nextBoolean()) { turbo(l, rp, d, attempt); break; }          // rules 19: half the ski jumps' share is a turbo ramp
                     float dyJ = r(0f, 0.7f), gapJ = reach(dyJ) * lerp(0.5f, 0.85f, d) * r(0.92f, 1f) * (1f - 0.04f * attempt);
                     l.add(plat(S, rp.s + L / 2f + gapJ + wB / 2f, y0 + rise + dyJ, wB, z));
                     break;

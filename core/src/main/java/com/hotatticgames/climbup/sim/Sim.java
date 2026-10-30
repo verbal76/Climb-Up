@@ -47,7 +47,7 @@ public final class Sim {
     public int events;               // accumulated since last consumeEvents()
     /** Events that no longer fit in {@link #events} (all 32 bits are taken): accumulated since the last {@link #consumeEvents2}. */
     public int events2;
-    public static final int EV2_REBOUND = 1;
+    public static final int EV2_REBOUND = 1, EV2_TURBO = 2, EV2_TURBO_CANCEL = 4;
     /**
      * Rules 19 timed rebound jump (owner directive 2026-10-29): a fresh Jump press in the air arms it for REBOUND_WINDOW seconds; if the climber then
      * touches a reboundable creature or projectile, that contact's normal outcome (shove or knock-back) is kept and a jump impulse is added to it,
@@ -59,6 +59,15 @@ public final class Sim {
     /** The Tarzan swing let go of last and how long it stays out of reach: you fly beside a swinging rope, and it is not caught again at once. */
     public int tarzanLast = -1; public float tarzanAgainT;
     static final float TARZAN_REGRAB = 1.0f;
+    /**
+     * Rules 19 turbo flight (owner directive 2026-10-29): seconds of powered flight left after a turbo ramp's launch. While it lasts the launch
+     * holds its speed (no air drag or steering) and gravity pulls at TURBO_GRAVITY of its usual strength: a long, flat, fast flight. A fresh Jump
+     * press cancels it (TURBO_CANCEL_KEEP of the forward speed is kept, gravity and air control return); a held or buffered press never does. Any
+     * contact (a hazard's knock, a creature's shove), a landing or a catch ends it, so collisions behave as ever.
+     */
+    public float turboT;
+    static final float TURBO_POWER = 0.55f, TURBO_GRAVITY = 0.3f, TURBO_CANCEL_KEEP = 0.35f;
+    public int turboLaunches, turboCancels;
     /** Upward speed a Jump adds on letting go of a Tarzan swing, as a share of a jump (the rope's own motion is kept). Provisional. */
     static final float TARZAN_RELEASE_UP = 0.55f;
     public int rebounds;
@@ -283,7 +292,7 @@ public final class Sim {
         landSpeed = o.landSpeed; events = o.events; assistForgive = o.assistForgive; ps0 = o.ps0; py0 = o.py0; teleported = o.teleported;
         es0 = o.es0.clone(); ey0 = o.ey0.clone(); es1 = o.es1.clone(); ey1 = o.ey1.clone(); edy = o.edy.clone();
         crumbleT = o.crumbleT.clone(); gone = o.gone.clone(); goneT = o.goneT.clone(); padSquash = o.padSquash.clone(); tilt = o.tilt.clone(); onT = o.onT.clone();
-        reboundBuf = o.reboundBuf; rebounds = o.rebounds; shoves = o.shoves; tarzanR = o.tarzanR; tarzanLast = o.tarzanLast; tarzanAgainT = o.tarzanAgainT;
+        reboundBuf = o.reboundBuf; rebounds = o.rebounds; shoves = o.shoves; turboT = o.turboT; turboLaunches = o.turboLaunches; turboCancels = o.turboCancels; tarzanR = o.tarzanR; tarzanLast = o.tarzanLast; tarzanAgainT = o.tarzanAgainT;
         clubTime = o.clubTime; swingT = o.swingT; shoveCd = o.shoveCd; crabS = o.crabS; crabY = o.crabY; keys = o.keys; keysFree = o.keysFree; featDone = o.featDone.clone(); aimAng = o.aimAng.clone(); aimFireT = o.aimFireT.clone(); aimArmed = o.aimArmed.clone(); crabPos = o.crabPos.clone(); crabVel = o.crabVel.clone(); crabMode = o.crabMode.clone(); crabStuck = o.crabStuck.clone(); crabCool = o.crabCool.clone(); crabTurn = o.crabTurn.clone(); crabSeen = o.crabSeen.clone(); mobState = o.mobState.clone(); mobT = o.mobT.clone(); mobS = o.mobS.clone(); mobY = o.mobY.clone(); mobDir = o.mobDir.clone(); mobTgt = o.mobTgt.clone(); mobSeen = o.mobSeen.clone(); deckOff = o.deckOff.clone(); crabJump = o.crabJump.clone(); crabFrom = o.crabFrom.clone(); crabFromDeck = o.crabFromDeck.clone(); crabFall = o.crabFall.clone(); aimYaw = o.aimYaw.clone(); avl = o.avl.clone(); lastAvlT = o.lastAvlT; avlImpacts = o.avlImpacts; avlKnocks = o.avlKnocks; enfKickTries = o.enfKickTries; enfKickHits = o.enfKickHits; enfSwatTries = o.enfSwatTries; enfSwatHits = o.enfSwatHits; enfRetreats = o.enfRetreats; enfFalls = o.enfFalls; enfAlerts = o.enfAlerts; enfSwatConsidered = o.enfSwatConsidered; enfSwatRejected = o.enfSwatRejected; enfSwatRisky = o.enfSwatRisky; enfLandOwn = o.enfLandOwn; enfLandNear = o.enfLandNear; enfHops = o.enfHops; enfFallEdge = o.enfFallEdge; enfFallChase = o.enfFallChase; enfFallNoDeck = o.enfFallNoDeck; avlFired = o.avlFired; avlSkipped = o.avlSkipped; avlReleased = o.avlReleased; avlNear = o.avlNear; avlArea = o.avlArea; avlHits = o.avlHits; avlRicochets = o.avlRicochets; avlPeak = o.avlPeak; avlTrigT = o.avlTrigT; avlTrigV = o.avlTrigV; avlTrigDist = o.avlTrigDist; avlFirstImpactT = o.avlFirstImpactT; avlFirstNearT = o.avlFirstNearT; avlRebounds = o.avlRebounds; avlTumbles = o.avlTumbles; squashT = o.squashT; slipCd = o.slipCd; finishedRun = o.finishedRun; lastGateNo = o.lastGateNo; lastKeyColor = o.lastKeyColor; lastGateColor = o.lastGateColor;
         act = o.act; hz = o.hz; winLo = o.winLo; winHi = o.winHi; invuln = o.invuln; hits = o.hits; hitS = o.hitS; hitY = o.hitY;
         humanHold = o.humanHold; heldX = o.heldX; heldY = o.heldY; heldXT = o.heldXT; heldYT = o.heldYT;
@@ -392,7 +401,7 @@ public final class Sim {
         // away from what touched you (DC4: the hazard's home was used, so a body between a carried saw's home and the saw itself was thrown through it)
         float side = hitBy == null ? 0f : course.dsWrap(s, Float.isNaN(hitFromS) ? hitBy.sAt(time) : hitFromS);
         hitFromS2 = hitFromS; hitFromS = Float.NaN;
-        mode = Mode.AIR; onElem = -1; coyote = 0; jumpBuf = 0; lockout = Math.max(lockout, KNOCK_LOCKOUT);
+        mode = Mode.AIR; onElem = -1; coyote = 0; jumpBuf = 0; lockout = Math.max(lockout, KNOCK_LOCKOUT); turboT = 0f;          // (rules 19: a knock ends a turbo flight)
         vx = (side >= 0f ? 1f : -1f) * T.hitKnockSide; vy = T.hitKnockUp; invuln = 0.7f;      // tuning.json: hitKnockSide / hitKnockUp
         if (hitBy != null && reboundable(hitBy.type)) tryRebound(hitFromS2, hitFromY);          // (a timed press turns the knock into a rebound; it is still a hit)
     }
@@ -625,6 +634,9 @@ public final class Sim {
         if (mode != Mode.AIR) sideIn = -1;
         if (in.jumpPressed) jumpBuf = T.jumpBuffer + assistForgive; else jumpBuf = Math.max(0, jumpBuf - dt);
         if (in.jumpPressed && mode == Mode.AIR) reboundBuf = REBOUND_WINDOW; else reboundBuf = Math.max(0f, reboundBuf - dt);          // (a fresh press only: holding Jump never re-arms it)
+        if (turboT > 0f && in.jumpPressed && mode == Mode.AIR) {          // rules 19: a fresh press in powered flight cancels it (and is not also a rebound press or a buffered jump)
+            turboT = 0f; vx *= TURBO_CANCEL_KEEP; reboundBuf = 0f; jumpBuf = 0f; turboCancels++; events2 |= EV2_TURBO_CANCEL;
+        }
         if (lockout > 0) lockout = Math.max(0, lockout - dt);
         if (tarzanAgainT > 0) { tarzanAgainT = Math.max(0f, tarzanAgainT - dt); if (tarzanAgainT == 0f) tarzanLast = -1; }
 
@@ -638,6 +650,7 @@ public final class Sim {
             case BEAM: stepBeam(in, dt); break;
             case TARZAN: stepTarzan(in, dt); break;
         }
+        if (mode != Mode.AIR) turboT = 0f;          // landed, caught something: the turbo is over
         prevJumpHeld = in.jumpHeld;
         s = course.wrap(s);
         if (y > maxHeight) maxHeight = y;
@@ -693,7 +706,7 @@ public final class Sim {
         }
         if (shoveCd <= 0f && invuln <= 0f && Math.abs(dx) < 0.55f + hw && y < cy + 0.62f && y + T.height > cy + 0.05f && (mode == Mode.GROUND || mode == Mode.AIR)) {
             float side = Math.signum(dx); if (side == 0f) side = -facing;
-            vx = side * 9f; vy = Math.max(vy, 6f); mode = Mode.AIR; onElem = -1; lockout = 0.3f; jumpedUp = false; coyote = 0f; shoveCd = 0.9f; shoves++; events |= EV_SHOVE;
+            vx = side * 9f; vy = Math.max(vy, 6f); mode = Mode.AIR; onElem = -1; lockout = 0.3f; jumpedUp = false; coyote = 0f; shoveCd = 0.9f; shoves++; turboT = 0f; events |= EV_SHOVE;
             tryRebound(cs, cy + 0.35f);          // (the crab's body centre)
         }
     }
@@ -712,7 +725,7 @@ public final class Sim {
         }
         if (shoveCd <= 0f && invuln <= 0f && Math.abs(dx) < Element.BEE_R + hw && by + Element.BEE_R > y + 0.1f && by - Element.BEE_R < y + T.height - 0.05f && (mode == Mode.GROUND || mode == Mode.AIR)) {
             float side = Math.signum(dx); if (side == 0f) side = -facing;
-            vx = side * Element.BEE_PUSH_X; vy = Math.max(vy, Element.BEE_PUSH_Y); mode = Mode.AIR; onElem = -1; lockout = 0.25f; jumpedUp = false; coyote = 0f; shoveCd = 1.0f; shoves++; events |= EV_SHOVE;
+            vx = side * Element.BEE_PUSH_X; vy = Math.max(vy, Element.BEE_PUSH_Y); mode = Mode.AIR; onElem = -1; lockout = 0.25f; jumpedUp = false; coyote = 0f; shoveCd = 1.0f; shoves++; turboT = 0f; events |= EV_SHOVE;
             tryRebound(bs, by);
         }
     }
@@ -851,7 +864,7 @@ public final class Sim {
                 float cy = dY + mobY[idx], dx = course.dsWrap(s, mobS[idx]);
                 if (shoveCd <= 0f && invuln <= 0f && Math.abs(dx) < Element.SKULL_R + hw && cy - Element.SKULL_R < y + T.height && cy + Element.SKULL_R > y + 0.05f && (mode == Mode.GROUND || mode == Mode.AIR)) {
                     vx = mobDir[idx] * Element.SKULL_LAUNCH_X; vy = Math.max(vy, Element.SKULL_LAUNCH_Y); mode = Mode.AIR; onElem = -1; coyote = 0f; lockout = 0.35f; jumpedUp = false; shoveCd = 0.9f;
-                    shoves++; events |= EV_SHOVE | EV_LAUNCH;
+                    shoves++; turboT = 0f; events |= EV_SHOVE | EV_LAUNCH;
                 }
                 break;
             }
@@ -949,7 +962,7 @@ public final class Sim {
                     float ahead = dx * mobDir[idx];
                     if (ahead > -Element.ENF_HALF - hw && ahead < Element.ENF_HALF + hw + Element.ENF_KICK_REACH[tier] && y < dY + 1.3f && y + T.height > dY + 0.1f) {
                         vx = mobDir[idx] * Element.ENF_KICK_X; vy = Math.max(vy, Element.ENF_KICK_Y); mode = Mode.AIR; onElem = -1; coyote = 0f; lockout = 0.3f; jumpedUp = false; shoveCd = 0.9f;
-                        shoves++; events |= EV_SHOVE | EV_LAUNCH | EV_ENF_HIT; enfKickHits++;
+                        shoves++; turboT = 0f; events |= EV_SHOVE | EV_LAUNCH | EV_ENF_HIT; enfKickHits++;
                     }
                 }
                 if (t >= wu + act + rec) { mobState[idx] = 2; mobT[idx] = 0f; }
@@ -978,7 +991,7 @@ public final class Sim {
                 float cy = dY + mobY[idx], bx = course.dsWrap(s, mobS[idx]);
                 if (shoveCd <= 0f && invuln <= 0f && (mode == Mode.GROUND || mode == Mode.AIR) && Math.abs(bx) < Element.ENF_HALF + hw + 0.25f && y < cy + Element.ENF_H + Element.ENF_REACH_UP && y + T.height > cy) {      // (DC4: hanging on a rope, cable or ledge is out of a creature's reach, as for every other creature)
                     vx = (bx >= 0f ? 1f : -1f) * Element.ENF_SWAT_X; vy = Math.min(vy, Element.ENF_SWAT_Y); mode = Mode.AIR; onElem = -1; coyote = 0f; lockout = 0.3f; jumpedUp = false; shoveCd = 0.9f;
-                    shoves++; events |= EV_SHOVE | EV_LAUNCH | EV_ENF_HIT; enfSwatHits++;
+                    shoves++; turboT = 0f; events |= EV_SHOVE | EV_LAUNCH | EV_ENF_HIT; enfSwatHits++;
                 }
                 if (crabVel[idx] < 0f) {
                     int q = enfTouch(j, a0, n, prevY, mobY[idx], mobS[idx]);
@@ -1561,7 +1574,7 @@ public final class Sim {
         if (invuln <= 0f && Math.abs(dx) < Element.BLOB_R + hw && y < surf + 1.4f && y > surf - 0.6f && (mode == Mode.GROUND || mode == Mode.AIR)) {      // squashed flat, and knocked away
             float push = dx > 0f ? 1f : dx < 0f ? -1f : -facing;
             vx = push * Element.BLOB_PUSH_X; vy = Math.max(vy, Element.BLOB_PUSH_Y); mode = Mode.AIR; onElem = -1; coyote = 0f; lockout = 0.4f; jumpedUp = false; shoveCd = 0.9f;
-            squashT = 0.45f; shoves++; events |= EV_SQUASH | EV_SHOVE;
+            squashT = 0.45f; shoves++; turboT = 0f; events |= EV_SQUASH | EV_SHOVE;
         }
     }
     /** Height of the deck surface under the blob (a tipping bridge's plank at the blob's own arc). */
@@ -1941,6 +1954,13 @@ public final class Sim {
         // leave the edge?
         Element el = course.get(e);
         float off = Math.abs(course.dsWrap(s, es1[e]));
+        if (el.turbo() && !gone[e] && course.dsWrap(s, es1[e]) * (el.amp >= 0f ? 1f : -1f) > el.halfW() + T.edgeOverhang) {          // rules 19: off the top of a turbo ramp - the booster fires
+            float dir = el.amp >= 0f ? 1f : -1f, ta = el.turboAngle(), v = el.turboSpeed();
+            mode = Mode.AIR; onElem = -1; jumpedUp = false; coyote = 0; jumpBuf = 0f;
+            vx = dir * v * (float) StrictMath.cos(ta); vy = v * (float) StrictMath.sin(ta);
+            turboT = TURBO_POWER; turboLaunches++; events |= EV_BOUNCE; events2 |= EV2_TURBO;
+            return;
+        }
         if (off > el.halfW() + T.edgeOverhang || gone[e] || (holesOpen(e) && el.overHole(course.dsWrap(s, es1[e]), HOLE_FOOT))) {
             mode = Mode.AIR; onElem = -1; vy = Math.min(0, platformVy(e)); jumpedUp = false;
             vx += platformVs(e) * 0.5f;
@@ -1965,11 +1985,13 @@ public final class Sim {
     private void stepAir(InputState in, float dt) {
         // horizontal
         float target = in.moveX * T.runSpeed;
-        if (Math.abs(in.moveX) > 0.05f && !(Math.abs(vx) > Math.abs(target) && Math.signum(vx) == Math.signum(target))) vx = approach(vx, target, T.airAccel * dt);
+        boolean powered = turboT > 0f;
+        if (powered) turboT = Math.max(0f, turboT - dt);          // rules 19: the turbo holds its launch speed (no drag, no steering) while powered
+        else if (Math.abs(in.moveX) > 0.05f && !(Math.abs(vx) > Math.abs(target) && Math.signum(vx) == Math.signum(target))) vx = approach(vx, target, T.airAccel * dt);
         else vx = approach(vx, 0, T.airDrag * dt);      // launched faster than you can run (spring, moving platform): keep it, only drag eases it
         if (Math.abs(in.moveX) > 0.15f) facing = in.moveX > 0 ? 1 : -1;
         // vertical
-        vy -= T.gravity * dt;
+        vy -= T.gravity * (powered ? TURBO_GRAVITY : 1f) * dt;
         if (vy < -T.maxFall) vy = -T.maxFall;
         if (jumpedUp && !in.jumpHeld && vy > T.jumpVel * T.jumpCutMul) vy = T.jumpVel * T.jumpCutMul;
         if (vy <= 0) jumpedUp = false;

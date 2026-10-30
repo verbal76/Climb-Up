@@ -57,6 +57,8 @@ public final class RunSnapshot {
     // Rules 19: a swing just let go of (Sim.tarzanLast) and how long it stays out of reach. Optional: older files have none (-1, 0).
     public long tarzanLastKey = -1;
     public float tarzanAgainT;
+    // Rules 19: powered turbo flight left (Sim.turboT). Optional: older files have none (0: no turbo).
+    public float turboT;
 
     public RunSnapshot() {}
 
@@ -115,6 +117,7 @@ public final class RunSnapshot {
         for (int i = 0; i < ak.size(); i++) { r.aKey[i] = ak.get(i); System.arraycopy(sim.avl, ai.get(i) * Sim.AVL_W, r.aState, i * Sim.AVL_W, Sim.AVL_W); }
         r.lastAvlT = sim.lastAvlT;
         if (sim.mode == Sim.Mode.TARZAN) { r.hasTarzanR = true; r.tarzanR = sim.tarzanR; }
+        r.turboT = sim.turboT;
         if (sim.tarzanAgainT > 0f && sim.tarzanLast >= 0) { r.tarzanLastKey = tower.elemKeyAt(sim.tarzanLast); r.tarzanAgainT = sim.tarzanAgainT; }
         int[] se = sim.sideEntry();
         if (se[0] >= 0) { r.sideKey = tower.elemKeyAt(se[0]); r.sideDir = se[1]; }
@@ -143,7 +146,7 @@ public final class RunSnapshot {
     public boolean valid() {
         if (version != VERSION || seed == 0) return false;
         if (hasTarzanR && !(fin(tarzanR) && tarzanR >= 0f)) return false;
-        if (!fin(tarzanAgainT) || tarzanAgainT < 0f) return false;
+        if (!fin(tarzanAgainT) || tarzanAgainT < 0f || !fin(turboT) || turboT < 0f) return false;
         if (!fin(absS, absY, lastGroundAbs, maxAbs, pullFromAbsS, pullFromAbsY, pullToAbsS, pullToAbsY, time, vx, vy, coyote, jumpBuf, lockout, pullT, ropeTopT, invuln, clubTime, swingT, shoveCd)) return false;
         if (time < 0f || cpSlice < 0 || cpLocal < 0 || maxSlice < 0) return false;
         try { Sim.Mode.valueOf(mode); } catch (Exception e) { return false; }
@@ -251,6 +254,7 @@ public final class RunSnapshot {
         if (sideKey >= 0 && sim.mode == Sim.Mode.AIR) { int w = tower.indexOfElemKey(sideKey); if (w >= 0) sim.setSideEntry(w, sideDir); }          // (after syncElements, which clears it)
         int tl = tarzanLastKey < 0 ? -1 : tower.indexOfElemKey(tarzanLastKey);
         sim.tarzanLast = tl; sim.tarzanAgainT = tl >= 0 ? tarzanAgainT : 0f;
+        sim.turboT = m == Sim.Mode.AIR ? turboT : 0f;
         if (m == Sim.Mode.TARZAN) {          // rules 19: back on the same rope, the same distance down it, wherever it has swung to at the saved time
             if (sim.course.get(on).type != com.hotatticgames.climbup.sim.Element.Type.TARZAN) return false;
             float r = hasTarzanR ? tarzanR : sim.tarzanGripFromPosition(on, TARZAN_LEGACY_TOL);      // a file without the grip: project the hands onto the rope

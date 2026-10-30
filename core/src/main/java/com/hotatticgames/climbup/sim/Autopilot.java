@@ -51,7 +51,7 @@ public final class Autopilot {
 
     static final float[] OFFSETS = {0f, 0.45f, 0.95f, 1.5f};
     /** Move-style id ranges for the timing-window metric (DC7): ground 32 (offset x hold x steer), walk-off 4, hole hop 6, mid hop 8, rope 12, cable 8. */
-    static final int G_GROUND = 0, G_WALKOFF = 32, G_HOLEHOP = 36, G_MIDHOP = 42, G_ROPE = 50, G_CABLE = 62, G_TARZAN = 70, G_COUNT = 76;
+    static final int G_GROUND = 0, G_WALKOFF = 32, G_HOLEHOP = 36, G_MIDHOP = 42, G_ROPE = 50, G_CABLE = 62, G_TARZAN = 70, G_TURBO = 76, G_COUNT = 79;
     /** Waits tried on a rope or a cable beside something that moves (DC7), spread over its period. */
     static final int ROPE_WAITS = 6;
     static final float[] HOLDS = {0.9f, 0.22f};
@@ -193,6 +193,25 @@ public final class Autopilot {
             in.moveX = steer(s, b, steerMode);
         }
     }
+
+    /**
+     * Rules 19 turbo ramp: run up and off the top (no jump, so the booster fires), then either ride the powered flight out ({@code cancelAfter} < 0)
+     * or cancel it with a fresh Jump press {@code cancelAfter} seconds after the launch, and steer to {@code b} once the power is off. The planner
+     * samples the cancel moment: when you cancel decides where you come down.
+     */
+    static final class TurboPolicy implements Policy {
+        final int a, b, steerMode; final float cancelAfter; float flight = -1f; boolean pressed;
+        TurboPolicy(int a, int b, float cancelAfter, int steerMode) { this.a = a; this.b = b; this.cancelAfter = cancelAfter; this.steerMode = steerMode; }
+        public void act(Sim s, InputState in) {
+            if (s.mode == Sim.Mode.LEDGE || s.mode == Sim.Mode.PULLUP) { in.moveY = 1f; return; }
+            if (s.mode == Sim.Mode.GROUND && s.onElem == a) { in.moveX = s.course.get(a).amp >= 0f ? 1f : -1f; return; }
+            if (s.mode != Sim.Mode.AIR) return;
+            flight = flight < 0f ? 0f : flight + Sim.DT;
+            if (cancelAfter >= 0f && !pressed && s.turboT > 0f && flight >= cancelAfter) { in.jumpPressed = true; in.jumpHeld = true; pressed = true; return; }
+            if (s.turboT <= 0f) in.moveX = steer(s, b, steerMode);
+        }
+    }
+    static final float[] TURBO_CANCELS = {-1f, 0.05f, 0.1f, 0.15f, 0.2f, 0.25f, 0.3f, 0.35f, 0.4f, 0.45f, 0.5f};
 
     /** DC7: hangs on (no input) for {@code wait} seconds, then plays {@code inner}: waiting for a gap on a rope or a cable, as a person does. */
     static final class WaitFirst implements Policy {
@@ -604,6 +623,10 @@ public final class Autopilot {
                 group.add(G_WALKOFF + sm);
             }
         }
+        if (base.mode == Sim.Mode.GROUND && c.get(a).turbo()) {          // rules 19: a turbo ramp - off the top with the booster, cancel sampled (tried first; a plain jump off it stays a candidate)
+            int at = 0;
+            for (float ca : TURBO_CANCELS) for (int sm = 0; sm < 3; sm++) { final float fca = ca; final int fsm = sm; cands.add(at, () -> new TurboPolicy(a, b, fca, fsm)); group.add(at++, G_TURBO + sm); }
+        }
         if (base.mode == Sim.Mode.GROUND && c.get(a).holed()) {           // Build 79: a bridge that drops planks: hop the holes (tried first: a plain run falls through)
             int at = 0;
             int hh = 0;
@@ -676,7 +699,7 @@ public final class Autopilot {
                 if (firstOk == null) firstOk = f;
             }
         }
-        if (measureMargin && !group.isEmpty()) { int best = 0; for (int gw : groupWins) best = Math.max(best, gw); r.window = best / (float) nWaits; }
+        if (measureMargin && !group.isEmpty()) { int best = 0; for (int gw : groupWins) best = Math.max(best, gw); r.window = Math.min(1f, best / (float) nWaits); }          // (a turbo's cancel moments are styles of one start, not waits)
         if (!r.ok && firstOk == null && !HIT_STRICT) collisionMoves(base, a, tgt, cands, tlim, hitOk, r);
         if (GenTrace.GEN.get() != null) {          // (observe-only: rules 19 acceptance accounting for the reports)
             if (r.ok && !r.viaHit && !r.viaRebound && r.hitSuccesses > 0) GenTrace.tally("r19_why_clean_over_hit");

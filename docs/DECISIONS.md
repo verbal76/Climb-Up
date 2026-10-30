@@ -1371,3 +1371,12 @@ HAPPEN drops 9-12 blocks; the warning is the rumble only; the work stacks on the
   to re-catch you 0.3 s after letting go): `tarzanLastKey`/`tarzanAgainT`, optional in run.json.
 - **Reports and probes grow courses exactly as the game does** (GameGrowth = Tower.grow backtracking); chunkFramed alone reported stops the
   game recovers from.
+- **Turbo ramp (owner directive 2026-10-29; engineering values provisional):** RAMP skin 5 with a booster at its top. Running off the top fires
+  the climber out at the ramp's own launch angle (0.15-0.55 rad) and speed (11-15 m/s); for 0.55 s the flight is powered (launch speed held, no
+  air drag or steering, gravity at 30%), a long, flat, fast flight. A fresh Jump press in powered flight cancels it: 35% of the forward speed is
+  kept, gravity and air control return, the climber stays airborne (no snap, no teleport). Held or buffered presses never cancel; a press on the
+  ramp is an ordinary jump. The cancel press is not also a rebound press. Any knock or shove, landing or catch ends the turbo, so collisions
+  behave as ever. Generation: half of the ski-jump share of second-world ramps; the landing deck lies at 95% (easiest) to 70% (hardest) of the
+  full uncancelled flight, so harder climbs need the cancel; 4 m decks at low difficulty. Planner: TurboPolicy (ride it out, or cancel at
+  0.05-0.5 s). Save: run.json turboT (optional). Visual: an orange-tinted ramp with a dark booster and glowing chevrons at its top.
+  -Dclimb.turboOff=true turns generation off for comparisons. Fixtures: TurboRampTest (9).

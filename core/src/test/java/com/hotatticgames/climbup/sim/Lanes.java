@@ -38,7 +38,7 @@ public final class Lanes {
             case CABLE: return "Traversal cables";
             case SPRING: return "Angled launching springs";
             case SEESAW: return "Tilting platforms and balance bridges";
-            case RAMP: return "Sloped surfaces: 0 plain, 1 crumbling, 2 shaking/bouncy, 3 spinning (rules 19: no longer generated), 4 conveyor/downhill";
+            case RAMP: return "Sloped surfaces: 0 plain, 1 crumbling, 2 shaking/bouncy, 3 spinning (rules 19: no longer generated), 4 conveyor/downhill, 5 turbo (booster launch, cancellable)";
             case SAW_H: return "Horizontal saw";
             case SAW_V: return "Vertical saw";
             case PENDULUM: return "Swinging hazard";

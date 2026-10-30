@@ -97,6 +97,13 @@ public final class Element {
     /** True for anything that changes with time (planner sweeps its phase). */
     /** Build 72 (owner): the spinning ramp (RAMP skin 3, was the sinking ramp) turns flat on its centre like a record: one turn every {@code period} seconds. */
     public boolean spins() { return type == Type.RAMP && skin == 3; }
+    /**
+     * Rules 19 TURBO RAMP (owner directive 2026-10-29): RAMP skin 5 with a booster at its top. Running off the top fires the climber out at
+     * {@link #turboAngle} above the horizontal (radians, toward the ramp's uphill side) at {@link #turboSpeed} m/s; see Sim.turboT.
+     */
+    public boolean turbo() { return type == Type.RAMP && skin == 5; }
+    public float turboAngle() { return period; }
+    public float turboSpeed() { return phase; }
     /** Build 79 (owner: some bridges drop plank sections when you land, leaving holes to jump): a fixed wooden bridge (STATIC skin 1) whose sections set in {@code color}
      *  (a bit mask; the deck is cut into holeSections() equal sections from its -s end, each about HOLE_SEC long) fall out HOLE_DELAY after you land on it. */
     public static final float HOLE_SEC = 1.3f, HOLE_DELAY = 0.45f;

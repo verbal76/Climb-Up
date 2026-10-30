@@ -209,6 +209,15 @@ public final class WorldRenderer implements Disposable {
                     }
                     for (int sd = -1; sd <= 1; sd += 2) { Part rl = boxPart(sd * L / 2f, sd * e.amp * L / 2f - 0.02f, 0f, 0.22f, 0.22f, 1.35f, roller); rl.roll = 45f; ps.add(rl); }
                 }
+                if (e.turbo()) {            // rules 19: the turbo booster at the top - a dark launcher tilted to its launch angle with glowing orange chevrons, seen from afar
+                    float dir = e.amp >= 0f ? 1f : -1f, xTop = dir * (e.w / 2f - 0.3f), yTop = e.amp * xTop, ang = e.turboAngle() * MathUtils.radiansToDegrees * dir;
+                    Color body = new Color(0.16f, 0.17f, 0.22f, 1f), hot = new Color(1f, 0.45f, 0.08f, 1f);
+                    Part b = boxPart(xTop, yTop + 0.16f, 0f, 0.62f, 0.3f, 1.4f, body); b.roll = ang; ps.add(b);
+                    for (int k = 0; k < 2; k++) {
+                        Part ch = boxPart(xTop - dir * 0.14f + dir * k * 0.26f, yTop + 0.33f + k * 0.02f, 0f, 0.1f, 0.06f, 1.2f, hot); ch.roll = ang;
+                        ch.inst.materials.get(0).set(ColorAttribute.createEmissive(hot.r * 0.8f, hot.g * 0.8f, hot.b * 0.8f, 1f)); ps.add(ch);
+                    }
+                }
                 break;
             }
             case STATIC: case GOAL: case CRUMBLE: {
@@ -766,7 +775,7 @@ public final class WorldRenderer implements Disposable {
             }
             if (e.type == Element.Type.PAD && p.dy > -0.05f) { float sq = sim.padSquash[i] / 0.25f; dy = p.dy - 0.18f * sq; }
             if (p.tintAttr != null && e.type == Element.Type.RAMP && p.fixed == false && p.tinted == false && p.color == null) {
-                if (e.skin == 1) p.tintAttr.color.set(1f, 0.78f, 0.6f, 1f); else if (e.skin == 2) p.tintAttr.color.set(1f, 0.9f, 0.55f, 1f); else if (e.skin == 4) p.tintAttr.color.set(0.62f, 0.64f, 0.70f, 1f); else if (e.skin == 3) p.tintAttr.color.set(0.8f, 0.95f, 1f, 1f); else p.tintAttr.color.set(Color.WHITE);
+                if (e.skin == 1) p.tintAttr.color.set(1f, 0.78f, 0.6f, 1f); else if (e.skin == 2) p.tintAttr.color.set(1f, 0.9f, 0.55f, 1f); else if (e.skin == 4) p.tintAttr.color.set(0.62f, 0.64f, 0.70f, 1f); else if (e.skin == 5) p.tintAttr.color.set(1f, 0.66f, 0.52f, 1f); else if (e.skin == 3) p.tintAttr.color.set(0.8f, 0.95f, 1f, 1f); else p.tintAttr.color.set(Color.WHITE);
             } else if (p.tintAttr != null) {
                 if (p.color != null && p.fall) p.tintAttr.color.set(p.color);          // crumbling tiles keep their warm tint
                 else if (p.tinted) p.tintAttr.color.set(tint);

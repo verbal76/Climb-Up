@@ -323,14 +323,27 @@ public final class Autopilot {
 
     static boolean movingNear(Course c, int a) {
         for (int k = 0; k <= 2; k++) { int i = c.deck(a, k); if (i >= 0 && (c.get(i).isMoving() || c.get(i).spins())) return true; }          // (DC6: route decks, the live tower's too)
-        int a0 = anchorIdx(c, a); for (Element h : c.hazards) if (h.anchor >= a0 - (firesAhead(h) ? 1 : 0) && h.anchor <= a0 + 2 && h.isMoving()) return true;
+        int a0 = anchorIdx(c, a), before = Math.max(0, c.deck(a0, -1)), hi = c.deck(a0, 2) < 0 ? c.size() - 1 : c.deck(a0, 2);
+        for (Element h : c.hazards) if (h.isMoving() && nearLink(c, a0, before, hi, h)) return true;
         return false;
+    }
+
+    /**
+     * Build 82 review (finding 5): hazard {@code h} sits on the route deck before {@code a0} (a cannon, aimed cannon or mortar there fires across this link)
+     * or on one of the route decks {@code a0} .. two after it, counted along the route as the decks above are (the live tower lists each slice's side
+     * structures after its route, so "a0 + 2" can name a decoy and miss the next slice's first decks). A hazard on a side structure is not on the link.
+     */
+    static boolean nearLink(Course c, int a0, int before, int hi, Element h) {          // before = the route deck before a0, hi = two route decks after it (course end if none)
+        int at = h.anchor;
+        if (at < 0 || at >= c.size() || c.get(at).anchor >= 0) return false;
+        return at >= (firesAhead(h) ? before : a0) && at <= hi;
     }
 
     static float maxPeriod(Course c, int a) {
         float p = 0;
         for (int k = 0; k <= 2; k++) { int i = c.deck(a, k); if (i >= 0 && (c.get(i).isMoving() || c.get(i).spins())) p = Math.max(p, c.get(i).period); }
-        int a0 = anchorIdx(c, a); for (Element h : c.hazards) if (h.anchor >= a0 - (firesAhead(h) ? 1 : 0) && h.anchor <= a0 + 2 && h.isMoving()) p = Math.max(p, h.period);
+        int a0 = anchorIdx(c, a), before = Math.max(0, c.deck(a0, -1)), hi = c.deck(a0, 2) < 0 ? c.size() - 1 : c.deck(a0, 2);
+        for (Element h : c.hazards) if (h.isMoving() && nearLink(c, a0, before, hi, h)) p = Math.max(p, h.period);
         return p;
     }
     /** Build 79: a cannon (or mortar) on the platform before fires across this one, as CourseGenerator.commit proves it: a person waits for a clear moment here too

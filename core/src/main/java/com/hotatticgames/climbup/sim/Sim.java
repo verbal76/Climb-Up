@@ -396,6 +396,20 @@ public final class Sim {
      * (armed again, their blocks gone). What the run has achieved stays: keys, opened gates, checkpoints, the run time, and encounters already resolved
      * (a creature knocked off or gone, an avalanche spent at or below the checkpoint). Crumbles and holes are restored by the caller as before.
      */
+    /**
+     * Build 82 review (finding 4): an encounter anchored on element {@code a} is at or behind checkpoint {@code cp} by its place along the route, not
+     * its index: the live tower lists each slice's side structures after the slice's whole route, so a side deck's index says nothing about where it
+     * is. A route deck counts up to and including the checkpoint's own; a side structure (fork branch, decoy) counts when the route deck it hangs from
+     * is below the checkpoint - one hanging from the checkpoint's deck branches off ahead of it.
+     */
+    boolean behindCheckpoint(int a, int cp) {
+        if (a < 0 || a >= course.size()) return a <= cp;
+        int r = course.get(a).anchor;
+        if (r < 0) return a <= cp;
+        for (int guard = 0; guard < 8 && r >= 0 && r < course.size() && course.get(r).anchor >= 0; guard++) r = course.get(r).anchor;          // a structure on a structure: the route deck under them
+        return r < cp;
+    }
+
     void resetEncounters(int cp) {
         java.util.Arrays.fill(tilt, 0f); java.util.Arrays.fill(onT, 0f); java.util.Arrays.fill(padSquash, 0f);
         ensureCapacity();
@@ -405,10 +419,10 @@ public final class Sim {
             boolean done = i < featDone.length && featDone[i];
             switch (h.type) {
                 case AVALANCHE:
-                    if (h.anchor > cp) { if (i < featDone.length) featDone[i] = false; if ((i + 1) * AVL_W <= avl.length) java.util.Arrays.fill(avl, i * AVL_W, (i + 1) * AVL_W, 0f); avlReset = true; }
+                    if (!behindCheckpoint(h.anchor, cp)) { if (i < featDone.length) featDone[i] = false; if ((i + 1) * AVL_W <= avl.length) java.util.Arrays.fill(avl, i * AVL_W, (i + 1) * AVL_W, 0f); avlReset = true; }
                     break;
                 case CRAB: case BEE: case SKULL: case BLOB: case ENFORCER: case AIMED:
-                    if (done || h.anchor <= cp) break;          // (repair 2026-10-28, same rule as the avalanches: only encounters ahead of the checkpoint start again; one on the checkpoint's own deck goes on, so it can still be outlasted - reset on every respawn, an Enforcer there kicked the climber off again and never left)
+                    if (done || behindCheckpoint(h.anchor, cp)) break;          // (repair 2026-10-28, same rule as the avalanches: only encounters ahead of the checkpoint start again; one on the checkpoint's own deck goes on, so it can still be outlasted - reset on every respawn, an Enforcer there kicked the climber off again and never left)
                     aimAng[i] = 0f; aimFireT[i] = -1e9f; aimArmed[i] = false; aimYaw[i] = 0f;
                     crabPos[i] = 0f; crabVel[i] = 0f; crabMode[i] = 0; crabStuck[i] = 0f; crabCool[i] = 0f; crabTurn[i] = 0f; crabSeen[i] = 0f;
                     mobState[i] = 0; mobT[i] = 0f; mobS[i] = 0f; mobY[i] = 0f; mobDir[i] = 0f; mobTgt[i] = 0f; mobSeen[i] = 0f;
@@ -880,14 +894,15 @@ public final class Sim {
                         mobS[idx] = course.wrap(dS + nx); mobDir[idx] = Math.signum(dx);
                     }
                 } else {
-                    int nj = j + (want > cur ? 1 : -1);
+                    int step = want > cur ? 1 : -1, nj = deck(j, step);          // (Build 82 review, finding 2: the next route deck, as the encounter's decks are counted - not j +- 1)
+                    if (nj < 0) break;
                     float side = course.dsWrap(es1[nj], dS) >= 0f ? 1f : -1f, edge = side * (half - 0.35f), x = course.dsWrap(mobS[idx], dS);
                     mobDir[idx] = side;
                     if (Math.abs(edge - x) > run) mobS[idx] = course.wrap(dS + x + Math.signum(edge - x) * run);
                     else if (enfHopOk(j, nj)) {
                         Element nd = course.get(nj);
                         crabFrom[idx] = mobS[idx]; mobTgt[idx] = course.wrap(es1[nj] - side * Math.max(0.3f, nd.halfW() - 0.5f));
-                        crabVel[idx] = nj - a0; mobState[idx] = 5; mobT[idx] = 0f; enfHops++;
+                        crabVel[idx] = cur + step; mobState[idx] = 5; mobT[idx] = 0f; enfHops++;          // (finding 2: its deck offset in route decks, as deck(a0, to) reads it)
                     }
                 }
                 break;
@@ -1470,16 +1485,16 @@ public final class Sim {
         int follow = 0;
         if (!sees && deck != null) {
             int ps = crabMode[idx] == 1 ? standOff(j, -1, 1, true) : NONE;
-            if (ps != NONE && ps != 0 && off + ps >= 0 && off + ps <= CRAB_FOLLOW && canHop(j, j + ps)) follow = ps;
+            if (ps != NONE && ps != 0 && off + ps >= 0 && off + ps <= CRAB_FOLLOW && canHop(j, deck(j, ps))) follow = ps;          // (Build 82 review, finding 2: route decks, as standOff counts them)
             else if (crabMode[idx] == 1 && mode == Mode.AIR && Math.abs(dx) <= CRAB_SIGHT + 3f && dy > -4f && dy < CRAB_SIGHT_HI + 2f && crabStuck[idx] < CRAB_WAIT) follow = 2;      // you are in the air over a gap near its deck: it waits (a moment) to see where you land
-            else if (off != 0) { int back = off > 0 ? -1 : 1; if (canHop(j, j + back)) follow = back * 3; }      // lost you away from home: it heads back
+            else if (off != 0) { int back = off > 0 ? -1 : 1; if (canHop(j, deck(j, back))) follow = back * 3; }      // lost you away from home: it heads back
         }
         // the way it faces: along its sweep, else the way it last moved (or was turned)
         float face = crabMode[idx] == 0 && off == 0 ? sweepFace : (crabVel[idx] >= 0f ? 1f : -1f);
         boolean turning = false;
         float lim = deck != null ? Math.max(0f, deck.halfW() - CRAB_EDGE) : 1e9f;
         if (sees || follow == 1 || follow == -1 || follow == 3 || follow == -3) {
-            float want = sees ? (dx > 0f ? 1f : dx < 0f ? -1f : face) : (course.dsWrap(es1[j + (follow > 0 ? 1 : -1)], dS) >= 0f ? 1f : -1f);
+            float want = sees ? (dx > 0f ? 1f : dx < 0f ? -1f : face) : (course.dsWrap(es1[deck(j, follow > 0 ? 1 : -1)], dS) >= 0f ? 1f : -1f);
             if (want != face) { crabTurn[idx] = (CRAB_TURN / T.react()); face = want; }                  // you are behind it: it stops and turns round before it comes on
             crabMode[idx] = (byte) (follow == 3 || follow == -3 ? 2 : 1);
             if (crabTurn[idx] > 0f) { crabTurn[idx] = Math.max(0f, crabTurn[idx] - DT); turning = true; }

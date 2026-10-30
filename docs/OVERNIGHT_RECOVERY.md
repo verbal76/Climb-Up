@@ -60,3 +60,15 @@ State (2026-10-30 ~12:00 UTC):
 - Uncommitted 1A/1B edits: PlanCache default on (DEFAULT field, CAP 2M ints, atomic class ids), CourseGenerator EARLY_REJECT default on +
   earlyRefused() tallies + Module.earlyRejected, LaneReport modules.csv refused_early column, PlanCacheTest/Probe restore defaults.
   Compiled OK into scratchpad/exp4 (do not gradle-compile while probe JVMs use build/classes).
+
+State (2026-10-30 ~12:15 UTC):
+- Committed: bf5fd66 (1A/1B defaults on + attribution; SLOPE flag off), 7b12f25 (KPI 7B columns in castle_control.csv, batch_summary KPI 7B
+  section, audit corrections: controller categories are independent).
+- Phase 2 A/B on GitHub (difficulty-report, generation only, seeds 2 + 7322, all modes, 5000 m, SHA 7b12f25):
+  run 41053445468 = baseline (no jvm_props), run 41053449567 = `-Dclimb.progSlope=true`.
+- Local: gs_default.log (gem/spread, default config), ca_N_base.log (NORMAL 7322 10 castles, SLOPE off). exp5 = overlay classes with the
+  KPI 7B / probe changes (run with exp5:exp4 classpath).
+- New owner directives (2026-10-30): (1) game juice + sound design + audio polish -> background agent, worktree scratchpad/audwt, branch
+  av/build83-audio (from d218fa9, same base as visual/build83-atmosphere; combine both into one audiovisual branch at the end, never merge);
+  (2) final nine-run 16-KPI certification -> only after the gameplay candidate is stable (cache, early reject, controller, NGH hazards,
+  CI dispositions done); prepare the reporting package (exec PDF, technical report, HTML dashboard, CSV/JSON, charts, manifest, ZIP artifact).

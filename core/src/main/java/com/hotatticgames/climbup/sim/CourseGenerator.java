@@ -111,8 +111,10 @@ public final class CourseGenerator {
             g.relaxed = attempt >= 12;       // the previous slice can occasionally leave no room that keeps clear of every older spiral layer: after twelve normal tries, build above it without the shortcut spacing to it (never without body clearance: ghostClash) rather than ever failing
             lastForDebug = g;
             GenTrace tr = GenTrace.GEN.get(); long a0 = tr != null ? GenTrace.now() : 0L; if (tr != null) { tr.attempt = attempt; tr.relaxed = g.relaxed; }      // observe-only (reports)
+            PlanCache pc = PlanCache.open();          // (speed only: plans repeated inside this attempt are answered once; off by default)
             try { g.buildChunk(prev); g.checkIntegrity(); g.checkLaunchCorridors(); Course out = g.extract(); sawsFair(out, t); continuous(out, t); g.progFinish(out); if (tr != null) { tr.finalAttempt = attempt; tr.attemptNanos.add(new long[]{attempt, GenTrace.now() - a0, 1}); } if (acceptedOut != null) acceptedOut[0] = attempt; return out; }
             catch (IllegalStateException e) { last = e; SLICE_FAILURES.incrementAndGet(); GenTrace.tally("attempt_fail_" + failureClass(e.getMessage())); if (tr != null) { tr.sliceFailures.add("attempt " + attempt + " [" + failureClass(e.getMessage()) + "]: " + e.getMessage()); tr.attemptNanos.add(new long[]{attempt, GenTrace.now() - a0, 0}); } }
+            finally { PlanCache.close(pc); }
         }
         throw last != null ? last : new IllegalStateException("slice " + k + ": no attempts left from " + from);
     }

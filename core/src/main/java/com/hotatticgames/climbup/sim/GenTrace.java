@@ -40,14 +40,27 @@ public final class GenTrace {
     public int[] hazardMap = new int[0];
     /** Wall time per generation phase over all slice attempts (nanos): extend (route modules + structures), structures, decoys (dead ends and fork branches), rooms. */
     public final java.util.TreeMap<String, Long> phaseNanos = new java.util.TreeMap<>();
-    public void phase(String name, long nanos) { phaseNanos.merge(name, nanos, Long::sum); }
+    public void phase(String name, long nanos) { phaseNanos.merge(name, nanos, Long::sum); Rec r = REC.get(); if (r != null) r.add(name, Rec.PHASE); }
     /** Observe-only event counts (fork and sub-fork opportunities, attempts, results, refusal reasons), per slice. */
     public final java.util.TreeMap<String, Integer> counts = new java.util.TreeMap<>();
     /** Counts one event on the installed trace; does nothing (and decides nothing) without one. */
-    public static void tally(String name) { GenTrace tr = GEN.get(); if (tr != null) tr.counts.merge(name, 1, Integer::sum); }
-    public static void tally(String name, int n) { GenTrace tr = GEN.get(); if (tr != null) tr.counts.merge(name, n, Integer::sum); }
+    public static void tally(String name) { tally(name, 1); }
+    public static void tally(String name, int n) { GenTrace tr = GEN.get(); if (tr == null) return; tr.counts.merge(name, n, Integer::sum); Rec r = REC.get(); if (r != null) r.add(name, n); }
     /** Tallies the refusal reasons a generator diagnostic array gained since {@code before} under {@code prefix} (observe-only). */
-    public static void tallyDiff(String prefix, int[] before, int[] now) { GenTrace tr = GEN.get(); if (tr == null) return; for (int i = 0; i < now.length; i++) if (now[i] > before[i]) tr.counts.merge(prefix + i, now[i] - before[i], Integer::sum); }
+    public static void tallyDiff(String prefix, int[] before, int[] now) { GenTrace tr = GEN.get(); if (tr == null) return; for (int i = 0; i < now.length; i++) if (now[i] > before[i]) tally(prefix + i, now[i] - before[i]); }
+
+    /**
+     * Speed only (plan cache, 2026-10-30): the observe-only events a planning call raised, in order, so that a cached plan replays exactly the
+     * tallies (and phase names, with no time) the real call would have raised. Installed only by {@link PlanCache} while a trace is on.
+     */
+    static final class Rec {
+        static final int PHASE = Integer.MIN_VALUE;
+        final ArrayList<String> names = new ArrayList<>(); int[] vals = new int[64];
+        void add(String name, int v) { if (names.size() == vals.length) vals = java.util.Arrays.copyOf(vals, vals.length * 2); vals[names.size()] = v; names.add(name); }
+        int size() { return names.size(); }
+        void truncate(int n) { while (names.size() > n) names.remove(names.size() - 1); }
+    }
+    static final ThreadLocal<Rec> REC = new ThreadLocal<>();
 
     /** Solver trace: every time the solver starts on a new route link (its own loop variable), with the clock and the setback count. */
     public static final class Solve {

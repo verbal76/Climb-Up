@@ -571,11 +571,12 @@ public final class Autopilot {
 
     static Result planTo(Sim base, int a, int b, boolean pair, boolean measureMargin, boolean lookahead) {
         GenTrace tr = GenTrace.GEN.get();
-        if (tr == null) return planTo0(base, a, b, pair, measureMargin, lookahead);
+        PlanCache pc = PlanCache.current();          // (speed only: null unless -Dclimb.planCache opened a scope for this slice attempt)
+        if (tr == null) return pc == null ? planTo0(base, a, b, pair, measureMargin, lookahead) : pc.plan(base, a, b, pair, measureMargin, lookahead);
         long t0 = GenTrace.now();
         int[] depth = PLAN_DEPTH.get(); depth[0]++;
         Result r;
-        try { r = planTo0(base, a, b, pair, measureMargin, lookahead); } finally { depth[0]--; }
+        try { r = pc == null ? planTo0(base, a, b, pair, measureMargin, lookahead) : pc.plan(base, a, b, pair, measureMargin, lookahead); } finally { depth[0]--; }
         long dt = GenTrace.now() - t0;
         // (observe-only, NGH generation cost investigation 2026-10-30: wall time per plan by how it ended)
         String how = r.viaRebound ? "rebound" : r.viaHit ? "knock" : r.ok ? "clean" : r.fallback != null ? "fallback" : "failed";
@@ -621,7 +622,7 @@ public final class Autopilot {
             GenTrace.tally("planrepeat_n_" + k + "_" + caller); tr.phase("planrepeat_" + k + "_" + caller, dt);
         }
     }
-    private static Result planTo0(Sim base, int a, int b, boolean pair, boolean measureMargin, boolean lookahead) {
+    static Result planTo0(Sim base, int a, int b, boolean pair, boolean measureMargin, boolean lookahead) {
         Course c = base.course;
         Result r = new Result();
         final int tgt = pair ? b : -1;

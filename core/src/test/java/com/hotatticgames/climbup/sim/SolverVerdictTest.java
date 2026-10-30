@@ -55,17 +55,27 @@ public class SolverVerdictTest {
     }
 
     /** DC2: a deck reached only by a ledge catch, with a blade where the pull-up ends: the catch alone used to prove the link. */
+    /**
+     * DC2: a hit during the pull-up is never a clean arrival. Rules 19 (owner correction 2026-10-29: a hit is not a failure; outcomes are
+     * evaluated, clean moves preferred): the link may still be made as a collision-assisted move when the knocked climber really arrives, and it
+     * is then marked as one; under the old strict rule (every hit a failure) it is not made at all.
+     */
     @Test public void aLedgeCatchWhosePullUpIsHitIsNoArrival() throws Exception {
         Tuning t = T();
-        boolean[] ok = new boolean[2];
-        for (int saw = 0; saw <= 1; saw++) {
+        Autopilot.Result[] r = new Autopilot.Result[3];
+        for (int k = 0; k <= 2; k++) {
+            int saw = k == 0 ? 0 : 1;
             Course c = new Course(1, t.circumference());
             c.add(el(Element.Type.STATIC, 0f, 0f, 4f)); c.add(el(Element.Type.STATIC, 4.0f, 2.6f, 2f)); c.add(el(Element.Type.GOAL, 9f, 3f, 3f));
             c.finishRoute();
             if (saw == 1) { Element h = el(Element.Type.SAW_H, 3.4f, 2.6f + 0.8f, 1f); h.anchor = 1; h.amp = 0f; h.period = 4f; c.hazards.add(h); }
-            ok[saw] = Autopilot.plan(Sim.startOn(c, t, 0), 0, true).ok;
+            boolean was = Autopilot.HIT_STRICT; Autopilot.HIT_STRICT = k == 2;
+            try { r[k] = Autopilot.plan(Sim.startOn(c, t, 0), 0, true); } finally { Autopilot.HIT_STRICT = was; }
         }
-        assertTrue("without the blade the catch and pull-up make the link", ok[0]);
-        assertFalse("with the blade on the pull-up the link is not made", ok[1]);
+        assertTrue("without the blade the catch and pull-up make the link", r[0].ok);
+        assertTrue("and cleanly", !r[0].viaHit && r[0].successes > 0);
+        assertEquals("with the blade on the pull-up no move arrives clean", 0, r[1].successes);
+        assertTrue("so if the link is made at all it is a collision-assisted move, marked as one", !r[1].ok || r[1].viaHit);
+        assertFalse("under the strict rule (a hit is a failure) the link is not made", r[2].ok);
     }
 }

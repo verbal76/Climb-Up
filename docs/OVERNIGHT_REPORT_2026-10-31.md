@@ -115,7 +115,22 @@ Details are in `docs/PROGRESSION_CONTROLLER_AUDIT.md`. In short:
 
 ## 8. Repository status
 
-(Filled in at the final commit.)
+- Branch `fix/build-83-root-causes`. Commits this night: 426cbe9, a731296, dcf1c7b, e7346a2 (all pushed).
+- Full `ci.yml` suite: draft validation PR #16 (never to be merged; base is the frozen Build 82 branch). This was the first full CI of the
+  Rules 19 work. Run 41016672931 on e7346a2 ran 586 core tests with 8 failures, none from the overnight code (whose switches are off):
+  - Fixed by the next commit (Rules 19 bookkeeping):
+    - Tarzan and turbo were missing from the verification coverage register (2 tests).
+    - The ledge pull-up test still expected the old hit = failure rule. It now asserts that no clean arrival exists, that the link is made only
+      as a marked collision-assisted move, and that the strict rule refuses it.
+    - The spinning-ramp test still expected spinning ramps, which the owner removed from generation on 2026-10-29.
+  - Expected until the Rules 19 freeze (owner rule: bump the rules version, fingerprint and replays only at the final freeze):
+    `DeterminismTest` fingerprint and `BundledReplayTest`.
+  - Owner decisions needed:
+    - `OfficialWorldRulesTest` gem midpoint: 5.35 m off against 4.5 m. Swing and turbo modules change where a rest can sit.
+    - `OfficialWorldRulesTest` difficulty spread across runs: 1.067 against at least 1.10.
+
+    Both are generation outcomes of Rules 19. Fixing them means changing generation or a test's tolerance, so they are left for the owner.
+- No release, Steam or workflow dispatch. Frozen branches (Build 82, the demo, the c8ef538 candidate) are untouched. PR #15 is untouched.
 
 ## 9. Owner decisions needed
 

@@ -94,8 +94,8 @@ def main():
         table(L, ["building module", "links", "share"], [[k, v, pct(v, n)] for k, v in by_kind.most_common()])
 
     # ---- KPI 16: Advanced Movement Utilization (owner amendment 2026-10-28), measured from elements, links and the solver witness, independently of scoring
-    MECH = ["PAD", "SPRING", "SEESAW", "RAMP", "SWING", "MOVE_H", "MOVE_V", "MOVE_Z", "ROPE", "CABLE", "CRUMBLE"]
-    KIND_TYPE = {"PAD": {"PAD"}, "SPRING": {"SPRING"}, "SEESAW": {"SEESAW"}, "RAMP": {"RAMP"}, "SWING": {"SWING"}, "MOVER_H": {"MOVE_H"}, "SLIDE_FALL": {"MOVE_H"},
+    MECH = ["PAD", "SPRING", "SEESAW", "RAMP", "SWING", "MOVE_H", "MOVE_V", "MOVE_Z", "ROPE", "CABLE", "CRUMBLE", "TARZAN"]
+    KIND_TYPE = {"PAD": {"PAD"}, "SPRING": {"SPRING"}, "SEESAW": {"SEESAW"}, "RAMP": {"RAMP", "TARZAN"}, "SWING": {"SWING"}, "MOVER_H": {"MOVE_H"}, "SLIDE_FALL": {"MOVE_H"},
                  "MOVER_V": {"MOVE_V"}, "ELEV_FALL": {"MOVE_V"}, "MOVER_Z": {"MOVE_Z"}, "ROPE": {"ROPE"}, "CABLE": {"CABLE"}, "CRUMBLE": {"CRUMBLE"}}
     L.append("## KPI 16. Advanced Movement Utilization"); L.append("")
     L.append("Distinct elements (a mechanic on several links counts once). placed = in the final course; main route / optional = route flag; on route links = "
@@ -380,6 +380,15 @@ def main():
             L.append(""); L.append("## T1. Avalanche placement and refusal breakdown (sum over courses)"); L.append("")
             L.append("avlwhy_<reason>_<live blocks>_link<n>: why the proof failed, how many blocks were live and the link from the proof start; avlwhy_arrival_<s>s: the arrival delay that failed; avlwhy_without_avalanche_clean/fails: the same stretch proven again with no avalanche (only with -Dclimb.diagAvl=true)"); L.append("")
             table(L, ["tally", *order], [[k] + [tal[m][k] for m in order] for k in akeys])
+        # Rules 19 (owner consolidated correction 2026-10-29; KPI audit 2026-10-30): collision-assisted acceptance and the new movement modules
+        rkeys = sorted({k for m in order for k in tal[m] if re.match(r"(r19_|module_tarzan|module_turbo|why_TARZAN_|why_TURBO_)", k)}, key=lambda k: -sum(tal[m][k] for m in order))
+        if rkeys:
+            L.append(""); L.append("## R19. Collision-assisted links and new movement modules (sum over courses)"); L.append("")
+            L.append("Per planned link (the generator's proofs; a link is planned several times): r19_why_clean_over_hit = a clean move was chosen though a move taking a knock also arrived; "
+                     "r19_why_via_knock = no clean move, accepted on at least 2 moves that take an ordinary knock and still arrive; r19_why_via_rebound = accepted on timed-rebound moves; "
+                     "r19_why_collision_too_few = collision moves found but fewer than 2; r19_why_rebound_trials = rebound trials spent. Modules: module_tarzan/module_turbo = drawn, "
+                     "r19_tarzan/turbo_committed/refused = accepted or refused by commit, why_TARZAN_/why_TURBO_ = the first refusal cause."); L.append("")
+            table(L, ["tally", *order], [[k] + [tal[m][k] for m in order] for k in rkeys])
         # T4 clearance audit and S1-C avalanche envelope (owner master directive, 2026-10-29): every key, not cut
         for pre, title, note in [
             ("t4body_", "T4. Layer body refusals: refused type vs the element it met, deficit (m)", "deficit = the smaller of the vertical overlap (1.5 m margins included) and the arc overlap (2.5 m pad included)"),

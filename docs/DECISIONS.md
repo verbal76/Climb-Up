@@ -1380,3 +1380,13 @@ HAPPEN drops 9-12 blocks; the warning is the rumble only; the work stacks on the
   full uncancelled flight, so harder climbs need the cancel; 4 m decks at low difficulty. Planner: TurboPolicy (ride it out, or cancel at
   0.05-0.5 s). Save: run.json turboT (optional). Visual: an orange-tinted ramp with a dark booster and glowing chevrons at its top.
   -Dclimb.turboOff=true turns generation off for comparisons. Fixtures: TurboRampTest (9).
+- **Tarzan swings and turbo ramps from the first world's second half (owner decision 2026-10-30):** from about 500 m (half of the 1000 m
+  first world) at half the second world's rate (swings 1 in 8 ramp draws, turbo ramps 1 in 10), the full rate from the second world. The
+  1000 m KPI study (owner audit 2026-10-30, KPI 16 FAIL: one swing in three courses) found the modules were simply never drawn below 1000 m.
+- **Tarzan refusal diagnosis (KPI audit recommendation 1):** in isolation the module is proven every time (TarzanModuleProbe: 120/120 catches
+  and rides, link margins 0.27-0.35 vs 0.07 needed). In context every refusal was a spiral-layer clearance: the swing's clearance box was
+  over-sized (2.4 m below the rope's end where the rider's feet hang 1.15 m; 0.8 m arc pad) - now the body's real extent - and the module
+  travels sideways without climbing, so its landing deck met the 9.5 m launcher spacing of the revolution below; its landing may now sit up to
+  1.6 m higher (reached by letting go on the upswing). Seed 7322 to 1750 m: swings placed 2 -> 5 (accepted 2/19 -> 5/16), body refusals 10 -> 0;
+  the remaining refusals are the shortcut spacing rule, kept. Refusals now trace as why_TARZAN_* / why_TURBO_*; diag_summary reports them
+  with the r19_ acceptance tallies (section R19) and counts TARZAN in KPI 16.

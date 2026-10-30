@@ -312,7 +312,7 @@ public final class CourseGenerator {
         tz.len = len; tz.amp = amp; tz.period = period; tz.phase = r(0f, 6.28f);
         l.add(tz);
         float vx = len * amp * 2f * (float) Math.PI / period, vy = T.jumpVel * Sim.TARZAN_RELEASE_UP;
-        float yb = yp - len - T.handHeight, yl = y0 + r(-0.5f, 0.8f);
+        float yb = yp - len - T.handHeight, yl = y0 + r(-0.5f, 1.6f);          // (up to 1.6 m higher: a release on the upswing gains height, and a swing that only travels sideways drifts toward the revolution below)
         float tf = (vy + (float) Math.sqrt(Math.max(0f, vy * vy + 2f * T.gravity * (yb - yl)))) / T.gravity;
         float clear = sp + arcHalf(tz) + 0.4f, wB = 3f;
         float land = Math.max(clear + wB / 2f, sp + vx * tf * lerp(0.6f, 0.85f, d) * (1f - 0.03f * attempt) + 0.5f);
@@ -1914,12 +1914,12 @@ public final class CourseGenerator {
             case MOVE_H: return e.w / 2f + e.amp;
             case SWING: return e.w / 2f + e.len * (float) StrictMath.sin(e.amp);
             case ROPE: return 0.8f;
-            case TARZAN: return e.len * (float) StrictMath.sin(e.amp) + 0.8f;          // (rules 19: the arc its rope and rider sweep)
+            case TARZAN: return e.len * (float) StrictMath.sin(e.amp) + 0.5f;          // (rules 19: the arc its rope and rider sweep: the rope's end at full swing, plus the body's half width and a margin)
             default: return e.w / 2f;
         }
     }
     static float vLo(Element e) {
-        switch (e.type) { case ROPE: return e.y - e.len; case TARZAN: return e.y - e.len - 2.4f; case CABLE: return e.y - 2.4f; case SEESAW: return e.y - 2.8f; case RAMP: return e.y - e.amp * e.halfW() - 3.4f; default: return e.y - 0.8f; }
+        switch (e.type) { case ROPE: return e.y - e.len; case TARZAN: return e.y - e.len - 1.4f;          /* (the rider's feet hang handHeight 1.15 m below the rope's end, plus 0.25 m) */ case CABLE: return e.y - 2.4f; case SEESAW: return e.y - 2.8f; case RAMP: return e.y - e.amp * e.halfW() - 3.4f; default: return e.y - 0.8f; }
     }
     static float vHi(Element e) {
         switch (e.type) {
@@ -2752,7 +2752,11 @@ public final class CourseGenerator {
             // fails for a climber who lands 2 cm away a moment later - the belt runs them off the back. Its links need a real margin (PROVISIONAL 0.25).
             if (beltSawNow && endless && P.progression()) margin = Math.max(margin, BELT_MARGIN);
             int cn0 = c.size(), ch0 = c.hazards.size();
-            boolean ok = commit(es, hz, margin);
+            String tk0 = traceKind;          // (observe-only: rules 19 swings and turbo ramps are RAMP draws; their refusals are traced under their own names)
+            if (traceKind != null) for (Element e : es) { if (e.type == Element.Type.TARZAN) traceKind = "TARZAN"; else if (e.turbo()) traceKind = "TURBO"; }
+            boolean ok;
+            try { ok = commit(es, hz, margin); } finally { traceKind = tk0; }
+            if (traceKind != null) for (Element e : es) { if (e.type == Element.Type.TARZAN) GenTrace.tally(ok ? "r19_tarzan_committed" : "r19_tarzan_refused"); else if (e.turbo()) GenTrace.tally(ok ? "r19_turbo_committed" : "r19_turbo_refused"); }
             // rules 13 (PUNISHER seeds 2 and 3, castles 6-7): a spike-drop row with enemies on its safe platforms was proven link by link, but a climber
             // crossing it in one go was shoved back under the drops again and again (111 hits). Such a row is kept only if it is crossed clean with
             // everything active, as the Enforcer encounters are (Autopilot.chainClean); otherwise another arrangement is tried.
@@ -3256,7 +3260,10 @@ public final class CourseGenerator {
                 break;
             }
             case RAMP: {
-                if (z >= 1 && !TARZAN_OFF && rnd.nextInt(4) == 0) { tarzan(l, eR, y0, d, z, attempt); break; }          // rules 19: the spinning ramp's old share (2 in 8) of ramps from the second world
+                // rules 19: the spinning ramp's old share (2 in 8) of ramps from the second world; owner decision 2026-10-30: from the first world's
+                // second half too (about 500 m up), at half that rate, so a climber meets swings and turbo ramps well before the second world
+                boolean intro = z == 0 && endless && ((last.y + base) % T.zoneHeight) >= 0.5f * T.zoneHeight;
+                if ((z >= 1 || intro) && !TARZAN_OFF && rnd.nextInt(intro ? 8 : 4) == 0) { tarzan(l, eR, y0, d, z, attempt); break; }
                 // a walkway up to a block that is taller than a jump; from the second world it may crumble, shake you about, or run downhill as a belt
                 // (rules 19, owner decision 2026-10-29: no more spinning ramps, skin 3; the other four share its draws equally. Sim and the renderer still
                 // play skin 3 so earlier saves and replays are unchanged)
@@ -3268,6 +3275,7 @@ public final class CourseGenerator {
                 if (skin == 4) rp.phase = lerp(1.3f, 3.4f, d) * r(0.95f, 1.05f);                // Build 72 (owner): a conveyor belt running downhill, faster the harder the climb (run speed is 5.6 m/s)
                 l.add(rp);
                 float wB = 3f + rnd.nextInt(2);
+                if (intro && !TURBO_OFF && rnd.nextInt(10) < 1) { turbo(l, rp, d, attempt); break; }          // (first world: no ski jumps; a turbo ramp at half the second world's 2 in 10)
                 if (z >= 1 && skin != 4 && rnd.nextInt(10) < 4) {          // (no ski jump off a belt: it would steal the run-up)         // ski jump: leap off the top of the ramp across a gap to a block up there
                     if (!TURBO_OFF && rnd.nextBoolean()) { turbo(l, rp, d, attempt); break; }          // rules 19: half the ski jumps' share is a turbo ramp
                     float dyJ = r(0f, 0.7f), gapJ = reach(dyJ) * lerp(0.5f, 0.85f, d) * r(0.92f, 1f) * (1f - 0.04f * attempt);

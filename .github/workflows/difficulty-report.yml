@@ -18,6 +18,7 @@ on:
       consolidate_only: { description: '1 = rebuild only the report from include_run''s stored courses (no gate, no course jobs; for a consolidation that failed after its courses passed)', required: false, default: '0' }
       campaign: { description: 'Campaign charts tag (A = NORMAL+PUNISHER, B = NGH; owner 2026-10-27): A1-A9 or B1-B9 from this run''s courses', required: false, default: '' }
       jvm_props: { description: 'Diagnostics only: extra JVM -D properties for the course jobs (e.g. -Dclimb.diagAvl=true -Dclimb.diagAvlFrom=1)', required: false, default: '' }
+      geometry_compare: { description: 'Geometry audit only (owner 2026-10-30): JSON object label -> earlier Difficulty report run id, e.g. {"baseline":"123","r11_5":"456"}; compares their courses (geometry_audit.py) and runs nothing else', required: false, default: '' }
       probe_jobs: { description: 'Diagnostics only (T5): JSON list of T5Probe argument strings, one job each (e.g. ["reach STATIC PAD", "audit 2 7321 30"]); runs instead of the report', required: false, default: '' }
       certify: { description: '1 = also build the certification package (tools/ci/cert_package.py: KPI measurements, charts, dashboard, PDFs, ZIP) as the certification-package artifact', required: false, default: '' }
       cert_args: { description: 'Certification only: extra cert_package.py arguments, e.g. --evidence ci_conclusion=success --evidence ci_sha=<sha> --overrides <repo path to evaluation_overrides.json>', required: false, default: '' }
@@ -39,7 +40,7 @@ permissions:
   actions: read
 jobs:
   gate:          # one shared validation gate for every course job (was repeated in each)
-    if: inputs.consolidate_only != '1' && inputs.probe_jobs == ''
+    if: inputs.consolidate_only != '1' && inputs.probe_jobs == '' && inputs.geometry_compare == ''
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -112,7 +113,7 @@ jobs:
           path: t5/
   consolidate:
     needs: report
-    if: always() && inputs.bench != '1' && inputs.probe_jobs == ''
+    if: always() && inputs.bench != '1' && inputs.probe_jobs == '' && inputs.geometry_compare == ''
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -151,6 +152,20 @@ jobs:
         with:
           name: difficulty-baseline-3lane
           path: baseline/
+      # Geometry audit (owner directive 2026-10-30): courses written with -Dclimb.geomAudit=true carry geometry_samples.csv
+      - name: Geometry audit (when the courses carry geometry tables)
+        if: always()
+        run: |
+          if ls parts/*/geometry_samples.csv >/dev/null 2>&1; then
+            pip install --quiet matplotlib
+            python3 tools/ci/geometry_audit.py geometry "run=parts" | tee -a "$GITHUB_STEP_SUMMARY"
+          else echo "no geometry tables in this run"; fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: geometry-audit
+          path: geometry/
+          if-no-files-found: ignore
       # Certification package (owner KPI framework, docs/CERTIFICATION_PACKAGE.md): only when dispatched with certify = 1; runs after the steps
       # above even if one of them failed, so an incomplete campaign is still reported (as NOT VERIFIED / FAIL, never as a pass)
       - name: Certification package
@@ -171,3 +186,27 @@ jobs:
         with:
           name: certification-package
           path: certification/
+  geometry_compare:          # owner directive 2026-10-30: candidates from earlier runs side by side (the first label is the baseline)
+    if: inputs.geometry_compare != ''
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download each candidate's courses and compare
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CANDIDATES: ${{ inputs.geometry_compare }}
+        run: |
+          pip install --quiet matplotlib
+          ARGS=$(python3 -c 'import json,os; d=json.loads(os.environ["CANDIDATES"]); print(" ".join(f"{k}={v}" for k,v in d.items()))')
+          LABELS=""
+          for kv in $ARGS; do
+            lab="${kv%%=*}"; id="${kv#*=}"
+            gh run download "$id" --repo "$GITHUB_REPOSITORY" --pattern 'lanes-mode-*' --dir "cand/$lab"
+            LABELS="$LABELS $lab=cand/$lab"
+          done
+          python3 tools/ci/geometry_audit.py geometry_compare $LABELS | tee -a "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: geometry-compare
+          path: geometry_compare/

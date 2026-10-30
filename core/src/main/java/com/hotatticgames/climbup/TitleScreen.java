@@ -27,6 +27,7 @@ public final class TitleScreen extends ScreenAdapter {
     private static int visits = -1;         // how many times the title screen has been shown this session (the first visit shows the first tagline)
     private String lastBub;
     private com.badlogic.gdx.Screen next;   // screen change is applied after ui.end() so the sprite batch is never left open
+    private final ClimbStart start = new ClimbStart();          // Build 82 review (findings 1, 6): a new climb is built off the frame; the play screen opens when it exists
 
     public TitleScreen(ClimbGame g) { this.g = g; }
 
@@ -98,13 +99,16 @@ public final class TitleScreen extends ScreenAdapter {
         String ver = g.versionLabel();          // always visible: which build is this?
         ui.text(ver, W - 72 - ui.font.width(ver, 2.8f), 9, 2.8f, Ui.ACCENT);
         if (notice) legacyPrompt(ui, W, H); else if (confirmNew) newRunPrompt(ui, W, H); else if (showMore) morePanel(ui, W, H);
-        if (g.saveNotice != null) {          // (R6: a refused course code says why, once, for a few seconds)
+        String building = start.status(Math.min(dt, 0.1f));
+        if (!building.isEmpty()) ui.textC(building, W / 2, 52, 3.2f, Ui.ACCENT);
+        else if (g.saveNotice != null) {          // (R6: a refused course code says why, once, for a few seconds)
             noticeT += dt; ui.textC(g.saveNotice, W / 2, 52, 3.2f, Ui.ACCENT);
             if (noticeT > 6f) { g.saveNotice = null; noticeT = 0f; }
         }
         ui.end();
         g.autoShot("title", dt);
         if (exitRequested) { exitRequested = false; g.persist(); Gdx.app.exit(); return; }       // EXIT: everything is already saved; persist once more and close the game
+        if (start.active()) { Screen ready = start.poll(g); if (ready != null) next = ready; }
         if (next != null) { Screen n = next; next = null; g.setScreen(n); }
     }
 
@@ -142,6 +146,7 @@ public final class TitleScreen extends ScreenAdapter {
 
     private boolean exitRequested, showMore;
     private void choose(Item it) {
+        if (start.active()) return;          // (Build 82 review: while a new climb is being built the menu waits - nothing can change the selection or leave mid-build)
         switch (it) {
             case PLAY: next = new PlayScreen(g, false); break;
             case NEW_RUN: confirmNew = true; break;                 // replaces the saved climb: asks first
@@ -220,7 +225,7 @@ public final class TitleScreen extends ScreenAdapter {
     }
 
     /** Starts a fresh climb: a random course ({@code seed} null), or the course behind a typed code. The saved climb, if any, is forgotten first. */
-    void startRun(Long seed) { g.beginFreshRun(seed); g.audio.play("click"); next = new PlayScreen(g, false); }
+    void startRun(Long seed) { if (start.active()) return; start.begin(g, seed); g.audio.play("click"); }
 
     private static final String[] NOTICE_A = {"THIS UPDATE CHANGED HOW A CLIMB IS STORED, SO YOUR", "UNFINISHED CLIMB COULD NOT CARRY OVER."};
     private static final String[] NOTICE_B = {"IT IS KEPT AS A LEGACY RUN. YOUR RECORDS AND SETTINGS ARE SAFE.", "YOUR NEXT CLIMB STARTS FRESH."};

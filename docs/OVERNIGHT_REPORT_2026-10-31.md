@@ -104,7 +104,9 @@ Details are in `docs/PROGRESSION_CONTROLLER_AUDIT.md`. In short:
 - **Escalation is flat.** Castle 1 → 3: NORMAL +4%, PUNISHER +1%, NGH +5%, against target rises of +8% to +11%.
 - **Castle 1 overshoots its target in every mode.** The terrain curve drives it, and the terrain factor is on its floor (PUNISHER and NGH)
   while still 17–29% over target.
-- **The controller compensates by easing hazards and enemies.** That is the PUNISHER castle-2 hazard dip.
+- **Each category is corrected on its own overshoot, toward an absolute level.** PUNISHER castle 1's hazards were 14% over their own
+  target, so castle 2's were eased below castle 1: the castle-2 hazard dip. (Corrected 2026-10-30: an earlier version said the controller
+  compensates across categories; the factors are independent per category.)
 - **NGH ceilings are binding.** Enemies are pinned at their +10% bound and still reach only 60–69% of target. Hazard module acceptance
   collapses by castle 3.
 - **Proposal (owner decision):**

@@ -287,6 +287,25 @@ public final class Progression {
     }
 
     /**
+     * Reports only (KPI 7B): the factors the controller requested (before its bounds) at the start of castle {@code n}, from the previous castle's
+     * completed record {@code prev} (layout of {@link #completed}; null for castle 1). This is {@link #factors}' own arithmetic for a castle with too
+     * little of itself built to count; NGH hazards give the request before capacity control.
+     */
+    public static float[] startRequest(int n, float[] prev, DifficultyProfile P) {
+        float[] q = {1f, 1f, 1f, 1f};
+        if (!P.progression()) return q;
+        if (prev == null) return n == 1 ? P.initialFactors() : q;
+        for (int k = 0; k < 4; k++) {
+            double tg = P.target(n - 1, k), e;
+            if (!(tg > 0)) continue;
+            if (SLOPE) { double tn = P.target(n, k), want = planned(n, k, prev[1 + k], P); e = 1 * (want * tg / tn - prev[1 + k]) / (want * tg / tn); }
+            else e = 1 * (tg - prev[1 + k]) / tg;
+            q[k] = (float) (1 + GAIN * e);
+        }
+        return q;
+    }
+
+    /**
      * Slope-aware progression (owner generator directive 2026-10-30, KPI 7B; behind -Dclimb.progSlope until validated): the level castle n is
      * steered toward in category k is its target, or the previous castle's measured level plus at least {@link #SLOPE_KEEP} of the planned rise,
      * whichever is higher. A castle that came out under target is corrected exactly as before (the target is the higher of the two); one that came

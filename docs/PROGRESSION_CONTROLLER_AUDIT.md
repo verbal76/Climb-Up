@@ -32,8 +32,9 @@ were changed.
    level back down to castle 2's target. If castle 1 overshoots by more than one castle's planned rise (PUNISHER: 38 points per castle),
    castle 2 is aimed *lower* than castle 1 came out. A dip after a hot start is the designed response, not a fault.
 2. **No integral, bounded factors.** A category whose achievable value saturates keeps a steady-state error. Example: terrain is mostly set by
-   the height-driven terrain curve, and factor 0.8 is its floor. The controller then compensates with the other categories, which the owner
-   did not intend (enemies are held to +10% on purpose).
+   the height-driven terrain curve, and factor 0.8 is its floor. Each category is controlled on its own error only (correction 2026-10-30: an
+   earlier draft said the controller compensates with the other categories; the code does not), so a saturated category simply stays off
+   target and the castle total drifts with it.
 3. **Lag.** The previous castle's error is applied to the whole next castle. The castle in progress counts only after 35% of it is built, and then
    only at half weight. So the correction arrives a castle late, and overcorrection alternates with undercorrection: the 797 → 819 → 823 → 844
    PUNISHER sequence (Bob's three-seed evaluation, 2,000 m) is the controller pulling an overshot castle 1 toward a target line that rises more
@@ -103,12 +104,14 @@ request in every castle (no capacity constraint triggered); the hazard shortfall
 2. **Terrain overshoots and the terrain factor is already on its floor.** PUNISHER and NGH terrain sits on factor 0.80 in all three castles
    and still measures 17–29% above its target; NORMAL's terrain runs 1–11% over at 0.89–0.92. Terrain comes from the height-driven terrain
    curve (plus the head start), which the selection factor barely reaches. This is the root of the "castle 1 too hot" overshoot.
-3. **Because terrain cannot come down, the controller takes difficulty out of the other categories.** PUNISHER castle 2's hazards fall
-   160 → 124 while its hazard factor is lowered to compensate for castle 1. This is the castle-2 dip the 1 km audit reported. Interaction
-   sits on its 0.80 floor in NORMAL in every castle.
+3. **Each category is corrected on its own overshoot, and the level law turns an over-target castle into a dip.** (Corrected 2026-10-30: an
+   earlier draft attributed this to compensation for terrain; the factors are computed per category, independently.) PUNISHER castle 1's
+   hazards came out 14% over their own target (160 / 140), so castle 2's hazard factor was lowered and hazards fell 160 → 124, below castle 1:
+   the castle-2 dip the 1 km audit reported. Terrain cannot come down (factor on its floor), so it does not offset the dip. Interaction sits on
+   its 0.80 floor in NORMAL in every castle for the same reason (its own overshoot).
 4. **Enemies saturate at their ceiling in NGH** (E 1.10 hi in every castle) and still reach only 60–69% of target. The +10% bound (the
-   owner's "no enemy spam") is binding. NGH reaches its total only because the terrain overshoot covers the enemy shortfall, so the
-   composition drifts away from the intended shares.
+   owner's "no enemy spam") is binding. NGH's total lands near target only because terrain happens to overshoot by about as much as enemies
+   fall short (arithmetic, not control), so the composition drifts away from the intended shares.
 5. **NGH hazards fall short by castle 3** (141 of 204) because the hazard modules are increasingly refused (mortars 1/27, drops 1/7), not
    because the controller asks for too little.
 
@@ -116,9 +119,9 @@ request in every castle (no capacity constraint triggered); the hazard shortfall
 
 - S1 (calibrate the opening) has to act on **terrain**, the category that overshoots. Possible levers: castle 1's position on the
   terrain curve (`curveShift`) or a terrain factor floor below 0.80 for castle 1 only. Lowering the other categories' opening factors would
-  repeat today's compensation problem.
-- S3 (anti-windup) matters most for NGH enemies and PUNISHER/NGH terrain: when a factor is on its bound, stop letting its error steer the
-  others.
+  not touch the terrain overshoot.
+- S3 (anti-windup): because categories are independent there is no cross-category windup to remove; what remains is reporting saturation
+  (requested vs applied) and not letting a saturated category's error grow without bound in the slope law.
 - NGH's hazard shortfall is a capacity problem (module acceptance) and needs generator work, not controller gain.
 - With S1 and S2, every mode has 20–30% of headroom between castle 1's calibrated level and castle 10's target. That matches the owner's
   30–40% reference without raising castle 10.

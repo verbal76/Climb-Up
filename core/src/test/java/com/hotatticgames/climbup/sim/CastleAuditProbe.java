@@ -26,13 +26,16 @@ public class CastleAuditProbe {
             StringBuilder sb = new StringBuilder(String.format("== %s seed %d (castle spacing %.0f m, slope-aware %b)%n", new String[]{"NORMAL", "PUNISHER", "NGH"}[lvl], seed, t.castleSpacing, Progression.SLOPE));
             double y = 0; int printed = 0, capPrinted = 0; long w0 = System.nanoTime();
             Map<Integer, float[]> req = new HashMap<>(); Map<Integer, int[]> mods = new TreeMap<>(); List<Float> totals = new ArrayList<>();
+            Map<String, int[]> refusedBy = new TreeMap<>(); Map<String, Integer> whys = new TreeMap<>();          // Phase 3: refusal causes per module kind (all attempts)
             try {
                 for (int k = 0; k < 400 && y < top; k++) {
                     CourseGenerator.Framed f = g.next(); y = f.yBase + f.c.get(f.c.routeSize() - 1).y;
                     for (GenTrace.Module m : g.trace.modules) {
+                        if (!m.ok && !"STRUCTURE".equals(m.role)) { int[] v = refusedBy.computeIfAbsent(m.kind, x -> new int[8]); v[0]++; if (m.earlyRejected) v[7]++; for (int q = 0; q < 6; q++) if (m.fails[q] > 0) v[1 + q]++; }
                         if ("STRUCTURE".equals(m.role) || m.attempt != g.trace.finalAttempt) continue;
                         int[] v = mods.computeIfAbsent(Progression.castleOf(m.y, t.castleSpacing), x -> new int[3]); if (m.ok) v[0]++; else { v[1]++; if (m.earlyRejected) v[2]++; }
                     }
+                    for (Map.Entry<String, Integer> w : g.trace.counts.entrySet()) if (w.getKey().startsWith("why_")) whys.merge(w.getKey(), w.getValue(), Integer::sum);
                     Progression pr = Progression.of(f.c.prog);
                     if (!req.containsKey(pr.castle())) { float[] r = new float[4]; pr.factors(pr.castle(), P, t.castleSpacing, r); req.put(pr.castle(), r); }
                     for (int i = printed; i < pr.completedCount(); i++) {
@@ -63,6 +66,10 @@ public class CastleAuditProbe {
             int regress = 0; for (int i = 1; i < totals.size(); i++) if (totals.get(i) < totals.get(i - 1)) regress++;
             if (totals.size() > 1) sb.append(String.format("SUMMARY %s seed %d: castles %d, castle 1 -> %d growth %+5.1f%%, regressions %d, backtracks %d%n",
                     new String[]{"NORMAL", "PUNISHER", "NGH"}[lvl], seed, totals.size(), totals.size(), 100 * (totals.get(totals.size() - 1) - totals.get(0)) / totals.get(0), regress, g.backtracks));
+            sb.append("REFUSED modules by kind (any attempt): refused / raised layer, hazard, plan, timing, conflict, threat / early\n");
+            for (Map.Entry<String, int[]> r : refusedBy.entrySet()) { int[] v = r.getValue(); sb.append(String.format("   %-9s %4d / %4d %4d %4d %4d %4d %4d / %d%n", r.getKey(), v[0], v[1], v[2], v[3], v[4], v[5], v[6], v[7])); }
+            sb.append("WHY tallies (top 40)\n");
+            whys.entrySet().stream().sorted((a, b) -> b.getValue() - a.getValue()).limit(40).forEach(w -> sb.append(String.format("   %5d %s%n", w.getValue(), w.getKey())));
             sb.append(String.format("   (%.0f m in %.0f s)%n", y, (System.nanoTime() - w0) / 1e9));
             System.out.print(sb);
         }

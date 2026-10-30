@@ -9,6 +9,8 @@ Writes, and prints to the job log:
   curves.csv         per mode and castle: mean, sd, min, max and course count of every lane (terrain, hazards, enemies, interaction, total)
                      and of hazard acceptance, Enforcers and avalanches
   curves_<lane>.png  the mode-average curve with its seed-to-seed min-max band, one chart per lane
+  kpi7b_control.csv  per course and castle: controller estimate vs target, growth, planned rise, slope error, requested vs applied factors,
+                     saturation, module refusals (KPI 7B)
   BATCH.md           the acceptance tally against the owner's standard and the tables above
 A course whose folder is missing (named by EXPECT_MODES / EXPECT_SEEDS) or whose gate did not pass is kept in every table as a failure; nothing is
 dropped or replaced.
@@ -80,7 +82,8 @@ def course(d):
         v = {k: num(r.get(k)) for k in LANES[:6]}
         v["enforcers"], v["avalanches"] = enc[c]
         per[c] = v
-    return {"dir": d, "run": run, "mode": mode_of(run), "gate": gate, "tally": tally, "causes": causes, "setbacks": setbacks, "castles": castles,
+    ctl = {int(num(r["castle"])): r for r in cc if r.get("status", "").startswith("comp")}
+    return {"dir": d, "run": run, "mode": mode_of(run), "ctl": ctl, "gate": gate, "tally": tally, "causes": causes, "setbacks": setbacks, "castles": castles,
             "top": top, "gen_s": gen, "solve_s": solve, "slices": len(ch), "failed_attempts": fails, "heap_mb": heap, "per": per}
 
 
@@ -175,6 +178,37 @@ def main():
         if not ks: md.append(f"- {b} above {a}: no castle completed in both"); continue
         bad = [k for k in ks if stats(agg[(b, k)]["lane_total"])[0] <= stats(agg[(a, k)]["lane_total"])[0]]
         md.append(f"- {b} above {a}: " + ("at every castle" if not bad else "not at castle(s) " + ", ".join(map(str, bad))))
+    md.append("")
+    # KPI 7B controller observability (generator directive 2026-10-30): per course, castle-to-castle growth against the planned rise, castle 1 -> last
+    # cumulative growth, dips (a castle below its predecessor), saturated factors and module refusals. Older course folders lack these columns: "-".
+    md += ["## KPI 7B progression (per course)", "",
+           "| run | castles | castle 1 -> last | dips | worst step | worst slope error | castles with a saturated factor | refused / attempted modules (early) |",
+           "|---|---|---|---|---|---|---|---|"]
+    k7 = []
+    for c in cs:
+        ctl = c.get("ctl") or {}
+        ks = sorted(k for k in ctl if k in c["castles"])
+        if len(ks) < 2 or "growth_vs_prev" not in ctl[ks[0]]: md.append(f"| {c['run']} | {len(ks)} | - | - | - | - | - | - |"); continue
+        tot = [num(ctl[k].get("est_total"), float("nan")) for k in ks]
+        steps = [num(ctl[k].get("growth_vs_prev"), float("nan")) for k in ks[1:]]
+        serr = [num(ctl[k].get("slope_error"), float("nan")) for k in ks[1:]]
+        sat = sum(1 for k in ks if ctl[k].get("saturated"))
+        att = sum(int(num(ctl[k].get("modules_attempted"))) for k in ks); ref = sum(int(num(ctl[k].get("modules_refused"))) for k in ks)
+        early = sum(int(num(ctl[k].get("modules_refused_early"))) for k in ks)
+        cum = (tot[-1] - tot[0]) / tot[0] if tot[0] else float("nan"); dips = sum(1 for x in steps if x < 0)
+        md.append(f"| {c['run']} | {len(ks)} | {100 * cum:+.1f}% | {dips} | {100 * min(steps):+.1f}% | {100 * min(serr):+.1f}% | {sat} | {ref} / {att} ({early}) |")
+        for k in ks:
+            r = ctl[k]
+            k7.append([c["run"], k, r.get("est_total"), r.get("target_total"), r.get("growth_vs_prev"), r.get("cum_growth"), r.get("planned_rise"), r.get("slope_error"),
+                       r.get("req_terrain"), r.get("factor_terrain"), r.get("req_hazards"), r.get("factor_hazards"), r.get("req_enemies"), r.get("factor_enemies"),
+                       r.get("req_interaction"), r.get("factor_interaction"), r.get("saturated"), r.get("modules_attempted"), r.get("modules_refused"),
+                       r.get("modules_refused_early"), r.get("slope_aware")])
+    with open(os.path.join(out, "kpi7b_control.csv"), "w", newline="") as f:
+        w = csv.writer(f)
+        w.writerow(["run", "castle", "est_total", "target_total", "growth_vs_prev", "cum_growth", "planned_rise", "slope_error", "req_terrain", "applied_terrain",
+                    "req_hazards", "applied_hazards", "req_enemies", "applied_enemies", "req_interaction", "applied_interaction", "saturated",
+                    "modules_attempted", "modules_refused", "modules_refused_early", "slope_aware"])
+        w.writerows(k7)
     md.append("")
     md += ["## Encounters and performance per mode", "", "| mode | Enforcers / course | avalanches / course | hazard acceptance | gen s / course | solve s / course | peak heap MB |",
            "|---|---|---|---|---|---|---|"]

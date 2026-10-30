@@ -1415,3 +1415,12 @@ HAPPEN drops 9-12 blocks; the warning is the rumble only; the work stacks on the
   NGH 7322: 40 s of 189 s. Profile (JFR): the avalanche rigid step (24%, mostly StrictMath cos/sin of block angles) and crab deck lookups (28%).
   Computing each block's cos/sin once per substep was bit-identical (cross-build signatures) but no faster (one deck contact per substep), so
   it was reverted. No other provably exact reduction was found without shortening the search, which the directive forbids.
+
+## Mechanic-introduction pop-ups (owner playtest, branch visual/build83-atmosphere, awaiting owner review) - 2026-10-30
+Owner: the ramp pop-up stayed too long and sat over the route. Contextual tips are now a compact top-edge banner (between the height plate and
+the pause button, `ui/TipBanner`), one short line per mechanic (`TipCatalog.brief`; the full text is kept and shown in the pause menu's LAST TIP
+panel), 2.5 s with a short fade (the locked-castle tip 4 s), closed by a tap on it, TAB, or the controller's BACK button (never while those are
+bound to a gameplay action). One at a time with a 1.2 s gap; the tip waits, hidden with its clock stopped, while an event toast or the world
+banner holds the top band (keeps Build 63's separate bands). The seen list (`SaveData.shownTips`, same keys) is respected; a tip is marked seen
+only when it starts. The club pickup toast is short and its how-to became the one-time `club` tip (tips off: as before). UI only: the banner never
+writes the InputState; replays and the simulation are unchanged. Details and the audit table: docs/TIPS_UX_REPORT.md.

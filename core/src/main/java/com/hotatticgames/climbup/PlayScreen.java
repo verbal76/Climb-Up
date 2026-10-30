@@ -59,10 +59,10 @@ public final class PlayScreen extends ScreenAdapter {
     private State state = State.PLAYING;
     private boolean clockLive;           // the speed-run clock starts on the first input of a session
     private String toastSub = "";
-    private float acc, time, runTime, fade, toastT, zoneT, stepT, ropeT, autosaveT, tipT, shotT;
+    private float acc, time, runTime, fade, toastT, zoneT, stepT, ropeT, autosaveT, shotT;
     private float pauseCd;               // short lock-out after a pause toggle so one controller press can never flip it twice (no flashing, no 10-click close)
     private boolean padLost;             // the pause was forced by the controller being unplugged: the pause menu says so until the run resumes
-    private String toast = "", tip = "", caption = ""; private float captionT;
+    private String toast = "", caption = ""; private float captionT;
     private int lastZone = -1, shots;
     private boolean confirmRestart, confirmEnd;
     /** A word that pops over the hero's head and floats up. {@code lift} is how many newer pops have arrived under it: each one bumps the older ones up a line, so two never print over each other (Build 63, owner). */
@@ -216,6 +216,7 @@ public final class PlayScreen extends ScreenAdapter {
         @Override public boolean touchDown(int sx, int sy, int p, int b) {
             if (state != State.PLAYING) return false;
             Vector2 u = un(sx, sy);
+            if (tipShown && tips.visible() && tipBox.contains(u.x, u.y, 12f)) { tips.dismiss(); return true; }      // a tap on the tip banner closes it and is nothing else (no jump, no stick); the banner sits in the top band, clear of both thumbs
             if (u.x > g.ui.w() - 150 && u.y > g.ui.h() - 150) return false; // pause button (handled via tap)
             if (u.x < 150 && u.y > g.ui.h() - 150 && g.settings.leftHanded) return false;
             if (sim.clubTime > 0f) {                                             // the swing button sits above the jump button while you carry the club
@@ -294,6 +295,7 @@ public final class PlayScreen extends ScreenAdapter {
         if (pauseCd > 0f) pauseCd -= dt;
         if (gi() != null) {                                              // desktop: pause / resume from the keyboard or controller (the pause button and menus work through the mouse and the focus ring)
             boolean p = gi().pausePressed(), b = gi().backPressed();
+            if (state == State.PLAYING && gi().tipDismissPressed()) tips.dismiss();       // the desktop's dismiss control (TAB / the controller's B), bound to no gameplay action
             if (state == State.PLAYING && gi().controllerLost()) { pauseGame(); pauseCd = 0.30f; padLost = true; }      // the pad in use was unplugged: hold the run until the player is back on a device
             if (pauseCd <= 0f) {                                          // one press = one toggle; the lock-out swallows any double-fire from the pad
                 if (state == State.PLAYING && p) { pauseGame(); pauseCd = 0.30f; }
@@ -625,7 +627,9 @@ public final class PlayScreen extends ScreenAdapter {
         }
         if ((ev & Sim.EV_CLUB) != 0) {
             g.audio.play("key", 0.9f, 0.8f); world.particles.burst(s, y + 1f, 14, gold, 3f, 3.2f, 0.12f, -1f, 0.9f); vibrate(25, 1);
-            toast = g.platform.tip("SPIKED CLUB! TAP SWING TO KNOCK CRABS AND BEES OFF"); toastT = 3f; say("[CLUB]");
+            if (g.settings.tips && !demo) { toast = "SPIKED CLUB!"; toastT = 1.6f; if (!g.save.shownTips.contains("club")) pendingTip = "club"; }      // tips UX (owner): the how-to is the one-time club tip, not a long toast at every pickup
+            else { toast = g.platform.tip("SPIKED CLUB! TAP SWING TO KNOCK CRABS AND BEES OFF"); toastT = 3f; }                                     // tips off: as before
+            say("[CLUB]");
         }
         if ((ev & Sim.EV_SWING) != 0) { g.audio.play("swing", 0.8f, 0.95f + MathUtils.random(0.1f)); vibrate(10, 2); }
         if ((ev & Sim.EV_SHOVE) != 0 && (ev & (Sim.EV_SQUASH | Sim.EV_LAUNCH)) == 0) { g.audio.play("bonk", 0.9f, 0.9f + MathUtils.random(0.2f)); g.audio.play("clack", 0.7f, 0.8f); world.shake(0.4f); freeze(0.05f); vibrate(25, 1); pop("OOF!", Color.WHITE); say("[BONK]"); }
@@ -709,41 +713,26 @@ public final class PlayScreen extends ScreenAdapter {
         if (t.infinityMeters > achBestInfinity) a.stat(AchievementRules.STAT_BEST_INFINITY_M, t.infinityMeters);
     }
 
-    private static final String[][] TIPS = {
-        {"jump", "HOLD JUMP FOR A HIGHER LEAP. THE STICK STEERS IN THE AIR."},
-        {"ledge", "SHORT BY A HAIR? PUSH TOWARD THE LEDGE TO GRAB, THEN STICK UP OR JUMP TO PULL UP."},
-        {"pad", "LAND ON A BOUNCE PAD TO LAUNCH. HOLD JUMP FOR EXTRA HEIGHT."},
-        {"rope", "GRAB A ROPE BY TOUCHING IT. STICK UP/DOWN CLIMBS. JUMP TO LEAP OFF."},
-        {"crumble", "CRUMBLING TILES DROP FAST. KEEP MOVING."},
-        {"move", "RIDE MOVING PLATFORMS, OR WAIT FOR THE RIGHT MOMENT TO JUMP."},
-        {"cable", "JUMP UP TO CABLES AND HANG. STICK LEFT/RIGHT SHIMMIES. DOWN OR JUMP DROPS."},
-        {"swing", "TIME YOUR LEAP ONTO THE SWINGING PLATFORM."},
-        {"checkpoint", "RED GEMS AND CASTLES ARE CHECKPOINTS. REACH ONE AND YOU RESTART FROM IT WHEN YOU FALL."},
-        {"saw", "SAWBLADES SLIDE BACK AND FORTH. WATCH THE RHYTHM, THEN GO. A HIT THROWS YOU OFF."},
-        {"cannon", "CANNONS FIRE SPIKED BALLS. WAIT FOR ONE TO PASS, THEN LEAP."},
-        {"trap", "SPIKES POP UP ON A BEAT. WAIT IN THE SAFE PATCH, THEN RUN ACROSS WHEN THEY ARE DOWN."},
-        {"block", "STONE SPIKE BLOCKS: HOP OVER THEM, AND DON'T DROP INTO ONE."},
-        {"crab", "CRABS BUMP YOU AROUND LIKE PING-PONG. TIME YOUR RUN, HOP OVER, OR KNOCK THEM OFF THE EDGE WITH THE SPIKED CLUB."},
-        {"bee", "BEES BUZZ IN, BUMP YOU AND FLY OFF AGAIN. THEY ONLY NUDGE YOU: THE DANGER IS WHAT IS BELOW."},
-        {"club", "A SPIKED CLUB! PRESS SWING TO KNOCK CRABS OFF THE PLATFORM. IT WEARS OFF AFTER A WHILE."},
-        {"drop", "SPIKED SLABS SLAM DOWN ON A BEAT. SLIP UNDER WHILE THEY ARE RAISED."},
-        {"spring", "SPRINGS LAUNCH YOU ALONG THE ARROW. STEER IN THE AIR TO LAND IT."},
-        {"ramp", "RAMPS LEAD UP TO BLOCKS TOO TALL TO JUMP. JUST RUN UP."},
-        {"rampcrumble", "THIS RAMP CRUMBLES WHEN YOU STAND ON IT. RUN!"},
-        {"rampshake", "A SHAKY RAMP BOUNCES YOU AROUND. KEEP MOVING AND AIM FOR THE TOP."},
-        {"rampspin", "A SPINNING RAMP! IT TURNS LIKE A RECORD AND FLINGS YOU SIDEWAYS. TIME YOUR JUMP."},
-        {"rampbelt", "A CONVEYOR RAMP! THE BELT RUNS DOWNHILL. KEEP RUNNING OR IT CARRIES YOU BACK DOWN."},
-        {"beltbridge", "A CONVEYOR BRIDGE! THE PLANKS ROLL LEFT. DON'T STAND STILL OR YOU'LL RIDE OFF THE END."},
-        {"seesaw", "THE BRIDGE TIPS UNDER YOU. KEEP RUNNING ACROSS BEFORE IT DUMPS YOU OFF."},
-        {"gate", "A COLOURED CASTLE NEEDS THE KEY OF ITS COLOUR. THE KEY IS HIDDEN BELOW THE PATH BEFORE IT: DROP DOWN, FIND IT, CLIMB BACK."},
-    };
+    // ---- contextual tips (owner playtest fix, see docs/TIPS_UX_REPORT.md): the texts live in TipCatalog; TipBanner times and lays out the compact top-edge banner
+    private final com.hotatticgames.climbup.ui.TipBanner tips = new com.hotatticgames.climbup.ui.TipBanner();
+    private final com.hotatticgames.climbup.ui.TipBanner.Box tipBox = new com.hotatticgames.climbup.ui.TipBanner.Box();
+    private final com.hotatticgames.climbup.ui.TipBanner.Measure tipMeasure = this::tipWidth;
+    private final java.util.function.UnaryOperator<String> tipRewrite = this::tipRewrite;
+    private float tipWidth(String str, float px) { return g.ui.font.width(str, g.ui.fitSize(px)); }
+    private String tipRewrite(String str) { return g.platform.tip(str); }
+    private final Color tipCol = new Color();
+    private boolean tipShown;           // the banner was drawn this frame (its box can be tapped away)
+    private String pendingTip;          // one tip waiting for the banner to be free (the club pickup); never more than one
+    private int tipBrowse;              // pause menu: which seen tip the LAST TIP panel shows (0 = the most recent)
 
     private void updateTips(float dt) {
         if (toastT > 0) toastT -= dt;
         if (lockedT > 0) lockedT -= dt;
         if (captionT > 0) captionT -= dt;
-        if (tipT > 0) { tipT -= dt; if (tipT <= 0) tip = ""; return; }
-        if (!g.settings.tips || demo) return;
+        tips.update(dt, toastT > 0 || zoneT > 0);          // the toast and the world banner share the top band: the tip waits (hidden, clock stopped) while one is up
+        if (!tips.ready()) return;                          // one tip at a time, and a short gap after each
+        if (!g.settings.tips || demo) { pendingTip = null; return; }
+        if (pendingTip != null) { String k = pendingTip; pendingTip = null; if (tipFor(k)) return; }
         // look for the next element of an unseen kind within 9 units
         for (int i = Math.max(0, sim.bestElem - 1); i < Math.min(course.size(), sim.bestElem + 8); i++) {
             Element e = course.get(i);
@@ -773,10 +762,7 @@ public final class PlayScreen extends ScreenAdapter {
     }
 
     private boolean tipFor(String key) {
-        if (g.save.shownTips.contains(key)) return false;
-        g.save.shownTips.add(key);
-        for (String[] t : TIPS) if (t[0].equals(key)) { tip = g.platform.tip(t[1]); tipT = 5f; }
-        return true;
+        return TipCatalog.offer(tips, g.save.shownTips, key, tipRewrite);          // the seen state is the player's, kept in the save as before
     }
 
     // ------------------------------------------------------------------ HUD & overlays
@@ -879,16 +865,8 @@ public final class PlayScreen extends ScreenAdapter {
             if (g.settings.captionBg > 0) ui.rect(W / 2 - cw / 2 - 14, cy - 12, cw + 28, chh + 24, g.settings.captionBg == 2 ? Color.BLACK : new Color(0, 0, 0, 0.6f));
             ui.text(caption, W / 2 - cw / 2, cy, cpx, Ui.TEXT);
         }
-        tipBottom = -1f;
-        if (!tip.isEmpty() && state == State.PLAYING) {
-            float px2 = 3.4f * tm; float maxW = W * 0.5f;
-            String[] lines = wrap(tip, px2, maxW);
-            float bh = lines.length * (PixelFont_H * px2 + 10) + 24;
-            float by = H - 150f - bh;          // top of the screen, under the HUD row, clear of the action
-            tipBottom = by;
-            ui.panel(W / 2 - maxW / 2 - 20, by, maxW + 40, bh);
-            for (int i = 0; i < lines.length; i++) ui.textC(lines[i], W / 2, by + bh - 24 - (i + 1) * (PixelFont_H * px2 + 10) + 10, px2, Ui.TEXT);
-        }
+        tipBottom = -1f; tipShown = false;
+        if (tips.active() && state == State.PLAYING) drawTip(ui, W, H, tm);
         drawHeroBubble();
         drawPops();
         if (state == State.PLAYING) { if (g.platform.touchControls()) drawControls(); else g.platform.drawPlayHints(ui, sim.clubTime > 0f, W, H); }
@@ -898,6 +876,57 @@ public final class PlayScreen extends ScreenAdapter {
         ui.end();
     }
     private static final float PixelFont_H = 7f;
+
+    /** The contextual tip: a compact banner at the top edge between the height plate and the pause button (TipBanner.layout), fading in and out; tap it (or press the dismiss control) to close it. */
+    private void drawTip(Ui ui, float W, float H, float tm) {
+        float a = tips.alpha();
+        if (a <= 0.01f) return;
+        boolean touch = g.platform.touchControls();
+        String mark = touch ? "X" : gi() != null ? gi().tipDismissLabel() : null;
+        com.hotatticgames.climbup.ui.TipBanner.Box b = com.hotatticgames.climbup.ui.TipBanner.layout(tips.text(), mark, W, H, tm, touch, g.settings.leftHanded, tipMeasure, tipBox);
+        boolean hc = g.settings.highContrast;
+        ui.rect(b.x - 5, b.y - 7, b.w + 10, b.h + 10, tipCol.set(Ui.SHADOW.r, Ui.SHADOW.g, Ui.SHADOW.b, Ui.SHADOW.a * a));
+        ui.rect(b.x - 3, b.y - 3, b.w + 6, b.h + 6, tipCol.set(Ui.EDGE.r, Ui.EDGE.g, Ui.EDGE.b, a));
+        ui.rect(b.x, b.y, b.w, b.h, tipCol.set(Ui.PANEL.r, Ui.PANEL.g, Ui.PANEL.b, (hc ? 1f : 0.92f) * a));
+        float px = ui.fitSize(b.px);
+        for (int i = 0; i < b.lines.length; i++) tipText(ui, b.lines[i], b.x + b.pad, b.y + b.h - b.pad - PixelFont_H * b.px - i * b.lineH, px, tipCol.set(Ui.TEXT.r, Ui.TEXT.g, Ui.TEXT.b, a), a);
+        if (mark != null && b.markW > 0f) {
+            float mp = ui.fitSize(b.px * com.hotatticgames.climbup.ui.TipBanner.markScale(mark));
+            tipText(ui, mark, b.x + b.w - b.pad - ui.font.width(mark, mp), b.y + b.h / 2f - PixelFont_H * mp / 2f, mp, tipCol.set(Ui.DIM.r, Ui.DIM.g, Ui.DIM.b, a), a);
+        }
+        tipBottom = b.y; tipShown = true;
+        if (ui.tappedIn(b.x - 12, b.y - 12, b.w + 24, b.h + 24)) tips.dismiss();          // mouse click / first finger (the touch handler also catches any other finger)
+    }
+
+    private final Color tipShadow = new Color();
+    /** Ui.text with the shadow faded along with the letters. */
+    private void tipText(Ui ui, String str, float x, float y, float px, Color c, float a) {
+        if (ui.crisp) { float k = ui.deviceScale(); px = Ui.snapSize(px, k); x = Ui.snapPos(x, k); y = Ui.snapPos(y, k); }
+        ui.font.drawShadow(ui.batch, str, x, y, px, c, tipShadow.set(Ui.SHADOW.r, Ui.SHADOW.g, Ui.SHADOW.b, Ui.SHADOW.a * a));
+    }
+
+    /** Pause menu: the full text of the tips already seen (most recent first), so a banner closed early or missed is never lost. Tap it for an older one. */
+    private void lastTipPanel(Ui ui, float panelX, float y, float ph) {
+        java.util.List<String> seen = g.save.shownTips;
+        int n = 0; for (String k : seen) if (TipCatalog.get(k) != null) n++;
+        float avail = panelX - 48f;
+        if (n == 0 || avail < 200f) return;
+        float tm = ui.tm(), pw = Math.min(avail, 440f), px0 = 24f + Math.max(0f, (avail - pw) / 2f);
+        int want = ((tipBrowse % n) + n) % n, idx = -1, c = 0;
+        for (int i = seen.size() - 1; i >= 0; i--) if (TipCatalog.get(seen.get(i)) != null && c++ == want) { idx = i; break; }
+        if (idx < 0) return;
+        String full = g.platform.tip(TipCatalog.get(seen.get(idx)).full);
+        ui.panel(px0, y, pw, ph);
+        float hp = 3.2f * Math.min(tm, 1.3f);
+        ui.text(want == 0 ? "LAST TIP" : "TIP " + (want + 1) + "/" + n, px0 + 20, y + ph - 20 - PixelFont_H * hp, hp, Ui.ACCENT);
+        String foot = n > 1 ? (g.platform.touchControls() ? "TAP: OLDER TIP" : "CLICK: OLDER TIP") : "";
+        float fp = Math.min(2.4f * Math.min(tm, 1.3f), (pw - 40f) / Math.max(1, foot.length() * 6f)), top = y + ph - 40 - PixelFont_H * hp - 12, bottom = y + 20 + (foot.isEmpty() ? 0f : PixelFont_H * fp + 14);
+        float bp = 2.8f * tm; String[] lines = wrap(full, bp, pw - 40);
+        while (bp > 1.6f && lines.length * (PixelFont_H * bp + 8) > top - bottom) { bp *= 0.92f; lines = wrap(full, bp, pw - 40); }
+        for (int i = 0; i < lines.length; i++) ui.text(lines[i], px0 + 20, top - (i + 1) * (PixelFont_H * bp + 8) + 8, bp, Ui.TEXT);
+        if (!foot.isEmpty()) ui.text(foot, px0 + 20, y + 20, fp, Ui.DIM);
+        if (n > 1 && ui.tappedIn(px0, y, pw, ph)) tipBrowse++;
+    }
     private final float[] headPos = new float[2];
     private float tipBottom = -1f;       // the tip box's lower edge this frame (-1: no tip): the pops never rise into it
 
@@ -1009,6 +1038,7 @@ public final class PlayScreen extends ScreenAdapter {
         float pw = 560, bw = 440, ph = 176 + (canEnd ? 5 : 4) * bs + 36 + (seedLine ? 30 : 0), x = W / 2 - pw / 2, y = H / 2 - ph / 2;
         ui.rect(0, 0, W, H, new Color(0, 0, 0, 0.55f));
         ui.panel(x, y, pw, ph);
+        lastTipPanel(ui, x, y, ph);
         if (seedLine) ui.textC("SEED " + SeedCode.encode(g.save.seed), W / 2, y + 14, 2.6f, Ui.DIM);
         if (padLost) { String pl = "CONTROLLER DISCONNECTED"; ui.textC(pl, W / 2, y + ph - 82, Math.min(5f, (pw - 40) / (pl.length() * 6f)), Ui.ACCENT); }      // the pause was forced by the pad going away: say so where PAUSED would be
         else ui.textC("PAUSED", W / 2, y + ph - 90, 8f, Ui.TEXT);
@@ -1050,7 +1080,7 @@ public final class PlayScreen extends ScreenAdapter {
 
     // ------------------------------------------------------------------ lifecycle
 
-    private void pauseGame() { if (state == State.PLAYING) { if (gi() != null) gi().clear(); g.audio.fallStop(); g.audio.stopLoops(); state = State.PAUSED; confirmRestart = confirmEnd = false; stickPtr = jumpPtr = -1; jumpHeldTouch = false; g.audio.play("click"); g.persist(); saveRun(); } }
+    private void pauseGame() { if (state == State.PLAYING) { tipBrowse = 0; if (gi() != null) gi().clear(); g.audio.fallStop(); g.audio.stopLoops(); state = State.PAUSED; confirmRestart = confirmEnd = false; stickPtr = jumpPtr = -1; jumpHeldTouch = false; g.audio.play("click"); g.persist(); saveRun(); } }
     /** Writes the exact moment of the climb (not in the scripted demo, and not once the finish screen is up: that run is over). */
     private void saveRun() { if (tower != null && !demo && state != State.FINISHED) g.saveRun(tower, sim); }
     private void resumePlay() { if (gi() != null) gi().clear(); state = State.PLAYING; acc = 0; padLost = false; g.audio.play("click"); }

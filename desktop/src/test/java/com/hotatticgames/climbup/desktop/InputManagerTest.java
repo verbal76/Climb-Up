@@ -339,4 +339,40 @@ public class InputManagerTest {
         for (int i = 0; i < 120; i++) { im.update(DT); if (im.menuPressed(Act.MENU_DOWN)) n++; src.endFrame(); }
         assertTrue("repeats after the initial delay, not every frame: " + n, n >= 8 && n <= 20);
     }
+
+    // ---------------------------------------------------------------- tip banner dismiss (owner pop-up UX fix)
+
+    @Test public void tabClosesTheTipAndIsNothingElse() {
+        src.press(Keys.TAB); im.update(DT); src.endFrame();
+        InputState s = read();
+        assertTrue(im.tipDismissPressed());
+        assertFalse("consumed", im.tipDismissPressed());
+        assertFalse(s.jumpPressed); assertFalse(s.jumpHeld); assertFalse(s.swingPressed); assertEquals(0f, s.moveX, 0f); assertEquals(0f, s.moveY, 0f);
+        assertFalse("not pause", im.pausePressed());
+        assertEquals("TAB", im.tipDismissLabel());
+    }
+
+    @Test public void tabBoundToAGameActionNoLongerClosesTips() {
+        cfg.keyboard.set(Act.JUMP, java.util.Arrays.asList(Keys.TAB));
+        src.press(Keys.TAB); im.update(DT); src.endFrame();
+        assertFalse("a gameplay key never doubles as the dismiss", im.tipDismissPressed());
+        assertNull(im.tipDismissLabel());
+    }
+
+    @Test public void theControllersBackButtonClosesTheTipButNotWhenItJumps() {
+        FakePad p = connect("pad1", "Xbox Controller"); frame();
+        p.set(Ctl.B, 1f); im.update(DT);
+        assertTrue(im.tipDismissPressed());
+        assertFalse(read().jumpPressed);
+        p.set(Ctl.B, 0f); im.update(DT);
+        cfg.padFor("pad1").set(Act.JUMP, java.util.Arrays.asList(Ctl.B));
+        p.set(Ctl.B, 1f); im.update(DT);
+        assertFalse("B now jumps: it does not also dismiss", im.tipDismissPressed());
+        assertTrue("jump stays jump", read().jumpPressed);
+    }
+
+    @Test public void jumpAndMoveNeverCloseTheTip() {
+        src.press(Keys.SPACE); src.press(Keys.D); src.press(Keys.ESCAPE); im.update(DT); src.endFrame();
+        assertFalse(im.tipDismissPressed());
+    }
 }

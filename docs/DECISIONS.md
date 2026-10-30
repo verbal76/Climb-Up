@@ -1436,3 +1436,23 @@ HAPPEN drops 9-12 blocks; the warning is the rumble only; the work stacks on the
   fingerprint and bundled replays follow at the final freeze, as already planned for rules 19. `Tuning.java`'s default radius stays 10 (the
   defaults already differ from tuning.json; tests that build `new Tuning()` keep their fixed geometry). LayerSpacingTest now expects a pad 9.6 m
   below a deck to be refused (C1) and 10.8 m to be allowed; ShortcutReachTest pins the audit's pad pairs.
+
+## Mechanic-introduction pop-ups (owner playtest, branch visual/build83-atmosphere, awaiting owner review) - 2026-10-30
+Owner: the ramp pop-up stayed too long and sat over the route. Contextual tips are now a compact top-edge banner (between the height plate and
+the pause button, `ui/TipBanner`), one short line per mechanic (`TipCatalog.brief`; the full text is kept and shown in the pause menu's LAST TIP
+panel), 2.5 s with a short fade (the locked-castle tip 4 s), closed by a tap on it, TAB, or the controller's BACK button (never while those are
+bound to a gameplay action). One at a time with a 1.2 s gap; the tip waits, hidden with its clock stopped, while an event toast or the world
+banner holds the top band (keeps Build 63's separate bands). The seen list (`SaveData.shownTips`, same keys) is respected; a tip is marked seen
+only when it starts. The club pickup toast is short and its how-to became the one-time `club` tip (tips off: as before). UI only: the banner never
+writes the InputState; replays and the simulation are unchanged. Details and the audit table: docs/TIPS_UX_REPORT.md.
+- **Mortar plinth (owner 2026-10-30, cosmetic, visual branch):** the 2 m slate block drawn under every mortar reached 6.3 m below the path, into
+  the spiral revolution below (the owner's "giant black box"). It is now a 0.45 m plinth under the cap (`WorldRenderer.MORTAR_PLINTH`); the
+  assembly ends about 4.8 m below the path. The mouth stays where the simulation fires from; nothing below the mouth is part of any clearance
+  rule, so generation, the simulation and replays are unchanged. A side-cannon-style slab was not used: 2.6 m wide, it would nearly fill the
+  2.2-3 m gap and read as a landable deck. Before/after: docs/visual/mortar_plinth_1280x720_below.png (seed 1, slice 3, ~214 m; AtmosShot
+  gained `-Dclimb.chain=true` to render a slice at its real height).
+- **Depth mover end posts removed (owner playtest 2026-10-30, cosmetic, visual branch):** the depth mover (MOVE_Z) drew two 0.9 m posts beside
+  the ends of its travel rail, offset to the platform's left edge, that read as floating mounts. `WorldRenderer.drawDepthRail` now draws only the
+  rail (whose brightness still shows when the platform is in the climber's plane); the moving platform is unchanged. The posts were renderer
+  boxes only (no element, hazard, collision box or generator rule refers to them), so movement range, speed, timing, collision, solver and
+  placement are unchanged. Before/after at 250 / 750 / 2750 / 4250 m, three moments each (seed 7): docs/visual/depth_mover_posts_*.png.

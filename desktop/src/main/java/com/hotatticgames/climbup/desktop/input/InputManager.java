@@ -53,13 +53,14 @@ public final class InputManager implements GameInput {
         Bindings<Integer> kb = cfg.keyboard;
         Bindings<Ctl> pb = active != null ? cfg.padFor(active.id()) : null;
         float dz = cfg.deadzone;
+        Ctl backJust = null;
         for (Act a : ACTS) {
             boolean d = false, j = false;
             for (int k : kb.get(a)) { if (src.down(k)) d = true; if (src.justPressed(k)) j = true; }
             if (!a.game) { for (int k : safetyKeys(a)) { if (src.down(k)) d = true; if (src.justPressed(k)) j = true; } }
             if (pb != null) {
-                for (Ctl c : pb.get(a)) { if (isDown(active, c, dz)) d = true; if (justDown(c)) j = true; }
-                if (!a.game) for (Ctl c : safetyPad(a)) { if (isDown(active, c, dz)) d = true; if (justDown(c)) j = true; }
+                for (Ctl c : pb.get(a)) { if (isDown(active, c, dz)) d = true; if (justDown(c)) { j = true; if (a == Act.BACK) backJust = c; } }
+                if (!a.game) for (Ctl c : safetyPad(a)) { if (isDown(active, c, dz)) d = true; if (justDown(c)) { j = true; if (a == Act.BACK) backJust = c; } }
             }
             int i = a.ordinal();
             boolean wasDown = down[i];
@@ -72,6 +73,8 @@ public final class InputManager implements GameInput {
         }
         // remember pad state for edge detection next frame
         if (active != null) for (Ctl c : Ctl.values()) prevPad[c.ordinal()] = isDown(active, c, dz);
+        // the tip banner's dismiss control: TAB on the keyboard, the controller's BACK/cancel button (B by default) - each only while it is bound to no gameplay action
+        tipDismiss = (src.justPressed(TIP_KEY) && !keyInGame(kb, TIP_KEY)) || (backJust != null && pb != null && !ctlInGame(pb, backJust));
         if (just[Act.JUMP.ordinal()]) jumpLatch = true;
         if (just[Act.SWING.ordinal()]) swingLatch = true;
         computeMove(kb, pb, dz);
@@ -81,6 +84,11 @@ public final class InputManager implements GameInput {
     }
 
     private boolean padActivity;
+    /** The keyboard key that closes the tip banner. Fixed (not in the bindings screen): it is not a gameplay control. */
+    public static final int TIP_KEY = com.badlogic.gdx.Input.Keys.TAB;
+    private boolean tipDismiss;
+    private static boolean keyInGame(Bindings<Integer> kb, int key) { for (Act a : ACTS) if (a.game && kb.get(a).contains(key)) return true; return false; }
+    private static boolean ctlInGame(Bindings<Ctl> pb, Ctl c) { for (Act a : ACTS) if (a.game && pb.get(a).contains(c)) return true; return false; }
 
     private void selectActivePad(List<? extends Pad> pads) {
         padActivity = false;
@@ -175,6 +183,15 @@ public final class InputManager implements GameInput {
     @Override public boolean pausePressed() { return just[Act.PAUSE.ordinal()]; }
     @Override public boolean backPressed() { return just[Act.BACK.ordinal()]; }
     @Override public void clear() { jumpLatch = false; swingLatch = false; }
+    @Override public boolean tipDismissPressed() { boolean r = tipDismiss; tipDismiss = false; return r; }
+    @Override public String tipDismissLabel() {
+        if (promptDevice() == Device.CONTROLLER) {
+            Bindings<Ctl> pb = cfg.padFor(active.id());
+            for (Ctl c : pb.get(Act.BACK)) if (!ctlInGame(pb, c)) return family().label(c);
+            return null;
+        }
+        return keyInGame(cfg.keyboard, TIP_KEY) ? null : KeyCodes.name(TIP_KEY);
+    }
     private boolean padLost;
     /** True once after the controller the player was actually using (prompts on the controller) was unplugged; a pad that was merely connected, or one removed while the keyboard was in use, raises nothing. */
     @Override public boolean controllerLost() { boolean r = padLost; padLost = false; return r; }

@@ -29,6 +29,8 @@ public final class GenTrace {
         public int e0, e1, h0, h1;     // elements [e0, e1) and hazards [h0, h1) it added (when ok)
         public int[] fails = new int[6];   // refusal counters it raised: layer, hazard placement, plan (solver proof), timing window, conflict, threat budget
         public long nanos;             // wall time inside the attempt (planning proofs, placement, rollback included)
+        public int plans; public long planNanos;          // top-level plans the attempt ran and their wall time (observe-only)
+        public boolean castleRollback; // refused after it was fully built and proven: it ran past the castle's approach window (observe-only)
     }
 
     public final ArrayList<Module> modules = new ArrayList<>();

@@ -877,6 +877,30 @@ public final class Autopilot {
      * NGH seed 1 slice 10 on 27603e4 passed the one-arrival proof and failed the whole-slice solver). Standing there must itself be clean.
      */
     public static boolean chainClean(Course c, Tuning t, int from, int to, float wait) {
+        GenTrace tr = GenTrace.GEN.get();
+        if (!PLAN_AUDIT || tr == null) return chainClean0(c, t, from, to, wait);
+        // (observe-only audit, overnight priority B 2026-10-30: encounter proofs by kind and outcome, their planning share, links walked, knocks taken, and exact repeats)
+        boolean avl = false; for (Element h : c.hazards) if (h.type == Element.Type.AVALANCHE && h.anchor >= from && h.anchor <= to) avl = true;
+        long t0 = GenTrace.now(); long[] acc = PLAN_ACC.get(); long p0 = acc[0], pn0 = acc[1];
+        CHAIN_STATS.get()[0] = 0; CHAIN_STATS.get()[1] = 0; CHAIN_STATS.get()[2] = 0;
+        boolean r = chainClean0(c, t, from, to, wait);
+        long dt = GenTrace.now() - t0; String k = (avl ? "avl" : "enc") + (wait > 0f ? "_wait" : "_now") + (r ? "_clean" : "_refused");
+        tr.phase("chain_" + k, dt); tr.phase("chain_" + k + "_plans", acc[1] - pn0);
+        GenTrace.tally("chain_n_" + k); GenTrace.tally("chain_plans_" + k, (int) (acc[0] - p0));
+        GenTrace.tally("chain_links_" + k, CHAIN_STATS.get()[0]); GenTrace.tally("chain_knocks_" + k, CHAIN_STATS.get()[1]); GenTrace.tally("chain_steps_" + k, CHAIN_STATS.get()[2]);
+        PlanCache.Enc en = new PlanCache.Enc(); en.obj(c); en.obj(t); en.put(from); en.put(to); en.put(Float.floatToRawIntBits(wait)); en.put(HIT_STRICT ? 1 : 0);
+        long h = PlanCache.hash(en.done());
+        Object[] seen = CHAIN_SEEN.get();
+        if (seen[0] != tr) { seen[0] = tr; seen[1] = new java.util.HashMap<Long, Boolean>(); }
+        @SuppressWarnings("unchecked") java.util.HashMap<Long, Boolean> m = (java.util.HashMap<Long, Boolean>) seen[1];
+        Boolean prev = m.put(h, r);
+        if (prev != null) { String sk = prev == r ? "same" : "differs"; GenTrace.tally("chainrepeat_n_" + sk + "_" + k); tr.phase("chainrepeat_" + sk + "_" + k, dt); }
+        return r;
+    }
+    /** Observe-only (PLAN_AUDIT): the current chainClean's {links walked, knocks taken, simulation steps}. */
+    static final ThreadLocal<int[]> CHAIN_STATS = ThreadLocal.withInitial(() -> new int[3]);
+    private static final ThreadLocal<Object[]> CHAIN_SEEN = ThreadLocal.withInitial(() -> new Object[2]);
+    private static boolean chainClean0(Course c, Tuning t, int from, int to, float wait) {
         Sim real = CourseGenerator.provenStart(c, t, from);
         real.humanHold = HUMAN_HOLD; real.act = null; real.hz = null;
         InputState in = new InputState(); int sb = lost(real), a = from;
@@ -890,8 +914,9 @@ public final class Autopilot {
             Result r = plan(real, a, false, true); boolean fb = !r.ok && r.fallback != null;          // (planRun, inline: a fallback is a move the planner could not prove)
             if (fb) { r.ok = true; r.factory = r.fallback; }
             if (!r.ok) return chainWhy("no_plan_" + avlLive(real), from, a);
-            Policy p = make(r.factory);
+            Policy p = make(r.factory); int h0 = real.hits; float t0 = real.time;
             for (int guard = (int) (20f / Sim.DT); guard > 0 && !succeeded(real, a); guard--) { in.clear(); p.act(real, in); real.step(in); if (lost(real) != sb) return chainWhy((fb ? "fallback_" : "planned_") + setbackWhy(real, sb), from, a); }
+            if (PLAN_AUDIT) { int[] cs = CHAIN_STATS.get(); cs[0]++; cs[1] += real.hits - h0; cs[2] += Math.round((real.time - t0) / Sim.DT); }          // (observe-only)
             if (!succeeded(real, a)) return chainWhy("timeout", from, a);
             a = real.mode == Sim.Mode.AIR ? real.lastPad : real.onElem;
         }

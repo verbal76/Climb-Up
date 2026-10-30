@@ -725,6 +725,7 @@ public final class CourseGenerator {
         if (capOn() && capKind(k) >= 0) { int h0 = c.hazards.size(); float y = c.get(c.size() - 1).y; boolean ok = tryModuleBelowT(k, d, zone); capCount(k, y, h0, ok); return ok; }
         return tryModuleBelowT(k, d, zone);
     }
+    private boolean lastCastleRollback;          // (observe-only, for the trace)
     private boolean tryModuleBelowT(Kind k, float d, int zone) {
         GenTrace tr = GenTrace.GEN.get();
         if (tr == null) return tryModuleBelow0(k, d, zone);
@@ -737,7 +738,7 @@ public final class CourseGenerator {
         long[] pa = Autopilot.PLAN_ACC.get(); long pn0 = pa[0], pt0 = pa[1];
         boolean ok;
         try { ok = tryModuleBelow0(k, d, zone); } finally { traceKind = null; }
-        m.nanos = GenTrace.now() - t0;
+        m.nanos = GenTrace.now() - t0; m.plans = (int) (pa[0] - pn0); m.planNanos = pa[1] - pt0; m.castleRollback = lastCastleRollback; lastCastleRollback = false;
         if (Autopilot.PLAN_AUDIT) { String o = (ok ? "planmod_ok_" : "planmod_rej_") + k.name(); GenTrace.tally(o + "_n", (int) (pa[0] - pn0)); tr.phase(o, pa[1] - pt0); GenTrace.tally(o + "_modules"); }          // (observe-only: plans spent on module attempts, by outcome)
         int[] f1 = {failLayer, failHaz, failPlan, failWindow, failConflict, failThreat};
         for (int i = 0; i < 6; i++) m.fails[i] = f1[i] - f0[i];
@@ -756,7 +757,7 @@ public final class CourseGenerator {
         if (castleTarget <= 0f || castleDone) return tryModule(k, d, zone);
         int n0 = c.size(), h0 = c.hazards.size();
         if (!tryModule(k, d, zone)) return false;
-        if (c.get(c.size() - 1).y > (exactCastle ? castleTarget - 1.6f : castleTarget + 1.0f)) { rollbackTo(n0, h0); return false; }
+        if (c.get(c.size() - 1).y > (exactCastle ? castleTarget - 1.6f : castleTarget + 1.0f)) { rollbackTo(n0, h0); lastCastleRollback = GenTrace.GEN.get() != null; return false; }
         return true;
     }
 
@@ -2418,6 +2419,12 @@ public final class CourseGenerator {
         thFrom = Math.max(0, thFrom);
         float[] threatBefore = new float[Math.max(0, n0 - 1 - thFrom)];
         if (P.threatBudget) for (int i = thFrom; i < n0 - 1; i++) threatBefore[i - thFrom] = EncounterModel.threat(c, T, i);
+        if (EARLY_REJECT && geometryRefuses(es, hz, n0, h0, from, thFrom, threatBefore)) {
+            hazardTried += hz.isEmpty() ? 0 : 1;
+            crabWhy(hz, false, w0); pendulumWhy(hz, false, w0);
+            EARLY_REFUSED.incrementAndGet();
+            return false;
+        }
         boolean[] heldBefore = new boolean[Math.max(0, n0 - 1 - from)];
         for (int i = from; i < n0 - 1; i++) {
             boolean cannonOnLanding = false; for (Element h : hz) if (h.type == Element.Type.CANNON && h.anchor == i + 1) cannonOnLanding = true;
@@ -2519,6 +2526,33 @@ public final class CourseGenerator {
             if (at.onElem == i && !Autopilot.plan(at, i, false).ok) return false;
         }
         return true;
+    }
+
+    /**
+     * Speed only (overnight priority C, 2026-10-30; off unless -Dclimb.earlyReject): the encounter-conflict rule and NORMAL's threat budget read
+     * nothing but the course's geometry and hazards (EncounterModel.link / threat), never a proof, and every check of {@link #commit} must pass for a
+     * module to be kept, so a module either of them refuses is refused whatever the proofs say. This evaluates both exactly as commit does after its
+     * proofs, with the module in place, before those proofs run, and leaves the course as it found it. The same modules are kept and refused; only
+     * the diagnostics of a refused module differ when its proofs would also have failed (its refusal is then counted as conflict or threat instead
+     * of plan, and the proofs' own report tallies are not raised).
+     */
+    static boolean EARLY_REJECT = Boolean.getBoolean("climb.earlyReject");
+    /** Diagnostics: modules refused by {@link #geometryRefuses} before their proofs. */
+    public static final java.util.concurrent.atomic.AtomicInteger EARLY_REFUSED = new java.util.concurrent.atomic.AtomicInteger();
+    private boolean geometryRefuses(List<Element> es, List<Element> hz, int n0, int h0, int from, int thFrom, float[] threatBefore) {
+        for (Element e : es) c.add(e);
+        for (Element h : hz) c.hazards.add(h);
+        try {
+            for (int i = Math.max(0, from); i < c.size() - 1; i++) if (EncounterModel.link(c, T, i).conflict) { failConflict++; return true; }
+            if (P.threatBudget) for (int i = thFrom; i < c.size() - 1; i++) {
+                if (i >= c.routeSize() - 1) break;
+                float th = EncounterModel.threat(c, T, i);
+                if (th <= P.threatBudget(Math.min(1f, level(c.get(i).y)), EncounterModel.cramped(c, i))) continue;
+                if (i < n0 - 1 && th <= threatBefore[i - thFrom] + 1e-4f) continue;
+                failThreat++; return true;
+            }
+            return false;
+        } finally { while (c.size() > n0) c.elements.remove(c.size() - 1); while (c.hazards.size() > h0) c.hazards.remove(c.hazards.size() - 1); }          // (exactly as commit's own refusal removes them)
     }
 
     /** The hazards already placed before this module's own (its hazards are the last {@code hz.size()} of the course's). */

@@ -28,6 +28,7 @@ public final class AtmosShot {
     private static final boolean REDUCED = Boolean.getBoolean("climb.reducedMotion");
     private static final int RUN = Integer.getInteger("climb.runFrames", 75);
     private static final String OUT = System.getProperty("climb.shotDir", "build/atmosshot");
+    private static final boolean CHAIN = Boolean.getBoolean("climb.chain");
     private static final String HEIGHTS = System.getProperty("climb.heights", "250,750,1250,1750,2250,2750,3250,3750,4250,4750");
 
     public static void main(String[] args) {
@@ -81,6 +82,15 @@ public final class AtmosShot {
                 fbo.dispose(); models.dispose();
             }
             Course cached(Tuning t, int k) {
+                if (CHAIN) {          // -Dclimb.chain=true: slice k as the game builds it, on top of slices 0..k-1 (its real height and difficulty)
+                    Course prev = null;
+                    for (int q = 0; q <= k; q++) {
+                        FileHandle fq = new FileHandle(OUT + "/cache/seed" + SEED + "_chain_k" + q + ".slice");
+                        if (!fq.exists()) fq.writeBytes(SliceCodec.encode(new CourseGenerator.Framed(CourseGenerator.chunk(SEED, q, prev, t), 0.0, 0.0)), false);
+                        prev = SliceCodec.decode(fq.readBytes()).c;
+                    }
+                    return prev;
+                }
                 FileHandle fh = new FileHandle(OUT + "/cache/seed" + SEED + "_k" + k + ".slice");
                 if (!fh.exists()) fh.writeBytes(SliceCodec.encode(new CourseGenerator.Framed(CourseGenerator.chunk(SEED, k, null, t), 0.0, 0.0)), false);
                 return SliceCodec.decode(fh.readBytes()).c;

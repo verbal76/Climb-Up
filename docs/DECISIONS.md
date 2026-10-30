@@ -1424,3 +1424,9 @@ bound to a gameplay action). One at a time with a 1.2 s gap; the tip waits, hidd
 banner holds the top band (keeps Build 63's separate bands). The seen list (`SaveData.shownTips`, same keys) is respected; a tip is marked seen
 only when it starts. The club pickup toast is short and its how-to became the one-time `club` tip (tips off: as before). UI only: the banner never
 writes the InputState; replays and the simulation are unchanged. Details and the audit table: docs/TIPS_UX_REPORT.md.
+- **Mortar plinth (owner 2026-10-30, cosmetic, visual branch):** the 2 m slate block drawn under every mortar reached 6.3 m below the path, into
+  the spiral revolution below (the owner's "giant black box"). It is now a 0.45 m plinth under the cap (`WorldRenderer.MORTAR_PLINTH`); the
+  assembly ends about 4.8 m below the path. The mouth stays where the simulation fires from; nothing below the mouth is part of any clearance
+  rule, so generation, the simulation and replays are unchanged. A side-cannon-style slab was not used: 2.6 m wide, it would nearly fill the
+  2.2-3 m gap and read as a landable deck. Before/after: docs/visual/mortar_plinth_1280x720_below.png (seed 1, slice 3, ~214 m; AtmosShot
+  gained `-Dclimb.chain=true` to render a slice at its real height).

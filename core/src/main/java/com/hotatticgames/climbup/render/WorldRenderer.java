@@ -875,6 +875,8 @@ public final class WorldRenderer implements Disposable {
      * the mortar lay on its side (owner's PC report).
      */
     public static final float CANNON_AXIS_UP = 1.02f * PK, CANNON_WHEEL_R = 0.94f * PK;
+    /** Height of the short plinth under a mortar's cap (cosmetic only; the simulation fires from the mouth, 3 m below the path, and nothing below the mouth is part of any clearance rule). */
+    static final float MORTAR_PLINTH = 0.45f;
     /** Pedestal height under a side cannon: its barrel axis flies the ball 2.35 above the slab, the wheels stand on the 0.16 cap sunk 0.04 into it. */
     public static final float CANNON_LIFT = 2.35f - CANNON_AXIS_UP - CANNON_WHEEL_R - 0.16f + 0.04f;
     /** The same under an aimed turret, whose axis sits 2.0 above its slab. */
@@ -1285,7 +1287,7 @@ public final class WorldRenderer implements Disposable {
                 // a cannon sunk in the ground below the path with its cradle tipped straight up on its wheels; the muzzle tip is where the ball (h.y) leaves from and falls back into
                 float[] mz = mouthFromAxle(0f, 90f, mouthTmp);                                       // tipped up: the mouth is a barrel's length above the axle and a barrel-axis height to its left
                 float axle = h.y - mz[1], capBot = axle - CANNON_WHEEL_R - 0.14f;
-                drawBox(h.s, capBot - 2.0f, 0f, camS, 1.5f, 2.0f, 1.3f, 0.34f, 0.31f, 0.40f);
+                drawBox(h.s, capBot - MORTAR_PLINTH, 0f, camS, 1.5f, MORTAR_PLINTH, 1.3f, 0.34f, 0.31f, 0.40f);          // (owner 2026-10-30: was a 2 m block reaching 6.3 m below the path, into the revolution below)
                 drawBox(h.s, capBot, 0f, camS, 1.7f, 0.18f, 1.5f, 0.30f, 0.27f, 0.36f);
                 if (!HAZ_NO_BODY) drawCannon(h.s - mz[0], axle, 0f, camS, 0f, 90f);                 // so the axle stands to the right of h.s and the mouth exactly on it
                 float charge = h.mortarCharge(t);           // the reload pause: the muzzle glows brighter and brighter, then the ball bursts out (warning for the timing)

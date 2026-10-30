@@ -108,11 +108,12 @@ public final class AchievementRules {
         public int marathonMeters;       // cumulative metres climbed across all runs
         public int checkpointIndex;      // the route element index of the live checkpoint (Sim.checkpoint)
         public double height;            // the climber's absolute height this step, metres (Nice Catch measures the fall from it)
+        public boolean competitive = true;  // owner policy 2026-10-30: this climb may earn the competitive achievements (RunRecord.competitiveEligible)
     }
 
     private final Set<String> fired = new HashSet<>();   // ids already returned this session (Steam also dedupes globally)
     private int towerFellMask;           // seeded from the persistent stat so it survives across sessions
-    private int worldsSeenMask;          // worlds visited this run (session)
+    private int worldsSeenMask;          // worlds visited: seeded from the save (owner 2026-10-30, ALL_WORLDS survives restarts), plus this session
     private int lastFailCp = -1, sameSpotFails;
     private int lastZone = -1;
     private boolean fellInThisZone;
@@ -127,6 +128,24 @@ public final class AchievementRules {
 
     /** @param towerFellMaskSeed the persisted 10-bit "fell on this tower" mask, so the feat can be completed across sessions. */
     public AchievementRules(int towerFellMaskSeed) { this.towerFellMask = towerFellMaskSeed & ALL_TOWERS_MASK; }
+
+    private boolean seededUnknown;
+    /**
+     * Owner achievement policy 2026-10-30: resumes NO_CHECKPOINT_WORLD tracking from the climb's save (SaveData.achZone / achZoneFell), so a quit
+     * and resume does not forget a fall-back in the current world. {@code zone} -1: a fresh climb; -2: unknown (counts as fallen in).
+     */
+    public void seedWorld(int zone, boolean fell) {
+        if (zone >= 0) { lastZone = zone; fellInThisZone = fell; }
+        else { lastZone = -1; fellInThisZone = false; seededUnknown = zone == -2; }
+    }
+    /** Owner decision (2026-10-30): ALL_WORLDS credit survives restarts - the worlds already visited (SaveData.worldsSeenMask) seed this session's mask. */
+    public void seedWorldsSeen(int mask) { worldsSeenMask |= mask & ALL_WORLDS_MASK; }
+    /** The worlds visited so far (seeded plus this session): the caller keeps it in the save. */
+    public int worldsSeen() { return worldsSeenMask; }
+
+    /** The world being tracked for NO_CHECKPOINT_WORLD (-1 before the first step) and whether a fall-back happened in it: the caller stores them with the climb. */
+    public int trackedWorld() { return lastZone; }
+    public boolean fellInTrackedWorld() { return fellInThisZone; }
 
     /** The live per-tower fell mask (the caller mirrors it back to {@link #STAT_TOWER_FELL_MASK} so it persists). */
     public int towerFellMask() { return towerFellMask; }
@@ -158,9 +177,9 @@ public final class AchievementRules {
         boolean summit = (ev & (Sim.EV_FINISH | Sim.EV_WIN)) != 0;
         if (summit) {
             earn(out, SUMMIT);
-            if (t.runFalls == 0) earn(out, CLEAN_RUN);                                           // never fell back to a checkpoint
-            if (t.runFalls == 0 && t.runHits == 0) earn(out, PERFECT_SUMMIT);                    // flawless: no fall-backs AND no hazard hits
-            if (t.finishTimeSec > 0f && Math.round(t.finishTimeSec * 60.0) <= Math.round(SPEED_SUMMIT_SECONDS * 60.0)) earn(out, SPEED_SUMMIT);      // Build 74: compared in whole simulation steps
+            if (t.competitive && t.runFalls == 0) earn(out, CLEAN_RUN);                          // never fell back to a checkpoint (competitive: eligible climbs only)
+            if (t.competitive && t.runFalls == 0 && t.runHits == 0) earn(out, PERFECT_SUMMIT);   // flawless: no fall-backs AND no hazard hits (competitive)
+            if (t.competitive && t.finishTimeSec > 0f && Math.round(t.finishTimeSec * 60.0) <= Math.round(SPEED_SUMMIT_SECONDS * 60.0)) earn(out, SPEED_SUMMIT);      // Build 74: compared in whole simulation steps (competitive)
         }
 
         // ---- worlds / space ----
@@ -177,7 +196,7 @@ public final class AchievementRules {
         if (t.infinityMeters >= INFINITY_1000_M) earn(out, INFINITY_1000);
         if (t.infinityMeters >= INFINITY_2500_M) earn(out, INFINITY_2500);
         if (t.infinityMeters >= INFINITY_5000_M) earn(out, INFINITY_5000);
-        if (t.bestInfinityMeters > 0 && t.infinityMeters > t.bestInfinityMeters) earn(out, INFINITY_BEST);   // beat a prior record
+        if (t.competitive && t.bestInfinityMeters > 0 && t.infinityMeters > t.bestInfinityMeters) earn(out, INFINITY_BEST);   // beat a prior record (competitive: against the eligible record only)
 
         // ---- fall milestones (lifetime cumulative) ----
         if (t.totalFalls >= 1) earn(out, FIRST_FALL);
@@ -222,9 +241,9 @@ public final class AchievementRules {
     /** Cleared a whole world (crossed up into the next one) with no fall-back during it. */
     private void updateNoCheckpointWorld(List<String> out, Tick t, int ev) {
         if ((ev & Sim.EV_RESPAWN) != 0) fellInThisZone = true;
-        if (lastZone < 0) { lastZone = t.zone; return; }
+        if (lastZone < 0) { lastZone = t.zone; if (seededUnknown) fellInThisZone = true; return; }          // a climb saved before the tracking existed: its current world counts as fallen in
         if (t.zone != lastZone) {
-            if (t.zone > lastZone && !fellInThisZone) earn(out, NO_CHECKPOINT_WORLD);
+            if (t.zone > lastZone && !fellInThisZone && t.competitive) earn(out, NO_CHECKPOINT_WORLD);          // (competitive)
             fellInThisZone = t.zone < lastZone;      // dropped into a lower world: we got here by falling
             lastZone = t.zone;
         }

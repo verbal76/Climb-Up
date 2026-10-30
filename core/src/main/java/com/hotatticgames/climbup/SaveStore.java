@@ -118,6 +118,12 @@ public final class SaveStore {
         if (!(d.towerStartClock >= 0)) d.towerStartClock = 0;
         if (!(d.towerStartHeight >= 0)) d.towerStartHeight = 0;
         if (d.name == null) d.name = "";
+        // owner decision C1 (2026-10-30): a save from before the lifetime fall count starts it at what it knows - the falls of the climb in
+        // progress (earlier climbs' falls were never kept); Steam's STAT_FALLS (the largest per-climb count so far) is merged in with max when
+        // Steam delivers it, so nothing is counted twice. Never negative afterwards.
+        if (d.lifetimeFalls < 0) d.lifetimeFalls = Math.max(0, d.falls);
+        if (d.pendingAchievements == null) d.pendingAchievements = "";
+        d.worldsSeenMask &= (1 << com.hotatticgames.climbup.sim.AchievementRules.WORLD_COUNT) - 1;
         if (d.splits == null) d.splits = new float[0];
         if (d.towerTotals == null) d.towerTotals = new float[0];
         if (d.bestTotals == null) d.bestTotals = new float[0];

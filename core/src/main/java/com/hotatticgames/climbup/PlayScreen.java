@@ -87,6 +87,7 @@ public final class PlayScreen extends ScreenAdapter {
     // Steam achievements (Windows only; a no-op sink elsewhere). Pure telemetry fed from events the game already fires.
     private AchievementRules achRules;
     private final AchievementRules.Tick achTick = new AchievementRules.Tick();
+    private int achStep;                // steps since the screen opened (Steam reconciliation about once a second)
     private int achBestInfinity;        // the endless-distance record at the start of this session (fixed baseline for "new best")
     private int achMarathonBase;        // cumulative climb metres stored before this session
     private double achSessionStartMax;  // absolute height when this session began (marathon counts the net climb from here)
@@ -174,7 +175,10 @@ public final class PlayScreen extends ScreenAdapter {
         if (!demo) {        // seed the cross-session achievement counters from Steam's stored stats (all 0 when there is no Steam)
             com.hotatticgames.climbup.platform.Achievements a = g.platform.achievements();
             achRules = new AchievementRules(a.stat(AchievementRules.STAT_TOWER_FELL_MASK));
-            achBestInfinity = a.stat(AchievementRules.STAT_BEST_INFINITY_M);
+            achRules.seedWorld(g.save.achZone, g.save.achZoneFell);          // (owner policy 2026-10-30: NO_CHECKPOINT_WORLD resumes with the climb, a quit cannot forget a fall)
+            achRules.seedWorldsSeen(g.save.worldsSeenMask);          // (owner 2026-10-30: ALL_WORLDS credit survives restarts)
+            if (!g.save.devPicked && AchievementDelivery.retry(g.save, a)) g.persist();          // (owner 2026-10-30: achievements earned while Steam was unavailable are offered again)
+            achBestInfinity = a.stat(AchievementRules.STAT_BEST_INFINITY_M);          // the competitive (eligible-only) endless record
             achMarathonBase = a.stat(AchievementRules.STAT_MARATHON_M);
             achSessionStartMax = maxAbs;
         }
@@ -202,7 +206,7 @@ public final class PlayScreen extends ScreenAdapter {
         sim.assistForgive = g.settings.assistForgive ? g.tuning.assistJumpForgiveness : 0f;
     }
 
-    @Override public void resize(int w, int h) { g.ui.resize(w, h); world.resize(w, h); }
+    @Override public void resize(int w, int h) { g.ui.resize(w, h); if (world != null) world.resize(w, h); }          // (release hardening: no world when show() refused the climb)
 
     // ------------------------------------------------------------------ input
 
@@ -288,6 +292,10 @@ public final class PlayScreen extends ScreenAdapter {
     // ------------------------------------------------------------------ frame
 
     @Override public void render(float dt) {
+        if (world == null) {          // release hardening (Build 82 review finding 1): show() refused the climb (its course cannot be built): leave for the title, nothing to step or draw
+            if (next != null) { com.badlogic.gdx.Screen n = next; next = null; boolean d = disposeOnLeave; g.setScreen(n); if (d) dispose(); }
+            return;
+        }
         if (PerfProbe.ON) { PerfProbe.tStart = System.nanoTime(); PerfProbe.steps = 0; PerfProbe.events = 0; PerfProbe.saved = false; PerfProbe.tDrive = 0; }
         dt = Math.min(dt, 0.1f);
         time += dt;
@@ -323,7 +331,7 @@ public final class PlayScreen extends ScreenAdapter {
                 if (gi() != null) gi().stepDone();
                 runTime += Sim.DT;
                 if (runTime > 15f && g.ota != null) g.ota.confirm();          // live play with the current (possibly OTA) content: a freshly applied update is now trusted
-                if (!demo) { if (!clockLive && (in.moveX != 0f || in.jumpPressed || in.moveY != 0f)) clockLive = true; RunRecord.tick(g.save, Sim.DT, clockLive); if (clockLive) RunRecord.noteAssist(g.save, g.settings.assistSlow || g.settings.assistForgive); if (absNow() > maxAbs) maxAbs = absNow(); if (maxAbs > g.save.climbHeight) g.save.climbHeight = (float) maxAbs; ResumeState.capture(g.save, sim); }
+                if (!demo) { if (!clockLive && (in.moveX != 0f || in.jumpPressed || in.moveY != 0f)) clockLive = true; RunRecord.tick(g.save, Sim.DT, clockLive); if (clockLive) RunRecord.noteAssist(g.save, g.settings.assistSlow || g.settings.assistForgive || AUTOPILOT); if (absNow() > maxAbs) maxAbs = absNow(); if (maxAbs > g.save.climbHeight) g.save.climbHeight = (float) maxAbs; ResumeState.capture(g.save, sim); }
                 int ev = sim.consumeEvents();
                 if (PerfProbe.ON) PerfProbe.events |= ev;
                 handleEvents(ev);
@@ -338,7 +346,7 @@ public final class PlayScreen extends ScreenAdapter {
             if (world.takeScan()) g.audio.play("scan", 0.5f, 1f);
             g.save.playSeconds += dt;
             if (maxAbs > g.save.bestHeight) g.save.bestHeight = (float) maxAbs;
-            if (g.save.finished && tower != null && !demo && !g.save.climbNotComparable) g.save.board().infinity(g.save.seed, infinityMetres());
+            if (g.save.finished && tower != null && !demo && RunRecord.competitiveEligible(g.save, AUTOPILOT)) g.save.board().infinity(g.save.seed, infinityMetres());          // (owner 2026-10-30: the endless record is competitive - eligible climbs only)
             int ms = (int) (maxAbs / 50f);
             if (ms > milestone) { milestone = ms; toast = ms * 50 + " M!"; toastT = 1.6f; g.audio.play("checkpoint", 0.55f, 1.35f); world.particles.burst(sim.s, sim.y + 1f, 12, gold, 2.6f, 3.2f, 0.1f, -0.5f, 1f); }
             for (int pi = pops.size() - 1; pi >= 0; pi--) { Pop pp = pops.get(pi); pp.age += dt; pp.liftShown += (pp.lift - pp.liftShown) * Math.min(1f, dt * 14f); if (pp.age > 1.1f) pops.remove(pi); }
@@ -544,11 +552,9 @@ public final class PlayScreen extends ScreenAdapter {
         sd.towers = n + 1;
         RecordsData.Run cur = null;
         if (n < RecordsData.LEGS) { if (!sd.climbNotComparable) sd.board().legDone(sd.seed, runRules(), n, split); cur = sd.board().current; }          // (R5: a mixed-rules climb sets no record)          // times table: this leg, its global and its on-this-course bests
-        boolean hadSplit = sd.bestSplit > 0f, pbSplit = !sd.assisted && sd.difficulty == 0 && (!hadSplit || RunRecord.faster(split, sd.bestSplit));       // owner (Build 71): an assisted run's towers are timed but set no best
-        if (pbSplit) sd.bestSplit = split;
-        if (sd.bestTotals.length <= n) sd.bestTotals = java.util.Arrays.copyOf(sd.bestTotals, n + 1);
-        boolean hadTotal = sd.bestTotals[n] > 0f, pbTotal = !sd.assisted && sd.difficulty == 0 && (!hadTotal || RunRecord.faster(total, sd.bestTotals[n]));
-        if (pbTotal) sd.bestTotals[n] = total;
+        boolean hadSplit = sd.bestSplit > 0f, hadTotal = sd.bestTotals.length > n && sd.bestTotals[n] > 0f;
+        int pb = RunRecord.towerBests(sd, n, split, total);          // owner (Build 71) and R5: an assisted or mixed-rules run's towers are timed but set no best
+        boolean pbSplit = (pb & 1) != 0, pbTotal = (pb & 2) != 0;
         sd.towerStartClock = sd.runClock; sd.towerStartHeight = (float) Math.max(0.0, maxAbs);
         toast = keyName(sim.lastGateColor) + " CASTLE OPENED!"; toastT = 3.2f;
         boolean showPb = g.settings.showBestTimes;                                   // Build 64: SHOW BEST TIMES hides every best and comparison here; the split itself and the clock stay
@@ -648,7 +654,7 @@ public final class PlayScreen extends ScreenAdapter {
         }
         if ((ev & Sim.EV_RESPAWN) != 0) {
             world.particles.burst(sim.s, sim.y + 0.6f, 18, cyan, 3f, 3.2f, 0.1f, 2f, 0.7f);
-            g.audio.play("respawn", 0.8f, 1f); fade = 1f; g.save.falls++; g.save.climbFalls++; vibrate(40, 1); world.shake(0.5f);
+            g.audio.play("respawn", 0.8f, 1f); fade = 1f; g.save.falls++; g.save.climbFalls++; if (!g.save.devPicked) g.save.lifetimeFalls = Math.max(0, g.save.lifetimeFalls) + 1;          // (owner C1: lifetime falls, the world picker excluded) vibrate(40, 1); world.shake(0.5f);
             if ((ev & Sim.EV_HIT) == 0) { toast = "BACK TO CHECKPOINT"; toastT = 1.6f; }
             g.persist();
         }
@@ -724,7 +730,11 @@ public final class PlayScreen extends ScreenAdapter {
         t.finishTimeSec = g.save.finishTime;
         t.runFalls = g.save.climbFalls;
         t.runHits = g.save.climbHits;
-        t.totalFalls = g.save.falls;
+        if (achStep++ % 60 == 0 && !g.save.devPicked) {          // about once a second: Steam's lifetime falls (another machine, or before this build) merged with max, never added; pending ids offered again
+            boolean merged = AchievementDelivery.mergeLifetimeFalls(g.save, a.stat(AchievementRules.STAT_FALLS));
+            if (AchievementDelivery.retry(g.save, a) || merged) g.persist();
+        }
+        t.totalFalls = Math.max(0, g.save.lifetimeFalls);          // (owner C1: FIRST_FALL / FALL_25 / FALL_100 count every climb)
         t.zone = AchievementRules.zoneAt(abs, zh);          // below the start is still world 0, never a wrap round to Deep Space
         t.currentTower = (int) Math.max(0, Math.min(AchievementRules.TOWERS_TOTAL - 1, Math.floor(abs / cs)));
         t.infinityMeters = g.save.finished ? (int) Math.max(0.0, maxAbs - g.tuning.finishCastle * cs) : -1;
@@ -732,12 +742,23 @@ public final class PlayScreen extends ScreenAdapter {
         t.marathonMeters = (int) Math.min(Integer.MAX_VALUE, (long) achMarathonBase + (long) Math.max(0.0, maxAbs - achSessionStartMax));
         t.checkpointIndex = sim.checkpoint;
         t.height = abs;
-        for (String id : achRules.step(t)) if (!g.save.devPicked) a.unlock(id);          // a world-picker climb (footage) earns nothing
+        // owner achievement policy (2026-10-30): competitive achievements and the competitive endless record only for an eligible climb (not
+        // assisted, mixed-rules, world picker or developer autopilot), in every difficulty; the rest stay open to assisted play
+        t.competitive = RunRecord.competitiveEligible(g.save, AUTOPILOT);
+        java.util.List<String> earned = achRules.step(t);
+        boolean fellNow = achRules.fellInTrackedWorld() && !g.save.achZoneFell;
+        g.save.achZone = achRules.trackedWorld(); g.save.achZoneFell = achRules.fellInTrackedWorld();          // NO_CHECKPOINT_WORLD tracking goes with the climb
+        if (g.save.devPicked) return;          // a world-picker climb (footage) earns nothing and updates no statistic
+        boolean dirty = fellNow;          // a fall in this world is saved at once, so a quit cannot erase it
+        int seen = g.save.worldsSeenMask | achRules.worldsSeen();
+        if (seen != g.save.worldsSeenMask) { g.save.worldsSeenMask = seen; dirty = true; }
+        for (String id : earned) dirty |= AchievementDelivery.earn(g.save, a, id);          // kept pending until Steam confirms it
+        if (dirty) g.persist();
         // mirror the persistent stats to Steam (the Steam layer caches and throttles the actual StoreStats; the no-op sink ignores them)
-        a.stat(AchievementRules.STAT_FALLS, g.save.falls);
+        a.stat(AchievementRules.STAT_FALLS, Math.max(0, g.save.lifetimeFalls));
         a.stat(AchievementRules.STAT_TOWER_FELL_MASK, achRules.towerFellMask());
         a.stat(AchievementRules.STAT_MARATHON_M, t.marathonMeters);
-        if (t.infinityMeters > achBestInfinity) a.stat(AchievementRules.STAT_BEST_INFINITY_M, t.infinityMeters);
+        if (t.competitive && t.infinityMeters > achBestInfinity) a.stat(AchievementRules.STAT_BEST_INFINITY_M, t.infinityMeters);          // eligible climbs only
     }
 
     // ---- contextual tips (owner playtest fix, see docs/TIPS_UX_REPORT.md): the texts live in TipCatalog; TipBanner times and lays out the compact top-edge banner

@@ -51,6 +51,19 @@ public final class SaveData {
     public float bestFinish = 0f;                // fastest finish ever (0 = none)
     public float bestSplit = 0f;                 // fastest single tower ever (0 = none)
     public float[] bestTotals = new float[0];    // fastest run clock at the Nth unlock, ever
+    /** Release hardening (owner achievement policy 2026-10-30): the world whose "cleared without a fall-back" progress is being tracked for
+     *  NO_CHECKPOINT_WORLD, and whether a fall-back happened in it - kept with the climb so a quit and resume cannot forget a fall.
+     *  -1 = a fresh climb, nothing tracked yet; -2 = unknown (a climb saved before this field existed: its current world counts as fallen in). */
+    public int achZone = -2;
+    public boolean achZoneFell = false;
+    /** Owner decision C1 (2026-10-30): fall-backs across all climbs, for FIRST_FALL / FALL_25 / FALL_100 and STAT_FALLS (assisted play counts, the
+     *  world picker does not). {@link #falls} stays the per-climb count it always was. -1 = not yet migrated (a save from before this field). */
+    public int lifetimeFalls = -1;
+    /** Owner decision (2026-10-30): the worlds ever visited (bit per world), so ALL_WORLDS credit survives restarts; merged with OR. */
+    public int worldsSeenMask = 0;
+    /** Owner decision (2026-10-30): achievement ids earned but not yet confirmed by Steam (offline, Steam not running, stats not delivered);
+     *  retried until Steam reports them unlocked, then removed. Comma-separated api ids. */
+    public String pendingAchievements = "";
     public boolean devPicked = false;            // Build 76 (owner): started from the hidden world picker (footage): never a record, a split or an achievement
     public int difficulty = 0;                   // Build 79 (owner): the climb in progress's difficulty (0 NORMAL, 1 PUNISHER, 2 NEVER GONNA HAPPEN), set when it starts from the setting; its times go on that difficulty's board
     public boolean assisted = false;             // owner (Build 71): this climb's clock has run with an assist on (slower speed or jump forgiveness); its times stay with the run but never become bests

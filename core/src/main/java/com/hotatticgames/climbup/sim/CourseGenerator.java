@@ -278,6 +278,30 @@ public final class CourseGenerator {
     private float r(float lo, float hi) { return lo + (hi - lo) * rnd.nextFloat(); }
     private static float lerp(float a, float b, float t) { return a + (b - a) * t; }
 
+    /** Diagnostics only: -Dclimb.tarzanOff=true generates no Tarzan swings (same-seed comparisons). */
+    static final boolean TARZAN_OFF = Boolean.getBoolean("climb.tarzanOff");
+    /**
+     * Rules 19 Tarzan swing module (owner directive 2026-10-29): a rope swinging from a pivot out over a gap. Swung all the way back, its end hangs
+     * just past the take-off edge at the height a jump's hands reach, so it is caught by jumping at it as it comes back; the landing deck lies
+     * where a release near the bottom of the swing carries you (the swing's top speed there, plus the release lift, falling to the deck), clear of
+     * the arc the rope sweeps. When you let go decides the flight; the planner proves it (TarzanPolicy samples the release over a period).
+     */
+    private void tarzan(List<Element> l, float eR, float y0, float d, int z, int attempt) {
+        float amp = r(0.55f, 0.75f), len = r(4.5f, 6f), period = r(2.4f, 3.0f);
+        float sc = eR + lerp(1.2f, 2.0f, d) * (1f - 0.03f * attempt), yc = y0 + T.handHeight + r(0.6f, 1.0f);
+        float sp = sc + len * (float) StrictMath.sin(amp), yp = yc + len * (float) StrictMath.cos(amp);
+        Element tz = plat(Element.Type.TARZAN, sp, yp, 1f, z);
+        tz.len = len; tz.amp = amp; tz.period = period; tz.phase = r(0f, 6.28f);
+        l.add(tz);
+        float vx = len * amp * 2f * (float) Math.PI / period, vy = T.jumpVel * Sim.TARZAN_RELEASE_UP;
+        float yb = yp - len - T.handHeight, yl = y0 + r(-0.5f, 0.8f);
+        float tf = (vy + (float) Math.sqrt(Math.max(0f, vy * vy + 2f * T.gravity * (yb - yl)))) / T.gravity;
+        float clear = sp + arcHalf(tz) + 0.4f, wB = 3f;
+        float land = Math.max(clear + wB / 2f, sp + vx * tf * lerp(0.6f, 0.85f, d) * (1f - 0.03f * attempt) + 0.5f);
+        l.add(plat(Element.Type.STATIC, land, yl, wB, z));
+        GenTrace.tally("module_tarzan");
+    }
+
     private Element plat(Element.Type type, float s, float y, float w, int zone) {
         Element e = new Element(type, s, y, w); e.zone = zone; return e;
     }
@@ -1872,15 +1896,16 @@ public final class CourseGenerator {
             case MOVE_H: return e.w / 2f + e.amp;
             case SWING: return e.w / 2f + e.len * (float) StrictMath.sin(e.amp);
             case ROPE: return 0.8f;
+            case TARZAN: return e.len * (float) StrictMath.sin(e.amp) + 0.8f;          // (rules 19: the arc its rope and rider sweep)
             default: return e.w / 2f;
         }
     }
     static float vLo(Element e) {
-        switch (e.type) { case ROPE: return e.y - e.len; case CABLE: return e.y - 2.4f; case SEESAW: return e.y - 2.8f; case RAMP: return e.y - e.amp * e.halfW() - 3.4f; default: return e.y - 0.8f; }
+        switch (e.type) { case ROPE: return e.y - e.len; case TARZAN: return e.y - e.len - 2.4f; case CABLE: return e.y - 2.4f; case SEESAW: return e.y - 2.8f; case RAMP: return e.y - e.amp * e.halfW() - 3.4f; default: return e.y - 0.8f; }
     }
     static float vHi(Element e) {
         switch (e.type) {
-            case ROPE: return e.y + 0.6f; case CABLE: return e.y + 0.4f; case SWING: return e.y + e.len + 0.4f;
+            case ROPE: case TARZAN: return e.y + 0.6f; case CABLE: return e.y + 0.4f; case SWING: return e.y + e.len + 0.4f;
             case MOVE_V: return e.y + e.amp + 2.8f; case RAMP: return e.y + e.amp * e.halfW() + 2.8f; default: return e.y + 2.8f;
         }
     }
@@ -3213,6 +3238,7 @@ public final class CourseGenerator {
                 break;
             }
             case RAMP: {
+                if (z >= 1 && !TARZAN_OFF && rnd.nextInt(4) == 0) { tarzan(l, eR, y0, d, z, attempt); break; }          // rules 19: the spinning ramp's old share (2 in 8) of ramps from the second world
                 // a walkway up to a block that is taller than a jump; from the second world it may crumble, shake you about, or run downhill as a belt
                 // (rules 19, owner decision 2026-10-29: no more spinning ramps, skin 3; the other four share its draws equally. Sim and the renderer still
                 // play skin 3 so earlier saves and replays are unchanged)

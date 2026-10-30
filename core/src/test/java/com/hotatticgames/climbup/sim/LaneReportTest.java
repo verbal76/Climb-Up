@@ -11,10 +11,10 @@ public class LaneReportTest {
     static Tuning tuning() throws Exception { return Tuning.parse(new String(Files.readAllBytes(Paths.get("../assets/data/tuning.json")))); }
 
     @Test public void everyElementTypeAndModuleKindIsClassified() {
-        assertEquals("Element.Type count changed: classify the new value in Lanes (owner amendment)", 31, Element.Type.values().length);
+        assertEquals("Element.Type count changed: classify the new value in Lanes (owner amendment)", 32, Element.Type.values().length);
         EnumMap<Lanes.Lane, Integer> n = new EnumMap<>(Lanes.Lane.class);
         for (Element.Type k : Element.Type.values()) { n.merge(Lanes.lane(k), 1, Integer::sum); assertFalse(Lanes.describe(k).isEmpty()); }
-        assertEquals(12, (int) n.get(Lanes.Lane.TERRAIN)); assertEquals(10, (int) n.get(Lanes.Lane.HAZARDS));
+        assertEquals(13, (int) n.get(Lanes.Lane.TERRAIN));          // (rules 19: + TARZAN) assertEquals(10, (int) n.get(Lanes.Lane.HAZARDS));
         assertEquals(5, (int) n.get(Lanes.Lane.ENEMIES)); assertEquals(4, (int) n.get(Lanes.Lane.UTILITY));
         CourseGenerator.Kind[] kinds = CourseGenerator.Kind.values();
         assertEquals("CourseGenerator.Kind count changed: add it to Lanes.KINDS", 25, kinds.length);

@@ -146,6 +146,7 @@ public final class TitleScreen extends ScreenAdapter {
 
     private boolean exitRequested, showMore;
     private void choose(Item it) {
+        if (start.active()) return;          // (Build 82 review: while a new climb is being built the menu waits - nothing can change the selection or leave mid-build)
         switch (it) {
             case PLAY: next = new PlayScreen(g, false); break;
             case NEW_RUN: confirmNew = true; break;                 // replaces the saved climb: asks first

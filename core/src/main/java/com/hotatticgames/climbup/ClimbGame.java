@@ -399,6 +399,10 @@ public class ClimbGame extends Game {
      * {@link Tower.FirstSliceFailed} (with {@link #saveNotice} set) for a typed course code that cannot be built, before any play screen exists.
      */
     public Run takeFreshRunIfReady() {
+        // the selection now (seed, difficulty, the tuning instance it uses): if what is being prepared is for anything else (a stale request, the
+        // title preparing the next random climb, a tuning reload), it is requested again - prepare() is idempotent for the same seed and tuning, and a
+        // result for another selection is never taken (Tower keys it on both)
+        prepareFreshRun();
         if (!com.hotatticgames.climbup.sim.Tower.ready(freshSeed(), newClimbTuning())) return null;
         Run r = openRun(true);
         runFresh = false;

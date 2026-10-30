@@ -35,6 +35,24 @@ public class Build82ReviewTest {
         assertArrayEquals("the prepared climb is the course new Tower makes", new Tower(seed, t).blob(0), r.tower.blob(0));
     }
 
+    /** Findings 1 and 6 (stale results): the selection changes while a climb is being prepared - another seed, then a reloaded tuning - and the
+     *  climb that opens is exactly the latest selection's, never the earlier request's. */
+    @Test public void aChangedSelectionNeverTakesAStalePreparedClimb() throws Exception {
+        Tuning t = TestUtil.tuning(); long first = 8205, second = 8206;
+        ClimbGame g = GenerationRecoveryTest.game(Files.createTempDirectory("b82-stale").toFile(), t);
+        g.beginFreshRun(first); g.prepareFreshRun();
+        g.beginFreshRun(second);          // the player went back and typed another code before the first was ready
+        ClimbGame.Run r = waitForFreshRun(g);
+        assertEquals("the latest selection", second, r.tower.seed);
+        assertArrayEquals(new Tower(second, t).blob(0), r.tower.blob(0));
+        Tuning reloaded = TestUtil.tuning();          // a tuning reload (new instance, same values) between request and start
+        g.beginFreshRun(first); g.prepareFreshRun(); g.tuning = reloaded;
+        ClimbGame.Run r2 = waitForFreshRun(g);
+        assertEquals(first, r2.tower.seed);
+        assertArrayEquals("made with the tuning in force when it starts", new Tower(first, reloaded).blob(0), r2.tower.blob(0));
+        assertEquals(ClimbGame.tuningStamp(reloaded), g.save.climbTuning);
+    }
+
     /** Finding 1: a typed course code that cannot be built is refused before any play screen exists, with its notice, never swapped for another seed. */
     @Test public void anUnbuildableTypedCodeIsRefusedBeforeThePlayScreen() throws Exception {
         Tuning t = TestUtil.tuning(); final long bad = 8202;

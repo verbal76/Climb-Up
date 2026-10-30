@@ -93,6 +93,7 @@ public final class Tower {
     public static void prepare(long seed, Tuning t) {
         Prepared p = prepared;
         if (p != null && p.seed == seed && p.t == t) return;
+        if (p != null) p.slice.cancel(false);          // (Build 82 review) a superseded request still queued never runs; one already running finishes untouched and is never taken
         prepared = new Prepared(seed, t, PREP.submit((Callable<Step>) () -> grow(seed, t, -1, null, null, -1)));
     }
 

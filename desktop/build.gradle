@@ -175,3 +175,16 @@ tasks.register('rampShot', JavaExec) {
     workingDir = file('../assets')
     systemProperties System.properties.findAll { it.key.toString().startsWith('climb.') }
 }
+
+// Atmosphere prototype (visual/build83-atmosphere): A/B screenshots of the climb between every pair of castles through the real WorldRenderer.
+// Run once as is (master switch off) and once with -Dclimb.atmos=true. Locally: xvfb-run -a -s "-screen 0 1920x1080x24" ./gradlew :desktop:atmosShot
+tasks.register('atmosShot', JavaExec) {
+    group = 'verification'
+    description = 'Screenshots the ten castle climbs with the atmosphere prototype off or on (-Dclimb.atmos=true) to desktop/build/atmosshot/ (see AtmosShot).'
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.hotatticgames.climbup.desktop.AtmosShot'
+    workingDir = file('../assets')
+    args = []
+    systemProperties System.properties.findAll { it.key.toString().startsWith('climb.') }
+    systemProperty 'climb.shotDir', project.findProperty('atmosShotDir') ?: "${buildDir}/atmosshot".toString()
+}

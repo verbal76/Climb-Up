@@ -43,7 +43,11 @@ public class LayerSpacingTest {
                 Course c = pair(t, lo, Element.Type.STATIC, dy);
                 assertTrue(lo + " " + dy + " m below a plain platform", clash(c));
             }
-            assertFalse(lo + " 9.6 m below", clash(pair(t, lo, Element.Type.STATIC, 9.6f)));
+            // a pad's measured reach (10.25 m + 0.5) is above the spacing: from the pad gap fix (2026-10-30) C1 refuses it up to 10.75 m at any small gap
+            if (lo == Element.Type.PAD) {
+                assertTrue("PAD 9.6 m below: within the pad's measured reach (C1)", clash(pair(t, lo, Element.Type.STATIC, 9.6f)));
+                assertFalse("PAD 10.8 m below", clash(pair(t, lo, Element.Type.STATIC, 10.8f)));
+            } else assertFalse(lo + " 9.6 m below", clash(pair(t, lo, Element.Type.STATIC, 9.6f)));
         }
     }
 

@@ -41,6 +41,19 @@ public class ShortcutReachTest {
         assertTrue("refused", clash(c));
     }
 
+    /**
+     * Pad gap fix (geometry audit 2026-10-30, owner decision): pad pairs 9.5-10.3 m up at a small or overlapping edge gap were refused by neither
+     * the 9.5 m spacing nor C1, and the T5Probe audit reached them in generated courses (PUNISHER 7321 slices 25 and 29, PUNISHER 7323 slices 13
+     * and 25, NGH 7323 slices 3 and 17; docs/geometry_audit/GEOMETRY_AUDIT_REPORT.md section 6). This bare fixture lacks those courses' run-on, so
+     * the evidence is the audit; the test pins the rule.
+     */
+    @Test public void padPairsAtSmallGapsUpToTheFullPadReachAreRefused() throws Exception {
+        Tuning t = T();
+        float[][] audit = {{0.15f, 9.90f}, {0.19f, 10.09f}, {0.49f, 10.02f}, {1.37f, 9.53f}, {2.01f, 10.19f}, {-3.92f, 9.84f}};
+        for (float[] k : audit) assertTrue("pad pair " + k[0] + " m along, " + k[1] + " m up", clash(pair(t, Element.Type.PAD, k[0], k[1])));
+        assertTrue("10.7 m up directly above is still within the pad's reach + margin", clash(pair(t, Element.Type.PAD, 0f, 10.7f)));
+    }
+
     /** Above the measured reach plus the margin (10.25 + 0.5 m) the pair stays allowed, as before; the search does not get there either. */
     @Test public void aPadPairAboveTheReachStaysAllowed() throws Exception {
         Tuning t = T();

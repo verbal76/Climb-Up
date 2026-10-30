@@ -282,8 +282,7 @@ What each option touches. ● changes, ○ unaffected, ◐ must be re-validated.
 | 15 Platforms | build | build | build (frozen tuning) |
 | 16 Advanced movement | ≈ | ↑ (low-reach launchers placed more) | ↑ |
 
-Solver validation status: the three `solve=1` runs (lowreach, r11.5, r11.5+lowreach) were dispatched at 16:23 UTC on 2026-10-30 and are
-recorded in section 13 when they finish. Until then KPI 2 and KPI 10 are not verified for any option.
+Solver validation: section 13 (all three candidates 100 % PROVEN_SOLVABLE).
 
 ## 12. Options
 
@@ -314,7 +313,22 @@ and the certification campaign, in that order.
 
 ## 13. Solver validation results
 
-Pending: runs 41089445815 (lowreach), 41089449890 (r11.5), 41089453619 (r11.5 + lowreach).
+`solve=1`, seeds 1, 2 and 7322, all modes, 5,000 m (commit 3397a41):
+
+| Candidate | Run | Courses passing | Slices PROVEN_SOLVABLE | Non-proven | Integrity violations | Castles complete | Ordering at every castle |
+|---|---|---|---|---|---|---|---|
+| r11.5 | 41089449890 | 9 / 9 | 625 / 625 | 0 | 0 | 9 / 9 | yes |
+| lowreach | 41089445815 | 9 / 9 | 621 / 621 | 0 | 0 | 9 / 9 | **no** (NGH not above PUNISHER at castle 10) |
+| r11.5 + lowreach | 41089453619 | 9 / 9 | 621 / 621 | 0 | 0 | 9 / 9 | yes |
+
+Every course in all three runs reports a witness setback (the solver's own witness run took a hit somewhere), so it is not specific to a
+candidate; a solve=1 baseline at radius 10 on the same commit is needed before reading anything into it.
+
+## 13a. Owner decision (2026-10-30)
+
+**Option C plus the pad-gap fix**, implemented on `fix/build-83-root-causes`: `assets/data/tuning.json` radius 10 -> 11.5, and C1's pad table
+holds 10.25 m at every edge gap up to 2 m. The 9.5 m blanket stays. No rules bump yet (that, the fingerprint and the bundled replays are done at
+the final freeze). Validation on the implementing commit: full CI, a `solve=1` campaign at the new defaults, and the T5 shortcut audit.
 
 ## 14. Reproducing
 

@@ -1427,3 +1427,12 @@ HAPPEN drops 9-12 blocks; the warning is the rumble only; the work stacks on the
   changed; relaxing it is an owner decision.
 - **Slope-aware progression (S2, `-Dclimb.progSlope`):** full-height A/B (runs 41053445468 / 41053449567) showed no improvement in dips or growth;
   it stays off (docs/PROGRESSION_CONTROLLER_AUDIT.md section 7).
+- **Geometry audit outcome (owner decision 2026-10-30): option C plus the pad-gap fix.** `assets/data/tuning.json` radius 10 -> 11.5
+  (circumference 62.8 -> 72.3 m) and C1's pad reach table holds 10.25 m at every edge gap up to 2 m (it was 8.25 / 9.5 m there; pads in
+  generated courses reached decks 9.53-10.29 m up at those gaps, refused by neither rule). The 9.5 m blanket is unchanged; the `measured` and
+  `lowreach` layer-rule switches stay off. Evidence: docs/geometry_audit/GEOMETRY_AUDIT_REPORT.md (radius 11.5: +17-25 % hazards, mortar rows
+  x2 in PUNISHER/NGH, castle growth +37 / +26 / +17 %, solve=1 run 41089449890 100 % PROVEN_SOLVABLE on 9 courses; cost: ~10 % longer route,
+  +20-60 % generation time). Radius is frozen for over-the-air updates, so this ships only in a full build. Every course changes: the rules bump,
+  fingerprint and bundled replays follow at the final freeze, as already planned for rules 19. `Tuning.java`'s default radius stays 10 (the
+  defaults already differ from tuning.json; tests that build `new Tuning()` keep their fixed geometry). LayerSpacingTest now expects a pad 9.6 m
+  below a deck to be refused (C1) and 10.8 m to be allowed; ShortcutReachTest pins the audit's pad pairs.

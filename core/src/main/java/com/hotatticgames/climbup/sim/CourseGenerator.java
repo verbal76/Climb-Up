@@ -2065,7 +2065,10 @@ public final class CourseGenerator {
     static final float[][] REACH_RAMP = {{-3.15f, 4.75f}, {-1.65f, 4.25f}, {-0.15f, 4.0f}, {1.35f, 4.5f}, {2.85f, 4.75f}, {4.35f, 3.5f}};
     static final float[][] REACH_SWING = {{-4.9f, 6.5f}, {-3.4f, 6.75f}, {-1.9f, 6.75f}, {-0.4f, 6.5f}, {1.1f, 6.5f}, {2.6f, 6.5f}, {4.1f, 6.75f}, {5.6f, 6.0f}, {7.1f, 4.25f}};
     static final float[][] REACH_SPRING = {{-2.5f, 8.5f}, {-1f, 8.5f}, {0.5f, 8.5f}, {2f, 8.5f}, {3.5f, 8.5f}, {5f, 8.5f}, {6.5f, 8.5f}, {8f, 8.0f}, {9.5f, 6.75f}, {11f, 3.75f}};
-    static final float[][] REACH_PAD = {{-2.5f, 8.25f}, {-1f, 8.25f}, {0.5f, 9.5f}, {2f, 10.25f}, {3.5f, 10.0f}, {5f, 10.0f}, {6.5f, 8.0f}, {8f, 3.25f}};
+    // Pad gap fix (geometry audit 2026-10-30, owner decision): at small or overlapping edge gaps, pads in generated courses reached decks
+    // 9.53-10.29 m up (T5Probe audit, docs/geometry_audit section 6), above the 8.25 / 9.5 m the T5 fixture measured there; so the table holds
+    // the pad's full measured reach (10.25 m) at every gap up to 2 m. It only refuses more.
+    static final float[][] REACH_PAD = {{-2.5f, 10.25f}, {-1f, 10.25f}, {0.5f, 10.25f}, {2f, 10.25f}, {3.5f, 10.0f}, {5f, 10.0f}, {6.5f, 8.0f}, {8f, 3.25f}};
 
     /** Diagnostics only (T4): a deficit in metres as a bucket name. */
     static String t4Bucket(float d) { return d <= 0.25f ? "le0.25" : d <= 0.5f ? "le0.5" : d <= 1f ? "le1" : d <= 2f ? "le2" : d <= 4f ? "le4" : "gt4"; }

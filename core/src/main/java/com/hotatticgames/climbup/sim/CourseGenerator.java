@@ -1954,7 +1954,7 @@ public final class CourseGenerator {
         if (dy >= 9.5f) return false;
         if (dy < PLAIN_LAYER_DY) return true;
         Element lower = e.y < f.y ? e : f, upper = lower == e ? f : e;
-        if (LAYER_MEASURED) return false;                                   // (geometry audit experiment: the measured reach above, C1, decides alone)
+        if (blanketWaived(lower)) return false;                             // (geometry audit experiment: the measured reach above, C1, decides alone)
         if (launches(lower)) return true;                                   // no trampoline shortcuts between layers
         if (R17_OFF_SPACING) return launches(upper);                         // (S1-B: rules 16, either platform)
         // Rules 19 (owner decision 2026-10-29, emergent movement, category C): a launcher above a plain platform no longer needs the full spacing when
@@ -2034,6 +2034,17 @@ public final class CourseGenerator {
      * another revolution no longer needs the blanket 9.5 m; the measured reach (C1, {@link #reachShortcut}), the bodies and the plain 4 m still apply.
      */
     static final boolean LAYER_MEASURED = "measured".equals(System.getProperty("climb.layerRule"));
+    /**
+     * Geometry audit experiment only (-Dclimb.layerRule=lowreach, default off): the blanket is waived only below the launchers whose measured reach
+     * stays far under it (sideways and depth movers, seesaws, swings, ramps other than the turbo ramp: 3.75 to 6.75 m, T5_FINDINGS section 2); pads,
+     * springs, elevators and turbo ramps keep the full 9.5 m.
+     */
+    static final boolean LAYER_LOWREACH = "lowreach".equals(System.getProperty("climb.layerRule"));
+    static boolean blanketWaived(Element lower) {
+        if (LAYER_MEASURED) return true;
+        if (!LAYER_LOWREACH) return false;
+        switch (lower.type) { case MOVE_H: case MOVE_Z: case SEESAW: case SWING: return true; case RAMP: return !lower.turbo(); default: return false; }
+    }
     /** Diagnostics only: -Dclimb.c1Off=true restores the rule without C1 (for same-seed comparisons). Not final only so a probe can switch it for one slice. */
     static boolean C1_OFF = Boolean.getBoolean("climb.c1Off");
     static boolean reachShortcut(Course c, Element e, Element f) {
@@ -2137,7 +2148,7 @@ public final class CourseGenerator {
         if (vLo(d) - 1.5f < vHi(f) && vHi(d) + 1.5f > vLo(f)) return true;
         if (!d.isPlatform() || !f.isPlatform()) return false;
         Element lower = d.y < f.y ? d : f;
-        return Math.abs(d.y - f.y) < (launches(lower) && !LAYER_MEASURED ? 9.5f : 4f);
+        return Math.abs(d.y - f.y) < (launches(lower) && !blanketWaived(lower) ? 9.5f : 4f);
     }
     private boolean forkLayersClash(Element d, Element f) { return forkLayersClash(c, d, f); }
     /** Whether element {@code i} of {@code c} is on a fork's branch (see {@link Course#forks}: take-off, first branch element, count, rejoin). */

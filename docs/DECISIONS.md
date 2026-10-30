@@ -1498,3 +1498,19 @@ collision, input timing, replays or determinism fixtures changed; every new cue 
   manifest, every manifest hash, each KPI's class (measured-complete, measured-incomplete, analyst judgment, unavailable) with its missing
   inputs named, the drawn share of every chart (a near-blank chart is flagged), every table's rows and empty cells, PDF pages and the
   dashboard's offline state. Reporting only; nothing in generation or gameplay changed.
+- **Build 83 candidate frozen as RULES_VERSION 19 (owner master execution directive part 6, 2026-10-30).** Rules 19 = the C1 cross-revolution
+  reach rule with the pad gap fix (pads keep their 10.25 m measured reach at edge gaps up to 2 m), emergent hazard-assisted movement neither
+  prevented nor relied on, a hit is not a failure, the timed rebound jump, Tarzan swings and turbo ramps from 500 m, descents and lowered pads in
+  every mode, no new spinning ramps, fallen planks stay gone, tower radius 11.5 m (tuning.json), the blanket 9.5 m rule retained (no layerRule
+  switch), atmosphere off. Generation fingerprint **b0c5646446610a0274e036ab** (rules 18: 3e79526889137dc34e1edeb9), read from DeterminismTest's
+  GENERATION_FINGERPRINT line, not chosen. Bundled seed-12 replay re-recorded with `ReplayTool record` on this source: 5,000 m, 10 doors, no
+  respawns, **no harness skips**, finish step 412,631 (clock 412,632 = 1:54:37.200), events d960b50ec8e81d71c651ae23, states
+  f043865b313609d77387b1bd; ReplayCheck and BundledReplayTest expect these values. The presentation merges (visual 9ca2c67, audio 856e79a) touch no
+  simulation, generator, tuning or replay file. Gem midpoint and run spread at radius 11.5 (GemSpreadProbe, local): spread hi/lo 1.184 (test >= 1.100;
+  radius 10 gave 1.067), seed 8 gem 1 -3.12 m (radius 10: +5.35 m), worst of 16 gems 3.34 m (test 4.5 m); no threshold or test changed.
+  CI 41095330974 on 72c0a6d (radius 11.5 + pad fix, before the freeze): 588 core tests, 3 failures - the fingerprint and bundled replay (both
+  refreshed here; its GENERATION_FINGERPRINT line is the same b0c5646446610a0274e036ab as the integrated source, so the presentation merges change no
+  generation) and TowerPrepareTest.onceReadyStartingTheClimbDoesNotGenerate ("prepared start 428 ms vs 2043 ms"). Root cause of the last: the test
+  timed seed 34's slice 0 and waited 3x that for seed 35's to be prepared; at radius 11.5 seed 35's costs about 3.5x seed 34's (measured locally
+  69-71 s vs 19-20 s on a loaded machine), so it was not ready yet. The test now times the seed it prepares; its 5x assertion and claim are
+  unchanged. The gem midpoint and run-spread tests pass at radius 11.5.

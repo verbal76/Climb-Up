@@ -30,7 +30,9 @@ public class TowerPrepareTest {
 
     @Test public void onceReadyStartingTheClimbDoesNotGenerate() throws Exception {
         Tuning t = TestUtil.tuning();
-        long t0 = System.nanoTime(); new Tower(34, t); long cold = System.nanoTime() - t0;
+        // cold = making this same seed's slice 0 on the spot (it was seed 34's until rules 19: at radius 11.5 seed 35's slice 0 costs about 3.5x seed 34's,
+        // so a wait of 3x seed 34's time ended before seed 35 was ready; CI 41095330974). Nothing is prepared yet, so this constructor makes it itself.
+        long t0 = System.nanoTime(); new Tower(35, t); long cold = System.nanoTime() - t0;
         Tower.prepare(35, t);
         Thread.sleep(Math.max(500, 3 * cold / 1_000_000));                    // the title screen is up for a moment: plenty of time to make it
         long t1 = System.nanoTime(); Tower tw = new Tower(35, t); long warm = System.nanoTime() - t1;

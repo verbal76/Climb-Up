@@ -33,6 +33,8 @@ public class GemSpreadProbe {
                     Element a = c.get(i - 1), b = i + 1 < c.routeSize() ? c.get(i + 1) : null;
                     sb.append(String.format("seed %d gem %d: y %.2f mid %.0f dev %+.2f%s | slice %d idx %d w %.2f | before %s y %.2f (%+.2f) | after %s%n", seed, gemNo, e.y, mid, dev, Math.abs(dev) > 4.5f ? "  OVER 4.5" : "",
                             k, i, e.w, a.type, a.y, e.y - a.y, b == null ? "-" : b.type + String.format(" y %.2f (%+.2f)", b.y, b.y - e.y)));
+                    if (Math.abs(dev) > 4.5f || Boolean.getBoolean("climb.gemDetail"))          // the route leading up to an out-of-tolerance gem
+                        for (int j = Math.max(0, i - 12); j <= Math.min(c.routeSize() - 1, i + 2); j++) { Element q = c.get(j); sb.append(String.format("      idx %d %s y %.2f s %.2f w %.2f skin %d%s%n", j, q.type, q.y, q.s, q.w, q.skin, q.checkpoint ? " checkpoint" : "")); }
                 }
             }
             // the test's load: first 1,100 m only

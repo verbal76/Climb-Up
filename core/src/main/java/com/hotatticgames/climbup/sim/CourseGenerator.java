@@ -1954,6 +1954,7 @@ public final class CourseGenerator {
         if (dy >= 9.5f) return false;
         if (dy < PLAIN_LAYER_DY) return true;
         Element lower = e.y < f.y ? e : f, upper = lower == e ? f : e;
+        if (blanketWaived(lower)) return false;                             // (geometry audit experiment: the measured reach above, C1, decides alone)
         if (launches(lower)) return true;                                   // no trampoline shortcuts between layers
         if (R17_OFF_SPACING) return launches(upper);                         // (S1-B: rules 16, either platform)
         // Rules 19 (owner decision 2026-10-29, emergent movement, category C): a launcher above a plain platform no longer needs the full spacing when
@@ -2028,6 +2029,22 @@ public final class CourseGenerator {
         return r;
     }
     static final float SHORTCUT_MARGIN = 0.5f;
+    /**
+     * Geometry audit experiment only (owner directive 2026-10-30; -Dclimb.layerRule=measured, default off): a launcher or carrier below a platform of
+     * another revolution no longer needs the blanket 9.5 m; the measured reach (C1, {@link #reachShortcut}), the bodies and the plain 4 m still apply.
+     */
+    static final boolean LAYER_MEASURED = "measured".equals(System.getProperty("climb.layerRule"));
+    /**
+     * Geometry audit experiment only (-Dclimb.layerRule=lowreach, default off): the blanket is waived only below the launchers whose measured reach
+     * stays far under it (sideways and depth movers, seesaws, swings, ramps other than the turbo ramp: 3.75 to 6.75 m, T5_FINDINGS section 2); pads,
+     * springs, elevators and turbo ramps keep the full 9.5 m.
+     */
+    static final boolean LAYER_LOWREACH = "lowreach".equals(System.getProperty("climb.layerRule"));
+    static boolean blanketWaived(Element lower) {
+        if (LAYER_MEASURED) return true;
+        if (!LAYER_LOWREACH) return false;
+        switch (lower.type) { case MOVE_H: case MOVE_Z: case SEESAW: case SWING: return true; case RAMP: return !lower.turbo(); default: return false; }
+    }
     /** Diagnostics only: -Dclimb.c1Off=true restores the rule without C1 (for same-seed comparisons). Not final only so a probe can switch it for one slice. */
     static boolean C1_OFF = Boolean.getBoolean("climb.c1Off");
     static boolean reachShortcut(Course c, Element e, Element f) {
@@ -2070,6 +2087,39 @@ public final class CourseGenerator {
         GenTrace.tally("t4sp_" + rule + "_" + t4Bucket(d));
         GenTrace.tally("t4sppair_" + pair + "_" + t4Bucket(d));
     }
+    /**
+     * Diagnostics only (geometry audit, owner directive 2026-10-30): every element of another revolution that element {@code idx} clashes with, by
+     * the rule each pair breaks - bodies, measured reach (C1), the plain 4 m between platforms, or only the blanket 9.5 m launcher spacing - and
+     * whether the whole refusal is owed to the blanket rule alone (no other rule refuses any pair). Reads the course; decides nothing.
+     */
+    private void layerRuleTally(int idx) {
+        Element e = c.get(idx); int pairs = 0, blanketOnly = 0; String low = null;
+        List<Element> others = new ArrayList<>(); for (int i = 0; i < idx - 3; i++) others.add(c.get(i)); others.addAll(ghostElems);
+        for (Element f : others) {
+            if (Math.abs(e.s - f.s) < c.circumference * 0.5f) continue;
+            boolean body = layersBodiesClash(c, e, f), reach = reachShortcutQuiet(c, e, f), win = Math.abs(c.dsWrap(e.s, f.s)) <= arcHalf(e) + arcHalf(f) + 2.5f;
+            boolean plats = e.isPlatform() && f.isPlatform(); float dy = Math.abs(e.y - f.y);
+            boolean plain = win && plats && dy < PLAIN_LAYER_DY;
+            Element lower = e.y < f.y ? e : f;
+            boolean blanket = win && plats && dy < 9.5f && !plain && launches(lower);
+            if (!(body || reach || plain || blanket)) continue;
+            pairs++;
+            if (body) GenTrace.tally("geo_pair_body"); if (reach) GenTrace.tally("geo_pair_c1"); if (plain) GenTrace.tally("geo_pair_plain4");
+            if (blanket && !body && !reach) { blanketOnly++; GenTrace.tally("geo_pair_blanket_only"); if (low == null) low = lower.type.name(); }
+        }
+        GenTrace.tally("geo_layer_refusal");
+        if (pairs > 0 && blanketOnly == pairs) { GenTrace.tally("geo_layer_refusal_blanket_only"); GenTrace.tally("geo_layer_refusal_blanket_only_" + low); }
+        GenTrace.tally("geo_layer_refusal_pairs", pairs);
+    }
+    /** {@link #reachShortcut} without its report tally (for the classification above). */
+    static boolean reachShortcutQuiet(Course c, Element e, Element f) {
+        if (C1_OFF || !e.isPlatform() || !f.isPlatform()) return false;
+        if (Math.abs(e.s - f.s) < c.circumference * 0.5f) return false;
+        Element lower = e.y < f.y ? e : f, upper = lower == e ? f : e;
+        float dy = upper.y - lower.y; if (dy <= 0f) return false;
+        float gap = Math.abs(c.dsWrap(e.s, f.s)) - arcHalf(lower) - arcHalf(upper), r = reachAt(c, lower, gap);
+        return r > 0f && dy < r + SHORTCUT_MARGIN;
+    }
     /** Diagnostics only (T4/S1-C): how deep a refused element sits in hazard {@code h}'s lethal box; for an avalanche, where it sits relative to the trigger deck (2 m cells). */
     private void t4BoxDeficit(Element e, Element h) {
         if (h == null) return;
@@ -2098,7 +2148,7 @@ public final class CourseGenerator {
         if (vLo(d) - 1.5f < vHi(f) && vHi(d) + 1.5f > vLo(f)) return true;
         if (!d.isPlatform() || !f.isPlatform()) return false;
         Element lower = d.y < f.y ? d : f;
-        return Math.abs(d.y - f.y) < (launches(lower) ? 9.5f : 4f);
+        return Math.abs(d.y - f.y) < (launches(lower) && !blanketWaived(lower) ? 9.5f : 4f);
     }
     private boolean forkLayersClash(Element d, Element f) { return forkLayersClash(c, d, f); }
     /** Whether element {@code i} of {@code c} is on a fork's branch (see {@link Course#forks}: take-off, first branch element, count, rejoin). */
@@ -2570,7 +2620,7 @@ public final class CourseGenerator {
         if (!ok && GenTrace.GEN.get() != null) { Element e = c.get(clashAt), f = lastClash;          // (observe-only: what a layer refusal ran into, for reports)
             GenTrace.tally("clash_" + (lastClashGhost ? "ghost_" : "slice_") + (layersBodiesClash(c, e, f) ? "body_" : "spacing_") + f.type + (f.anchor >= 0 ? "_side" : ""));
             why("layer_" + (lastClashGhost ? "ghost_" : "slice_") + (layersBodiesClash(c, e, f) ? "body_" : "spacing_") + e.type + "_vs_" + f.type); }
-        if (!ok && GenTrace.GEN.get() != null) t4LayerDeficit(c.get(clashAt), lastClash);
+        if (!ok && GenTrace.GEN.get() != null) { t4LayerDeficit(c.get(clashAt), lastClash); layerRuleTally(clashAt); }
         if (!ok) { boolean cr = false; for (Element h : hz) if (h.type == Element.Type.CRAB) cr = true;
             if (cr) { Element e = c.get(clashAt), f = lastClash; boolean body = vLo(e) - 1.5f < vHi(f) && vHi(e) + 1.5f > vLo(f);
                 CRABCLASH[(f.anchor >= 0 ? 2 : 0) + (body ? 0 : 1) + (lastClashGhost ? 4 : 0)]++; } }

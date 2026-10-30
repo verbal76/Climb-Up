@@ -222,6 +222,8 @@ public final class LaneReport {
     final DifficultyScore v2;
     private final Set<String> seenHaz = new HashSet<>();
 
+    /** Geometry audit (owner directive 2026-10-30), only with -Dclimb.geomAudit=true: sees every slice; writes its tables after the report. */
+    GeometryAudit geo;
     public LaneReport(Tuning t, int mode, long seed, float top) {
         this.t = t; this.mode = mode; this.seed = seed; this.top = top; v2 = new DifficultyScore(t);
         for (Element.Type k : Element.Type.values()) { Lanes.lane(k); inventory.put(k, new int[3]); }
@@ -244,7 +246,7 @@ public final class LaneReport {
                 long g0 = System.nanoTime(), ga = alloc();
                 CourseGenerator.Framed pf = f;
                 int bt0 = growth.backtracks;
-                try { f = growth.next(); }
+                try { f = growth.next(); if (GeometryAudit.ON) { if (geo == null) geo = new GeometryAudit(t, MODE[mode] + "-s" + seed); geo.add(f); } }
                 catch (RuntimeException e) { if (growth.failedTrace != null) for (String s : growth.failedTrace.sliceFailures) sliceFailures.add(new String[]{"" + growth.failedSlice, q(s)}); genSeconds += (System.nanoTime() - g0) / 1e9; failedSlice = growth.failedSlice; throw e; }          // the slice that stopped generation keeps its attempts' reasons
                 GenTrace tr = growth.trace;
                 if (growth.backtracks > bt0) tr.counts.merge("generation_backtracks", growth.backtracks - bt0, Integer::sum);
@@ -775,6 +777,7 @@ public final class LaneReport {
 
     public static void main(String[] a) throws Exception {
         Tuning base = Tuning.parse(new String(Files.readAllBytes(Paths.get(a[0]))));
+        if (System.getProperty("climb.radius") != null) base.radius = Float.parseFloat(System.getProperty("climb.radius"));          // geometry audit experiments only (layer pitch scales with the circumference)
         int mode = Integer.parseInt(a[2]); long seed = Long.parseLong(a[3]); Path out = Paths.get(a[4]);
         Tuning t = mode == 0 ? base : base.hardCopy(mode);
         LaneReport r = new LaneReport(t, mode, seed, Float.parseFloat(a[1]));
@@ -784,6 +787,7 @@ public final class LaneReport {
             meta.put(kv[0], System.getenv().getOrDefault(kv[1], "local"));
         meta.put("solver_version", "Autopilot.run at commit " + meta.get("commit"));
         r.write(out, meta); r.writeV2(out); VarietyReport.write(r, out);          // gameplay variety, apart from difficulty (owner 2026-10-27)
+        if (r.geo != null) r.geo.write(out);
         System.out.printf(Locale.ROOT, "%s seed %d: reached %.0f m, %d slices, %d windows, %d ledger rows, gen %.0f s, solve %.0f s%s%n", MODE[mode], seed, r.reached, r.slices, r.windows.size(), r.ledger.size(), r.genSeconds, r.solveSeconds, r.stopped == null ? "" : " - " + r.stopped);
         for (Map.Entry<String, String> e : r.verdicts().entrySet()) System.out.println("  " + e.getKey() + ": " + e.getValue());
         // validation gate (owner directive 2026-10-27): the artifacts above are written first; an incomplete course, a solver failure or a geometry

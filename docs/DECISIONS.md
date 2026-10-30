@@ -1390,3 +1390,6 @@ HAPPEN drops 9-12 blocks; the warning is the rumble only; the work stacks on the
   1.6 m higher (reached by letting go on the upswing). Seed 7322 to 1750 m: swings placed 2 -> 5 (accepted 2/19 -> 5/16), body refusals 10 -> 0;
   the remaining refusals are the shortcut spacing rule, kept. Refusals now trace as why_TARZAN_* / why_TURBO_*; diag_summary reports them
   with the r19_ acceptance tallies (section R19) and counts TARZAN in KPI 16.
+- **KPI 7 progression direction (owner, 2026-10-30):** each difficulty should show meaningful escalation through all ten castles, with about
+  30-40% total growth as a flexible reference, not a rigid numerical gate. Recorded as design direction; no progression balancing is done
+  during the NGH generation-cost investigation (owner instruction).

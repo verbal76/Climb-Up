@@ -732,9 +732,11 @@ public final class CourseGenerator {
         int[] f0 = {failLayer, failHaz, failPlan, failWindow, failConflict, failThreat};
         long t0 = GenTrace.now();
         traceKind = k.name();
+        long[] pa = Autopilot.PLAN_ACC.get(); long pn0 = pa[0], pt0 = pa[1];
         boolean ok;
         try { ok = tryModuleBelow0(k, d, zone); } finally { traceKind = null; }
         m.nanos = GenTrace.now() - t0;
+        if (Autopilot.PLAN_AUDIT) { String o = (ok ? "planmod_ok_" : "planmod_rej_") + k.name(); GenTrace.tally(o + "_n", (int) (pa[0] - pn0)); tr.phase(o, pa[1] - pt0); GenTrace.tally(o + "_modules"); }          // (observe-only: plans spent on module attempts, by outcome)
         int[] f1 = {failLayer, failHaz, failPlan, failWindow, failConflict, failThreat};
         for (int i = 0; i < 6; i++) m.fails[i] = f1[i] - f0[i];
         m.ok = ok; m.e1 = c.size(); m.h1 = c.hazards.size(); tr.modules.add(m);

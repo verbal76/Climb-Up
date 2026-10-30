@@ -573,11 +573,53 @@ public final class Autopilot {
         GenTrace tr = GenTrace.GEN.get();
         if (tr == null) return planTo0(base, a, b, pair, measureMargin, lookahead);
         long t0 = GenTrace.now();
-        Result r = planTo0(base, a, b, pair, measureMargin, lookahead);
+        int[] depth = PLAN_DEPTH.get(); depth[0]++;
+        Result r;
+        try { r = planTo0(base, a, b, pair, measureMargin, lookahead); } finally { depth[0]--; }
+        long dt = GenTrace.now() - t0;
         // (observe-only, NGH generation cost investigation 2026-10-30: wall time per plan by how it ended)
         String how = r.viaRebound ? "rebound" : r.viaHit ? "knock" : r.ok ? "clean" : r.fallback != null ? "fallback" : "failed";
-        tr.phase("r19plan_" + how, GenTrace.now() - t0); GenTrace.tally("r19plan_n_" + how);
+        tr.phase("r19plan_" + how, dt); GenTrace.tally("r19plan_n_" + how);
+        if (depth[0] == 0) { long[] acc = PLAN_ACC.get(); acc[0]++; acc[1] += dt; }          // top-level plans only (nested look-ahead plans are inside their time)
+        if (PLAN_AUDIT && depth[0] == 0) planAudit(tr, base, a, b, pair, measureMargin, lookahead, r, dt);
         return r;
+    }
+    /** Observe-only plan audit (NGH cost investigation 2026-10-30; a probe sets it): top-level plans attributed to their caller, and repeats. */
+    static boolean PLAN_AUDIT = false;
+    static final ThreadLocal<int[]> PLAN_DEPTH = ThreadLocal.withInitial(() -> new int[1]);
+    /** Top-level plans run on this thread so far {count, nanos} (observe-only; the generator reads deltas around each module attempt). */
+    static final ThreadLocal<long[]> PLAN_ACC = ThreadLocal.withInitial(() -> new long[2]);
+    private static final ThreadLocal<Object[]> PLAN_SEEN = ThreadLocal.withInitial(() -> new Object[2]);
+    private static void planAudit(GenTrace tr, Sim base, int a, int b, boolean pair, boolean measureMargin, boolean lookahead, Result r, long dt) {
+        // the caller: the first frame outside this class, and whether an encounter proof (chainClean) is on the way
+        String caller = "?"; boolean chain = false;
+        for (StackTraceElement f : Thread.currentThread().getStackTrace()) {
+            String cl = f.getClassName();
+            if (cl.endsWith(".Autopilot")) { if (f.getMethodName().equals("chainClean")) chain = true; continue; }
+            if (cl.startsWith("java.") || cl.endsWith(".Thread")) continue;
+            caller = cl.substring(cl.lastIndexOf('.') + 1) + "." + f.getMethodName(); break;
+        }
+        if (chain) caller = "chainClean<-" + caller;
+        GenTrace.tally("plancall_n_" + caller); tr.phase("plancall_" + caller, dt);
+        // repeats: the same inputs (climber state, link, flags, the elements and hazards near it) planned again in this trace with the same answer
+        Course c = base.course; long h = 1469598103934665603L;
+        long[] v = {System.identityHashCode(c), a, b, pair ? 1 : 0, measureMargin ? 1 : 0, lookahead ? 1 : 0, Float.floatToIntBits(base.time), Float.floatToIntBits(base.s),
+            Float.floatToIntBits(base.y), Float.floatToIntBits(base.vx), Float.floatToIntBits(base.vy), base.mode.ordinal(), base.onElem, c.size(), c.hazards.size(), base.keys};
+        for (long x : v) h = (h ^ x) * 1099511628211L;
+        for (int i = Math.max(0, Math.min(a, b) - 3); i < Math.min(c.size(), Math.max(a, b) + 8); i++) {
+            Element e = c.get(i); h = (h ^ e.type.ordinal()) * 1099511628211L;
+            for (float x : new float[]{e.s, e.y, e.w, e.amp, e.period, e.phase, e.len}) h = (h ^ Float.floatToIntBits(x)) * 1099511628211L;
+            h = (h ^ e.skin) * 1099511628211L;
+        }
+        for (Element e : c.hazards) { h = (h ^ e.type.ordinal()) * 1099511628211L; for (float x : new float[]{e.s, e.y, e.amp, e.period, e.phase}) h = (h ^ Float.floatToIntBits(x)) * 1099511628211L; }
+        Object[] seen = PLAN_SEEN.get();
+        if (seen[0] != tr) { seen[0] = tr; seen[1] = new java.util.HashMap<Long, Boolean>(); }
+        @SuppressWarnings("unchecked") java.util.HashMap<Long, Boolean> m = (java.util.HashMap<Long, Boolean>) seen[1];
+        Boolean prev = m.put(h, r.ok);
+        if (prev != null) {
+            String k = prev == r.ok ? "same" : "differs";
+            GenTrace.tally("planrepeat_n_" + k + "_" + caller); tr.phase("planrepeat_" + k + "_" + caller, dt);
+        }
     }
     private static Result planTo0(Sim base, int a, int b, boolean pair, boolean measureMargin, boolean lookahead) {
         Course c = base.course;

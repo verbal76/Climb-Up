@@ -137,7 +137,7 @@ public final class TimesScreen extends ScreenAdapter {
         ui.textC(foot1, W / 2, 134f, Math.min(2.4f, (W - 80f) / (foot1.length() * 6f)), Ui.DIM);
         if (!foot2.isEmpty()) ui.textC(foot2, W / 2, 110f, Math.min(2.4f, (W - 80f) / (foot2.length() * 6f)), Ui.DIM);
         if (ui.button(new String[]{"PUNISHER", "NEVER...", "NORMAL"}[boardNo], W - 360, 22, 330, 78)) { g.audio.play("click"); boardNo = (boardNo + 1) % 3; page = 0; }      // Build 79: the next difficulty's board
-        if (ui.button("BACK", W / 2 - 150, 22, 300, 78, true) || leave) { g.audio.play("click"); g.setScreen(back); }
+        if (ui.button("BACK", W / 2 - 150, 22, 300, 78, true) || leave) { g.audio.play("back"); g.setScreen(back); }
         ui.end();
         g.autoShot("times", dt);
     }

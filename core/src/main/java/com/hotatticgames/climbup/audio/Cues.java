@@ -40,6 +40,9 @@ public final class Cues {
         return Math.max(0.2f, Math.min(0.4f, 1.9f / v));
     }
 
+    /** Seconds between the small metal "zip" while moving hand over hand along a cable (Build 83; quieter and sparser than footsteps so it never drones). */
+    public static final float CABLE_ZIP_EVERY = 0.28f;
+
     /** Hum loudness 0..1 from the distance (metres) to the nearest conveyor: full when you stand on it, gone at {@code HUM_RANGE}. */
     public static final float HUM_RANGE = 9f;
     public static float humLevel(float distance, boolean standingOn) {

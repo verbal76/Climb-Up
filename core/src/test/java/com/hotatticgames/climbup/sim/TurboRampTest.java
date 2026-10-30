@@ -126,4 +126,18 @@ public class TurboRampTest {
         Sim cp = a.copy(); cp.step(new InputState()); a.step(new InputState());
         assertEquals(a.s, cp.s, 0f); assertEquals(a.vx, cp.vx, 0f); assertEquals(a.turboT, cp.turboT, 0f);
     }
+
+    /** Owner list: turbo into a Tarzan swing. The flight is caught by a swing hanging in its path (wherever the rope is then); the catch ends the turbo. */
+    @Test public void aTurboFlightCanCatchATarzanSwing() throws Exception {
+        Tuning t = T();
+        Sim probe = launched(course(t, 0f, 0f), t);          // where the flight is 0.25 s after launch
+        for (int k = 0; k < 15; k++) probe.step(new InputState());
+        Course c = course(t, 0f, 0f);
+        Element tz = new Element(Element.Type.TARZAN, probe.s, probe.y + t.handHeight + 3.5f, 1f); tz.len = 4.5f; tz.amp = 0.01f; tz.period = 3f; c.add(tz);          // all but still, hanging across the flight
+        Sim m = launched(c, t);
+        boolean caught = false;
+        for (int k = 0; k < 60 && !caught; k++) { m.step(new InputState()); caught = m.mode == Sim.Mode.TARZAN; }
+        assertTrue("caught the swing mid-flight", caught);
+        assertEquals("the catch ends the turbo", 0f, m.turboT, 0f);
+    }
 }

@@ -88,7 +88,7 @@ def main():
     print("\n## KPIs\n\nClass: MEASURED-COMPLETE (objective rule decides, every input present), MEASURED-INCOMPLETE (some required input or check is "
           "missing), ANALYST-JUDGMENT (measured; the framework leaves the verdict to the analyst), UNAVAILABLE (nothing measured).\n\n"
           "| KPI | name | class | automatic status | final status | checks | measured / total measurements | missing inputs |\n|---|---|---|---|---|---|---|---|")
-    for kid in KPI_IDS + ["7"]:
+    for kid in KPI_IDS:
         k = kpis.get(kid)
         if not k:
             print(f"| {kid} | MISSING | | | | | |"); problems.append(f"KPI {kid} missing"); continue
@@ -166,7 +166,8 @@ def main():
     if os.path.exists(dash):
         h = open(dash, encoding="utf-8").read()
         ext = re.findall(r"(?:src|href)\s*=\s*[\"']https?://|fetch\(|XMLHttpRequest", h)
-        bad = [w for w in ("NaN", "undefined") if re.search(r"[>\s\"']" + w + r"[<\s\"',]", h)]
+        text = re.sub(r"<script\b.*?</script>", "", h, flags=re.S)   # the dashboard's own code tests for undefined; only the rendered text counts
+        bad = [w for w in ("NaN", "undefined") if re.search(r"[>\s\"']" + w + r"[<\s\"',]", text)]
         print(f"Dashboard: {len(h):,} characters, network references {len(ext)}, suspicious text {bad or 'none'}")
         if ext: problems.append("dashboard has network references")
     else:

@@ -127,3 +127,31 @@ request in every castle (no capacity constraint triggered); the hazard shortfall
   30–40% reference without raising castle 10.
 
 All of this is a proposal for the owner. No targets, bounds, caps or densities were changed.
+
+## 7. Slope-aware control (S2) A/B at full height (generator directive 2026-10-30, Phase 2)
+
+S2 is implemented behind `-Dclimb.progSlope` (`Progression.planned`, SLOPE_KEEP 0.5) and was compared with the current controller on GitHub
+(Difficulty report, generation only, commit 7b12f25, seeds 2 and 7322, 5,000 m, all ten castles, 0 generation failures, geometry clean):
+run 41053445468 (current) and run 41053449567 (`-Dclimb.progSlope=true`). KPI 7B per course (lane report total, castle 1 -> 10):
+
+| Course | Current: growth / dips / worst step | Slope-aware: growth / dips / worst step |
+|---|---|---|
+| NORMAL s2 | +38.4% / 3 / -8.2% | +40.2% / 3 / -13.6% |
+| NORMAL s7322 | +32.1% / 3 / -5.5% | +27.6% / 6 / -8.1% |
+| PUNISHER s2 | +22.6% / 3 / -12.2% | +26.9% / 3 / -10.6% |
+| PUNISHER s7322 | +17.4% / 4 / -3.8% | +16.8% / 4 / -7.6% |
+| NGH s2 | +0.1% / 5 / -4.6% | +2.9% / 5 / -3.9% |
+| NGH s7322 | +7.0% / 4 / -9.5% | +6.7% / 5 / -6.6% |
+
+**Result: S2 does not remove the dips and is not enabled.** The castle-to-castle steps it was meant to smooth are dominated by placement
+variation, not by the control law: the two seeds differ by 30-50 points at the same castle (more than a castle's planned rise of 27-40), and
+the categories the controller could raise are already at a limit:
+
+- **NGH hazards fall** from 181 (castle 1) to 152 (castle 10). Hazard modules are refused, not under-requested: mortars are accepted 7% and
+  spike-drop rows 11-14% of tries, and about 80% of their refusals are the spiral-layer clearance rule (P1/P3c of the same runs).
+- **Enemies sit on their 1.10 ceiling** in NGH (the owner's anti-spam bound; not raised).
+- **Terrain responds weakly** to its factor and its lane score has a large structural floor (NGH terrain 605 -> 639 over ten castles while
+  the terrain curve rises from 0.73 to 1.15).
+
+So for NGH (+0-7%) and PUNISHER (+17-27%) the controller has nothing left to move, whatever its law. The levers that remain are hazard
+acceptance (Phase 3: the layer refusals) and the castle-1 calibration (S1), both owner-visible. NORMAL already reaches +28-40%.

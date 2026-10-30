@@ -1105,8 +1105,7 @@ public final class WorldRenderer implements Disposable {
     private void drawDepthRail(Element e, float es, float ey, float camS, float t) {
         float z = e.zAt(t), live = Math.abs(z) <= Element.Z_REACH ? 1f : 0f;
         drawBox(es, ey - 0.62f, -e.amp * 0.0f, camS, 0.12f, 0.1f, e.amp * 2f + 1.6f, 0.30f + 0.5f * live, 0.34f + 0.4f * live, 0.44f);
-        drawBox(es - e.halfW() - 0.2f, ey - 0.62f, e.amp + 0.8f, camS, 0.2f, 0.9f, 0.2f, 0.3f, 0.32f, 0.4f);
-        drawBox(es - e.halfW() - 0.2f, ey - 0.62f, -e.amp - 0.8f, camS, 0.2f, 0.9f, 0.2f, 0.3f, 0.32f, 0.4f);
+        // (no end posts: the two 0.9 m posts that stood beside the rail's ends read as stray mounts; owner playtest 2026-10-30)
     }
 
     /** A coloured block placed in a rig's model space (the base transform already holds its position, yaw, tilt and scale). */

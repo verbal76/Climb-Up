@@ -1430,3 +1430,8 @@ writes the InputState; replays and the simulation are unchanged. Details and the
   rule, so generation, the simulation and replays are unchanged. A side-cannon-style slab was not used: 2.6 m wide, it would nearly fill the
   2.2-3 m gap and read as a landable deck. Before/after: docs/visual/mortar_plinth_1280x720_below.png (seed 1, slice 3, ~214 m; AtmosShot
   gained `-Dclimb.chain=true` to render a slice at its real height).
+- **Depth mover end posts removed (owner playtest 2026-10-30, cosmetic, visual branch):** the depth mover (MOVE_Z) drew two 0.9 m posts beside
+  the ends of its travel rail, offset to the platform's left edge, that read as floating mounts. `WorldRenderer.drawDepthRail` now draws only the
+  rail (whose brightness still shows when the platform is in the climber's plane); the moving platform is unchanged. The posts were renderer
+  boxes only (no element, hazard, collision box or generator rule refers to them), so movement range, speed, timing, collision, solver and
+  placement are unchanged. Before/after at 250 / 750 / 2750 / 4250 m, three moments each (seed 7): docs/visual/depth_mover_posts_*.png.

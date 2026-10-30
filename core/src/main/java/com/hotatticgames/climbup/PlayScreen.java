@@ -159,6 +159,7 @@ public final class PlayScreen extends ScreenAdapter {
             sim.setRange(0, course.size() - 1); simSize = course.size(); if (tower != null) seenRebuilds = tower.rebuilds;
         }
         world = new WorldRenderer(g.tuning, course, g.models, g.settings.quality, g.settings.character);
+        juice = new com.hotatticgames.climbup.fx.Juice(world.particles);
         if (tower != null) world.setOrigin(tower.originY, tower.originS);
         applySettings();
         world.snapCamera(sim);
@@ -197,6 +198,7 @@ public final class PlayScreen extends ScreenAdapter {
         world.quality = g.settings.quality;
         world.setCharacter(g.settings.character);
         world.particles.density = g.settings.quality == 0 ? 0.4f : g.settings.quality == 1 ? 0.7f : 1f;
+        juice.enabled = !g.settings.reducedMotion && g.settings.quality > 0;          // Build 83 juice: off in the minimal presentation
         sim.assistForgive = g.settings.assistForgive ? g.tuning.assistJumpForgiveness : 0f;
     }
 
@@ -323,6 +325,7 @@ public final class PlayScreen extends ScreenAdapter {
                 int ev = sim.consumeEvents();
                 if (PerfProbe.ON) PerfProbe.events |= ev;
                 handleEvents(ev);
+                observeCounters();
                 if (!demo) achievements(ev);
                 acc -= Sim.DT; steps++;
                 if (state != State.PLAYING) break;
@@ -347,7 +350,7 @@ public final class PlayScreen extends ScreenAdapter {
         if (PerfProbe.ON && !play) { PerfProbe.tStream = PerfProbe.tSim = System.nanoTime(); }
         world.render(sim, play ? acc / Sim.DT : 1f, dt, time, true);
         if (PerfProbe.ON) PerfProbe.tWorld = System.nanoTime();
-        if (world.cloudsBroken > 0) { g.audio.play("poof", 0.45f, 0.9f + MathUtils.random(0.3f)); world.cloudsBroken = 0; }
+        if (world.cloudsBroken > 0) { g.audio.play("poof", 0.45f, g.audio.vary(0.9f, 0.3f)); world.cloudsBroken = 0; }
         drawHud();
         if (PerfProbe.ON) PerfProbe.tHud = System.nanoTime();
         g.autoShot("play", dt);
@@ -355,7 +358,21 @@ public final class PlayScreen extends ScreenAdapter {
     }
 
     private final java.util.HashMap<Element, Integer> cycleSeen = new java.util.HashMap<>();
-    private float sawT, crabT, enfStepT, avlT; private int avlHeard;
+    private float sawT, crabT, enfStepT, avlT, zipT, trailT2; private int avlHeard;
+    private com.hotatticgames.climbup.fx.Juice juice;
+    private int turboHeard = -1, cancelHeard = -1, reboundHeard = -1;
+
+    /**
+     * Build 83: sounds and juice for things the simulation counts but signals with no event bit of its own (observe-only - the counters are
+     * public statistics; nothing is consumed or changed): a turbo ramp's booster lighting, a turbo flight cut short, a timed rebound.
+     */
+    private void observeCounters() {
+        if (turboHeard < 0 || sim.turboLaunches < turboHeard || sim.turboCancels < cancelHeard || sim.rebounds < reboundHeard) { turboHeard = sim.turboLaunches; cancelHeard = sim.turboCancels; reboundHeard = sim.rebounds; return; }
+        if (sim.turboLaunches > turboHeard) { g.audio.play("turbo", 1f, g.audio.vary(0.97f, 0.06f)); juice.turboLaunch(sim.s, sim.y, sim.vx); say("[BOOSTER]"); }
+        if (sim.turboCancels > cancelHeard) { g.audio.play("fizzle", 0.8f, g.audio.vary(0.95f, 0.1f)); juice.turboFizzle(sim.s, sim.y); }
+        if (sim.rebounds > reboundHeard) { g.audio.play("rebound", 0.8f, g.audio.vary(0.97f, 0.08f)); juice.rebound(sim.s, sim.y + g.tuning.height * 0.5f); say("[PING]"); }
+        turboHeard = sim.turboLaunches; cancelHeard = sim.turboCancels; reboundHeard = sim.rebounds;
+    }
 
     /** Hazards you can hear: cannon booms, spikes snapping up, the saw's whir. Volume falls off with distance. */
     private void hazardSounds(float dt) {
@@ -384,12 +401,12 @@ public final class PlayScreen extends ScreenAdapter {
                     break;
                 }
                 case CRAB:
-                    if (crabT <= 0f && d < 8f) { crabT = 0.9f + MathUtils.random(0.7f); g.audio.play("clack", 0.3f * vol, 0.9f + MathUtils.random(0.25f)); }
+                    if (crabT <= 0f && d < 8f) { crabT = g.audio.vary(0.9f, 0.7f); g.audio.play("clack", 0.3f * vol, g.audio.vary(0.9f, 0.25f)); }
                     break;
                 case SKULL: {           // an eerie moan when it changes mood (hover, wind-up, turn) nearby; the dash itself is EV_DASH
                     int st = hk < sim.mobState.length ? sim.mobState[hk] : 0;
                     Integer prev = cycleSeen.put(h, st);
-                    if (prev != null && prev != st && st != 3 && st != 0 && d < 12f) g.audio.play("skull", 0.4f * vol + 0.05f, 0.9f + MathUtils.random(0.2f));
+                    if (prev != null && prev != st && st != 3 && st != 0 && d < 12f) g.audio.play("skull", 0.4f * vol + 0.05f, g.audio.vary(0.9f, 0.2f));
                     break;
                 }
                 case BLOB: {            // wobbles before it leaps
@@ -402,18 +419,18 @@ public final class PlayScreen extends ScreenAdapter {
                     int st = sim.enforcerState(hk);
                     Integer prev = cycleSeen.put(h, st);
                     if (d < 14f) {
-                        if ((st == 2 || st == 6) && enfStepT <= 0f) { enfStepT = 0.34f - 0.04f * Math.max(0, Math.min(2, h.skin)); g.audio.play("enf_step" + (1 + MathUtils.random(3)), 0.55f * vol + 0.05f, 0.95f + MathUtils.random(0.1f)); }
+                        if ((st == 2 || st == 6) && enfStepT <= 0f) { enfStepT = 0.34f - 0.04f * Math.max(0, Math.min(2, h.skin)); g.audio.play("enf_step" + (1 + (int) g.audio.vary(0f, 3.999f)), 0.55f * vol + 0.05f, g.audio.vary(0.95f, 0.1f)); }
                         if (prev != null && prev != st && st == 3) { g.audio.play("enf_stomp", 0.6f * vol + 0.1f, 1.15f); say("[CLANK]"); }
                         if (prev != null && (prev == 4 || prev == 5) && st == 2) { g.audio.play("enf_stomp", 0.8f * vol + 0.1f, 0.9f); world.shake(0.2f * vol); say("[STOMP]"); }
                     }
                     break;
                 }
                 case BEE:
-                    if (h.beePresent(sim.time) && sawT <= 0f && d < 11f) { sawT = 0.3f; g.audio.play("buzz", 0.4f * vol, 0.9f + MathUtils.random(0.2f)); }
+                    if (h.beePresent(sim.time) && sawT <= 0f && d < 11f) { sawT = 0.3f; g.audio.play("buzz", 0.4f * vol, g.audio.vary(0.9f, 0.2f)); }
                     { int diving = h.beePresent(sim.time) && h.beeDive(sim.time) > 0.5f ? 1 : 0; Integer prev = cycleSeen.put(h, diving); if (prev != null && prev == 0 && diving == 1 && d < 11f) g.audio.play("dive", 0.5f * vol + 0.05f, 1f); }
                     break;
                 case SAW_H: case SAW_V:
-                    if (sawT <= 0f && d < 9f) { sawT = 0.45f; g.audio.play("saw", 0.35f * vol, 0.95f + MathUtils.random(0.1f)); }
+                    if (sawT <= 0f && d < 9f) { sawT = 0.45f; g.audio.play("saw", 0.35f * vol, g.audio.vary(0.95f, 0.1f)); }
                     break;
                 default: break;
             }
@@ -454,13 +471,14 @@ public final class PlayScreen extends ScreenAdapter {
             gruntT -= dt;
             if (gruntT <= 0) {
                 gruntT = 0.55f + MathUtils.random(0.4f); gruntN++;
-                g.audio.play("grunt" + (1 + MathUtils.random(2)), 0.9f, (0.93f + MathUtils.random(0.16f)) * com.hotatticgames.climbup.render.Characters.voice(g.settings.character));
+                g.audio.play("grunt" + (1 + (int) g.audio.vary(0f, 2.999f)), 0.9f, (g.audio.vary(0.93f, 0.16f)) * com.hotatticgames.climbup.render.Characters.voice(g.settings.character));
                 if (gruntN % 2 == 0) pop(STRAIN[MathUtils.random(STRAIN.length - 1)], Color.WHITE);
                 say("[STRAINING]"); vibrate(8, 2);
             }
         } else gruntT = 0.35f;
-        if (sim.mode == Sim.Mode.GROUND && Math.abs(sim.vx) > 2f) { stepT -= dt; if (stepT <= 0) { stepT = Cues.stepInterval(sim.vx); if (!g.audio.playPack(Cues.stepGroup(Cues.surface(underfoot())), 0.5f, 0.92f + MathUtils.random(0.16f))) g.audio.play("step", 0.35f, 0.9f + MathUtils.random(0.2f)); world.particles.burst(sim.s - sim.facing * 0.3f, sim.y + 0.05f, 2, dust, 0.5f, 0.7f, 0.09f, 3f, 0.35f); } }
-        if (sim.mode == Sim.Mode.ROPE && Math.abs(in.moveY) > 0.3f) { ropeT -= dt; if (ropeT <= 0) { ropeT = 0.32f; g.audio.play("rope", 0.4f, 0.9f + MathUtils.random(0.2f)); } }
+        if (sim.mode == Sim.Mode.GROUND && Math.abs(sim.vx) > 2f) { stepT -= dt; if (stepT <= 0) { stepT = Cues.stepInterval(sim.vx); if (!g.audio.playPack(Cues.stepGroup(Cues.surface(underfoot())), 0.5f, g.audio.vary(0.92f, 0.16f))) g.audio.play("step", 0.35f, g.audio.vary(0.9f, 0.2f)); world.particles.burst(sim.s - sim.facing * 0.3f, sim.y + 0.05f, 2, dust, 0.5f, 0.7f, 0.09f, 3f, 0.35f); } }
+        if (sim.mode == Sim.Mode.ROPE && Math.abs(in.moveY) > 0.3f) { ropeT -= dt; if (ropeT <= 0) { ropeT = 0.32f; g.audio.play("rope", 0.4f, g.audio.vary(0.9f, 0.2f)); } }
+        if (sim.mode == Sim.Mode.CABLE && Math.abs(in.moveX) > 0.3f) { zipT -= dt; if (zipT <= 0) { zipT = Cues.CABLE_ZIP_EVERY; g.audio.play("zip", 0.4f, g.audio.vary(0.92f, 0.16f)); } } else zipT = 0.12f;      // Build 83: hand over hand along a cable (it had no sound)
     }
 
     private void vibrate(int ms, int minLevel) {
@@ -532,6 +550,7 @@ public final class PlayScreen extends ScreenAdapter {
         sd.towerStartClock = sd.runClock; sd.towerStartHeight = (float) Math.max(0.0, maxAbs);
         toast = keyName(sim.lastGateColor) + " CASTLE OPENED!"; toastT = 3.2f;
         boolean showPb = g.settings.showBestTimes;                                   // Build 64: SHOW BEST TIMES hides every best and comparison here; the split itself and the clock stay
+        if (showPb && ((pbSplit && hadSplit) || (pbTotal && hadTotal))) { g.audio.play("pb", 0.9f, 1f); juice.personalBest(sim.s, sim.y + g.tuning.height + 0.4f); say("[NEW BEST]"); }      // Build 83: a personal best gets its own sting (with SHOW BEST TIMES only)
         String vsSeed = showPb && cur != null && cur.seed == sd.seed && n < RecordsData.LEGS && cur.legSeedPrev[n] > 0f ? "  " + fmtDelta(split - cur.legSeedPrev[n]) + " VS COURSE BEST" : "";
         toastSub = "TOWER " + (n + 1) + "  " + fmtTime(split) + vsSeed + (showPb && pbSplit && hadSplit ? "  FASTEST TOWER!" : "") + "    TOTAL " + fmtTime(total) + (showPb && pbTotal && hadTotal ? "  PACE PB!" : "") + (sd.assisted ? "  ASSISTED" : "");
         g.persist();
@@ -576,9 +595,10 @@ public final class PlayScreen extends ScreenAdapter {
             trailT -= dt;
             if (trailT <= 0) { trailT = 0.04f; world.particles.spawn(sim.s + MathUtils.random(-0.2f, 0.2f), sim.y + 0.3f, MathUtils.random(-0.3f, 0.3f), -1.5f, cyan, 0.07f, 0f, 0.5f); }
         }
+        if (sim.mode == Sim.Mode.AIR && sim.turboT > 0f) { trailT2 -= dt; if (trailT2 <= 0) { trailT2 = 0.035f; juice.turboTrail(sim.s, sim.y, sim.vx); } }          // Build 83: booster exhaust while a turbo flight lasts
         if (sim.mode == Sim.Mode.GROUND && sim.onElem >= 0 && course.get(sim.onElem).type == Element.Type.SEESAW && Math.abs(sim.tilt[sim.onElem]) > 0.25f) {
             creakT -= dt;
-            if (creakT <= 0) { creakT = 0.4f; g.audio.play("rope", 0.35f, 0.55f + MathUtils.random(0.15f)); world.particles.burst(sim.s, sim.y, 2, brown, 0.8f, 0.6f, 0.07f, 4f, 0.4f); }
+            if (creakT <= 0) { creakT = 0.4f; g.audio.play("rope", 0.35f, g.audio.vary(0.55f, 0.15f)); world.particles.burst(sim.s, sim.y, 2, brown, 0.8f, 0.6f, 0.07f, 4f, 0.4f); }
         }
     }
 
@@ -601,16 +621,23 @@ public final class PlayScreen extends ScreenAdapter {
         if ((ev & Sim.EV_PULL) != 0) { g.audio.play("effort", 0.9f, com.hotatticgames.climbup.render.Characters.voice(g.settings.character)); pop("HUP!", gold); vibrate(20, 2); }
         if ((ev & Sim.EV_GRAB) != 0 && sim.mode == Sim.Mode.LEDGE) {
             gruntT = 0.35f; pop(CATCH[MathUtils.random(CATCH.length - 1)], gold); freeze(0.08f); world.shake(0.4f); }
-        if ((ev & Sim.EV_JUMP) != 0) { g.audio.play("jump", 0.7f, 0.95f + MathUtils.random(0.1f)); world.particles.burst(s, y, 4, dust, 1.4f, 1.2f, 0.12f, 6f, 0.4f); vibrate(8, 2); }
+        if ((ev & Sim.EV_JUMP) != 0) { g.audio.play("jump", 0.7f, g.audio.vary(0.95f, 0.1f)); world.particles.burst(s, y, 4, dust, 1.4f, 1.2f, 0.12f, 6f, 0.4f); vibrate(8, 2); }
         if ((ev & Sim.EV_LAND) != 0) {
             float k = MathUtils.clamp(sim.landSpeed / 16f, 0.3f, 1f);
-            { float lv = 0.4f + 0.5f * k, lp = 0.9f + MathUtils.random(0.15f);
+            { float lv = 0.4f + 0.5f * k, lp = g.audio.vary(0.9f, 0.15f);
               if (!g.audio.playPack(Cues.landGroup(Cues.surface(underfoot())), Math.min(1f, lv * 1.1f), lp)) g.audio.play("land", lv, lp); }
             world.particles.burst(s, y, (int) (6 * k) + 2, dust, 2f, 1.5f, 0.14f, 7f, 0.45f);
-            if (sim.landSpeed > 15f) { world.shake(0.4f); vibrate(18, 1); }
+            if (sim.landSpeed > 15f) { world.shake(0.4f); vibrate(18, 1); g.audio.play("thump", Math.min(0.8f, 0.45f + (sim.landSpeed - 15f) * 0.05f), g.audio.vary(0.92f, 0.12f)); juice.hardLanding(s, y, sim.landSpeed); }          // Build 83: the weight of a long fall
         }
-        if ((ev & Sim.EV_BOUNCE) != 0) { g.audio.play("bounce", 0.9f, 1f); world.particles.burst(s, y, 10, cyan, 3.2f, 3.2f, 0.12f, 4f, 0.6f); world.shake(0.5f); vibrate(30, 1); say("[BOING]"); }
-        if ((ev & Sim.EV_GRAB) != 0) { g.audio.play("grab", 0.8f, 1f); vibrate(22, 1); say("[GRAB]"); }
+        if ((ev & Sim.EV_BOUNCE) != 0) { if (turboHeard < 0 || sim.turboLaunches <= turboHeard) g.audio.play("bounce", 0.9f, 1f);          // (a turbo ramp's launch also sets EV_BOUNCE: it gets the booster instead, see observeCounters)
+            world.particles.burst(s, y, 10, cyan, 3.2f, 3.2f, 0.12f, 4f, 0.6f); world.shake(0.5f); vibrate(30, 1); say("[BOING]"); }
+        if ((ev & Sim.EV_GRAB) != 0) {
+            g.audio.play("grab", 0.7f, 1f); vibrate(22, 1); say("[GRAB]");
+            float hy = sim.y + g.tuning.handHeight;          // Build 83: each catch has its own layer under the grab click - a rope creaks, a cable rings, a ledge is slapped
+            if ((ev & Sim.EV_ROPE) != 0) { g.audio.play("ropecatch", 0.7f, g.audio.vary(0.95f, 0.1f)); juice.ropeGrab(sim.s, hy); }
+            else if ((ev & Sim.EV_CABLE) != 0) { g.audio.play("zing", 0.6f, g.audio.vary(0.96f, 0.08f)); juice.cableGrab(sim.s, hy); }
+            else if (sim.mode == Sim.Mode.LEDGE) { g.audio.play("slap", 0.7f, g.audio.vary(0.94f, 0.12f)); juice.ledgeGrab(sim.s, hy, sim.facing); }
+        }
         if ((ev & Sim.EV_PULL) != 0) { g.audio.play("pull", 0.7f, 1f); }
         if ((ev & Sim.EV_CRUMBLE) != 0) { g.audio.play("crumble", 0.7f, 1f); g.audio.playPack("hit_wood", 0.4f, 0.8f); world.particles.burst(s, y - 0.2f, 12, brown, 2.2f, 1f, 0.16f, 12f, 0.8f); say("[CRUMBLE]"); }
         if ((ev & Sim.EV_CHECKPOINT) != 0) {
@@ -627,22 +654,22 @@ public final class PlayScreen extends ScreenAdapter {
             g.audio.play("key", 0.9f, 0.8f); world.particles.burst(s, y + 1f, 14, gold, 3f, 3.2f, 0.12f, -1f, 0.9f); vibrate(25, 1);
             toast = g.platform.tip("SPIKED CLUB! TAP SWING TO KNOCK CRABS AND BEES OFF"); toastT = 3f; say("[CLUB]");
         }
-        if ((ev & Sim.EV_SWING) != 0) { g.audio.play("swing", 0.8f, 0.95f + MathUtils.random(0.1f)); vibrate(10, 2); }
-        if ((ev & Sim.EV_SHOVE) != 0 && (ev & (Sim.EV_SQUASH | Sim.EV_LAUNCH)) == 0) { g.audio.play("bonk", 0.9f, 0.9f + MathUtils.random(0.2f)); g.audio.play("clack", 0.7f, 0.8f); world.shake(0.4f); freeze(0.05f); vibrate(25, 1); pop("OOF!", Color.WHITE); say("[BONK]"); }
+        if ((ev & Sim.EV_SWING) != 0) { g.audio.play("swing", 0.8f, g.audio.vary(0.95f, 0.1f)); vibrate(10, 2); }
+        if ((ev & Sim.EV_SHOVE) != 0 && (ev & (Sim.EV_SQUASH | Sim.EV_LAUNCH)) == 0) { g.audio.play("bonk", 0.9f, g.audio.vary(0.9f, 0.2f)); g.audio.play("clack", 0.7f, 0.8f); world.shake(0.4f); freeze(0.05f); vibrate(25, 1); pop("OOF!", Color.WHITE); say("[BONK]"); }
         // Build 71 creatures: the skull's dash, the blob's leap and landing, being squashed, being launched
-        if ((ev & Sim.EV_SLIP) != 0) { g.audio.play("slip", 1f, 1.45f + MathUtils.random(0.2f)); pop("WHOA!", Color.WHITE); say("[SQUEAK]"); vibrate(15, 2); }      // a squeaky-shoe skid on ice (sfx.json "slip")
+        if ((ev & Sim.EV_SLIP) != 0) { g.audio.play("slip", 1f, g.audio.vary(1.45f, 0.2f)); pop("WHOA!", Color.WHITE); say("[SQUEAK]"); vibrate(15, 2); }      // a squeaky-shoe skid on ice (sfx.json "slip")
         if ((ev & Sim.EV_DASH) != 0) { g.audio.play("dash", 0.9f, 1f); say("[WHOOSH]"); }
         if ((ev & Sim.EV_ENF_ALERT) != 0) { g.audio.play("enf_alert", 0.85f, 1f); say("[ROBOT ALERT]"); }          // PUNISHER: an Enforcer has seen you
         if ((ev & Sim.EV_AVL_WARN) != 0) { g.audio.play("slam", 0.7f, 0.6f); g.audio.playPack("hit_brick", 0.5f, 0.5f); world.shake(0.25f); vibrate(40, 2); say("[RUMBLE ABOVE]"); }          // an avalanche breaks loose (rules 18, owner 2026-10-29: the rumble only - no popup, no arrows; the caption only with captions on)
-        if (sim.avlImpacts != avlHeard) { if (sim.avlImpacts > avlHeard && avlT <= 0f) { avlT = 0.12f; g.audio.play("slam", 0.55f, 0.85f + MathUtils.random(0.3f)); g.audio.playPack("hit_brick", 0.35f, 0.9f); say("[BLOCKS CRASH]"); } avlHeard = sim.avlImpacts; }
-        if ((ev & Sim.EV_ENF_HIT) != 0) { g.audio.play("enf_hit", 1f, 0.95f + MathUtils.random(0.1f)); say("[ROBOT KICK]"); }          // its kick or swat landed (the launch itself sounds below)
-        if ((ev & Sim.EV_ENF_JUMP) != 0) { g.audio.play("enf_jet", 0.8f, 0.95f + MathUtils.random(0.1f)); say("[JETS]"); }          // its swat jump or its leap away
+        if (sim.avlImpacts != avlHeard) { if (sim.avlImpacts > avlHeard && avlT <= 0f) { avlT = 0.12f; g.audio.play("slam", 0.55f, g.audio.vary(0.85f, 0.3f)); g.audio.playPack("hit_brick", 0.35f, 0.9f); say("[BLOCKS CRASH]"); } avlHeard = sim.avlImpacts; }
+        if ((ev & Sim.EV_ENF_HIT) != 0) { g.audio.play("enf_hit", 1f, g.audio.vary(0.95f, 0.1f)); say("[ROBOT KICK]"); }          // its kick or swat landed (the launch itself sounds below)
+        if ((ev & Sim.EV_ENF_JUMP) != 0) { g.audio.play("enf_jet", 0.8f, g.audio.vary(0.95f, 0.1f)); say("[JETS]"); }          // its swat jump or its leap away
         if ((ev & Sim.EV_BLOB_JUMP) != 0) { g.audio.play("blobup", 0.9f, 1f); say("[BOING]"); }
         if ((ev & Sim.EV_BLOB_LAND) != 0) { g.audio.play("splat", 1f, 1f); world.shake(0.25f); say("[THUD]"); }
         if ((ev & Sim.EV_SQUASH) != 0) { g.audio.play("splat", 1f, 0.7f); g.audio.play("bonk", 0.7f, 0.6f); world.shake(0.6f); freeze(0.08f); vibrate(45, 1); pop("SQUASH!", SQUASH_GREEN); say("[SQUASH]"); }
         if ((ev & Sim.EV_LAUNCH) != 0) { g.audio.play("bounce", 1f, 0.8f); world.shake(0.5f); freeze(0.05f); vibrate(35, 1); pop("WHOOSH!", Color.WHITE); say("[LAUNCHED]"); }
         if ((ev & Sim.EV_CRAB_OFF) != 0) {
-            g.audio.play("squeak", 0.9f, 0.9f + MathUtils.random(0.3f)); g.audio.play("clack", 0.7f, 1.2f); world.crabFlung(sim.crabS, sim.crabY, sim.facing, sim.knocked); freeze(0.07f); world.shake(0.4f); vibrate(30, 1);
+            g.audio.play("squeak", 0.9f, g.audio.vary(0.9f, 0.3f)); g.audio.play("clack", 0.7f, 1.2f); world.crabFlung(sim.crabS, sim.crabY, sim.facing, sim.knocked); freeze(0.07f); world.shake(0.4f); vibrate(30, 1);
             if (sim.knocked == 2) { pop("FORE!", gold); g.audio.play("bonk", 1f, 0.8f); world.shake(0.7f); say("[CLUB BREAKS]"); } else pop("BONK!", gold);      // Build 79: a skull batted away, and the club gone with it
             world.particles.burst(sim.crabS, sim.crabY + 0.4f, 12, red, 3.5f, 3.5f, 0.12f, 6f, 0.6f);
         }

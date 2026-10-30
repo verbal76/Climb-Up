@@ -1415,3 +1415,37 @@ HAPPEN drops 9-12 blocks; the warning is the rumble only; the work stacks on the
   NGH 7322: 40 s of 189 s. Profile (JFR): the avalanche rigid step (24%, mostly StrictMath cos/sin of block angles) and crab deck lookups (28%).
   Computing each block's cos/sin once per substep was bit-identical (cross-build signatures) but no faster (one deck contact per substep), so
   it was reverted. No other provably exact reduction was found without shortening the search, which the directive forbids.
+
+## Build 83 audio polish: louder effects, real headroom, distinct cues (owner directive "GAME JUICE, SOUND DESIGN & AUDIO POLISH", branch `av/build83-audio`, 2026-10-30)
+
+Full measurements, before/after tables and the inventory: `docs/AUDIO_POLISH_REPORT.md`. Presentation only: nothing under `sim/`, `tuning.json`,
+collision, input timing, replays or determinism fixtures changed; every new cue is derived from existing event bits or public counters.
+
+- **Why effects were quiet at 10 (measured, not guessed):** (1) libGDX clamps a Sound's volume to 1.0 and the slider was `volume x step/10`, so
+  10 could never be louder than the files; (2) many pack clips were very spiky (sample peaks at or above 0 dBFS but only -20..-28 LUFS loud: the
+  grab, bounce-pad clang, landing thuds, UI click, footsteps), and the CI's dynamic `loudnorm` left the Minifantasy clips up to +1.6 dBFS (clipping)
+  with variants of one sound 4.5 dB apart; (3) **desktop only:** libGDX places a centred mono effect where OpenAL Soft renders it **7.9 dB down per
+  channel** (calibrated with a 1 kHz tone through the OpenAL Soft wave writer), while the stereo music and Android's SoundPool play at file level.
+- **Mastering (`tools/audio/master_sfx.py`, outputs `assets/audio/mastered/` + `assets/data/sfx_levels.json`; originals untouched):** trim, gain to a
+  per-class in-game target (loudest 100 ms, K-weighted: major -9.5, action -11.5, texture -15.5 LUFS at the caller's loudest volume, from
+  `assets/data/sfx_mix.json`), oversampled soft clip of spikes only (at most 6 dB) and a look-ahead limiter (at most 6 dB) to -1 dBTP. A file that
+  would need more stays short of its target (listed in the report). Set `"mastered": false` in `sfx_mix.json` or delete the folder to go back.
+- **Licensed Minifantasy clips:** `tools/ci/fetch_pack_sfx.sh` now applies fixed per-clip gains (measured from the pinned pack, sha256 unchanged)
+  and a limiter instead of `loudnorm`; still 20 clips, still never committed.
+- **EFFECTS VOLUME curve (`audio/SfxMix`):** 0 = silence; 1..10 in equal 3.1 dB steps from -28 dB to 0 dB (was 1 = -20 dB and only 6 dB between 5
+  and 10). Saved values keep their meaning (same number = same slider position); no settings migration was needed. Music is unchanged and independent.
+- **Bus safety (`SfxMix`):** per-sound copy caps and gaps (data), a 14-voice budget (under Android's 24 streams and OpenAL's 16 sources), equal-power
+  scaling of pile-ups, a peak budget so effects starting within 100 ms cannot sum past full scale, and a 6 dB / 0.35 s duck of texture sounds
+  (steps, creaks, buzzes, hum) under major cues so warnings stay audible in busy scenes.
+- **Desktop level fix (`desktop/OpenAlLevels`):** each effect voice is made non-spatial (AL_SOFT_source_spatialize; the game never pans) and given
+  the measured 4.5 dB back as OpenAL source gain, so a PC plays effects at the same level as a phone. `-Dclimb.noAlLevels=true` turns it off.
+- **Sound identity fixes:** the saw used the rope's creak clip (now its own whir); the pull-up "huup" used the spike trap's snap clips (now the
+  per-character voice again); the bounce pad's thin clang -> an original sprung "boing"; respawn's whoosh (also a jump whoosh) -> a short rising
+  shimmer; menu click -> "select" blip, back/cancel -> a matching falling "back" blip. Previous mappings are kept in `sfx.json` `_build82`.
+- **New cues (original, `tools/audio/gen_cues83.py`):** turbo-ramp booster + its fizzle when cancelled, timed-rebound ping, rope-catch creak,
+  cable-catch ring, ledge hand slap, cable hand-over-hand zip, hard-landing thump, personal-best sting (only with SHOW BEST TIMES on).
+- **Juice (`fx/Juice`, presentation only, own generator):** rope fibres / cable sparks / ledge grit on a catch, hard-landing dust ring, turbo
+  launch flash + exhaust trail, fizzle puff, rebound star, personal-best confetti. No new shake, flash or hit-stop. Off with REDUCED MOTION and at
+  LOW graphics quality.
+- **Cosmetic randomness:** variant picks and pitch/volume variation in audio now come from `SfxMix`'s own generator (and Juice's), not MathUtils;
+  the simulation never used either (PlayDeterminismTest's guard is unchanged).

@@ -9,13 +9,31 @@ import com.hotatticgames.climbup.Settings;
 import java.util.HashMap;
 import java.util.Map;
 
-/** Procedurally synthesised effects and loops (assets/audio, made by tools/gen_audio.py). */
+/**
+ * Effects and music. Effects are the game's own (assets/audio, tools/gen_audio.py and tools/audio/gen_cues83.py), the owner's packs mapped by
+ * assets/data/sfx.json, and the optional licensed Minifantasy clips; Build 83 plays the mastered copy of each (assets/audio/mastered,
+ * tools/audio/master_sfx.py) and routes every effect through {@link SfxMix} (slider curve, voice limits, ducking, stacking guard).
+ */
 public final class Audio implements Disposable {
     private final Map<String, Sound> sounds = new HashMap<>();
     private final Map<String, Music> tracks = new HashMap<>();
     private final Map<String, Sound[]> variants = new HashMap<>();     // owner-supplied sound pack, chosen per sound by assets/data/sfx.json
     private final Map<String, Integer> lastVariant = new HashMap<>();
     private final Map<String, Sound[]> mf = new HashMap<>();           // OPTIONAL Minifantasy Forgotten Plains clips (assets/audio/pack_mf, fetched at build time, never in the repo): absent = the caller falls back
+    private final Map<Sound, Float> lengths = new HashMap<>();          // seconds per clip (sfx_levels.json), for the voice accounting
+    private final Map<Sound, Float> peaks = new HashMap<>();            // linear true peak per clip (sfx_levels.json), for the peak budget
+    private final Map<String, Float> levelPeak = new HashMap<>();
+
+    /**
+     * Platform level hook (Build 83): the desktop launcher installs one that corrects OpenAL's level for each effect voice (libGDX places a mono
+     * effect where OpenAL Soft renders it 7.9 dB down per channel, while Android's SoundPool and the stereo music play at file level). Called
+     * after an effect starts and whenever a looping effect's volume changes, with the volume the game gave it. Null on Android and in tests.
+     */
+    public interface LevelHook { void level(Sound sound, long id, float volume); }
+    public static volatile LevelHook levelHook;
+    /** Build 83 effects bus; public for the About line and tests. */
+    public final SfxMix mix;
+    private final Map<String, Float> levelDur = new HashMap<>();
     private final Settings settings;
     private Music current;
     private String currentName = "";
@@ -24,12 +42,22 @@ public final class Audio implements Disposable {
     public static final String[] GAME_TRACKS = {"music_game", "music_leaplike", "music_mountain_jig", "music_track4"};
     public static final String[] SFX = {"jump", "land", "bounce", "grab", "pull", "crumble", "checkpoint", "respawn", "win", "click", "rope", "step", "grunt1", "grunt2", "grunt3", "effort", "hit", "cannon", "saw", "spikes", "key", "door", "locked", "swing", "bonk", "squeak", "poof", "buzz", "whoosh",
             "dash", "skull", "wobble", "blobup", "splat", "clack", "dive", "slam", "motor", "scan",
-            "enf_step1", "enf_step2", "enf_step3", "enf_step4", "enf_stomp", "enf_alert", "enf_hit", "enf_jet"};          // PUNISHER Enforcer: Helton Yan, Mecha Footsteps (CC BY 4.0, owner exception; tools/audio/mecha_steps.py)
+            "enf_step1", "enf_step2", "enf_step3", "enf_step4", "enf_stomp", "enf_alert", "enf_hit", "enf_jet",          // PUNISHER Enforcer: Helton Yan, Mecha Footsteps (CC BY 4.0, owner exception; tools/audio/mecha_steps.py)
+            "boing", "turbo", "fizzle", "slap", "zing", "zip", "ropecatch", "thump", "warp", "pb", "back", "rebound", "select"};   // Build 83 cues (tools/audio/gen_cues83.py)
 
     public Audio(Settings s) {
         settings = s;
+        mix = new SfxMix().load(text("data/sfx_mix.json"));
+        try {                                                   // clip lengths of the mastered files (and of the originals, as measured)
+            com.badlogic.gdx.utils.JsonValue lv = new com.badlogic.gdx.utils.JsonReader().parse(text("data/sfx_levels.json")).get("files");
+            for (com.badlogic.gdx.utils.JsonValue e = lv == null ? null : lv.child; e != null; e = e.next) {
+                com.badlogic.gdx.utils.JsonValue o = e.get(mix.mastered ? "out" : "in");
+                if (o != null) { levelDur.put(e.name, o.getFloat("dur", 0.6f)); levelPeak.put(e.name, (float) Math.pow(10.0, o.getFloat("truePeakDb", -1f) / 20.0)); }
+            }
+        } catch (Exception ignored) { }
         for (String n : SFX) {
-            try { sounds.put(n, Gdx.audio.newSound(Gdx.files.internal("audio/" + n + ".wav"))); } catch (Exception ignored) { }
+            Sound snd = load(n, "audio/" + n + ".wav");
+            if (snd != null) sounds.put(n, snd);
         }
         try {
             com.badlogic.gdx.utils.JsonValue map = new com.badlogic.gdx.utils.JsonReader().parse(Gdx.files.internal("data/sfx.json"));
@@ -37,7 +65,9 @@ public final class Audio implements Disposable {
                 if (e.name == null || e.name.startsWith("_") || !e.isArray()) continue;
                 java.util.ArrayList<Sound> list = new java.util.ArrayList<>();
                 for (com.badlogic.gdx.utils.JsonValue f = e.child; f != null; f = f.next) {
-                    try { list.add(Gdx.audio.newSound(Gdx.files.internal("audio/pack/" + f.asString() + ".ogg"))); } catch (Exception ignored) { }
+                    String n = f.asString();
+                    Sound snd = n.startsWith("@") ? own(n.substring(1)) : load("p_" + n, "audio/pack/" + n + ".ogg");    // @name = one of the game's own effects
+                    if (snd != null) list.add(snd);
                 }
                 if (!list.isEmpty()) variants.put(e.name, list.toArray(new Sound[0]));
             }
@@ -47,24 +77,44 @@ public final class Audio implements Disposable {
             for (int i = 1; i <= 3; i++) {
                 try {
                     com.badlogic.gdx.files.FileHandle f = Gdx.files.internal("audio/pack_mf/" + g + "_" + i + ".ogg");
-                    if (f.exists()) list.add(Gdx.audio.newSound(f));
+                    if (f.exists()) { Sound snd = Gdx.audio.newSound(f); lengths.put(snd, g.startsWith("step") ? 0.5f : 0.9f); peaks.put(snd, 0.95f); list.add(snd); }    // CI converts them to decode at or under about -0.5 dBTP (fetch_pack_sfx.sh)
                 } catch (Exception ignored) { }
             }
             if (!list.isEmpty()) mf.put(g, list.toArray(new Sound[0]));
         }
     }
 
+    private static String text(String path) {
+        try { com.badlogic.gdx.files.FileHandle f = Gdx.files.internal(path); return f.exists() ? f.readString("UTF-8") : null; } catch (Exception e) { return null; }
+    }
+    /** Loads the mastered copy (audio/mastered/<key>.wav or .ogg) when mastering is on and it exists, else the original; remembers its length. */
+    private Sound load(String key, String original) {
+        try {
+            com.badlogic.gdx.files.FileHandle f = null;
+            if (mix.mastered) { f = Gdx.files.internal("audio/mastered/" + key + ".wav"); if (!f.exists()) f = Gdx.files.internal("audio/mastered/" + key + ".ogg"); }
+            if (f == null || !f.exists()) f = Gdx.files.internal(original);
+            if (!f.exists()) return null;
+            Sound snd = Gdx.audio.newSound(f);
+            lengths.put(snd, levelDur.getOrDefault(key, 0.6f)); peaks.put(snd, levelPeak.getOrDefault(key, 1f));
+            return snd;
+        } catch (Exception e) { return null; }
+    }
+    /** One of the game's own effects by name (shared with the sfx.json entries that point at it). */
+    private Sound own(String name) {
+        Sound snd = sounds.get(name);
+        if (snd == null) { snd = load(name, "audio/" + name + ".wav"); if (snd != null) sounds.put(name, snd); }
+        return snd;
+    }
+    private static double now() { return System.nanoTime() / 1e9; }
+    /** The effects bus gain for the current EFFECTS VOLUME (0 = silent). */
+    public float bus() { return mix.bus(settings.sfx); }
+    /** Cosmetic variation from the audio's own generator (never the simulation's or MathUtils'): base + 0..spread. */
+    public float vary(float base, float spread) { return mix.vary(base, spread); }
+
     /** Pack clip groups (files pack_mf/<group>_1..3.ogg, made by tools/ci/fetch_pack_sfx.sh). */
     public static final String[] PACK_GROUPS = {"step_grass", "step_dirt", "step_stone", "land_grass", "land_stone", "hit_wood", "hit_brick"};
     /** Quiet looping ambience beds (pack_mf/amb_*.ogg), chosen by world. */
     public static final String[] AMBIENCE = {"amb_birds", "amb_wind", "amb_crickets"};
-
-    private boolean throttle(String key, float gap) {
-        long now = System.nanoTime();
-        Long last = lastPlay.get(key);
-        if (last != null && (now - last) < gap * 1e9f) { throttled++; return true; }
-        lastPlay.put(key, now); return false;
-    }
 
     /**
      * Plays one random variant of an optional pack clip group. Returns false when the pack is not installed (tests, ci builds), so the caller can fall back to
@@ -73,12 +123,10 @@ public final class Audio implements Disposable {
     public boolean playPack(String group, float vol, float pitch) {
         Sound[] v = mf.get(group);
         if (v == null) return false;
-        if (settings.sfx <= 0 || throttle("mf_" + group, 0.06f)) return true;
-        int i = v.length == 1 ? 0 : MathUtils.random(v.length - 1);
-        if (v.length > 1 && lastVariant.getOrDefault("mf_" + group, -1) == i) i = (i + 1) % v.length;
+        if (settings.sfx <= 0) return true;
+        int i = mix.pick(v.length, lastVariant.getOrDefault("mf_" + group, -1));
+        start(group, v[i], vol, pitch);
         lastVariant.put("mf_" + group, i);
-        try { if (v[i].play(MathUtils.clamp(vol, 0, 1) * settings.sfx / 10f, pitch, 0f) == -1) refused++; played++; }
-        catch (Exception e) { errors++; lastError = e.getClass().getSimpleName(); }
         return true;
     }
     public boolean hasPack(String group) { return mf.containsKey(group); }
@@ -94,7 +142,7 @@ public final class Audio implements Disposable {
         if (humVol < 0.01f && target <= 0f) { humStop(); return; }
         try {
             if (humId == -1) { humId = s.loop(0f, 1f, 0f); }
-            if (humId != -1) s.setVolume(humId, humVol * HUM_LEVEL * settings.sfx / 10f);
+            if (humId != -1) { float v = humVol * HUM_LEVEL * bus() * mix.duckNow(now()); s.setVolume(humId, v); if (levelHook != null) levelHook.level(s, humId, v); }
         } catch (Exception e) { errors++; lastError = e.getClass().getSimpleName(); humId = -1; }
     }
     public static final float HUM_LEVEL = 0.22f;
@@ -127,7 +175,7 @@ public final class Audio implements Disposable {
         } else if (bed != null) bedVol = Math.min(1f, bedVol + dt * 0.5f);
         if (bed == null) return;
         try {
-            float v = bedVol * BED_LEVEL * settings.sfx / 10f;
+            float v = bedVol * BED_LEVEL * bus();
             bed.setVolume(v);
             if (v > 0f && !bed.isPlaying()) bed.play(); else if (v <= 0f && bed.isPlaying()) bed.pause();
         } catch (Exception e) { errors++; lastError = e.getClass().getSimpleName(); }
@@ -142,20 +190,52 @@ public final class Audio implements Disposable {
     public void play(String name, float vol, float pitch) {
         Sound s = sounds.get(name);
         Sound[] v = variants.get(name);
-        if (v != null) {
-            int i = v.length == 1 ? 0 : MathUtils.random(v.length - 1);
-            if (v.length > 1 && lastVariant.getOrDefault(name, -1) == i) i = (i + 1) % v.length;
-            lastVariant.put(name, i); s = v[i];
-        }
+        int i = -1;
+        if (v != null) { i = mix.pick(v.length, lastVariant.getOrDefault(name, -1)); s = v[i]; }
         if (s == null || settings.sfx <= 0) return;
-        // a runaway caller must never flood the platform's sound pool (Android silently stops serving a saturated pool): cap how often one sound can start
-        long now = System.nanoTime();
-        Long last = lastPlay.get(name);
-        float gap = name.equals("step") ? 0.07f : 0.045f;
-        if (last != null && (now - last) < gap * 1e9f) { throttled++; return; }
-        lastPlay.put(name, now);
-        try { if (s.play(MathUtils.clamp(vol, 0, 1) * settings.sfx / 10f, pitch, 0f) == -1) refused++; played++; }
-        catch (Exception e) { errors++; lastError = e.getClass().getSimpleName(); }
+        if (start(name, s, vol, pitch) && i >= 0) lastVariant.put(name, i);
+    }
+
+    /**
+     * Starts one effect through the bus: the mix decides whether it may start now (gap, copies, voice budget - a runaway caller can never flood
+     * the platform's sound pool, which Android silently stops serving when saturated) and how much it is ducked or stack-scaled; the slider
+     * curve sets the rest. Returns true when it was started.
+     */
+    private boolean start(String name, Sound s, float vol, float pitch) {
+        float len = lengths.getOrDefault(s, 0.6f) / Math.max(0.25f, pitch), v = MathUtils.clamp(vol, 0f, 1f) * bus();
+        double t = now();
+        float g = mix.admit(name, len, v * peaks.getOrDefault(s, 1f), t);
+        if (g < 0f) { throttled++; return false; }
+        if (mix.squeeze < 1f || mix.squeezeMajor < 1f) squeezeRecent(mix.squeeze, mix.squeezeMajor, t);
+        try {
+            long id = s.play(v * g, pitch, 0f);
+            if (id == -1) refused++;
+            else {
+                if (levelHook != null) levelHook.level(s, id, v * g);
+                int k = recentNext; recentNext = (recentNext + 1) % RECENT;          // remembered briefly, so a major cue can make room (SfxMix.squeeze)
+                recentSound[k] = s; recentId[k] = id; recentVol[k] = v * g; recentAt[k] = t; recentMinor[k] = mix.entry(name).prio < SfxMix.MAJOR;
+            }
+            played++;
+        } catch (Exception e) { errors++; lastError = e.getClass().getSimpleName(); }
+        return true;
+    }
+
+    private static final int RECENT = 16;
+    private final Sound[] recentSound = new Sound[RECENT];
+    private final long[] recentId = new long[RECENT];
+    private final float[] recentVol = new float[RECENT];
+    private final double[] recentAt = new double[RECENT];
+    private final boolean[] recentMinor = new boolean[RECENT];
+    private int recentNext;
+    /** Turns down the effects that started within the mix's peak window (a major cue needs the room): minor ones by f, major ones by fMajor. */
+    private void squeezeRecent(float f, float fMajor, double t) {
+        for (int k = 0; k < RECENT; k++) {
+            if (recentSound[k] == null || t - recentAt[k] >= mix.peakWindow) continue;
+            float by = recentMinor[k] ? f : fMajor;
+            if (by >= 1f) continue;
+            recentVol[k] *= by;
+            try { recentSound[k].setVolume(recentId[k], recentVol[k]); if (levelHook != null) levelHook.level(recentSound[k], recentId[k], recentVol[k]); } catch (Exception ignored) { }
+        }
     }
 
     private long fallId = -1; private Sound fallSnd; private boolean falling;
@@ -164,7 +244,7 @@ public final class Audio implements Disposable {
         if (falling || settings.sfx <= 0) return;
         Sound[] v = variants.get("fall"); if (v == null) return;
         falling = true; fallSnd = v[0];
-        try { fallId = fallSnd.play(MathUtils.clamp(vol, 0, 1) * settings.sfx / 10f, 1f, 0f); played++; } catch (Exception e) { errors++; lastError = e.getClass().getSimpleName(); }
+        try { float fv = MathUtils.clamp(vol, 0, 1) * bus(); fallId = fallSnd.play(fv, 1f, 0f); if (fallId != -1 && levelHook != null) levelHook.level(fallSnd, fallId, fv); played++; } catch (Exception e) { errors++; lastError = e.getClass().getSimpleName(); }
     }
     public void fallStop() {
         if (!falling) return;
@@ -174,7 +254,6 @@ public final class Audio implements Disposable {
     }
     public boolean isFalling() { return falling; }
 
-    private final Map<String, Long> lastPlay = new HashMap<>();
     private int played, throttled, refused, errors, musicRestarts;
     private String lastError = "-";
     /** One line for Settings > About: what the audio system has been doing (helps when a phone loses sound). */
@@ -185,6 +264,7 @@ public final class Audio implements Disposable {
     /** Settings > About > restart audio: rebuilds the music player and starts the current track again. */
     public void restart() {
         musicRestarts++;
+        mix.reset();
         try {
             for (Music m : tracks.values()) { try { m.setOnCompletionListener(null); m.stop(); m.dispose(); } catch (Exception ignored) { } }
             tracks.clear(); current = null;
@@ -222,7 +302,7 @@ public final class Audio implements Disposable {
     public void playlist(String... names) {
         if (list != null && currentName.equals("playlist")) { applyVolume(); return; }
         if (current != null) { current.setOnCompletionListener(null); current.stop(); }
-        list = names; listIdx = MathUtils.random(names.length - 1); currentName = "playlist";
+        list = names; listIdx = mix.pick(names.length, -1); currentName = "playlist";
         startListTrack();
     }
 

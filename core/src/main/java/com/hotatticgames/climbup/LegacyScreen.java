@@ -31,7 +31,7 @@ public final class LegacyScreen extends ScreenAdapter {
             y -= step;
         }
         if (l.size() > shown) ui.textC("+ " + (l.size() - shown) + " OLDER", W / 2, 118, 3f, Ui.DIM);
-        if (ui.button("BACK", W / 2 - 150, 22, 300, 78, true)) { g.audio.play("click"); g.setScreen(back); }
+        if (ui.button("BACK", W / 2 - 150, 22, 300, 78, true)) { g.audio.play("back"); g.setScreen(back); }
         ui.end();
         g.autoShot("legacy", dt);
     }

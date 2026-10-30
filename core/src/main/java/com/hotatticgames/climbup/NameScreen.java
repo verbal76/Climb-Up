@@ -99,7 +99,7 @@ public final class NameScreen extends ScreenAdapter {
         g.autoShot("name", dt);
 
         if (okRequested) { okRequested = false; if (confirm()) { g.audio.play("click"); next = home; } else g.audio.play("click", 0.5f, 0.7f); }
-        if (cancelRequested) { cancelRequested = false; g.audio.play("click"); next = back; }
+        if (cancelRequested) { cancelRequested = false; g.audio.play("back"); next = back; }
         if (next != null) { Screen n = next; next = null; g.setScreen(n); }
     }
 }

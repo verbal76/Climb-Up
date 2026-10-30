@@ -76,12 +76,18 @@ if [ "$MODE" = "--check" ]; then echo "pack sfx: OK, downloaded from $SRC, SHA-2
 
 mkdir -p "$OUT" || fail "cannot create $OUT"
 N=0
-# mono 22.05 kHz OGG, silence trimmed, normalised, length capped.  conv <out-name> <source-file-stem>
+# mono 22.05 kHz OGG, silence trimmed, length capped.  conv <out-name> <src-stem> <max-seconds> <loop:0|1>
+# Build 83 (owner: effects too quiet at EFFECTS VOLUME 10): one-shots get a FIXED gain per clip, measured from this exact pack (its SHA-256 is pinned
+# above) by the Build 83 audio pass, then a 1.5 ms look-ahead limiter at -3 dBFS (so the Vorbis file decodes below 0 dBFS; the old dynamic loudnorm
+# left peaks up to +1.6 dBFS and variants of one sound up to 4.5 dB apart). Targets: landings and hits -11.5, footsteps -12.4 LUFS over the loudest
+# 100 ms (K-weighted), limiting at most ~6 dB so the transients keep their snap. See docs/AUDIO_POLISH_REPORT.md.
+declare -A GAIN=([hit_brick_1]=13.0 [hit_brick_2]=13.0 [hit_wood_1]=19.0 [hit_wood_2]=14.0 [land_grass_1]=12.5 [land_grass_2]=9.5 [land_stone_1]=9.0 [land_stone_2]=0.5 [step_dirt_1]=12.0 [step_dirt_2]=11.5 [step_dirt_3]=15.5 [step_grass_1]=19.5 [step_grass_2]=17.0 [step_grass_3]=12.5 [step_stone_1]=19.5 [step_stone_2]=15.5 [step_stone_3]=17.0)
 conv() {  # conv <out-name> <src-stem> <max-seconds> <loop:0|1>
   local src; src="$(ls "$WORK"/x/"$2".wav 2>/dev/null | head -n1)"
   [ -n "$src" ] || { echo "::error::pack sfx: the pack has no $2.wav"; return; }
   if [ "$4" = "0" ]; then
-    ffmpeg -v error -y -i "$src" -ac 1 -ar 22050 -af "silenceremove=start_periods=1:start_threshold=-45dB,loudnorm=I=-20:TP=-2:LRA=7,atrim=0:$3" -c:a libvorbis -q:a 2 "$OUT/$1.ogg" && N=$((N+1))
+    local g="${GAIN[$1]:-0}"
+    ffmpeg -v error -y -i "$src" -ac 1 -ar 22050 -af "aresample=22050,silenceremove=start_periods=1:start_threshold=-45dB,atrim=0:$3,volume=${g}dB,alimiter=limit=0.7079:attack=1.5:release=12:level=disabled" -c:a libvorbis -q:a 3 "$OUT/$1.ogg" && N=$((N+1))
   else
     ffmpeg -v error -y -i "$src" -ac 1 -ar 22050 -af "loudnorm=I=-26:TP=-3:LRA=7" -c:a libvorbis -q:a 1 "$OUT/$1.ogg" && N=$((N+1))
   fi

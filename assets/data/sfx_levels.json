@@ -1,0 +1,2125 @@
+{
+ "_comment": "Written by tools/audio/master_sfx.py: per mastered file, the source, class, the measurements before (in) and after (out) and the gain / peak limiting applied. l100 = loudest 100 ms K-weighted (LUFS), m400 = loudest 400 ms (EBU momentary). dur (s) also feeds the game's voice accounting.",
+ "ceilingDb": -1.0,
+ "clipKneeDb": 3.0,
+ "files": {
+  "back": {
+   "class": "texture",
+   "clipDb": 0.0,
+   "gainDb": -2.14,
+   "grDb": -0.0,
+   "in": {
+    "dur": 0.11,
+    "l100": -11.45,
+    "m400": -17.47,
+    "peakDb": -1.0,
+    "truePeakDb": -1.0
+   },
+   "out": {
+    "dur": 0.1,
+    "l100": -13.59,
+    "m400": -19.61,
+    "peakDb": -3.14,
+    "truePeakDb": -3.14
+   },
+   "rate": 22050,
+   "src": "assets/audio/back.wav",
+   "target": -13.58
+  },
+  "blobup": {
+   "class": "action",
+   "clipDb": 0.0,
+   "gainDb": -0.42,
+   "grDb": -0.0,
+   "in": {
+    "dur": 0.32,
+    "l100": -8.16,
+    "m400": -10.68,
+    "peakDb": -2.5,
+    "truePeakDb": -2.5
+   },
+   "out": {
+    "dur": 0.32,
+    "l100": -8.59,
+    "m400": -11.1,
+    "peakDb": -2.92,
+    "truePeakDb": -2.92
+   },
+   "rate": 22050,
+   "src": "assets/audio/blobup.wav",
+   "target": -8.58
+  },
+  "boing": {
+   "class": "action",
+   "clipDb": 0.0,
+   "gainDb": 1.0,
+   "grDb": 1.01,
+   "in": {
+    "dur": 0.48,
+    "l100": -10.96,
+    "m400": -15.9,
+    "peakDb": -1.0,
+    "truePeakDb": -0.99
+   },
+   "out": {
+    "dur": 0.48,
+    "l100": -10.27,
+    "m400": -15.15,
+    "peakDb": -1.01,
+    "truePeakDb": -1.0
+   },
+   "rate": 22050,
+   "src": "assets/audio/boing.wav",
+   "target": -9.5
+  },
+  "bonk": {
+   "class": "action",
+   "clipDb": 0.0,
+   "gainDb": 1.0,
+   "grDb": 0.11,
+   "in": {
+    "dur": 0.2,
+    "l100": -10.9,
+    "m400": -16.77,
+    "peakDb": -1.94,
+    "truePeakDb": -1.89
+   },
+   "out": {
+    "dur": 0.2,
+    "l100": -9.94,
+    "m400": -15.81,
+    "peakDb": -1.05,
+    "truePeakDb": -1.0
+   },
+   "rate": 22050,
+   "src": "assets/audio/bonk.wav",
+   "target": -9.5
+  },
+  "bounce": {
+   "class": "action",
+   "clipDb": 0.0,
+   "gainDb": -2.11,
+   "grDb": -0.0,
+   "in": {
+    "dur": 0.38,
+    "l100": -7.39,
+    "m400": -9.69,
+    "peakDb": -1.94,
+    "truePeakDb": -1.94
+   },
+   "out": {
+    "dur": 0.38,
+    "l100": -9.5,
+    "m400": -11.8,
+    "peakDb": -4.05,
+    "truePeakDb": -4.05
+   },
+   "rate": 22050,
+   "src": "assets/audio/bounce.wav",
+   "target": -9.5
+  },
+  "buzz": {
+   "class": "texture",
+   "clipDb": 0.0,
+   "gainDb": -0.87,
+   "grDb": -0.0,
+   "in": {
+    "dur": 0.4,
+    "l100": -5.67,
+    "m400": -6.92,
+    "peakDb": -1.94,
+    "truePeakDb": -1.29
+   },
+   "out": {
+    "dur": 0.4,
+    "l100": -6.54,
+    "m400": -7.79,
+    "peakDb": -2.81,
+    "truePeakDb": -2.17
+   },
+   "rate": 22050,
+   "src": "assets/audio/buzz.wav",
+   "target": -6.54
+  },
+  "cannon": {
+   "class": "action",
+   "clipDb": 0.0,
+   "gainDb": 1.0,
+   "grDb": 0.15,
+   "in": {
+    "dur": 0.6,
+    "l100": -10.71,
+    "m400": -15.03,
+    "peakDb": -1.94,
+    "truePeakDb": -1.85
+   },
+   "out": {
+    "dur": 0.59,
+    "l100": -9.74,
+    "m400": -14.05,
+    "peakDb": -1.09,
+    "truePeakDb": -1.0
+   },
+   "rate": 22050,
+   "src": "assets/audio/cannon.wav",
+   "target": -9.5
+  },
+  "checkpoint": {
+   "class": "major",
+   "clipDb": 1.08,
+   "gainDb": 6.0,
+   "grDb": 4.02,
+   "in": {
+    "dur": 0.7,
+    "l100": -11.85,
+    "m400": -12.78,
+    "peakDb": -1.94,
+    "truePeakDb": -1.94
+   },
+   "out": {
+    "dur": 0.57,
+    "l100": -8.38,
+    "m400": -8.61,
+    "peakDb": -1.0,
+    "truePeakDb": -1.0
+   },
+   "rate": 22050,
+   "src": "assets/audio/checkpoint.wav",
+   "target": -5.56
+  },
+  "clack": {
+   "class": "texture",
+   "clipDb": 0.0,
+   "gainDb": 1.0,
+   "grDb": -0.0,
+   "in": {
+    "dur": 0.2,
+    "l100": -12.53,
+    "m400": -18.44,
+    "peakDb": -3.1,
+    "truePeakDb": -2.16
+   },
+   "out": {
+    "dur": 0.12,
+    "l100": -11.53,
+    "m400": -17.46,
+    "peakDb": -2.1,
+    "truePeakDb": -1.16
+   },
+   "rate": 22050,
+   "src": "assets/audio/clack.wav",
+   "target": -11.4
+  },
+  "click": {
+   "class": "texture",
+   "clipDb": 0.0,
+   "gainDb": -5.22,
+   "grDb": -0.0,
+   "in": {
+    "dur": 0.04,
+    "l100": -8.25,
+    "m400": -14.27,
+    "peakDb": -1.94,
+    "truePeakDb": 1.08
+   },
+   "out": {
+    "dur": 0.04,
+    "l100": -13.59,
+    "m400": -19.61,
+    "peakDb": -7.16,
+    "truePeakDb": -4.14
+   },
+   "rate": 22050,
+   "src": "assets/audio/click.wav",
+   "target": -13.58
+  },
+  "crumble": {
+   "class": "action",
+   "clipDb": 2.06,
+   "gainDb": 7.0,
+   "grDb": 4.93,
+   "in": {
+    "dur": 0.55,
+    "l100": -13.5,
+    "m400": -15.12,
+    "peakDb": -1.94,
+    "truePeakDb": -1.94
+   },
+   "out": {
+    "dur": 0.55,
+    "l100": -8.17,
+    "m400": -9.57,
+    "peakDb": -1.01,
+    "truePeakDb": -1.0
+   },
+   "rate": 22050,
+   "src": "assets/audio/crumble.wav",
+   "target": -6.4
+  },
+  "dash": {
+   "class": "action",
+   "clipDb": 0.0,
+   "gainDb": 0.5,
+   "grDb": -0.0,
+   "in": {
+    "dur": 0.42,
+    "l100": -9.21,
+    "m400": -12.28,
+    "peakDb": -2.5,
+    "truePeakDb": -1.83
+   },
+   "out": {
+    "dur": 0.419,
+    "l100": -8.71,
+    "m400": -11.78,
+    "peakDb": -2.0,
+    "truePeakDb": -1.33
+   },
+   "rate": 22050,
+   "src": "assets/audio/dash.wav",
+   "target": -8.58
+  },
+  "dive": {
+   "class": "action",
+   "clipDb": 0.19,
+   "gainDb": 6.0,
+   "grDb": 3.76,
+   "in": {
+    "dur": 0.5,
+    "l100": -10.41,
+    "m400": -12.32,
+    "peakDb": -3.1,
+    "truePeakDb": -3.08
+   },
+   "out": {
+    "dur": 0.5,
+    "l100": -7.31,
+    "m400": -8.25,
+    "peakDb": -1.02,
+    "truePeakDb": -1.0
+   },
+   "rate": 22050,
+   "src": "assets/audio/dive.wav",
+   "target": -4.31
+  },
+  "door": {
+   "class": "major",
+   "clipDb": 1.57,
+   "gainDb": 6.5,
+   "grDb": 4.16,
+   "in": {
+    "dur": 0.7,
+    "l100": -14.22,
+    "m400": -16.01,
+    "peakDb": -1.94,
+    "truePeakDb": -1.94
+   },
+   "out": {
+    "dur": 0.7,
+    "l100": -9.53,
+    "m400": -10.11,
+    "peakDb": -1.01,
+    "truePeakDb": -1.0
+   },
+   "rate": 22050,
+   "src": "assets/audio/door.wav",
+   "target": -7.5
+  },
+  "effort": {
+   "class": "action",
+   "clipDb": 0.0,
+   "gainDb": 1.0,
+   "grDb": 0.08,
+   "in": {
+    "dur": 0.3,
+    "l100": -9.82,
+    "m400": -13.58,
+    "peakDb": -1.94,
+    "truePeakDb": -1.92
+   },
+   "out": {
+    "dur": 0.3,
+    "l100": -8.83,
+    "m400": -12.63,
+    "peakDb": -1.02,
+    "truePeakDb": -1.0
+   },
+   "rate": 22050,
+   "src": "assets/audio/effort.wav",
+   "target": -8.58
+  },
+  "enf_alert": {
+   "class": "major",
+   "clipDb": 1.07,
+   "gainDb": 5.0,
+   "grDb": 4.01,
+   "in": {
+    "dur": 1.2,
+    "l100": -11.36,
+    "m400": -12.87,
+    "peakDb": -1.0,
+    "truePeakDb": -0.96
+   },
+   "out": {
+    "dur": 1.177,
+    "l100": -8.39,
+    "m400": -9.22,
+    "peakDb": -1.03,
+    "truePeakDb": -1.0
+   },
+   "rate": 22050,
+   "src": "assets/audio/enf_alert.wav",
+   "target": -6.09
+  },
+  "enf_hit": {
+   "class": "action",
+   "clipDb": 0.0,
+   "gainDb": 2.0,
+   "grDb": 2.0,
+   "in": {
+    "dur": 0.56,
+    "l100": -11.56,
+    "m400": -13.64,
+    "peakDb": -1.0,
+    "truePeakDb": -1.0
+   },
+   "out": {
+    "dur": 0.542,
+    "l100": -10.49,
+    "m400": -12.01,
+    "peakDb": -1.0,
+    "truePeakDb": -1.0
+   },
+   "rate": 22050,
+   "src": "assets/audio/enf_hit.wav",
+   "target": -9.5
+  },
+  "enf_jet": {
+   "class": "action",
+   "clipDb": 0.0,
+   "gainDb": 0.5,
+   "grDb": 0.5,
+   "in": {
+    "dur": 0.8,
+    "l100": -8.23,
+    "m400": -10.77,
+    "peakDb": -1.0,
+    "truePeakDb": -1.0
+   },
+   "out": {
+    "dur": 0.781,
+    "l100": -7.76,
+    "m400": -10.32,
+    "peakDb": -1.0,
+    "truePeakDb": -1.0
+   },
+   "rate": 22050,
+   "src": "assets/audio/enf_jet.wav",
+   "target": -7.56
+  },
+  "enf_step1": {
+   "class": "texture",
+   "clipDb": 0.0,
+   "gainDb": 8.5,
+   "grDb": 2.08,
+   "in": {
+    "dur": 0.6,
+    "l100": -19.02,
+    "m400": -22.29,
+    "peakDb": -7.43,
+    "truePeakDb": -7.42
+   },
+   "out": {
+    "dur": 0.592,
+    "l100": -11.05,
+    "m400": -14.14,
+    "peakDb": -1.01,
+    "truePeakDb": -1.0
+   },
+   "rate": 22050,
+   "src": "assets/audio/enf_step1.wav",
+   "target": -10.06
+  },
+  "enf_step2": {
+   "class": "texture",
+   "clipDb": 0.0,
+   "gainDb": 10.5,
+   "grDb": 0.81,
+   "in": {
+    "dur": 0.6,
+    "l100": -21.0,
+    "m400": -22.95,
+    "peakDb": -10.76,
+    "truePeakDb": -10.69
+   },
+   "out": {
+    "dur": 0.592,
+    "l100": -10.69,
+    "m400": -12.58,
+    "peakDb": -1.0,
+    "truePeakDb": -1.0
+   },
+   "rate": 22050,
+   "src": "assets/audio/enf_step2.wav",
+   "target": -10.06
+  },
+  "enf_step3": {
+   "class": "texture",
+   "clipDb": 0.0,
+   "gainDb": 16.0,
+   "grDb": 3.15,
+   "in": {
+    "dur": 0.6,
+    "l100": -26.39,
+    "m400": -29.01,
+    "peakDb": -13.86,
+    "truePeakDb": -13.85
+   },
+   "out": {
+    "dur": 0.592,
+    "l100": -11.52,
+    "m400": -13.49,
+    "peakDb": -1.01,
+    "truePeakDb": -1.0
+   },
+   "rate": 22050,
+   "src": "assets/audio/enf_step3.wav",
+   "target": -10.06
+  },
+  "enf_step4": {
+   "class": "texture",
+   "clipDb": 0.0,
+   "gainDb": 12.5,
+   "grDb": 2.23,
+   "in": {
+    "dur": 0.6,
+    "l100": -22.65,
+    "m400": -25.12,
+    "peakDb": -11.32,
+    "truePeakDb": -11.27
+   },
+   "out": {
+    "dur": 0.589,
+    "l100": -10.7,
+    "m400": -12.94,
+    "peakDb": -1.04,
+    "truePeakDb": -1.0
+   },
+   "rate": 22050,
+   "src": "assets/audio/enf_step4.wav",
+   "target": -10.06
+  },
+  "enf_stomp": {
+   "class": "action",
+   "clipDb": 0.0,
+   "gainDb": 3.5,
+   "grDb": 1.2,
+   "in": {
+    "dur": 1.0,
+    "l100": -12.43,
+    "m400": -16.17,
+    "peakDb": -3.36,
+    "truePeakDb": -3.3
+   },
+   "out": {
+    "dur": 0.993,
+    "l100": -9.23,
+    "m400": -12.85,
+    "peakDb": -1.01,
+    "truePeakDb": -1.0
+   },
+   "rate": 22050,
+   "src": "assets/audio/enf_stomp.wav",
+   "target": -8.58
+  },
+  "fizzle": {
+   "class": "action",
+   "clipDb": 0.25,
+   "gainDb": 3.5,
+   "grDb": 3.94,
+   "in": {
+    "dur": 0.34,
+    "l100": -11.52,
+    "m400": -16.99,
+    "peakDb": -1.0,
+    "truePeakDb": -0.47
+   },
+   "out": {
+    "dur": 0.34,
+    "l100": -9.55,
+    "m400": -14.81,
+    "peakDb": -1.0,
+    "truePeakDb": -1.0
+   },
+   "rate": 22050,
+   "src": "assets/audio/fizzle.wav",
+   "target": -7.56
+  },
+  "grab": {
+   "class": "action",
+   "clipDb": 0.0,
+   "gainDb": -3.65,
+   "grDb": -0.0,
+   "in": {
+    "dur": 0.14,
+    "l100": -3.91,
+    "m400": -9.79,
+    "peakDb": -1.94,
+    "truePeakDb": 0.61
+   },
+   "out": {
+    "dur": 0.13,
+    "l100": -7.56,
+    "m400": -13.44,
+    "peakDb": -5.59,
+    "truePeakDb": -3.03
+   },
+   "rate": 22050,
+   "src": "assets/audio/grab.wav",
+   "target": -7.56
+  },
+  "grunt1": {
+   "class": "action",
+   "clipDb": 0.0,
+   "gainDb": 1.5,
+   "grDb": 0.63,
+   "in": {
+    "dur": 0.26,
+    "l100": -10.42,
+    "m400": -14.85,
+    "peakDb": -1.94,
+    "truePeakDb": -1.87
+   },
+   "out": {
+    "dur": 0.26,
+    "l100": -9.12,
+    "m400": -13.52,
+    "peakDb": -1.07,
+    "truePeakDb": -1.0
+   },
+   "rate": 22050,
+   "src": "assets/audio/grunt1.wav",
+   "target": -8.58
+  },
+  "grunt2": {
+   "class": "action",
+   "clipDb": 0.0,
+   "gainDb": 2.0,
+   "grDb": 1.07,
+   "in": {
+    "dur": 0.32,
+    "l100": -10.71,
+    "m400": -14.44,
+    "peakDb": -1.94,
+    "truePeakDb": -1.93
+   },
+   "out": {
+    "dur": 0.32,
+    "l100": -9.12,
+    "m400": -12.69,
+    "peakDb": -1.01,
+    "truePeakDb": -1.0
+   },
+   "rate": 22050,
+   "src": "assets/audio/grunt2.wav",
+   "target": -8.58
+  },
+  "grunt3": {
+   "class": "action",
+   "clipDb": 0.0,
+   "gainDb": 1.5,
+   "grDb": 0.68,
+   "in": {
+    "dur": 0.22,
+    "l100": -10.31,
+    "m400": -14.8,
+    "peakDb": -1.94,
+    "truePeakDb": -1.82
+   },
+   "out": {
+    "dur": 0.22,
+    "l100": -9.03,
+    "m400": -13.5,
+    "peakDb": -1.0,
+    "truePeakDb": -1.0
+   },
+   "rate": 22050,
+   "src": "assets/audio/grunt3.wav",
+   "target": -8.58
+  },
+  "hit": {
+   "class": "major",
+   "clipDb": 0.32,
+   "gainDb": 5.0,
+   "grDb": 3.92,
+   "in": {
+    "dur": 0.42,
+    "l100": -12.91,
+    "m400": -18.07,
+    "peakDb": -1.94,
+    "truePeakDb": -1.86
+   },
+   "out": {
+    "dur": 0.42,
+    "l100": -9.42,
+    "m400": -14.27,
+    "peakDb": -1.1,
+    "truePeakDb": -1.0
+   },
+   "rate": 22050,
+   "src": "assets/audio/hit.wav",
+   "target": -7.5
+  },
+  "jump": {
+   "class": "action",
+   "clipDb": 0.0,
+   "gainDb": -0.41,
+   "grDb": -0.0,
+   "in": {
+    "dur": 0.16,
+    "l100": -5.99,
+    "m400": -11.55,
+    "peakDb": -1.94,
+    "truePeakDb": -1.94
+   },
+   "out": {
+    "dur": 0.16,
+    "l100": -6.4,
+    "m400": -11.97,
+    "peakDb": -2.35,
+    "truePeakDb": -2.35
+   },
+   "rate": 22050,
+   "src": "assets/audio/jump.wav",
+   "target": -6.4
+  },
+  "key": {
+   "class": "major",
+   "clipDb": 0.0,
+   "gainDb": 1.0,
+   "grDb": 0.18,
+   "in": {
+    "dur": 0.5,
+    "l100": -8.54,
+    "m400": -10.85,
+    "peakDb": -1.94,
+    "truePeakDb": -1.82
+   },
+   "out": {
+    "dur": 0.46,
+    "l100": -7.54,
+    "m400": -9.86,
+    "peakDb": -1.12,
+    "truePeakDb": -1.0
+   },
+   "rate": 22050,
+   "src": "assets/audio/key.wav",
+   "target": -7.5
+  },
+  "land": {
+   "class": "action",
+   "clipDb": 0.27,
+   "gainDb": 5.0,
+   "grDb": 3.87,
+   "in": {
+    "dur": 0.1,
+    "l100": -13.72,
+    "m400": -19.74,
+    "peakDb": -1.94,
+    "truePeakDb": -1.94
+   },
+   "out": {
+    "dur": 0.1,
+    "l100": -11.18,
+    "m400": -17.2,
+    "peakDb": -1.0,
+    "truePeakDb": -1.0
+   },
+   "rate": 22050,
+   "src": "assets/audio/land.wav",
+   "target": -8.58
+  },
+  "locked": {
+   "class": "major",
+   "clipDb": 1.15,
+   "gainDb": 6.0,
+   "grDb": 4.03,
+   "in": {
+    "dur": 0.25,
+    "l100": -11.91,
+    "m400": -17.7,
+    "peakDb": -1.94,
+    "truePeakDb": -1.87
+   },
+   "out": {
+    "dur": 0.25,
+    "l100": -7.84,
+    "m400": -13.49,
+    "peakDb": -1.0,
+    "truePeakDb": -1.0
+   },
+   "rate": 22050,
+   "src": "assets/audio/locked.wav",
+   "target": -5.56
+  },
+  "motor": {
+   "class": "bed",
+   "clipDb": 0.0,
+   "gainDb": 0.0,
+   "grDb": 0.0,
+   "in": {
+    "dur": 1.0,
+    "l100": -15.19,
+    "m400": -16.34,
+    "peakDb": -6.02,
+    "truePeakDb": -6.02
+   },
+   "out": {
+    "dur": 1.0,
+    "l100": -15.19,
+    "m400": -16.34,
+    "peakDb": -6.02,
+    "truePeakDb": -6.02
+   },
+   "rate": 22050,
+   "src": "assets/audio/motor.wav",
+   "target": null
+  },
+  "p_brass1": {
+   "class": "major",
+   "clipDb": 0.0,
+   "gainDb": 7.5,
+   "grDb": -0.0,
+   "in": {
+    "dur": 3.675,
+    "l100": -15.21,
+    "m400": -16.06,
+    "peakDb": -9.43,
+    "truePeakDb": -9.42
+   },
+   "out": {
+    "dur": 3.395,
+    "l100": -7.64,
+    "m400": -8.49,
+    "peakDb": -1.88,
+    "truePeakDb": -1.88
+   },
+   "rate": 44100,
+   "src": "assets/audio/pack/brass1.ogg",
+   "target": -7.5
+  },
+  "p_brass3": {
+   "class": "major",
+   "clipDb": 0.0,
+   "gainDb": 10.5,
+   "grDb": 0.45,
+   "in": {
+    "dur": 3.672,
+    "l100": -18.16,
+    "m400": -19.52,
+    "peakDb": -11.06,
+    "truePeakDb": -11.05
+   },
+   "out": {
+    "dur": 3.662,
+    "l100": -7.62,
+    "m400": -8.97,
+    "peakDb": -0.9,
+    "truePeakDb": -0.9
+   },
+   "rate": 44100,
+   "src": "assets/audio/pack/brass3.ogg",
+   "target": -7.5
+  },
+  "p_clang8": {
+   "class": "major",
+   "clipDb": 5.81,
+   "gainDb": 9.0,
+   "grDb": 5.64,
+   "in": {
+    "dur": 0.271,
+    "l100": -19.37,
+    "m400": -25.37,
+    "peakDb": -0.19,
+    "truePeakDb": -0.19
+   },
+   "out": {
+    "dur": 0.238,
+    "l100": -14.64,
+    "m400": -20.61,
+    "peakDb": -1.28,
+    "truePeakDb": -0.88
+   },
+   "rate": 44100,
+   "src": "assets/audio/pack/clang8.ogg",
+   "target": -5.56
+  },
+  "p_clang9": {
+   "class": "major",
+   "clipDb": 5.81,
+   "gainDb": 8.5,
+   "grDb": 4.93,
+   "in": {
+    "dur": 0.353,
+    "l100": -16.25,
+    "m400": -21.92,
+    "peakDb": -0.0,
+    "truePeakDb": 0.31
+   },
+   "out": {
+    "dur": 0.33,
+    "l100": -11.15,
+    "m400": -16.45,
+    "peakDb": -1.29,
+    "truePeakDb": -0.97
+   },
+   "rate": 44100,
+   "src": "assets/audio/pack/clang9.ogg",
+   "target": -5.56
+  },
+  "p_clickandrelease_1": {
+   "class": "action",
+   "clipDb": 5.84,
+   "gainDb": 8.5,
+   "grDb": 5.6,
+   "in": {
+    "dur": 0.317,
+    "l100": -20.87,
+    "m400": -22.44,
+    "peakDb": -0.28,
+    "truePeakDb": 0.34
+   },
+   "out": {
+    "dur": 0.294,
+    "l100": -17.4,
+    "m400": -19.36,
+    "peakDb": -0.93,
+    "truePeakDb": -0.89
+   },
+   "rate": 44100,
+   "src": "assets/audio/pack/clickandrelease_1.ogg",
+   "target": -7.56
+  },
+  "p_crunch_1": {
+   "class": "major",
+   "clipDb": 1.17,
+   "gainDb": 8.0,
+   "grDb": 3.99,
+   "in": {
+    "dur": 1.849,
+    "l100": -15.56,
+    "m400": -18.22,
+    "peakDb": -3.86,
+    "truePeakDb": -3.85
+   },
+   "out": {
+    "dur": 0.456,
+    "l100": -9.5,
+    "m400": -11.28,
+    "peakDb": -0.84,
+    "truePeakDb": -0.84
+   },
+   "rate": 44100,
+   "src": "assets/audio/pack/crunch_1.ogg",
+   "target": -7.5
+  },
+  "p_crunch_2": {
+   "class": "major",
+   "clipDb": 1.33,
+   "gainDb": 6.0,
+   "grDb": 3.99,
+   "in": {
+    "dur": 1.843,
+    "l100": -13.93,
+    "m400": -16.16,
+    "peakDb": -1.69,
+    "truePeakDb": -1.69
+   },
+   "out": {
+    "dur": 1.743,
+    "l100": -8.39,
+    "m400": -10.93,
+    "peakDb": -0.72,
+    "truePeakDb": -0.7
+   },
+   "rate": 44100,
+   "src": "assets/audio/pack/crunch_2.ogg",
+   "target": -7.5
+  },
+  "p_crunch_3": {
+   "class": "action",
+   "clipDb": 0.0,
+   "gainDb": 7.0,
+   "grDb": 2.35,
+   "in": {
+    "dur": 1.843,
+    "l100": -13.7,
+    "m400": -16.89,
+    "peakDb": -5.65,
+    "truePeakDb": -5.65
+   },
+   "out": {
+    "dur": 0.6,
+    "l100": -7.61,
+    "m400": -10.65,
+    "peakDb": -0.7,
+    "truePeakDb": -0.7
+   },
+   "rate": 44100,
+   "src": "assets/audio/pack/crunch_3.ogg",
+   "target": -6.4
+  },
+  "p_fall": {
+   "class": "texture",
+   "clipDb": 0.0,
+   "gainDb": -0.94,
+   "grDb": -0.0,
+   "in": {
+    "dur": 3.2,
+    "l100": -12.15,
+    "m400": -13.87,
+    "peakDb": -1.43,
+    "truePeakDb": -1.43
+   },
+   "out": {
+    "dur": 3.2,
+    "l100": -13.13,
+    "m400": -14.83,
+    "peakDb": -2.34,
+    "truePeakDb": -2.33
+   },
+   "rate": 44100,
+   "src": "assets/audio/pack/fall.ogg",
+   "target": -13.09
+  },
+  "p_parry1": {
+   "class": "action",
+   "clipDb": 3.23,
+   "gainDb": 5.5,
+   "grDb": 4.12,
+   "in": {
+    "dur": 0.918,
+    "l100": -14.25,
+    "m400": -20.09,
+    "peakDb": 0.71,
+    "truePeakDb": 0.73
+   },
+   "out": {
+    "dur": 0.915,
+    "l100": -12.93,
+    "m400": -18.48,
+    "peakDb": -0.81,
+    "truePeakDb": -0.79
+   },
+   "rate": 44100,
+   "src": "assets/audio/pack/parry1.ogg",
+   "target": -8.58
+  },
+  "p_parry2": {
+   "class": "action",
+   "clipDb": 4.06,
+   "gainDb": 6.0,
+   "grDb": 4.21,
+   "in": {
+    "dur": 1.046,
+    "l100": -14.78,
+    "m400": -20.64,
+    "peakDb": 0.85,
+    "truePeakDb": 1.06
+   },
+   "out": {
+    "dur": 1.046,
+    "l100": -12.98,
+    "m400": -18.57,
+    "peakDb": -0.89,
+    "truePeakDb": -0.89
+   },
+   "rate": 44100,
+   "src": "assets/audio/pack/parry2.ogg",
+   "target": -8.58
+  },
+  "p_parry3": {
+   "class": "action",
+   "clipDb": 2.56,
+   "gainDb": 4.5,
+   "grDb": 4.0,
+   "in": {
+    "dur": 1.107,
+    "l100": -13.17,
+    "m400": -18.85,
+    "peakDb": 1.06,
+    "truePeakDb": 1.06
+   },
+   "out": {
+    "dur": 1.107,
+    "l100": -12.04,
+    "m400": -17.35,
+    "peakDb": -0.9,
+    "truePeakDb": -0.9
+   },
+   "rate": 44100,
+   "src": "assets/audio/pack/parry3.ogg",
+   "target": -8.58
+  },
+  "p_scratch2": {
+   "class": "texture",
+   "clipDb": 2.86,
+   "gainDb": 5.0,
+   "grDb": 5.21,
+   "in": {
+    "dur": 0.24,
+    "l100": -12.02,
+    "m400": -18.03,
+    "peakDb": 0.2,
+    "truePeakDb": 0.86
+   },
+   "out": {
+    "dur": 0.222,
+    "l100": -10.89,
+    "m400": -16.89,
+    "peakDb": -0.97,
+    "truePeakDb": -0.79
+   },
+   "rate": 44100,
+   "src": "assets/audio/pack/scratch2.ogg",
+   "target": -6.54
+  },
+  "p_shell_explosion_1": {
+   "class": "action",
+   "clipDb": 0.0,
+   "gainDb": 3.0,
+   "grDb": 2.68,
+   "in": {
+    "dur": 1.527,
+    "l100": -12.63,
+    "m400": -16.26,
+    "peakDb": -1.35,
+    "truePeakDb": -1.32
+   },
+   "out": {
+    "dur": 1.527,
+    "l100": -10.64,
+    "m400": -13.79,
+    "peakDb": -0.89,
+    "truePeakDb": -0.89
+   },
+   "rate": 44100,
+   "src": "assets/audio/pack/shell_explosion_1.ogg",
+   "target": -9.5
+  },
+  "p_snap_1": {
+   "class": "action",
+   "clipDb": 0.0,
+   "gainDb": 0.0,
+   "grDb": 1.72,
+   "in": {
+    "dur": 0.327,
+    "l100": -8.55,
+    "m400": -14.52,
+    "peakDb": 0.71,
+    "truePeakDb": 0.72
+   },
+   "out": {
+    "dur": 0.304,
+    "l100": -9.31,
+    "m400": -15.26,
+    "peakDb": -0.93,
+    "truePeakDb": -0.93
+   },
+   "rate": 44100,
+   "src": "assets/audio/pack/snap_1.ogg",
+   "target": -7.0
+  },
+  "p_snap_2": {
+   "class": "action",
+   "clipDb": 0.0,
+   "gainDb": 0.0,
+   "grDb": 2.15,
+   "in": {
+    "dur": 0.338,
+    "l100": -9.25,
+    "m400": -15.23,
+    "peakDb": 1.15,
+    "truePeakDb": 1.15
+   },
+   "out": {
+    "dur": 0.295,
+    "l100": -10.24,
+    "m400": -16.21,
+    "peakDb": -0.88,
+    "truePeakDb": -0.88
+   },
+   "rate": 44100,
+   "src": "assets/audio/pack/snap_2.ogg",
+   "target": -7.0
+  },
+  "p_snap_3": {
+   "class": "action",
+   "clipDb": 1.57,
+   "gainDb": 7.5,
+   "grDb": 3.99,
+   "in": {
+    "dur": 0.506,
+    "l100": -13.99,
+    "m400": -19.98,
+    "peakDb": -2.93,
+    "truePeakDb": -2.93
+   },
+   "out": {
+    "dur": 0.304,
+    "l100": -9.22,
+    "m400": -15.17,
+    "peakDb": -0.85,
+    "truePeakDb": -0.85
+   },
+   "rate": 44100,
+   "src": "assets/audio/pack/snap_3.ogg",
+   "target": -6.4
+  },
+  "p_snap_4": {
+   "class": "action",
+   "clipDb": 1.14,
+   "gainDb": 7.5,
+   "grDb": 3.98,
+   "in": {
+    "dur": 0.482,
+    "l100": -13.94,
+    "m400": -19.95,
+    "peakDb": -3.38,
+    "truePeakDb": -3.38
+   },
+   "out": {
+    "dur": 0.32,
+    "l100": -9.0,
+    "m400": -15.0,
+    "peakDb": -0.92,
+    "truePeakDb": -0.92
+   },
+   "rate": 44100,
+   "src": "assets/audio/pack/snap_4.ogg",
+   "target": -6.4
+  },
+  "p_sucess1": {
+   "class": "major",
+   "clipDb": 0.0,
+   "gainDb": 6.0,
+   "grDb": 1.68,
+   "in": {
+    "dur": 1.872,
+    "l100": -13.88,
+    "m400": -17.08,
+    "peakDb": -5.32,
+    "truePeakDb": -5.32
+   },
+   "out": {
+    "dur": 1.422,
+    "l100": -8.4,
+    "m400": -11.32,
+    "peakDb": -0.89,
+    "truePeakDb": -0.87
+   },
+   "rate": 44100,
+   "src": "assets/audio/pack/sucess1.ogg",
+   "target": -7.5
+  },
+  "p_sucesss2": {
+   "class": "major",
+   "clipDb": 0.7,
+   "gainDb": 10.5,
+   "grDb": 3.94,
+   "in": {
+    "dur": 1.873,
+    "l100": -16.37,
+    "m400": -17.65,
+    "peakDb": -6.86,
+    "truePeakDb": -6.86
+   },
+   "out": {
+    "dur": 1.373,
+    "l100": -6.99,
+    "m400": -8.3,
+    "peakDb": -0.8,
+    "truePeakDb": -0.8
+   },
+   "rate": 44100,
+   "src": "assets/audio/pack/sucesss2.ogg",
+   "target": -5.56
+  },
+  "p_textscroll_2": {
+   "class": "texture",
+   "clipDb": 2.38,
+   "gainDb": 11.5,
+   "grDb": 4.0,
+   "in": {
+    "dur": 1.846,
+    "l100": -19.43,
+    "m400": -19.76,
+    "peakDb": -6.12,
+    "truePeakDb": -6.12
+   },
+   "out": {
+    "dur": 0.953,
+    "l100": -9.76,
+    "m400": -10.06,
+    "peakDb": -0.68,
+    "truePeakDb": -0.68
+   },
+   "rate": 44100,
+   "src": "assets/audio/pack/textscroll_2.ogg",
+   "target": -7.56
+  },
+  "p_textscroll_3": {
+   "class": "texture",
+   "clipDb": 2.9,
+   "gainDb": 9.5,
+   "grDb": 4.13,
+   "in": {
+    "dur": 1.841,
+    "l100": -17.46,
+    "m400": -18.7,
+    "peakDb": -3.64,
+    "truePeakDb": -3.6
+   },
+   "out": {
+    "dur": 1.401,
+    "l100": -12.5,
+    "m400": -13.09,
+    "peakDb": -0.78,
+    "truePeakDb": -0.78
+   },
+   "rate": 44100,
+   "src": "assets/audio/pack/textscroll_3.ogg",
+   "target": -7.56
+  },
+  "p_thud1": {
+   "class": "action",
+   "clipDb": 5.79,
+   "gainDb": 8.0,
+   "grDb": 4.42,
+   "in": {
+    "dur": 0.368,
+    "l100": -21.42,
+    "m400": -27.32,
+    "peakDb": 0.56,
+    "truePeakDb": 0.79
+   },
+   "out": {
+    "dur": 0.365,
+    "l100": -18.21,
+    "m400": -23.88,
+    "peakDb": -1.01,
+    "truePeakDb": -0.9
+   },
+   "rate": 44100,
+   "src": "assets/audio/pack/thud1.ogg",
+   "target": -8.58
+  },
+  "p_thud2": {
+   "class": "action",
+   "clipDb": 5.62,
+   "gainDb": 7.5,
+   "grDb": 4.17,
+   "in": {
+    "dur": 0.887,
+    "l100": -18.05,
+    "m400": -23.93,
+    "peakDb": 1.12,
+    "truePeakDb": 1.12
+   },
+   "out": {
+    "dur": 0.874,
+    "l100": -15.26,
+    "m400": -20.89,
+    "peakDb": -1.03,
+    "truePeakDb": -1.01
+   },
+   "rate": 44100,
+   "src": "assets/audio/pack/thud2.ogg",
+   "target": -9.5
+  },
+  "p_thudd3": {
+   "class": "major",
+   "clipDb": 3.95,
+   "gainDb": 6.0,
+   "grDb": 4.0,
+   "in": {
+    "dur": 0.915,
+    "l100": -13.85,
+    "m400": -19.71,
+    "peakDb": 0.95,
+    "truePeakDb": 0.95
+   },
+   "out": {
+    "dur": 0.912,
+    "l100": -12.01,
+    "m400": -17.61,
+    "peakDb": -0.82,
+    "truePeakDb": -0.82
+   },
+   "rate": 44100,
+   "src": "assets/audio/pack/thudd3.ogg",
+   "target": -7.5
+  },
+  "p_transition": {
+   "class": "texture",
+   "clipDb": 1.74,
+   "gainDb": 4.5,
+   "grDb": 4.09,
+   "in": {
+    "dur": 2.659,
+    "l100": -14.6,
+    "m400": -18.37,
+    "peakDb": 0.06,
+    "truePeakDb": 0.23
+   },
+   "out": {
+    "dur": 2.659,
+    "l100": -12.74,
+    "m400": -15.33,
+    "peakDb": -0.51,
+    "truePeakDb": -0.51
+   },
+   "rate": 44100,
+   "src": "assets/audio/pack/transition.ogg",
+   "target": -10.06
+  },
+  "p_unclick_1": {
+   "class": "texture",
+   "clipDb": 6.02,
+   "gainDb": 8.0,
+   "grDb": 4.54,
+   "in": {
+    "dur": 0.101,
+    "l100": -19.96,
+    "m400": -25.98,
+    "peakDb": 1.02,
+    "truePeakDb": 1.02
+   },
+   "out": {
+    "dur": 0.088,
+    "l100": -17.53,
+    "m400": -23.55,
+    "peakDb": -0.84,
+    "truePeakDb": -0.79
+   },
+   "rate": 44100,
+   "src": "assets/audio/pack/unclick_1.ogg",
+   "target": -5.38
+  },
+  "p_unclick_2": {
+   "class": "texture",
+   "clipDb": 5.95,
+   "gainDb": 8.5,
+   "grDb": 4.57,
+   "in": {
+    "dur": 0.058,
+    "l100": -21.47,
+    "m400": -27.5,
+    "peakDb": 0.45,
+    "truePeakDb": 0.45
+   },
+   "out": {
+    "dur": 0.035,
+    "l100": -19.13,
+    "m400": -25.15,
+    "peakDb": -1.01,
+    "truePeakDb": -0.7
+   },
+   "rate": 44100,
+   "src": "assets/audio/pack/unclick_2.ogg",
+   "target": -5.38
+  },
+  "p_woosh_1": {
+   "class": "action",
+   "clipDb": 0.0,
+   "gainDb": 0.0,
+   "grDb": 2.21,
+   "in": {
+    "dur": 0.352,
+    "l100": -8.01,
+    "m400": -13.9,
+    "peakDb": 1.21,
+    "truePeakDb": 1.21
+   },
+   "out": {
+    "dur": 0.259,
+    "l100": -9.25,
+    "m400": -15.13,
+    "peakDb": -0.81,
+    "truePeakDb": -0.77
+   },
+   "rate": 44100,
+   "src": "assets/audio/pack/woosh_1.ogg",
+   "target": -6.4
+  },
+  "p_woosh_2": {
+   "class": "action",
+   "clipDb": 0.77,
+   "gainDb": 3.5,
+   "grDb": 4.28,
+   "in": {
+    "dur": 0.273,
+    "l100": -10.29,
+    "m400": -16.12,
+    "peakDb": -0.64,
+    "truePeakDb": 0.22
+   },
+   "out": {
+    "dur": 0.274,
+    "l100": -8.69,
+    "m400": -14.44,
+    "peakDb": -0.93,
+    "truePeakDb": -0.93
+   },
+   "rate": 44100,
+   "src": "assets/audio/pack/woosh_2.ogg",
+   "target": -6.4
+  },
+  "p_woosh_3": {
+   "class": "action",
+   "clipDb": 0.33,
+   "gainDb": 2.5,
+   "grDb": 3.9,
+   "in": {
+    "dur": 0.345,
+    "l100": -10.18,
+    "m400": -15.46,
+    "peakDb": 0.47,
+    "truePeakDb": 0.67
+   },
+   "out": {
+    "dur": 0.367,
+    "l100": -9.54,
+    "m400": -14.56,
+    "peakDb": -0.65,
+    "truePeakDb": -0.65
+   },
+   "rate": 44100,
+   "src": "assets/audio/pack/woosh_3.ogg",
+   "target": -7.56
+  },
+  "p_woosh_4": {
+   "class": "action",
+   "clipDb": 5.9,
+   "gainDb": 8.5,
+   "grDb": 5.04,
+   "in": {
+    "dur": 1.023,
+    "l100": -15.82,
+    "m400": -21.83,
+    "peakDb": 0.35,
+    "truePeakDb": 0.4
+   },
+   "out": {
+    "dur": 0.14,
+    "l100": -13.03,
+    "m400": -19.01,
+    "peakDb": -1.13,
+    "truePeakDb": -1.01
+   },
+   "rate": 44100,
+   "src": "assets/audio/pack/woosh_4.ogg",
+   "target": -2.56
+  },
+  "pb": {
+   "class": "major",
+   "clipDb": 0.0,
+   "gainDb": 2.5,
+   "grDb": 2.58,
+   "in": {
+    "dur": 0.95,
+    "l100": -9.54,
+    "m400": -11.87,
+    "peakDb": -1.0,
+    "truePeakDb": -0.92
+   },
+   "out": {
+    "dur": 0.95,
+    "l100": -8.12,
+    "m400": -9.82,
+    "peakDb": -1.0,
+    "truePeakDb": -1.0
+   },
+   "rate": 22050,
+   "src": "assets/audio/pb.wav",
+   "target": -6.58
+  },
+  "poof": {
+   "class": "action",
+   "clipDb": 3.56,
+   "gainDb": 8.5,
+   "grDb": 4.29,
+   "in": {
+    "dur": 0.45,
+    "l100": -11.46,
+    "m400": -16.43,
+    "peakDb": -1.94,
+    "truePeakDb": -1.94
+   },
+   "out": {
+    "dur": 0.45,
+    "l100": -7.01,
+    "m400": -10.93,
+    "peakDb": -1.0,
+    "truePeakDb": -1.0
+   },
+   "rate": 22050,
+   "src": "assets/audio/poof.wav",
+   "target": -2.56
+  },
+  "pull": {
+   "class": "action",
+   "clipDb": 0.0,
+   "gainDb": 2.5,
+   "grDb": 1.56,
+   "in": {
+    "dur": 0.3,
+    "l100": -9.23,
+    "m400": -13.09,
+    "peakDb": -1.94,
+    "truePeakDb": -1.94
+   },
+   "out": {
+    "dur": 0.3,
+    "l100": -7.76,
+    "m400": -11.24,
+    "peakDb": -1.0,
+    "truePeakDb": -1.0
+   },
+   "rate": 22050,
+   "src": "assets/audio/pull.wav",
+   "target": -6.4
+  },
+  "rebound": {
+   "class": "action",
+   "clipDb": 0.23,
+   "gainDb": 4.0,
+   "grDb": 3.85,
+   "in": {
+    "dur": 0.24,
+    "l100": -11.76,
+    "m400": -17.62,
+    "peakDb": -1.0,
+    "truePeakDb": -1.0
+   },
+   "out": {
+    "dur": 0.24,
+    "l100": -9.41,
+    "m400": -15.21,
+    "peakDb": -1.0,
+    "truePeakDb": -1.0
+   },
+   "rate": 22050,
+   "src": "assets/audio/rebound.wav",
+   "target": -7.56
+  },
+  "respawn": {
+   "class": "major",
+   "clipDb": 0.0,
+   "gainDb": 0.0,
+   "grDb": -0.0,
+   "in": {
+    "dur": 0.45,
+    "l100": -5.63,
+    "m400": -6.9,
+    "peakDb": -1.94,
+    "truePeakDb": -1.94
+   },
+   "out": {
+    "dur": 0.45,
+    "l100": -5.64,
+    "m400": -6.91,
+    "peakDb": -1.94,
+    "truePeakDb": -1.94
+   },
+   "rate": 22050,
+   "src": "assets/audio/respawn.wav",
+   "target": -5.56
+  },
+  "rope": {
+   "class": "texture",
+   "clipDb": 3.06,
+   "gainDb": 7.5,
+   "grDb": 4.55,
+   "in": {
+    "dur": 0.07,
+    "l100": -14.4,
+    "m400": -20.42,
+    "peakDb": -1.94,
+    "truePeakDb": -1.44
+   },
+   "out": {
+    "dur": 0.07,
+    "l100": -10.95,
+    "m400": -16.97,
+    "peakDb": -1.08,
+    "truePeakDb": -1.0
+   },
+   "rate": 22050,
+   "src": "assets/audio/rope.wav",
+   "target": -6.54
+  },
+  "ropecatch": {
+   "class": "action",
+   "clipDb": 0.63,
+   "gainDb": 4.5,
+   "grDb": 4.23,
+   "in": {
+    "dur": 0.26,
+    "l100": -11.04,
+    "m400": -14.62,
+    "peakDb": -1.0,
+    "truePeakDb": -0.94
+   },
+   "out": {
+    "dur": 0.26,
+    "l100": -6.89,
+    "m400": -10.93,
+    "peakDb": -1.01,
+    "truePeakDb": -1.0
+   },
+   "rate": 22050,
+   "src": "assets/audio/ropecatch.wav",
+   "target": -6.4
+  },
+  "saw": {
+   "class": "texture",
+   "clipDb": 0.29,
+   "gainDb": 4.0,
+   "grDb": 4.0,
+   "in": {
+    "dur": 0.5,
+    "l100": -9.71,
+    "m400": -11.18,
+    "peakDb": -1.94,
+    "truePeakDb": -0.89
+   },
+   "out": {
+    "dur": 0.5,
+    "l100": -7.67,
+    "m400": -8.85,
+    "peakDb": -1.04,
+    "truePeakDb": -1.0
+   },
+   "rate": 22050,
+   "src": "assets/audio/saw.wav",
+   "target": -5.38
+  },
+  "scan": {
+   "class": "texture",
+   "clipDb": 0.0,
+   "gainDb": 6.0,
+   "grDb": 0.07,
+   "in": {
+    "dur": 4.2,
+    "l100": -14.98,
+    "m400": -15.93,
+    "peakDb": -6.94,
+    "truePeakDb": -6.93
+   },
+   "out": {
+    "dur": 4.194,
+    "l100": -8.98,
+    "m400": -9.93,
+    "peakDb": -1.0,
+    "truePeakDb": -1.0
+   },
+   "rate": 22050,
+   "src": "assets/audio/scan.wav",
+   "target": -8.48
+  },
+  "select": {
+   "class": "texture",
+   "clipDb": 0.0,
+   "gainDb": -2.38,
+   "grDb": -0.0,
+   "in": {
+    "dur": 0.11,
+    "l100": -11.2,
+    "m400": -17.23,
+    "peakDb": -1.0,
+    "truePeakDb": -0.88
+   },
+   "out": {
+    "dur": 0.1,
+    "l100": -13.59,
+    "m400": -19.61,
+    "peakDb": -3.38,
+    "truePeakDb": -3.25
+   },
+   "rate": 22050,
+   "src": "assets/audio/select.wav",
+   "target": -13.58
+  },
+  "skull": {
+   "class": "texture",
+   "clipDb": 0.0,
+   "gainDb": 2.0,
+   "grDb": -0.0,
+   "in": {
+    "dur": 0.9,
+    "l100": -9.74,
+    "m400": -10.5,
+    "peakDb": -4.44,
+    "truePeakDb": -4.28
+   },
+   "out": {
+    "dur": 0.897,
+    "l100": -7.74,
+    "m400": -8.5,
+    "peakDb": -2.44,
+    "truePeakDb": -2.28
+   },
+   "rate": 22050,
+   "src": "assets/audio/skull.wav",
+   "target": -7.56
+  },
+  "slam": {
+   "class": "action",
+   "clipDb": 0.0,
+   "gainDb": 2.0,
+   "grDb": 2.08,
+   "in": {
+    "dur": 0.5,
+    "l100": -10.42,
+    "m400": -15.76,
+    "peakDb": -0.92,
+    "truePeakDb": -0.92
+   },
+   "out": {
+    "dur": 0.48,
+    "l100": -9.12,
+    "m400": -14.35,
+    "peakDb": -1.0,
+    "truePeakDb": -1.0
+   },
+   "rate": 22050,
+   "src": "assets/audio/slam.wav",
+   "target": -8.09
+  },
+  "slap": {
+   "class": "action",
+   "clipDb": 5.01,
+   "gainDb": 8.0,
+   "grDb": 5.45,
+   "in": {
+    "dur": 0.14,
+    "l100": -14.82,
+    "m400": -20.84,
+    "peakDb": -1.0,
+    "truePeakDb": 0.01
+   },
+   "out": {
+    "dur": 0.14,
+    "l100": -11.85,
+    "m400": -17.86,
+    "peakDb": -1.0,
+    "truePeakDb": -1.0
+   },
+   "rate": 22050,
+   "src": "assets/audio/slap.wav",
+   "target": -6.4
+  },
+  "spikes": {
+   "class": "action",
+   "clipDb": 0.0,
+   "gainDb": 2.0,
+   "grDb": 1.22,
+   "in": {
+    "dur": 0.22,
+    "l100": -9.2,
+    "m400": -13.51,
+    "peakDb": -1.94,
+    "truePeakDb": -1.78
+   },
+   "out": {
+    "dur": 0.22,
+    "l100": -7.49,
+    "m400": -11.7,
+    "peakDb": -1.0,
+    "truePeakDb": -1.0
+   },
+   "rate": 22050,
+   "src": "assets/audio/spikes.wav",
+   "target": -7.0
+  },
+  "splat": {
+   "class": "action",
+   "clipDb": 0.0,
+   "gainDb": 3.0,
+   "grDb": 2.59,
+   "in": {
+    "dur": 0.34,
+    "l100": -12.72,
+    "m400": -18.32,
+    "peakDb": -1.41,
+    "truePeakDb": -1.41
+   },
+   "out": {
+    "dur": 0.33,
+    "l100": -10.59,
+    "m400": -16.1,
+    "peakDb": -1.0,
+    "truePeakDb": -1.0
+   },
+   "rate": 22050,
+   "src": "assets/audio/splat.wav",
+   "target": -9.5
+  },
+  "squeak": {
+   "class": "action",
+   "clipDb": 0.0,
+   "gainDb": 1.5,
+   "grDb": 0.56,
+   "in": {
+    "dur": 0.35,
+    "l100": -10.41,
+    "m400": -15.32,
+    "peakDb": -1.94,
+    "truePeakDb": -1.94
+   },
+   "out": {
+    "dur": 0.35,
+    "l100": -9.1,
+    "m400": -13.96,
+    "peakDb": -1.0,
+    "truePeakDb": -1.0
+   },
+   "rate": 22050,
+   "src": "assets/audio/squeak.wav",
+   "target": -8.58
+  },
+  "step": {
+   "class": "texture",
+   "clipDb": 5.25,
+   "gainDb": 10.0,
+   "grDb": 4.8,
+   "in": {
+    "dur": 0.05,
+    "l100": -15.64,
+    "m400": -21.66,
+    "peakDb": -1.94,
+    "truePeakDb": -1.75
+   },
+   "out": {
+    "dur": 0.05,
+    "l100": -11.01,
+    "m400": -17.03,
+    "peakDb": -1.01,
+    "truePeakDb": -1.0
+   },
+   "rate": 22050,
+   "src": "assets/audio/step.wav",
+   "target": -5.38
+  },
+  "swing": {
+   "class": "action",
+   "clipDb": 0.0,
+   "gainDb": 1.5,
+   "grDb": 1.21,
+   "in": {
+    "dur": 0.28,
+    "l100": -9.16,
+    "m400": -13.82,
+    "peakDb": -1.94,
+    "truePeakDb": -1.29
+   },
+   "out": {
+    "dur": 0.28,
+    "l100": -8.0,
+    "m400": -12.56,
+    "peakDb": -1.01,
+    "truePeakDb": -1.0
+   },
+   "rate": 22050,
+   "src": "assets/audio/swing.wav",
+   "target": -7.56
+  },
+  "thump": {
+   "class": "action",
+   "clipDb": 0.05,
+   "gainDb": 3.5,
+   "grDb": 3.53,
+   "in": {
+    "dur": 0.3,
+    "l100": -11.44,
+    "m400": -17.28,
+    "peakDb": -1.0,
+    "truePeakDb": -0.93
+   },
+   "out": {
+    "dur": 0.3,
+    "l100": -9.45,
+    "m400": -15.22,
+    "peakDb": -1.0,
+    "truePeakDb": -1.0
+   },
+   "rate": 22050,
+   "src": "assets/audio/thump.wav",
+   "target": -7.56
+  },
+  "turbo": {
+   "class": "action",
+   "clipDb": 0.0,
+   "gainDb": 0.0,
+   "grDb": 0.33,
+   "in": {
+    "dur": 0.75,
+    "l100": -9.71,
+    "m400": -10.82,
+    "peakDb": -1.0,
+    "truePeakDb": -0.67
+   },
+   "out": {
+    "dur": 0.75,
+    "l100": -9.73,
+    "m400": -10.84,
+    "peakDb": -1.15,
+    "truePeakDb": -1.0
+   },
+   "rate": 22050,
+   "src": "assets/audio/turbo.wav",
+   "target": -9.5
+  },
+  "warp": {
+   "class": "major",
+   "clipDb": 0.58,
+   "gainDb": 4.5,
+   "grDb": 4.14,
+   "in": {
+    "dur": 0.5,
+    "l100": -10.06,
+    "m400": -12.9,
+    "peakDb": -1.0,
+    "truePeakDb": -1.0
+   },
+   "out": {
+    "dur": 0.5,
+    "l100": -7.3,
+    "m400": -9.7,
+    "peakDb": -1.0,
+    "truePeakDb": -1.0
+   },
+   "rate": 22050,
+   "src": "assets/audio/warp.wav",
+   "target": -5.56
+  },
+  "whoosh": {
+   "class": "texture",
+   "clipDb": 0.0,
+   "gainDb": 1.0,
+   "grDb": 0.12,
+   "in": {
+    "dur": 1.6,
+    "l100": -11.28,
+    "m400": -11.83,
+    "peakDb": -1.94,
+    "truePeakDb": -1.88
+   },
+   "out": {
+    "dur": 1.599,
+    "l100": -10.28,
+    "m400": -10.83,
+    "peakDb": -1.06,
+    "truePeakDb": -1.0
+   },
+   "rate": 22050,
+   "src": "assets/audio/whoosh.wav",
+   "target": -10.06
+  },
+  "win": {
+   "class": "major",
+   "clipDb": 0.11,
+   "gainDb": 4.5,
+   "grDb": 3.7,
+   "in": {
+    "dur": 1.4,
+    "l100": -12.39,
+    "m400": -12.78,
+    "peakDb": -1.94,
+    "truePeakDb": -1.75
+   },
+   "out": {
+    "dur": 1.28,
+    "l100": -8.89,
+    "m400": -8.99,
+    "peakDb": -1.01,
+    "truePeakDb": -1.0
+   },
+   "rate": 22050,
+   "src": "assets/audio/win.wav",
+   "target": -7.5
+  },
+  "wobble": {
+   "class": "action",
+   "clipDb": 0.0,
+   "gainDb": 4.5,
+   "grDb": 2.4,
+   "in": {
+    "dur": 0.55,
+    "l100": -10.51,
+    "m400": -11.95,
+    "peakDb": -3.1,
+    "truePeakDb": -3.1
+   },
+   "out": {
+    "dur": 0.55,
+    "l100": -7.5,
+    "m400": -8.3,
+    "peakDb": -1.0,
+    "truePeakDb": -1.0
+   },
+   "rate": 22050,
+   "src": "assets/audio/wobble.wav",
+   "target": -5.76
+  },
+  "zing": {
+   "class": "action",
+   "clipDb": 2.88,
+   "gainDb": 6.5,
+   "grDb": 4.39,
+   "in": {
+    "dur": 0.42,
+    "l100": -11.56,
+    "m400": -16.57,
+    "peakDb": -1.0,
+    "truePeakDb": -0.62
+   },
+   "out": {
+    "dur": 0.42,
+    "l100": -7.58,
+    "m400": -11.94,
+    "peakDb": -1.0,
+    "truePeakDb": -1.0
+   },
+   "rate": 22050,
+   "src": "assets/audio/zing.wav",
+   "target": -5.06
+  },
+  "zip": {
+   "class": "texture",
+   "clipDb": 0.1,
+   "gainDb": 3.0,
+   "grDb": 3.71,
+   "in": {
+    "dur": 0.09,
+    "l100": -9.79,
+    "m400": -15.81,
+    "peakDb": -1.0,
+    "truePeakDb": -0.26
+   },
+   "out": {
+    "dur": 0.09,
+    "l100": -8.84,
+    "m400": -14.86,
+    "peakDb": -1.08,
+    "truePeakDb": -1.0
+   },
+   "rate": 22050,
+   "src": "assets/audio/zip.wav",
+   "target": -6.54
+  }
+ },
+ "maxClipDb": 6.0,
+ "maxGrDb": 6.0
+}

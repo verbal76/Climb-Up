@@ -57,7 +57,7 @@ final class BindingsScreen extends ScreenAdapter {
         if (pad && target != null) ui.textC(DesktopTabs.clip(target.name(), 40), W / 2, H - 106, 2.8f, Ui.DIM);
         boolean usable = !pad || (target != null && target.connected() && pb != null);
         if (!dialog()) {
-            if (ui.button("BACK", 40, H - 100, 200, 64, true)) { g.audio.play("click"); dp.save(); g.setScreen(back); ui.end(); return; }
+            if (ui.button("BACK", 40, H - 100, 200, 64, true)) { g.audio.play("back"); dp.save(); g.setScreen(back); ui.end(); return; }
             if (usable) {
                 column(ui, W / 2 - 620, H - 160, "GAMEPLAY", true);
                 column(ui, W / 2 + 20, H - 160, "MENUS", false);
@@ -154,7 +154,7 @@ final class BindingsScreen extends ScreenAdapter {
         }
     }
 
-    private void cancel() { g.audio.play("click"); if (pad) rp.cancel(); else rk.cancel(); status = "CANCELLED. NOTHING WAS CHANGED."; }
+    private void cancel() { g.audio.play("back"); if (pad) rp.cancel(); else rk.cancel(); status = "CANCELLED. NOTHING WAS CHANGED."; }
 
     private void confirm(Act a) {
         Bindings.Result r = pad ? rp.confirm() : rk.confirm();

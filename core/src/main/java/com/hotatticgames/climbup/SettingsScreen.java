@@ -133,7 +133,7 @@ public final class SettingsScreen extends ScreenAdapter {
         Ui ui = g.ui; ui.begin();
         float W = ui.w(), H = ui.h();
         ui.textC("SETTINGS", W / 2, H - 78, 7f, Ui.TEXT);
-        if (ui.button("BACK", 40, H - 100, 200, 64, true)) { g.audio.play("click"); g.persist(); if (back instanceof PlayScreen) ((PlayScreen) back).resumeFromSettings(); g.setScreen(back); ui.end(); return; }
+        if (ui.button("BACK", 40, H - 100, 200, 64, true)) { g.audio.play("back"); g.persist(); if (back instanceof PlayScreen) ((PlayScreen) back).resumeFromSettings(); g.setScreen(back); ui.end(); return; }
         java.util.List<com.hotatticgames.climbup.platform.Platform.SettingsTab> extra = g.platform.settingsTabs();
         boolean desktop = g.platform.desktop();
         if (extra.isEmpty()) {                                      // phone: four tabs in a centred row, the two long names wider

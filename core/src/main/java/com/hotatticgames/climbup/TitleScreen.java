@@ -174,7 +174,7 @@ public final class TitleScreen extends ScreenAdapter {
             TitleLayout.Rect r = m.buttons[i];
             if (ui.button(items[i].label(g.settings.character, g.save.legacy.size()), r.x, r.y, r.w, r.h)) { g.audio.play("click"); chooseMore(items[i]); }
         }
-        if (ui.button("BACK", m.back.x, m.back.y, m.back.w, m.back.h, true)) { g.audio.play("click"); showMore = false; }
+        if (ui.button("BACK", m.back.x, m.back.y, m.back.w, m.back.h, true)) { g.audio.play("back"); showMore = false; }
     }
 
     private final float[] headPos = new float[2];
@@ -216,7 +216,7 @@ public final class TitleScreen extends ScreenAdapter {
         float row = py + 40 + bh + 18;
         if (ui.button("RANDOM RUN", W / 2 - bw - 14, row, bw, bh)) { confirmNew = false; startRun(null); }
         if (ui.button("SEEDED RUN", W / 2 + 14, row, bw, bh)) { confirmNew = false; g.audio.play("click"); next = new SeedScreen(g, this); }
-        if (ui.button("CANCEL", W / 2 - bw / 2, py + 40, bw, bh, true)) { g.audio.play("click"); confirmNew = false; }
+        if (ui.button("CANCEL", W / 2 - bw / 2, py + 40, bw, bh, true)) { g.audio.play("back"); confirmNew = false; }
     }
 
     /** Starts a fresh climb: a random course ({@code seed} null), or the course behind a typed code. The saved climb, if any, is forgotten first. */

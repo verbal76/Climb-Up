@@ -200,7 +200,7 @@ public final class PlayScreen extends ScreenAdapter {
         sim.assistForgive = g.settings.assistForgive ? g.tuning.assistJumpForgiveness : 0f;
     }
 
-    @Override public void resize(int w, int h) { g.ui.resize(w, h); world.resize(w, h); }
+    @Override public void resize(int w, int h) { g.ui.resize(w, h); if (world != null) world.resize(w, h); }          // (Build 82 review, finding 1: no world when show() refused the climb)
 
     // ------------------------------------------------------------------ input
 
@@ -285,6 +285,10 @@ public final class PlayScreen extends ScreenAdapter {
     // ------------------------------------------------------------------ frame
 
     @Override public void render(float dt) {
+        if (world == null) {          // Build 82 review (finding 1): show() refused the climb (its course cannot be built): leave for the title, nothing to step or draw
+            if (next != null) { com.badlogic.gdx.Screen n = next; next = null; boolean d = disposeOnLeave; g.setScreen(n); if (d) dispose(); }
+            return;
+        }
         if (PerfProbe.ON) { PerfProbe.tStart = System.nanoTime(); PerfProbe.steps = 0; PerfProbe.events = 0; PerfProbe.saved = false; PerfProbe.tDrive = 0; }
         dt = Math.min(dt, 0.1f);
         time += dt;
@@ -524,11 +528,9 @@ public final class PlayScreen extends ScreenAdapter {
         sd.towers = n + 1;
         RecordsData.Run cur = null;
         if (n < RecordsData.LEGS) { if (!sd.climbNotComparable) sd.board().legDone(sd.seed, runRules(), n, split); cur = sd.board().current; }          // (R5: a mixed-rules climb sets no record)          // times table: this leg, its global and its on-this-course bests
-        boolean hadSplit = sd.bestSplit > 0f, pbSplit = !sd.assisted && sd.difficulty == 0 && (!hadSplit || RunRecord.faster(split, sd.bestSplit));       // owner (Build 71): an assisted run's towers are timed but set no best
-        if (pbSplit) sd.bestSplit = split;
-        if (sd.bestTotals.length <= n) sd.bestTotals = java.util.Arrays.copyOf(sd.bestTotals, n + 1);
-        boolean hadTotal = sd.bestTotals[n] > 0f, pbTotal = !sd.assisted && sd.difficulty == 0 && (!hadTotal || RunRecord.faster(total, sd.bestTotals[n]));
-        if (pbTotal) sd.bestTotals[n] = total;
+        boolean hadSplit = sd.bestSplit > 0f, hadTotal = sd.bestTotals.length > n && sd.bestTotals[n] > 0f;
+        int pb = RunRecord.towerBests(sd, n, split, total);          // owner (Build 71) and R5: an assisted or mixed-rules run's towers are timed but set no best
+        boolean pbSplit = (pb & 1) != 0, pbTotal = (pb & 2) != 0;
         sd.towerStartClock = sd.runClock; sd.towerStartHeight = (float) Math.max(0.0, maxAbs);
         toast = keyName(sim.lastGateColor) + " CASTLE OPENED!"; toastT = 3.2f;
         boolean showPb = g.settings.showBestTimes;                                   // Build 64: SHOW BEST TIMES hides every best and comparison here; the split itself and the clock stay

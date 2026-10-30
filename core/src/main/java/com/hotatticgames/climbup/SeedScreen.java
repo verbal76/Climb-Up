@@ -21,6 +21,7 @@ public final class SeedScreen extends ScreenAdapter {
     private String message = "";
     private float time;
     private Screen next;
+    private final ClimbStart start = new ClimbStart();          // Build 82 review (findings 1, 6): the climb is built off the frame, the play screen opens when it exists
     private boolean okRequested, cancelRequested;
     public SeedScreen(ClimbGame g, Screen back) { this.g = g; this.back = back; }
 
@@ -74,7 +75,8 @@ public final class SeedScreen extends ScreenAdapter {
         float cw = ui.font.width(cnt, 3f), px = Math.min(6f, (bw - 22 - 24 - cw - 18) / (16 * 6f));
         ui.text(shown.toString(), bx + 22, by + bh / 2 - ui.font.height(px) / 2, px, Ui.TEXT);
         ui.text(cnt, bx + bw - 18 - cw, by + bh / 2 - ui.font.height(3f) / 2, 3f, Ui.DIM);
-        if (!message.isEmpty()) ui.textC(message, W / 2, by - 30, Math.min(3.2f, (W - 60f) / (message.length() * 6f)), Ui.ACCENT);
+        String building = start.status(Math.min(dt, 0.1f)), msg = building.isEmpty() ? message : building;
+        if (!msg.isEmpty()) ui.textC(msg, W / 2, by - 30, Math.min(3.2f, (W - 60f) / (msg.length() * 6f)), Ui.ACCENT);
         // the symbols
         float gw = Math.min(W - 144, 1100), gap = KEYS_GAP, kh = keyHeight(H, Dp.unitsPerDp(ui)), kw = (gw - gap * (COLS - 1)) / COLS, gx = W / 2 - gw / 2;
         float top = H - KEYS_TOP_BELOW_H;
@@ -92,10 +94,11 @@ public final class SeedScreen extends ScreenAdapter {
         if (ui.button("CANCEL", gx + 2 * (aw + gap), ay, aw, kh)) cancelRequested = true;
         ui.end();
         g.autoShot("seed", dt);
+        if (start.active()) { okRequested = cancelRequested = false; Screen ready = start.poll(g); if (ready != null) next = ready; }          // building: the keys wait
         if (okRequested) {
             okRequested = false;
             Long seed = confirm();
-            if (seed != null) { g.beginFreshRun(seed); g.audio.play("click"); next = new PlayScreen(g, false); }
+            if (seed != null) { start.begin(g, seed); g.audio.play("click"); }
             else g.audio.play("click", 0.5f, 0.7f);
         }
         if (cancelRequested) { cancelRequested = false; g.audio.play("click"); next = back; }

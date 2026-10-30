@@ -252,7 +252,7 @@ public class ClimbGame extends Game {
         for (int tries = 0; ; tries++) {
             try { r.tower = new Tower(seed, nt); break; }
             catch (Tower.FirstSliceFailed e) {          // R6 (2026-10-28): the first slice could not be built on any attempt or backtrack
-                recordGenerationFailure("seed " + seed + " first slice: " + e.getMessage());
+                recordGenerationFailure(seed, nt.hard, nt, "seed " + seed + " first slice: " + e.getMessage());
                 if (typed || tries >= 4) {          // a typed course code is refused, never quietly swapped for another seed
                     saveNotice = "COURSE " + SeedCode.encode(seed) + " CANNOT BE BUILT ON THESE RULES";
                     throw e;
@@ -309,11 +309,33 @@ public class ClimbGame extends Game {
         saveNotice = "SAVED CLIMB " + SeedCode.encode(old) + " COULD NOT BE RESUMED: ARCHIVED" + (aside != null ? ", FILE KEPT" : "");
     }
 
-    /** R5 (2026-10-28): CRC32 of the tuning a climb is generated with (part of what a course is, with the seed, the difficulty and the rules version). */
+    /**
+     * R5 (2026-10-28): CRC32 of the tuning a climb is generated with (part of what a course is, with the seed, the difficulty and the rules version).
+     * Build 82 review (finding 8): every instance field by name, in name order, with its exact bits, so the stamp is the same on every runtime (the
+     * reflection order the Json text followed is not specified, and differs between JVMs and Android).
+     */
     public static int tuningStamp(Tuning t) {
+        java.util.List<java.lang.reflect.Field> fs = new java.util.ArrayList<>();
+        for (java.lang.reflect.Field f : Tuning.class.getDeclaredFields()) if (!java.lang.reflect.Modifier.isStatic(f.getModifiers())) fs.add(f);
+        fs.sort(java.util.Comparator.comparing(java.lang.reflect.Field::getName));
+        StringBuilder b = new StringBuilder("tuning-stamp-2;");
+        try {
+            for (java.lang.reflect.Field f : fs) {
+                Class<?> k = f.getType();
+                long v = k == float.class ? Float.floatToIntBits(f.getFloat(t)) : k == int.class ? f.getInt(t) : k == boolean.class ? (f.getBoolean(t) ? 1 : 0)
+                        : k == double.class ? Double.doubleToLongBits(f.getDouble(t)) : k == long.class ? f.getLong(t) : String.valueOf(f.get(t)).hashCode();
+                b.append(f.getName()).append('=').append(v).append(';');
+            }
+        } catch (IllegalAccessException e) { throw new IllegalStateException(e); }
+        java.util.zip.CRC32 c = new java.util.zip.CRC32();
+        c.update(b.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        return (int) c.getValue() | 1;          // never 0 (0 = unknown)
+    }
+    /** The stamp Build 82 stored (CRC32 of libGDX's Json text of the tuning): still accepted on resume, so a climb begun before this repair stays comparable on the runtime it began on. */
+    static int legacyTuningStamp(Tuning t) {
         java.util.zip.CRC32 c = new java.util.zip.CRC32();
         c.update(new com.badlogic.gdx.utils.Json().toJson(t).getBytes(java.nio.charset.StandardCharsets.UTF_8));
-        return (int) c.getValue() | 1;          // never 0 (0 = unknown)
+        return (int) c.getValue() | 1;
     }
 
     /**
@@ -324,17 +346,23 @@ public class ClimbGame extends Game {
     private void checkRulesOnResume() {
         if (save.climbNotComparable) return;
         boolean rules = save.climbRules > 0 && save.climbRules != com.hotatticgames.climbup.sim.CourseGenerator.RULES_VERSION;
-        boolean tune = save.climbTuning != 0 && save.climbTuning != tuningStamp(runTuning());
+        int stamp = tuningStamp(runTuning());
+        if (save.climbTuning != 0 && save.climbTuning != stamp && save.climbTuning == legacyTuningStamp(runTuning())) save.climbTuning = stamp;          // (finding 8: a climb stamped before the repair, same tuning: restamped, still comparable)
+        boolean tune = save.climbTuning != 0 && save.climbTuning != stamp;
         if (!rules && !tune) return;
         save.climbNotComparable = true;
         saveNotice = "THIS CLIMB BEGAN ON " + (rules ? "OLDER RULES" : "OTHER TUNING") + ": ITS TIMES ARE NOT RECORDED";
     }
 
     /** R1 (2026-10-28): one line per generation failure (seed, difficulty, rules, tuning, what failed) in generation_failures.txt; never thrown, never shown. */
-    public void recordGenerationFailure(String what) {
+    public void recordGenerationFailure(String what) {          // the climb in play: the saved climb's seed, difficulty and tuning
+        recordGenerationFailure(save != null ? save.seed : 0, save != null ? save.difficulty : -1, runTuning(), what);
+    }
+    /** Build 82 review (finding 7): a failure of a climb that is not (yet) the saved one - a new climb's first slice - names its own seed, difficulty and tuning. */
+    void recordGenerationFailure(long seed, int difficulty, Tuning t, String what) {
         try (java.io.FileWriter w = new java.io.FileWriter(new java.io.File(dataDir, "generation_failures.txt"), true)) {
-            w.write(System.currentTimeMillis() + " seed=" + (save != null ? save.seed : 0) + " difficulty=" + (save != null ? save.difficulty : -1) + " rules=" + com.hotatticgames.climbup.sim.CourseGenerator.RULES_VERSION
-                + " tuning=" + Integer.toHexString(tuningStamp(runTuning())) + " build=" + appBuild + " " + what + "\n");
+            w.write(System.currentTimeMillis() + " seed=" + seed + " difficulty=" + difficulty + " rules=" + com.hotatticgames.climbup.sim.CourseGenerator.RULES_VERSION
+                + " tuning=" + Integer.toHexString(tuningStamp(t)) + " build=" + appBuild + " " + what + "\n");
         } catch (Exception ignored) { }
     }
 
@@ -348,6 +376,35 @@ public class ClimbGame extends Game {
      * while the splash and the title are up, so starting it is instant. The seed is drawn now instead of on the tap (equally random); a typed course code
      * prepares its own slice (SeedScreen). Calling it again before that climb starts does nothing.
      */
+    /**
+     * Build 82 review (findings 1 and 6): the seed a fresh climb will take - a typed course code, the climb.seed hook, else the random seed drawn
+     * ahead - without taking it (openRun takes it).
+     */
+    long freshSeed() {
+        if (pendingSeed != null) return pendingSeed;
+        String sd = System.getProperty("climb.seed");
+        if (sd != null) return Long.parseLong(sd);
+        if (nextRandomSeed == null) nextRandomSeed = drawSeed();
+        return nextRandomSeed;
+    }
+
+    /**
+     * Build 82 review (findings 1 and 6): after {@link #beginFreshRun}, starts making the fresh climb's first slices in the background (the same pure
+     * generation {@code new Tower} does, so the course is unchanged), so a typed course code no longer freezes the frame that begins the climb.
+     */
+    public void prepareFreshRun() { if (tuning != null) com.hotatticgames.climbup.sim.Tower.prepare(freshSeed(), newClimbTuning()); }
+
+    /**
+     * Build 82 review (findings 1 and 6): the fresh climb once its first slices are made, else null (call again next frame). Throws
+     * {@link Tower.FirstSliceFailed} (with {@link #saveNotice} set) for a typed course code that cannot be built, before any play screen exists.
+     */
+    public Run takeFreshRunIfReady() {
+        if (!com.hotatticgames.climbup.sim.Tower.ready(freshSeed(), newClimbTuning())) return null;
+        Run r = openRun(true);
+        runFresh = false;
+        return r;
+    }
+
     public void prepareNextClimb() {
         if (demo || tuning == null) return;
         String sd = System.getProperty("climb.seed");

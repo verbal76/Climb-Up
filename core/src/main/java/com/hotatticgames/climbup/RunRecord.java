@@ -34,11 +34,29 @@ public final class RunRecord {
         if (sd.seed != 0) sd.board().markAssisted(sd.seed);
     }
 
+    /**
+     * Build 82 review (finding 3): the one gate for every personal best (tower split, pace total, finish): a NORMAL climb that is neither assisted
+     * (owner, Build 71) nor mixed-rules (R5: resumed on other generation rules or tuning than it began with). The times table has its own rules stamps.
+     */
+    public static boolean setsRecords(SaveData sd) { return !sd.assisted && !sd.climbNotComparable && sd.difficulty == 0; }
+
+    /**
+     * A castle opened {@code n} towers into the climb: keeps the fastest tower {@code split} and the pace best for {@code total} at that castle
+     * (only for a climb that {@link #setsRecords}). Returns 1 when the split is a new best, 2 when the total is, 3 for both.
+     */
+    public static int towerBests(SaveData sd, int n, float split, float total) {
+        int pb = 0;
+        if (setsRecords(sd) && (sd.bestSplit <= 0f || faster(split, sd.bestSplit))) { sd.bestSplit = split; pb |= 1; }
+        if (sd.bestTotals.length <= n) sd.bestTotals = java.util.Arrays.copyOf(sd.bestTotals, n + 1);
+        if (setsRecords(sd) && (sd.bestTotals[n] <= 0f || faster(total, sd.bestTotals[n]))) { sd.bestTotals[n] = total; pb |= 2; }
+        return pb;
+    }
+
     /** Completes the run exactly once at the current clock. Returns 1 for a new personal best, 0 for a finish that is not a record, -1 if the run was already complete (nothing changes). */
     public static int complete(SaveData sd) {
         if (sd.finished) return -1;
         sd.finished = true; sd.finishTime = sd.runClock; sd.lastFinish = sd.finishTime;
-        boolean best = !sd.assisted && sd.difficulty == 0 && (sd.bestFinish <= 0f || faster(sd.finishTime, sd.bestFinish));      // an assisted run finishes normally but is never a record
+        boolean best = setsRecords(sd) && (sd.bestFinish <= 0f || faster(sd.finishTime, sd.bestFinish));      // an assisted or mixed-rules run finishes normally but is never a record
         if (best) sd.bestFinish = sd.finishTime;
         return best ? 1 : 0;
     }

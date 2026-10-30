@@ -96,6 +96,12 @@ public final class Tower {
         prepared = new Prepared(seed, t, PREP.submit((Callable<Step>) () -> grow(seed, t, -1, null, null, -1)));
     }
 
+    /** True once the slices {@link #prepare} started for this seed and tuning are made (built or refused): {@code new Tower(seed, t)} then does not generate. */
+    public static boolean ready(long seed, Tuning t) {
+        Prepared p = prepared;
+        return p != null && p.seed == seed && p.t == t && p.slice.isDone();
+    }
+
     /** Slice 0 for this climb (final: slice 1 was built from it) and the provisional slice 1: the prepared ones when they are for this seed and tuning, else made now. */
     private static Step firstSlice(long seed, Tuning t) {
         Prepared p = prepared;

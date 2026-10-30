@@ -1385,7 +1385,10 @@ public final class WorldRenderer implements Disposable {
                     r.inst.userData = Boolean.TRUE;
                 }
                 float wind = st == 3 ? MathUtils.clamp(mt / (Element.ENF_WINDUP[tier] / (rsim != null ? rsim.T.react() : 1f)), 0f, 1f) : 0f, hot = st == 3 && wind < 1f ? wind : 0f;
-                for (com.badlogic.gdx.graphics.g3d.Material m : r.inst.materials) m.set(ColorAttribute.createEmissive(0.22f + 0.6f * hot, 0.22f + 0.1f * hot, 0.2f, 1f));
+                for (com.badlogic.gdx.graphics.g3d.Material m : r.inst.materials) {          // (Build 82 review, finding 10: the rig's own emissive, recoloured in place - no allocation per frame)
+                    ColorAttribute em = (ColorAttribute) m.get(ColorAttribute.Emissive);
+                    if (em != null) em.color.set(0.22f + 0.6f * hot, 0.22f + 0.1f * hot, 0.2f, 1f); else m.set(ColorAttribute.createEmissive(0.22f + 0.6f * hot, 0.22f + 0.1f * hot, 0.2f, 1f));
+                }
                 float sc = ENF_SCALE * (1f + 0.08f * tier), spin = st == 7 ? mt * 240f : 0f;
                 if (st != 7 && st != 8) castShadow(r.inst, es, ey);
                 drawRig(r, es, ey, 0f, camS, sc, dir >= 0f ? 70f : -70f, spin, st == 2 || st == 6 ? 1.3f + 0.15f * tier : 1f);

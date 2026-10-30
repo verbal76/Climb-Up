@@ -1419,3 +1419,11 @@ HAPPEN drops 9-12 blocks; the warning is the rumble only; the work stacks on the
   NGH 7322: 40 s of 189 s. Profile (JFR): the avalanche rigid step (24%, mostly StrictMath cos/sin of block angles) and crab deck lookups (28%).
   Computing each block's cos/sin once per substep was bit-identical (cross-build signatures) but no faster (one deck contact per substep), so
   it was reverted. No other provably exact reduction was found without shortening the search, which the directive forbids.
+- **Phase 3 NGH hazard acceptance (generator directive 2026-10-30):** refusal causes classified at full height (run 41053445468): the spiral-layer
+  rule refuses 37-81% of NGH hazard modules (MORTAR and DROPS 81%), and the leading layer cause for every module kind is a deck within 9.5 m above a
+  launcher of the revolution below, mostly missing by 0.25 m or less. A shape adaptation that keeps every rule (`-Dclimb.mortarAdapt`: lift a mortar
+  row deck up to 1 m past a lower-layer clash; 7db5825) raised mortar acceptance only 6.9% -> 7.2% at full height (run 41062643253): layer refusals
+  became hazard-box refusals. It stays off (default generation unchanged). The launcher spacing rule is the owner's shortcut protection and was not
+  changed; relaxing it is an owner decision.
+- **Slope-aware progression (S2, `-Dclimb.progSlope`):** full-height A/B (runs 41053445468 / 41053449567) showed no improvement in dips or growth;
+  it stays off (docs/PROGRESSION_CONTROLLER_AUDIT.md section 7).

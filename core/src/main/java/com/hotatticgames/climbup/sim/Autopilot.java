@@ -570,6 +570,16 @@ public final class Autopilot {
     public static Result planPair(Sim base, int a, int b, boolean measureMargin) { return planTo(base, a, b, true, measureMargin, false); }
 
     static Result planTo(Sim base, int a, int b, boolean pair, boolean measureMargin, boolean lookahead) {
+        GenTrace tr = GenTrace.GEN.get();
+        if (tr == null) return planTo0(base, a, b, pair, measureMargin, lookahead);
+        long t0 = GenTrace.now();
+        Result r = planTo0(base, a, b, pair, measureMargin, lookahead);
+        // (observe-only, NGH generation cost investigation 2026-10-30: wall time per plan by how it ended)
+        String how = r.viaRebound ? "rebound" : r.viaHit ? "knock" : r.ok ? "clean" : r.fallback != null ? "fallback" : "failed";
+        tr.phase("r19plan_" + how, GenTrace.now() - t0); GenTrace.tally("r19plan_n_" + how);
+        return r;
+    }
+    private static Result planTo0(Sim base, int a, int b, boolean pair, boolean measureMargin, boolean lookahead) {
         Course c = base.course;
         Result r = new Result();
         final int tgt = pair ? b : -1;
@@ -700,7 +710,11 @@ public final class Autopilot {
             }
         }
         if (measureMargin && !group.isEmpty()) { int best = 0; for (int gw : groupWins) best = Math.max(best, gw); r.window = Math.min(1f, best / (float) nWaits); }          // (a turbo's cancel moments are styles of one start, not waits)
-        if (!r.ok && firstOk == null && !HIT_STRICT) collisionMoves(base, a, tgt, cands, tlim, hitOk, r);
+        if (!r.ok && firstOk == null && !HIT_STRICT) {
+            long c0 = GenTrace.now();
+            collisionMoves(base, a, tgt, cands, tlim, hitOk, r);
+            GenTrace tr = GenTrace.GEN.get(); if (tr != null) tr.phase(r.ok ? "r19search_found" : "r19search_none", GenTrace.now() - c0);
+        }
         if (GenTrace.GEN.get() != null) {          // (observe-only: rules 19 acceptance accounting for the reports)
             if (r.ok && !r.viaHit && !r.viaRebound && r.hitSuccesses > 0) GenTrace.tally("r19_why_clean_over_hit");
             if (r.viaHit && !r.viaRebound) GenTrace.tally("r19_why_via_knock");

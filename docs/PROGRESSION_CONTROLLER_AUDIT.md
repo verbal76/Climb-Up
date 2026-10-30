@@ -74,6 +74,53 @@ castle 1 lands on target, or come out somewhat lower (about 30–40%) if castle 
 - S2 can raise late castles above the current targets when early castles run hot. Cap it with the existing factor bounds.
 - Any change alters every seed's course, so it needs a rules bump, replays and fingerprints at the next freeze.
 
-## 6. Measurements (CastleAuditProbe)
+## 6. Measurements (CastleAuditProbe, seed 7322, three castles each, 1,645-1,665 m)
 
-(pending)
+Local runs with the plan cache and early rejection on. Both are verified to generate identical courses, so the numbers are those of the
+default build. Totals are the controller's own estimate (the lane report's model); "factors" are the factors the castle's last slice was
+built with. (lo)/(hi) mark a factor sitting on its bound.
+
+| Mode | Castle | Total / target | Terrain T | Hazards H | Enemies E | Interaction X | Factors T / H / E / X |
+|---|---|---|---|---|---|---|---|
+| NORMAL | 1 | 677 / 630 (+7.4%) | 533 / 504 | 90 / 82 | 43 / 32 | 18 / 13 | 0.92 / 0.72 / 0.70 lo / 0.80 lo |
+| NORMAL | 2 | 713 / 657 (+8.6%) | 573 / 514 | 108 / 93 | 24 / 36 | 14 / 15 | 0.89 / 0.82 / 0.94 / 0.80 lo |
+| NORMAL | 3 | 705 / 683 (+3.1%) | 525 / 522 | 114 / 104 | 47 / 40 | 26 / 17 | 0.91 / 0.82 / 1.10 hi / 0.80 lo |
+| PUNISHER | 1 | 810 / 700 (+15.7%) | 551 / 462 | 160 / 140 | 72 / 70 | 33 / 28 | 0.80 lo / 0.86 / 0.78 / 0.80 lo |
+| PUNISHER | 2 | 806 / 738 (+9.2%) | 587 / 484 | 124 / 149 | 72 / 75 | 27 / 30 | 0.80 lo / 0.99 / 0.97 / 0.93 |
+| PUNISHER | 3 | 818 / 777 (+5.3%) | 597 / 506 | 133 / 159 | 62 / 81 | 32 / 31 | 0.80 lo / 1.25 / 1.10 hi / 1.05 |
+| NGH | 1 | 917 / 850 (+7.9%) | 599 / 493 | 177 / 179 | 100 / 145 | 43 / 34 | 0.80 lo / 0.99 / 1.10 hi / 0.80 lo |
+| NGH | 2 | 893 / 890 (+0.4%) | 578 / 513 | 175 / 191 | 104 / 150 | 40 / 36 | 0.80 lo / 1.07 / 1.10 hi / 0.80 lo |
+| NGH | 3 | 959 / 930 (+3.1%) | 686 / 533 | 141 / 204 | 91 / 156 | 43 / 37 | 0.80 lo / 1.28 / 1.10 hi / 0.81 |
+
+NGH hazard capacity (accepted / attempted modules), castle 3: HAZ 42/82, TRAP 11/30, MORTAR 1/27, DROPS 1/7. Hazard control applied its whole
+request in every castle (no capacity constraint triggered); the hazard shortfall comes from refusals, not from the request.
+
+### Findings
+
+1. **Escalation is flat in every mode.** Castle 1 → 3: NORMAL 677 → 705 (+4%), PUNISHER 810 → 818 (+1%), NGH 917 → 959 (+5%). Over
+   the same castles the targets rise +8%, +11% and +9%. Castle 2 is at or below castle 1 in NORMAL (+5% then −1%), PUNISHER (−0.5%)
+   and NGH (−3%).
+2. **Terrain overshoots and the terrain factor is already on its floor.** PUNISHER and NGH terrain sits on factor 0.80 in all three castles
+   and still measures 17–29% above its target; NORMAL's terrain runs 1–11% over at 0.89–0.92. Terrain comes from the height-driven terrain
+   curve (plus the head start), which the selection factor barely reaches. This is the root of the "castle 1 too hot" overshoot.
+3. **Because terrain cannot come down, the controller takes difficulty out of the other categories.** PUNISHER castle 2's hazards fall
+   160 → 124 while its hazard factor is lowered to compensate for castle 1. This is the castle-2 dip the 1 km audit reported. Interaction
+   sits on its 0.80 floor in NORMAL in every castle.
+4. **Enemies saturate at their ceiling in NGH** (E 1.10 hi in every castle) and still reach only 60–69% of target. The +10% bound (the
+   owner's "no enemy spam") is binding. NGH reaches its total only because the terrain overshoot covers the enemy shortfall, so the
+   composition drifts away from the intended shares.
+5. **NGH hazards fall short by castle 3** (141 of 204) because the hazard modules are increasingly refused (mortars 1/27, drops 1/7), not
+   because the controller asks for too little.
+
+### What this means for the strategy in section 4
+
+- S1 (calibrate the opening) has to act on **terrain**, the category that overshoots. Possible levers: castle 1's position on the
+  terrain curve (`curveShift`) or a terrain factor floor below 0.80 for castle 1 only. Lowering the other categories' opening factors would
+  repeat today's compensation problem.
+- S3 (anti-windup) matters most for NGH enemies and PUNISHER/NGH terrain: when a factor is on its bound, stop letting its error steer the
+  others.
+- NGH's hazard shortfall is a capacity problem (module acceptance) and needs generator work, not controller gain.
+- With S1 and S2, every mode has 20–30% of headroom between castle 1's calibrated level and castle 10's target. That matches the owner's
+  30–40% reference without raising castle 10.
+
+All of this is a proposal for the owner. No targets, bounds, caps or densities were changed.

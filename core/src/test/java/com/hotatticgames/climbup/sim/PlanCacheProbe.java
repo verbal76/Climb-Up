@@ -43,6 +43,14 @@ public class PlanCacheProbe {
                         new String[]{"NORMAL", "PUNISHER", "NGH"}[lvl], seed, m, k, y, wall, wall / Math.max(1, y), g.backtracks, stop, PlanCache.stats() + " earlyRefused=" + CourseGenerator.EARLY_REFUSED.get());
                 for (String s : PlanCache.MISMATCH_LOG) System.out.println("   MISMATCH " + s);
                 bad += PlanCache.MISMATCHES.get();
+                String out = System.getenv("CLIMB_SIGOUT"), in = System.getenv("CLIMB_SIGREF");          // (across builds: write this run's signatures, or compare with a run of another build)
+                if (out != null) Files.write(Paths.get(out + "." + lvl + "." + seed + "." + m), sig);
+                if (in != null) {
+                    List<String> other = Files.readAllLines(Paths.get(in + "." + lvl + "." + seed + "." + m));
+                    int d = firstDiff(other, sig);
+                    if (d < 0) System.out.printf("   IDENTICAL to the reference build: %d slices%n", sig.size());
+                    else { bad++; System.out.printf("   DIFFERS from the reference build at slice %d:%n     %s%n     %s%n", d, d < other.size() ? other.get(d) : "-", d < sig.size() ? sig.get(d) : "-"); }
+                }
                 if (ref == null) { ref = sig; refMode = m; refCnt = cnt; continue; }
                 int d = firstDiff(ref, sig);
                 if (d < 0) System.out.printf("   IDENTICAL to %s: %d slices%n", refMode, sig.size());

@@ -14,10 +14,10 @@ no merge, no Steam, Build 82 fallback untouched. PR #15 never merged.
 
 | Priority | State | Evidence |
 |---|---|---|
-| A plan cache | implemented (off by default), shadow + on; equivalence probes running (scratchpad pcA.log, pcB.log) | NORMAL 7322 s0-1 and NORMAL 1 s0-2: 0 mismatches, identical slices; 14% / 12% faster |
-| B avalanche | observe-only chainClean audit written (uncommitted, not compiled yet); ModuleCostProbe | - |
-| C early rejection | observe-only per-module plans/planNanos/castleRollback in GenTrace.Module (uncommitted); ModuleCostProbe | - |
-| D controller audit | CastleAuditProbe written; code read: P-controller on previous-castle error, bounded factors, no integral | - |
+| A plan cache | DONE: off by default, validated identical on 8 seed/mode cases, 10-17% faster | table below |
+| B avalanche | DONE (measurement): 99% planning; exact cos/sin hoist tried, identical, no gain, reverted | DECISIONS, report section 4 |
+| C early rejection | DONE: `-Dclimb.earlyReject` off by default, identical courses on 6 cases, up to -64% (NORMAL 5) | report section 5 |
+| D controller audit | DONE (design only): docs/PROGRESSION_CONTROLLER_AUDIT.md section 6 | castles.log |
 
 ## Plan cache equivalence so far (off vs shadow vs on, slice bytes + module log + failures + untimed tallies)
 
@@ -34,7 +34,11 @@ no merge, no Steam, Build 82 fallback untouched. PR #15 never merged.
 Only difference ever seen: the tally `avalanche_proof_ms` (wall-clock milliseconds; differs between two OFF runs too). The probe now
 excludes `*_ms` tallies. Running: pcB2.log (PUNISHER 3, NGH 2), modcost.log (B/C measurement, cache off).
 
-## Next actions
+## Next actions (remaining)
+
+- Push the final checkpoint without [skip ci] so ci.yml validates the branch; read the result; report.
+
+## Earlier plan (done)
 
 1. When pcA/pcB finish: record results; compile the B/C instrumentation; run ModuleCostProbe (NGH 7322 150 m, P 7322 300 m) with cache ON.
 2. Decide B and C optimizations from the measurements (exactness required; counters/tally attribution must also stay identical).

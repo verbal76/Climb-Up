@@ -41,7 +41,10 @@ public final class WorldRenderer implements Disposable {
     private final Tuning T;
     private final Course course;
     private final Models models;
-    private final ModelBatch batch = new ModelBatch(new com.badlogic.gdx.graphics.g3d.utils.DefaultShaderProvider(Grade.config(boneConfig())));      // Build 72: colour-graded
+    /** Atmosphere prototype (null unless the -Dclimb.atmos master switch is on; see {@link Atmos}). */
+    private final Atmos atmos = Atmos.ENABLED ? new Atmos() : null;
+    private AtmosMotes atmosMotes;
+    private final ModelBatch batch = new ModelBatch(atmos != null ? atmos.provider(boneConfig()) : new com.badlogic.gdx.graphics.g3d.utils.DefaultShaderProvider(Grade.config(boneConfig())));      // Build 72: colour-graded
     private final PerspectiveCamera cam = new PerspectiveCamera(40f, 16, 9);
     private final Environment env = new Environment();
     private final DirectionalLight sun = new DirectionalLight(), fillL = new DirectionalLight(), bounceL = new DirectionalLight();
@@ -133,6 +136,7 @@ public final class WorldRenderer implements Disposable {
         camY -= dy; renderY -= dy; heroY -= dy;
         for (Flung f : flung) f.y -= dy;
         particles.shiftY(dy);
+        if (atmosMotes != null) atmosMotes.shiftY(dy);
         originY = newOriginY; originS = newOriginS;
     }
 
@@ -585,6 +589,12 @@ public final class WorldRenderer implements Disposable {
         Palette.blend(Palette.BOUNCE, zoneF, lc); hBounce.color.set(lc);
         Palette.blend(Palette.RIM, zoneF, lc); hRim.color.set(lc.r * 0.95f, lc.g * 0.95f, lc.b * 0.95f, 1f);
         ((ColorAttribute) env.get(ColorAttribute.Fog)).color.set(skyBot).lerp(skyTop, 0.25f);
+        if (atmos != null) {          // atmosphere prototype: the castle's colour on the sky (and, unless colourblind-safe colours are on, the world's lights - never the hero's), plus this frame's haze, mist and glow
+            atmos.frame(zoneF, camY + originY, T.castleSpacing, T.zoneHeight * T.zoneCount, quality, colourblind, gold, skyTop, skyMid, skyBot);
+            ((ColorAttribute) env.get(ColorAttribute.Fog)).color.set(skyBot).lerp(skyTop, 0.25f);
+            float[] lk = atmos.light;
+            ((ColorAttribute) env.get(ColorAttribute.AmbientLight)).color.mul(lk[0], lk[1], lk[2], 1f); sun.color.mul(lk[0], lk[1], lk[2], 1f);
+        }
 
         // camera
         float sh = 0;
@@ -597,6 +607,7 @@ public final class WorldRenderer implements Disposable {
             else k++;
         }
         if (quality > 0 && !reducedMotion) ambientMotes(dt, zoneF, ps);
+        if (atmos != null) { if (atmosMotes == null) atmosMotes = new AtmosMotes(models); atmosMotes.update(frameDt, zoneF, ps, camY, quality >= 2 && !reducedMotion); }
         float pullT = (!reducedMotion && sim.mode == Sim.Mode.AIR && sim.vy < -10f) ? MathUtils.clamp((-sim.vy - 10f) / 14f, 0f, 1f) * 2.4f : 0f;       // pull back in a long fall to see where you will land
         camPull += (pullT - camPull) * Math.min(1f, 3f * dt);
         cam.position.set(sh * 0.1f, camY + (CAM_DIST < 6f ? -0.6f : 2.2f) + sh * 0.1f, CAM_DIST + camPull);
@@ -609,6 +620,7 @@ public final class WorldRenderer implements Disposable {
         Gdx.gl.glClearColor(skyBot.r, skyBot.g, skyBot.b, 1f);
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT | GL20.GL_DEPTH_BUFFER_BIT);
         bg.render(sb, shapes, skyTop, skyMid, skyBot, ps, bgY, zoneF, T.circumference(), reducedMotion, time);
+        if (atmos != null) atmos.drawSky(shapes, cam.viewportWidth, cam.viewportHeight);       // atmosphere prototype: deeper zenith, haze rising from below (under the sun glow and the far layer)
         Gdx.gl.glClear(GL20.GL_DEPTH_BUFFER_BIT);
         if (quality > 0 && GfxHooks.skyEffects) bg.renderGlow(sb, zoneF);
         if (quality > 0) {                 // planets and sky ships far behind the tower (wide-range camera, drawn first)
@@ -621,6 +633,7 @@ public final class WorldRenderer implements Disposable {
             if (space.scanSound) scanPending = true;
             farCam.viewportWidth = cam.viewportWidth; farCam.viewportHeight = cam.viewportHeight; farCam.fieldOfView = cam.fieldOfView;
             farCam.position.set(cam.position); farCam.direction.set(cam.direction); farCam.up.set(cam.up); farCam.update();
+            if (atmos != null) Atmos.fogFarLayer(space.env, ((ColorAttribute) env.get(ColorAttribute.Fog)).color);       // atmosphere prototype: the far layer takes the haze
             if (GfxHooks.skyEffects) { batch.begin(farCam); space.renderFar(batch, ps, bgY, zoneF); batch.end(); }
             Gdx.gl.glClear(GL20.GL_DEPTH_BUFFER_BIT);
         }
@@ -658,6 +671,7 @@ public final class WorldRenderer implements Disposable {
         drawFlung(dt, ps);
         if (showPlayer) drawPlayer(sim, dt, time, ps, py, alpha);
         particles.render(batch, env, ps, T, course);
+        if (atmosMotes != null && quality >= 2 && !reducedMotion) atmosMotes.render(batch, env, ps, T, course);
         batch.end();
         drawShadows(sim, alpha, ps, py, zoneF);
         if (scaled) endScaledScene();

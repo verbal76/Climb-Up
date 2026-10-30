@@ -16,7 +16,7 @@ import org.junit.Test;
 public class PlanCacheTest {
     static Tuning T() throws Exception { return Tuning.parse(new String(Files.readAllBytes(Paths.get("../assets/data/tuning.json")))); }
 
-    @After public void off() { PlanCache.MODE = PlanCache.Mode.OFF; Autopilot.HIT_STRICT = false; }
+    @After public void restore() { PlanCache.MODE = PlanCache.DEFAULT; Autopilot.HIT_STRICT = false; }
 
     /** A short course with a moving platform and a saw, so the plans wait, time and dodge. */
     static Course course(Tuning t) {

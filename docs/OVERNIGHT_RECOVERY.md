@@ -44,3 +44,19 @@ excludes `*_ms` tallies. Running: pcB2.log (PUNISHER 3, NGH 2), modcost.log (B/C
 2. Decide B and C optimizations from the measurements (exactness required; counters/tally attribution must also stay identical).
 3. CastleAuditProbe N/P/NGH 7322 to ~2000 m with `-Dclimb.planCache=on` (identical output, faster).
 4. DECISIONS entries, push, ci.yml run on the branch (no [skip ci]) for the final checkpoint, overnight report.
+
+## Generator improvement directive (owner, 2026-10-30, after the overnight report)
+
+Phases: 0 recover; 1A plan cache default on; 1B early rejection default on with explicit attribution; 2 progression controller
+(castle-1 terrain calibration, slope-aware control, anti-windup, observability in KPI 7B); 3 NGH hazard acceptance; 4 staged validation;
+5 CI reconciliation + gem / spread investigation; 6 report. Never merge PR #16; no release/Steam; fingerprints/replays only at the freeze.
+
+State (2026-10-30 ~12:00 UTC):
+- Head d218fa9 pushed; CI 41030282332 on it in progress (expected remaining: fingerprint, bundled replay, OfficialWorldRulesTest x2).
+- Rules 18 candidate CI 40884943058 PASSED both OfficialWorldRulesTest checks -> both discrepancies arrived with Rules 19.
+- Gem/spread probe (GemSpreadProbe, uncommitted) running: scratchpad gs_default.log, gs_noR19mods.log (Tarzan/turbo off).
+  Rules 18 baseline run prepared: worktree scratchpad/r18wt (detached c8ef538, read-only), classes scratchpad/r18cls, jars r18jars.txt;
+  run from r18wt/core with `java -cp "../../r18cls:$(cat ../../r18jars.txt)" org.junit.runner.JUnitCore com.hotatticgames.climbup.GemSpreadProbe`.
+- Uncommitted 1A/1B edits: PlanCache default on (DEFAULT field, CAP 2M ints, atomic class ids), CourseGenerator EARLY_REJECT default on +
+  earlyRefused() tallies + Module.earlyRejected, LaneReport modules.csv refused_early column, PlanCacheTest/Probe restore defaults.
+  Compiled OK into scratchpad/exp4 (do not gradle-compile while probe JVMs use build/classes).

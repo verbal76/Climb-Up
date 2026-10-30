@@ -1393,7 +1393,7 @@ HAPPEN drops 9-12 blocks; the warning is the rumble only; the work stacks on the
 - **KPI 7 progression direction (owner, 2026-10-30):** each difficulty should show meaningful escalation through all ten castles, with about
   30-40% total growth as a flexible reference, not a rigid numerical gate. Recorded as design direction; no progression balancing is done
   during the NGH generation-cost investigation (owner instruction).
-- **Plan cache (overnight priority A, owner authorisation 2026-10-30; speed only, `-Dclimb.planCache=off|shadow|on`, default off):**
+- **Plan cache (overnight priority A, owner authorisation 2026-10-30; speed only, `-Dclimb.planCache=off|shadow|on`; default **on** since the generator directive of 2026-10-30, `off` is the emergency switch):**
   `PlanCache` answers a repeated `Autopilot.planTo` inside one slice attempt from a stored result. The key is the whole starting simulation
   object graph (every climber, element-state, hazard-state and creature field, the course with every element and hazard, the tuning) encoded
   by reflection plus the call's flags and the planner switches; it is matched by comparing the full key, never by hash alone. Only the
@@ -1402,12 +1402,16 @@ HAPPEN drops 9-12 blocks; the warning is the rumble only; the work stacks on the
   mode computes every plan and compares a would-be hit field by field, by the chosen move's policy and replayed trial, by the tallies and by the
   untouched start state. Evidence (PlanCacheProbe, GameGrowth with backtracking, off vs shadow vs on: slice bytes, every module attempt,
   failures, all tallies except the wall-clock `avalanche_proof_ms`): NORMAL 7322/1/5, PUNISHER 7322/2/3, NGH 7322/1/2 identical, 0 shadow
-  mismatches; 10-17% less generation time (NGH 7322 0.795 -> 0.680 s/m).
-- **Early geometric rejection (overnight priority C; speed only, `-Dclimb.earlyReject`, default off):** the encounter-conflict rule and
+  mismatches; 10-17% less generation time (NGH 7322 0.795 -> 0.680 s/m). A scope clears itself at 2 M ints of keys (about 8 MB) so a phone generating
+  slices stays bounded; class ids in the key encoder come from an atomic counter (parallel test threads).
+- **Early geometric rejection (overnight priority C; speed only; default **on** since the generator directive of 2026-10-30, `-Dclimb.earlyReject=false` restores proof-first order):** the encounter-conflict rule and
   NORMAL's threat budget read only geometry and hazards and every commit check must pass, so they now may run before a module's proofs
   (`geometryRefuses`). The same modules are kept and refused (PlanCacheProbe "early" modes: NORMAL 7322/5/1, PUNISHER 7322/2, NGH 7322 slices
   and module outcomes identical). Diagnostics differ for a refused module whose proofs would also have failed (counted as conflict/threat, not
-  plan; its proofs' tallies are not raised), which is why it is off by default pending owner review. Saving: NORMAL seed 5 0.649 -> 0.236 s/m
+  plan; its proofs' tallies are not raised), so the refusal is attributed explicitly: the tally `early_refused_conflict` / `early_refused_threat` counts such refusals,
+  `GenTrace.Module.earlyRejected` marks the module and the lane report's modules.csv carries a `refused_early` column. KPI comparability:
+  acceptance KPIs count modules kept and refused, which are unchanged; only the refusal-reason breakdown and proof tallies (plans, plan_ms)
+  of doubly-refused modules move, and `refused_early` says exactly how many. Saving: NORMAL seed 5 0.649 -> 0.236 s/m
   (61% of its time was proving modules the conflict/threat rules then refused), NORMAL 1 -24%, PUNISHER 7322 -6%, NGH 7322 ~0.
 - **Avalanche encounter-check cost (overnight priority B):** measured, not changed. 99% of an avalanche chainClean is planning (the 24-wait
   sweep with 8 s longer trials under live blocks: about 0.41 s per plan vs 0.06 s for other encounters); walking the climber through costs

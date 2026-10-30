@@ -738,7 +738,7 @@ public final class CourseGenerator {
         long[] pa = Autopilot.PLAN_ACC.get(); long pn0 = pa[0], pt0 = pa[1];
         boolean ok;
         try { ok = tryModuleBelow0(k, d, zone); } finally { traceKind = null; }
-        m.nanos = GenTrace.now() - t0; m.plans = (int) (pa[0] - pn0); m.planNanos = pa[1] - pt0; m.castleRollback = lastCastleRollback; lastCastleRollback = false;
+        m.nanos = GenTrace.now() - t0; m.plans = (int) (pa[0] - pn0); m.planNanos = pa[1] - pt0; m.castleRollback = lastCastleRollback; lastCastleRollback = false; m.earlyRejected = lastEarlyRefused; lastEarlyRefused = false;
         if (Autopilot.PLAN_AUDIT) { String o = (ok ? "planmod_ok_" : "planmod_rej_") + k.name(); GenTrace.tally(o + "_n", (int) (pa[0] - pn0)); tr.phase(o, pa[1] - pt0); GenTrace.tally(o + "_modules"); }          // (observe-only: plans spent on module attempts, by outcome)
         int[] f1 = {failLayer, failHaz, failPlan, failWindow, failConflict, failThreat};
         for (int i = 0; i < 6; i++) m.fails[i] = f1[i] - f0[i];
@@ -2529,27 +2529,31 @@ public final class CourseGenerator {
     }
 
     /**
-     * Speed only (overnight priority C, 2026-10-30; off unless -Dclimb.earlyReject): the encounter-conflict rule and NORMAL's threat budget read
+     * Speed only (overnight priority C, 2026-10-30; on by default, -Dclimb.earlyReject=false to disable): the encounter-conflict rule and NORMAL's threat budget read
      * nothing but the course's geometry and hazards (EncounterModel.link / threat), never a proof, and every check of {@link #commit} must pass for a
      * module to be kept, so a module either of them refuses is refused whatever the proofs say. This evaluates both exactly as commit does after its
      * proofs, with the module in place, before those proofs run, and leaves the course as it found it. The same modules are kept and refused; only
      * the diagnostics of a refused module differ when its proofs would also have failed (its refusal is then counted as conflict or threat instead
-     * of plan, and the proofs' own report tallies are not raised).
+     * of plan, and the proofs' own report tallies are not raised). Such refusals are reported explicitly: modules.csv refused_early, the
+     * early_refused_conflict / early_refused_threat tallies and GenTrace.Module.earlyRejected.
      */
-    static boolean EARLY_REJECT = Boolean.getBoolean("climb.earlyReject");
+    static boolean EARLY_REJECT = !"false".equals(System.getProperty("climb.earlyReject", "true"));          // (on by default since 2026-10-30; -Dclimb.earlyReject=false restores the old order)
+    /** Report attribution (observe-only): this module was refused before its proofs ran (modules.csv refused_early, tallies early_refused_*). */
+    private void earlyRefused(String why) { GenTrace.tally("early_refused_" + why); lastEarlyRefused = GenTrace.GEN.get() != null; }
+    private boolean lastEarlyRefused;
     /** Diagnostics: modules refused by {@link #geometryRefuses} before their proofs. */
     public static final java.util.concurrent.atomic.AtomicInteger EARLY_REFUSED = new java.util.concurrent.atomic.AtomicInteger();
     private boolean geometryRefuses(List<Element> es, List<Element> hz, int n0, int h0, int from, int thFrom, float[] threatBefore) {
         for (Element e : es) c.add(e);
         for (Element h : hz) c.hazards.add(h);
         try {
-            for (int i = Math.max(0, from); i < c.size() - 1; i++) if (EncounterModel.link(c, T, i).conflict) { failConflict++; return true; }
+            for (int i = Math.max(0, from); i < c.size() - 1; i++) if (EncounterModel.link(c, T, i).conflict) { failConflict++; earlyRefused("conflict"); return true; }
             if (P.threatBudget) for (int i = thFrom; i < c.size() - 1; i++) {
                 if (i >= c.routeSize() - 1) break;
                 float th = EncounterModel.threat(c, T, i);
                 if (th <= P.threatBudget(Math.min(1f, level(c.get(i).y)), EncounterModel.cramped(c, i))) continue;
                 if (i < n0 - 1 && th <= threatBefore[i - thFrom] + 1e-4f) continue;
-                failThreat++; return true;
+                failThreat++; earlyRefused("threat"); return true;
             }
             return false;
         } finally { while (c.size() > n0) c.elements.remove(c.size() - 1); while (c.hazards.size() > h0) c.hazards.remove(c.hazards.size() - 1); }          // (exactly as commit's own refusal removes them)

@@ -275,7 +275,7 @@ public final class LaneReport {
             int e0 = m.e0 - tr.offset, e1 = m.e1 - tr.offset;
             if (fin && m.ok) { ks[1]++; travMods.add(new String[]{"" + castleOf(m.y), m.kind, m.role}); for (int i = Math.max(0, e0); i < Math.min(c.size(), e1); i++) { owner[i] = id; ownerKind[i] = m.kind; } }
             modules.add(new String[]{id, "" + k, "" + m.attempt, "" + fin, m.kind, m.role, m.picked == null ? "" : m.picked, f3(m.d), f3(m.y), "" + m.ok, "" + e0, "" + e1, "" + (m.h1 - m.h0),
-                "" + m.fails[0], "" + m.fails[1], "" + m.fails[2], "" + m.fails[3], "" + m.fails[4], "" + m.fails[5], f3(m.nanos / 1e6)});
+                "" + m.fails[0], "" + m.fails[1], "" + m.fails[2], "" + m.fails[3], "" + m.fails[4], "" + m.fails[5], f3(m.nanos / 1e6), m.earlyRejected ? "1" : "0"});
             if (!m.ok) { Win w = win(wi(m.y)); w.rejected++; }
             if ("FALLBACK".equals(m.role) && m.ok && fin) win(wi(m.y)).fallbacks++;
         }
@@ -581,7 +581,7 @@ public final class LaneReport {
                 f3(L.emJump), f3(L.emPosition), f3(L.emWait), f3(L.emCommit), f3(L.emRecover), f3(L.emPursue), f3(L.emScore), q(L.hazards.toString()), q(L.enemies.toString()), L.status, f3(L.solveTime), L.setbacks < 0 ? "" : "" + L.setbacks, "" + L.planFails, q(Arrays.toString(L.windows)), f3(L.solveWall), "" + L.visits));
         }
         try (PrintWriter w = pw(out, "modules.csv")) {
-            w.println("run,id,slice,attempt,final_attempt,kind,role,picked_first,difficulty,y,accepted,e0,e1,hazards_added,refused_layer,refused_hazard,refused_plan,refused_window,refused_conflict,refused_threat,wall_ms");
+            w.println("run,id,slice,attempt,final_attempt,kind,role,picked_first,difficulty,y,accepted,e0,e1,hazards_added,refused_layer,refused_hazard,refused_plan,refused_window,refused_conflict,refused_threat,wall_ms,refused_early");
             for (String[] m : modules) w.println(run + "," + String.join(",", m));
         }
         try (PrintWriter w = pw(out, "solver.csv")) {

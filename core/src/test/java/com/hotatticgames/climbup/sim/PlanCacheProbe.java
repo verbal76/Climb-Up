@@ -59,7 +59,7 @@ public class PlanCacheProbe {
                         for (String key : ks) if (!Objects.equals(refCnt.get(d).get(key), cnt.get(d).get(key))) System.out.printf("     tally %s: %s %s, %s %s%n", key, refMode, refCnt.get(d).get(key), m, cnt.get(d).get(key)); } }
             }
         }
-        PlanCache.MODE = PlanCache.Mode.OFF; CourseGenerator.EARLY_REJECT = false;
+        PlanCache.MODE = PlanCache.DEFAULT; CourseGenerator.EARLY_REJECT = !"false".equals(System.getProperty("climb.earlyReject", "true"));
         System.out.println(bad == 0 ? "== PLAN CACHE EQUIVALENCE: PASS" : "== PLAN CACHE EQUIVALENCE: FAIL (" + bad + ")");
         org.junit.Assert.assertEquals(0, bad);
     }

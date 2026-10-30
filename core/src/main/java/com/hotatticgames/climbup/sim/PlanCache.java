@@ -23,19 +23,21 @@ import java.util.concurrent.atomic.AtomicLong;
  * draws no random numbers; its only side effects are the observe-only report tallies, which are recorded with the entry and replayed on a hit
  * ({@link GenTrace.Rec}), and the returned Result, which callers modify, so each hit gets its own copy.
  *
- * <p>Modes ({@code -Dclimb.planCache}): {@code off} (default: nothing is opened, nothing changes), {@code shadow} (every plan is still computed;
+ * <p>Modes ({@code -Dclimb.planCache}): {@code on} (the default since 2026-10-30: validated to generate identical courses, slices, module
+ * decisions, backtracks and tallies on NORMAL, PUNISHER and NGH seeds), {@code off} (the emergency switch: nothing is opened), {@code shadow} (every plan is still computed;
  * a would-be hit is compared field by field, by the chosen move's behaviour, by the tallies raised and by the starting state left untouched, and
- * any difference is logged in {@link #MISMATCH_LOG}; generation is never affected), {@code on} (hits return the stored result).
+ * any difference is logged in {@link #MISMATCH_LOG}; generation is never affected). With {@code on}, hits return the stored result.
  */
 final class PlanCache {
     enum Mode { OFF, SHADOW, ON }
-    static volatile Mode MODE = parse(System.getProperty("climb.planCache", "off"));
+    static final Mode DEFAULT = parse(System.getProperty("climb.planCache", "on"));
+    static volatile Mode MODE = DEFAULT;
     static Mode parse(String s) { return "on".equalsIgnoreCase(s) ? Mode.ON : "shadow".equalsIgnoreCase(s) ? Mode.SHADOW : Mode.OFF; }
 
     /** Fields never in the key: the motion-cache handle a trial replaces before it steps (see the class comment). */
     static final java.util.Set<String> EXCLUDED = new java.util.HashSet<>(Arrays.asList("Sim.motion", "Sim.motionGen", "Sim.mstep"));
     /** Memory bound per scope (key ints held); reaching it clears the scope (a clear only turns later hits into misses). */
-    static final long CAP_INTS = 8_000_000L;
+    static final long CAP_INTS = 2_000_000L;          // (about 8 MB per scope: phones generate slices too)
 
     // diagnostics (observe-only)
     static final AtomicLong LOOKUPS = new AtomicLong(), HITS = new AtomicLong(), STORES = new AtomicLong(), MISMATCHES = new AtomicLong(), UNCACHEABLE = new AtomicLong(),
@@ -175,7 +177,8 @@ final class PlanCache {
 
     private static final ConcurrentHashMap<Class<?>, Field[]> FIELDS = new ConcurrentHashMap<>();
     private static final ConcurrentHashMap<Class<?>, Integer> IDS = new ConcurrentHashMap<>();
-    private static int id(Class<?> c) { return IDS.computeIfAbsent(c, x -> IDS.size() + 1); }
+    private static final java.util.concurrent.atomic.AtomicInteger NEXT_ID = new java.util.concurrent.atomic.AtomicInteger();
+    private static int id(Class<?> c) { return IDS.computeIfAbsent(c, x -> NEXT_ID.incrementAndGet()); }          // (unique even when several threads generate)
 
     /** Every instance field of {@code c} and its superclasses (minus {@link #EXCLUDED}), in a fixed order. */
     static Field[] fields(Class<?> c) {

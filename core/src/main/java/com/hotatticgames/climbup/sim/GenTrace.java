@@ -31,6 +31,7 @@ public final class GenTrace {
         public long nanos;             // wall time inside the attempt (planning proofs, placement, rollback included)
         public int plans; public long planNanos;          // top-level plans the attempt ran and their wall time (observe-only)
         public boolean castleRollback; // refused after it was fully built and proven: it ran past the castle's approach window (observe-only)
+        public boolean earlyRejected;  // refused by a geometry-only rule (conflict, threat budget) before its proofs ran (CourseGenerator.EARLY_REJECT)
     }
 
     public final ArrayList<Module> modules = new ArrayList<>();

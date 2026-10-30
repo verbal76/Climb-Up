@@ -1,14 +1,17 @@
 package com.hotatticgames.climbup.sim;
 
 import java.nio.file.*;
+import java.util.*;
 import org.junit.Test;
 
 /**
- * Scratch probe (overnight priority D, 2026-10-30: progression controller audit, measurement only; not a fixture). Grows climbs as the game does and
- * prints, for every completed castle, the controller's own measurement against the profile's target (total and T/H/E/X), the factors that castle
- * was built with and whether each sat on its bound, and for NGH the hazard control (requested, applied, constraint).
+ * Scratch probe (KPI 7B progression audit; not a fixture). Grows climbs as the game does (GameGrowth) and prints, per completed castle, the
+ * controller's measurement against the profile's target (total and T/H/E/X, mitigation M), castle-to-castle and cumulative growth, the factors
+ * the castle was built with (applied) beside what the controller asked for at the castle's start (requested, before the bounds), saturated
+ * factors, accepted / refused module attempts, and for NGH the hazard control and capacity records. A summary line gives castle 1 -> last
+ * growth and the regressions (castles below their predecessor).
  *
- * <p>Env: CLIMB_PROBE, CLIMB_CASES = "mode:seed:top,...".
+ * <p>Env: CLIMB_PROBE, CLIMB_CASES = "mode:seed:top,..." (mode 0 NORMAL, 1 PUNISHER, 2 NGH).
  */
 public class CastleAuditProbe {
     @Test public void castles() throws Exception {
@@ -20,19 +23,33 @@ public class CastleAuditProbe {
             Tuning t = lvl == 0 ? base : base.hardCopy(lvl);
             DifficultyProfile P = DifficultyProfile.of(t);
             GameGrowth g = new GameGrowth(seed, t);
-            StringBuilder sb = new StringBuilder(String.format("== %s seed %d (castle spacing %.0f m)%n", new String[]{"NORMAL", "PUNISHER", "NGH"}[lvl], seed, t.castleSpacing));
+            StringBuilder sb = new StringBuilder(String.format("== %s seed %d (castle spacing %.0f m, slope-aware %b)%n", new String[]{"NORMAL", "PUNISHER", "NGH"}[lvl], seed, t.castleSpacing, Progression.SLOPE));
             double y = 0; int printed = 0, capPrinted = 0; long w0 = System.nanoTime();
+            Map<Integer, float[]> req = new HashMap<>(); Map<Integer, int[]> mods = new TreeMap<>(); List<Float> totals = new ArrayList<>();
             try {
                 for (int k = 0; k < 400 && y < top; k++) {
                     CourseGenerator.Framed f = g.next(); y = f.yBase + f.c.get(f.c.routeSize() - 1).y;
+                    for (GenTrace.Module m : g.trace.modules) {
+                        if ("STRUCTURE".equals(m.role) || m.attempt != g.trace.finalAttempt) continue;
+                        int[] v = mods.computeIfAbsent(Progression.castleOf(m.y, t.castleSpacing), x -> new int[3]); if (m.ok) v[0]++; else { v[1]++; if (m.earlyRejected) v[2]++; }
+                    }
                     Progression pr = Progression.of(f.c.prog);
+                    if (!req.containsKey(pr.castle())) { float[] r = new float[4]; pr.factors(pr.castle(), P, t.castleSpacing, r); req.put(pr.castle(), r); }
                     for (int i = printed; i < pr.completedCount(); i++) {
                         float[] r = pr.completed(i); int n = (int) r[0];
-                        float tot = Progression.total(r, 1), tg = P.targetTotal(n);
+                        float tot = Progression.total(r, 1), tg = P.targetTotal(n), prev = totals.isEmpty() ? Float.NaN : totals.get(totals.size() - 1);
+                        totals.add(tot);
+                        float[] rq = req.getOrDefault(n, new float[]{Float.NaN, Float.NaN, Float.NaN, Float.NaN});
                         StringBuilder fs = new StringBuilder();
-                        for (int q = 0; q < 4; q++) { float fv = r[1 + Progression.ACC + q]; fs.append(String.format(" %s%.2f%s", "THEX".charAt(q), fv, fv <= P.factorLo(q) + 1e-4f ? "(lo)" : fv >= P.factorHi(q) - 1e-4f && !(q == 1 && P.capacityControl()) ? "(hi)" : "")); }
-                        sb.append(String.format("CASTLE %2d total %6.0f / target %6.0f (%+5.1f%%) | T %5.0f/%5.0f H %5.0f/%5.0f E %5.0f/%5.0f X %4.0f/%4.0f M %3.0f | links %3.0f chall %3.0f rest %2.0f | factors%s%n",
-                                n, tot, tg, 100 * (tot - tg) / tg, r[1], P.target(n, 0), r[2], P.target(n, 1), r[3], P.target(n, 2), r[4], P.target(n, 3), r[5], r[6], r[7], r[8], fs));
+                        for (int q = 0; q < 4; q++) {
+                            float fv = r[1 + Progression.ACC + q];
+                            boolean lo = fv <= P.factorLo(q) + 1e-4f, hi = fv >= P.factorHi(q) - 1e-4f && !(q == 1 && P.capacityControl());
+                            fs.append(String.format(" %s%.2f/%.2f%s", "THEX".charAt(q), rq[q], fv, lo ? "(lo)" : hi ? "(hi)" : ""));
+                        }
+                        int[] mv = mods.getOrDefault(n, new int[3]);
+                        sb.append(String.format("CASTLE %2d total %6.0f / target %6.0f (%+5.1f%%) step %+5.1f%% cum %+5.1f%% | T %4.0f/%4.0f H %4.0f/%4.0f E %4.0f/%4.0f X %3.0f/%3.0f M %2.0f | req/applied%s | modules ok %d refused %d (early %d)%n",
+                                n, tot, tg, 100 * (tot - tg) / tg, Float.isNaN(prev) ? 0f : 100 * (tot - prev) / prev, 100 * (tot - totals.get(0)) / totals.get(0),
+                                r[1], P.target(n, 0), r[2], P.target(n, 1), r[3], P.target(n, 2), r[4], P.target(n, 3), r[5], fs, mv[0], mv[1], mv[2]));
                     }
                     printed = pr.completedCount();
                     for (int i = capPrinted; i < pr.capRecordCount(); i++) {
@@ -43,6 +60,9 @@ public class CastleAuditProbe {
                     capPrinted = pr.capRecordCount();
                 }
             } catch (RuntimeException e) { sb.append("STOPPED: ").append(e.getMessage()).append('\n'); }
+            int regress = 0; for (int i = 1; i < totals.size(); i++) if (totals.get(i) < totals.get(i - 1)) regress++;
+            if (totals.size() > 1) sb.append(String.format("SUMMARY %s seed %d: castles %d, castle 1 -> %d growth %+5.1f%%, regressions %d, backtracks %d%n",
+                    new String[]{"NORMAL", "PUNISHER", "NGH"}[lvl], seed, totals.size(), totals.size(), 100 * (totals.get(totals.size() - 1) - totals.get(0)) / totals.get(0), regress, g.backtracks));
             sb.append(String.format("   (%.0f m in %.0f s)%n", y, (System.nanoTime() - w0) / 1e9));
             System.out.print(sb);
         }

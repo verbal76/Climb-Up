@@ -1490,3 +1490,11 @@ collision, input timing, replays or determinism fixtures changed; every new cue 
   LOW graphics quality.
 - **Cosmetic randomness:** variant picks and pitch/volume variation in audio now come from `SfxMix`'s own generator (and Juice's), not MathUtils;
   the simulation never used either (PlayDeterminismTest's guard is unchanged).
+- **Build 83 master execution (owner directive and supplement, 2026-10-30): campaign seeds and package inspection.** The nine-course KPI
+  campaign uses seeds **1, 2, 3** (the owner's written campaign specification of 2026-10-27: "seeds 1, 2, 3 ... seeds fixed in advance"); the
+  c8ef538 validation's 7321-7323 were that run's choice, not a recorded specification, so comparisons with it are made per mode, not per seed.
+  The geometry and validation runs of 2026-10-30 used 1, 2, 7322 and are design evidence, not campaign evidence. `tools/ci/inspect_package.py`
+  (run after the certification package in difficulty-report.yml) prints what the package really holds: ZIP CRC and SHA-256 against the
+  manifest, every manifest hash, each KPI's class (measured-complete, measured-incomplete, analyst judgment, unavailable) with its missing
+  inputs named, the drawn share of every chart (a near-blank chart is flagged), every table's rows and empty cells, PDF pages and the
+  dashboard's offline state. Reporting only; nothing in generation or gameplay changed.

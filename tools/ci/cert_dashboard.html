@@ -1,0 +1,410 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>__CERT_TITLE__ dashboard</title>
+<!-- Template for tools/ci/cert_package.py: the packager replaces the two placeholders and writes one self-contained offline file
+     (inline CSS and JS, data embedded as JSON, no network access). -->
+<style>
+:root {
+  color-scheme: light;
+  --page: #f9f9f7; --surface: #fcfcfb; --ink: #0b0b0b; --ink2: #52514e; --muted: #898781; --grid: #e1e0d9; --axis: #c3c2b7;
+  --border: rgba(11,11,11,0.10); --hover: rgba(11,11,11,0.05);
+  --s-normal: #2a78d6; --s-punisher: #eb6834; --s-ngh: #6250d6;
+  --l-terrain: #2a78d6; --l-hazards: #eb6834; --l-enemies: #1baf7a; --l-interaction: #eda100; --l-mitigation: #6250d6;
+  --c-a: #2a78d6; --c-b: #1baf7a; --c-c: #eda100; --c-d: #6250d6;
+  --pass: #0ca30c; --watch: #fab219; --fail: #d03b3b; --nv: #898781;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --page: #0d0d0d; --surface: #1a1a19; --ink: #f0efec; --ink2: #c3c2b7; --muted: #898781; --grid: #2c2c2a; --axis: #383835;
+    --border: rgba(255,255,255,0.10); --hover: rgba(255,255,255,0.06);
+    --s-normal: #3987e5; --s-punisher: #d95926; --s-ngh: #9085e9;
+    --l-terrain: #3987e5; --l-hazards: #d95926; --l-enemies: #199e70; --l-interaction: #c98500; --l-mitigation: #9085e9;
+    --c-a: #3987e5; --c-b: #199e70; --c-c: #c98500; --c-d: #9085e9;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #0d0d0d; --surface: #1a1a19; --ink: #f0efec; --ink2: #c3c2b7; --muted: #898781; --grid: #2c2c2a; --axis: #383835;
+  --border: rgba(255,255,255,0.10); --hover: rgba(255,255,255,0.06);
+  --s-normal: #3987e5; --s-punisher: #d95926; --s-ngh: #9085e9;
+  --l-terrain: #3987e5; --l-hazards: #d95926; --l-enemies: #199e70; --l-interaction: #c98500; --l-mitigation: #9085e9;
+  --c-a: #3987e5; --c-b: #199e70; --c-c: #c98500; --c-d: #9085e9;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--page); color: var(--ink); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+header { padding: 18px 24px 8px; }
+h1 { font-size: 20px; margin: 0 0 4px; }
+h2 { font-size: 15px; margin: 0 0 8px; }
+.sub { color: var(--ink2); font-size: 12.5px; }
+.filters { position: sticky; top: 0; z-index: 5; display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; padding: 10px 24px; background: var(--page);
+  border-bottom: 1px solid var(--border); }
+.filters label { font-size: 12.5px; color: var(--ink2); display: inline-flex; gap: 6px; align-items: center; }
+#f-kpi { max-width: 260px; }
+td.nw { white-space: nowrap; }
+select, button { font: inherit; font-size: 12.5px; color: var(--ink); background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px; }
+button { cursor: pointer; }
+main { padding: 16px 24px 40px; display: grid; grid-template-columns: repeat(auto-fit, minmax(520px, 1fr)); gap: 16px; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; min-width: 0; }
+.wide { grid-column: 1 / -1; }
+.tiles { display: flex; flex-wrap: wrap; gap: 12px; }
+.tile { border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; min-width: 120px; }
+.tile .v { font-size: 20px; font-weight: 600; }
+.tile .k { font-size: 12px; color: var(--ink2); }
+table { border-collapse: collapse; width: 100%; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+th, td { text-align: left; padding: 4px 8px; border-bottom: 1px solid var(--grid); vertical-align: top; }
+th { color: var(--ink2); font-weight: 600; cursor: pointer; white-space: nowrap; position: sticky; top: 0; background: var(--surface); }
+tr.click { cursor: pointer; }
+tr.click:hover, tr.sel { background: var(--hover); }
+.scroll { max-height: 420px; overflow: auto; }
+.badge { display: inline-block; padding: 1px 8px; border-radius: 10px; font-weight: 600; font-size: 12px; color: #fff; white-space: nowrap; }
+.b-PASS { background: var(--pass); } .b-FAIL { background: var(--fail); } .b-WATCH { background: var(--watch); color: #0b0b0b; } .b-NV { background: var(--nv); }
+.nm { color: var(--muted); font-style: italic; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--ink2); margin: 2px 0 6px; }
+.legend i { display: inline-block; width: 14px; height: 3px; vertical-align: middle; margin-right: 5px; border-radius: 2px; }
+.legend i.box { height: 10px; width: 10px; }
+.legend i.dash { background: none !important; border-top: 2px dashed var(--ink); height: 0; }
+svg text { fill: var(--ink2); font-size: 11px; }
+svg .axis { stroke: var(--axis); } svg .gridl { stroke: var(--grid); }
+#tip { position: fixed; pointer-events: none; z-index: 20; background: var(--surface); color: var(--ink); border: 1px solid var(--border); border-radius: 8px;
+  padding: 8px 10px; font-size: 12px; box-shadow: 0 4px 14px rgba(0,0,0,.18); display: none; max-width: 360px; }
+#tip .row { display: flex; gap: 8px; align-items: center; white-space: nowrap; }
+#tip .row b { min-width: 52px; text-align: right; font-variant-numeric: tabular-nums; }
+#tip .key { width: 12px; height: 3px; border-radius: 2px; }
+#tip .h { color: var(--ink2); margin-bottom: 4px; }
+.detail { margin-top: 10px; border-top: 1px solid var(--grid); padding-top: 8px; }
+.small { font-size: 12px; color: var(--ink2); }
+.multis { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 8px; }
+</style>
+</head>
+<body>
+<header>
+  <h1 id="title"></h1>
+  <div class="sub" id="ident"></div>
+</header>
+<div class="filters" role="toolbar" aria-label="Filters">
+  <label>Difficulty <span id="f-mode"></span></label>
+  <label>Seed <select id="f-seed"></select></label>
+  <label>Castle <select id="f-castle"></select></label>
+  <label>Mechanic <select id="f-mech"></select></label>
+  <label>Hazard <select id="f-haz"></select></label>
+  <label>KPI <select id="f-kpi"></select></label>
+  <label>Status <select id="f-status"></select></label>
+  <button id="theme" type="button" aria-label="Toggle light or dark mode">Light / dark</button>
+</div>
+<main>
+  <section class="card wide"><h2>Campaign</h2><div class="tiles" id="tiles"></div></section>
+  <section class="card wide"><h2>KPI scorecard</h2><div class="small">Click a KPI for its checks, measurements and evidence. A missing measurement is never a PASS.</div>
+    <div class="scroll"><table id="kpi-table"></table></div><div id="kpi-detail" class="detail"></div></section>
+  <section class="card wide"><h2>Ten-castle progression <select id="f-metric" aria-label="Metric"></select></h2>
+    <div class="legend" id="prog-legend"></div><div id="prog"></div></section>
+  <section class="card wide"><h2>Composition per castle (mean of the selected courses; mitigation below zero)</h2><div class="multis" id="comp"></div></section>
+  <section class="card"><h2 id="haz-title">Hazards placed per castle</h2><div class="legend" id="haz-legend"></div><div id="haz"></div></section>
+  <section class="card"><h2>Enemies placed per castle</h2><div class="legend" id="ene-legend"></div><div id="ene"></div></section>
+  <section class="card"><h2 id="mech-title">Mechanic per castle</h2><div class="legend" id="mech-legend"></div><div id="mech"></div></section>
+  <section class="card"><h2>Avalanche triggers per castle</h2><div class="legend" id="avl-legend"></div><div id="avl"></div></section>
+  <section class="card"><h2>Enforcers placed per castle (tiers in the tooltip)</h2><div class="legend" id="enf-legend"></div><div id="enf"></div></section>
+  <section class="card"><h2>Generation time per castle, s</h2><div class="legend" id="gen-legend"></div><div id="gen"></div></section>
+  <section class="card wide"><h2>Castle drill-down</h2><div class="small">One row per course and castle for the filters above; click a header to sort, a row for every field.</div>
+    <div class="scroll"><table id="castle-table"></table></div><div id="castle-detail" class="detail"></div></section>
+  <section class="card"><h2>Slowest slices</h2><div class="scroll"><table id="slice-table"></table></div></section>
+  <section class="card"><h2>Modules by kind (selected courses)</h2><div class="scroll"><table id="mod-table"></table></div></section>
+  <section class="card wide"><h2>Courses</h2><div class="scroll"><table id="course-table"></table></div></section>
+</main>
+<div id="tip" role="tooltip"></div>
+<script type="application/json" id="cert-data">__CERT_DATA__</script>
+<script>
+"use strict";
+const D = JSON.parse(document.getElementById("cert-data").textContent);
+const MODES = D.modes, CASTLES = [1,2,3,4,5,6,7,8,9,10];
+const NM = "not measured in this campaign";
+const $ = id => document.getElementById(id);
+const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const modeVar = m => ({NORMAL: "--s-normal", PUNISHER: "--s-punisher", NGH: "--s-ngh"})[m] || "--muted";
+const el = (tag, attrs, text) => { const e = document.createElement(tag); for (const k in attrs || {}) e.setAttribute(k, attrs[k]); if (text != null) e.textContent = text; return e; };
+const svgEl = (tag, attrs) => { const e = document.createElementNS("http://www.w3.org/2000/svg", tag); for (const k in attrs || {}) e.setAttribute(k, attrs[k]); return e; };
+const num = v => (v === null || v === undefined || v === "" || Number.isNaN(+v)) ? null : +v;
+const f = (v, d = 1) => { const x = num(v); return x === null ? "-" : x.toLocaleString(undefined, {maximumFractionDigits: d, minimumFractionDigits: 0}); };
+const meanOf = a => { const v = a.map(num).filter(x => x !== null); return v.length ? v.reduce((s, x) => s + x, 0) / v.length : null; };
+let state = {modes: new Set(MODES), seed: "all", castle: "all", mech: D.mechanic_types[0], haz: "all", kpi: "all", status: "all", metric: "total"};
+try { const t = localStorage.getItem("cert-theme"); if (t) document.documentElement.setAttribute("data-theme", t); } catch (e) {}
+
+// ---------- filters
+function fillSelect(id, opts, val) { const s = $(id); s.textContent = ""; for (const [v, t] of opts) { const o = el("option", {value: v}, t); if (String(v) === String(val)) o.selected = true; s.appendChild(o); } }
+const presentCourses = D.courses.filter(c => c.present);
+const seeds = [...new Set(presentCourses.map(c => String(c.seed)))].sort((a, b) => (+a) - (+b) || a.localeCompare(b));
+const hazTypes = [...new Set(D.hazard_types.filter(h => h.lane === "HAZARDS").map(h => h.type))].sort();
+fillSelect("f-seed", [["all", "all seeds"], ...seeds.map(s => [s, "seed " + s])], "all");
+fillSelect("f-castle", [["all", "all castles"], ...CASTLES.map(c => [c, "castle " + c])], "all");
+fillSelect("f-mech", D.mechanic_types.map(m => [m, m.toLowerCase()]), state.mech);
+fillSelect("f-haz", [["all", "all hazard types"], ...hazTypes.map(h => [h, h.toLowerCase()])], "all");
+fillSelect("f-kpi", [["all", "all KPIs"], ...D.kpis.map(k => [k.id, k.id + " " + k.name])], "all");
+fillSelect("f-status", [["all", "all statuses"], ...["PASS", "FAIL", "WATCH", "NOT VERIFIED"].map(s => [s, s])], "all");
+const METRICS = [["total", "total reference points"], ["terrain", "terrain lane"], ["hazards", "hazard lane"], ["enemies", "enemy lane"], ["interaction", "interaction lane"],
+  ["mitigation", "mitigation lane"], ["growth_pct", "growth over previous castle (fraction)"], ["hazards_placed", "hazards placed"], ["enemies_placed", "enemies placed"],
+  ["avalanches", "avalanches"], ["enforcers", "Enforcers"], ["unique_mechanics", "unique mechanics"], ["signature_entropy", "signature entropy"], ["win_sd", "window sd"],
+  ["spike_windows", "spike windows"], ["gen_wall_s", "generation s"], ["ctl_slope_error", "controller slope error"]];
+fillSelect("f-metric", METRICS, "total");
+const fm = $("f-mode");
+for (const m of MODES) { const l = el("label", {}); const cb = el("input", {type: "checkbox", value: m}); cb.checked = true; cb.addEventListener("change", () => { cb.checked ? state.modes.add(m) : state.modes.delete(m); render(); }); l.appendChild(cb); l.appendChild(document.createTextNode(m)); fm.appendChild(l); }
+for (const [id, key] of [["f-seed", "seed"], ["f-castle", "castle"], ["f-mech", "mech"], ["f-haz", "haz"], ["f-kpi", "kpi"], ["f-status", "status"], ["f-metric", "metric"]])
+  $(id).addEventListener("change", e => { state[key] = e.target.value; render(); });
+$("theme").addEventListener("click", () => { const r = document.documentElement; const dark = r.getAttribute("data-theme") ? r.getAttribute("data-theme") === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+  r.setAttribute("data-theme", dark ? "light" : "dark"); try { localStorage.setItem("cert-theme", r.getAttribute("data-theme")); } catch (e) {} render(); });
+
+const selCourses = () => presentCourses.filter(c => state.modes.has(c.mode) && (state.seed === "all" || String(c.seed) === state.seed));
+const selRuns = () => new Set(selCourses().map(c => c.run));
+const selCastles = () => { const r = selRuns(); return D.castles.filter(x => r.has(x.run) && (state.castle === "all" || String(x.castle) === String(state.castle))); };
+const modesShown = () => MODES.filter(m => state.modes.has(m) && selCourses().some(c => c.mode === m));
+
+// ---------- tooltip
+const tip = $("tip");
+function showTip(ev, head, rows) {
+  tip.textContent = ""; tip.appendChild(el("div", {class: "h"}, head));
+  for (const r of rows) { const row = el("div", {class: "row"}); if (r.color) { const k = el("span", {class: "key"}); k.style.background = r.color; row.appendChild(k); } row.appendChild(el("b", {}, r.value)); row.appendChild(el("span", {}, r.label)); tip.appendChild(row); }
+  tip.style.display = "block"; const w = tip.offsetWidth, h = tip.offsetHeight;
+  tip.style.left = Math.min(ev.clientX + 14, innerWidth - w - 8) + "px"; tip.style.top = Math.min(ev.clientY + 14, innerHeight - h - 8) + "px";
+}
+const hideTip = () => { tip.style.display = "none"; };
+
+// ---------- chart primitives (hand-rolled SVG)
+function frame(container, ys, opts) {
+  container.textContent = "";
+  const W = Math.max(300, container.clientWidth || 600), H = opts.height || 280, m = {l: 56, r: 16, t: 10, b: 38};
+  const svg = svgEl("svg", {width: W, height: H, viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": opts.label || "chart"});
+  const vals = ys.filter(v => v !== null && Number.isFinite(v));
+  let lo = Math.min(0, ...vals), hi = Math.max(...vals, lo + 1e-9);
+  if (!vals.length) { lo = 0; hi = 1; }
+  const pad = (hi - lo) * 0.06; hi += pad; if (lo < 0) lo -= pad;
+  const y = v => m.t + (H - m.t - m.b) * (1 - (v - lo) / (hi - lo));
+  const ticks = niceTicks(lo, hi, 5);
+  for (const t of ticks) { svg.appendChild(svgEl("line", {x1: m.l, x2: W - m.r, y1: y(t), y2: y(t), class: "gridl"})); const tx = svgEl("text", {x: m.l - 6, y: y(t) + 4, "text-anchor": "end"}); tx.textContent = fmtTick(t); svg.appendChild(tx); }
+  svg.appendChild(svgEl("line", {x1: m.l, x2: W - m.r, y1: y(Math.max(lo, 0)), y2: y(Math.max(lo, 0)), class: "axis"}));
+  if (opts.yLabel) { const t = svgEl("text", {x: 12, y: m.t + (H - m.t - m.b) / 2, transform: `rotate(-90 12 ${m.t + (H - m.t - m.b) / 2})`, "text-anchor": "middle"}); t.textContent = opts.yLabel; svg.appendChild(t); }
+  if (opts.xLabel) { const t = svgEl("text", {x: m.l + (W - m.l - m.r) / 2, y: H - 4, "text-anchor": "middle"}); t.textContent = opts.xLabel; svg.appendChild(t); }
+  container.appendChild(svg);
+  if (!vals.length) { const t = svgEl("text", {x: W / 2, y: H / 2, "text-anchor": "middle"}); t.textContent = opts.empty || NM; svg.appendChild(t); }
+  return {svg, W, H, m, y, lo, hi, has: vals.length > 0};
+}
+function niceTicks(lo, hi, n) { const span = hi - lo, step0 = span / n, mag = Math.pow(10, Math.floor(Math.log10(step0))), r = step0 / mag;
+  const step = (r < 1.5 ? 1 : r < 3 ? 2 : r < 7 ? 5 : 10) * mag; const out = []; for (let t = Math.ceil(lo / step) * step; t <= hi + 1e-9; t += step) out.push(+t.toFixed(10)); return out; }
+const fmtTick = t => Math.abs(t) >= 1000 ? (t / 1000).toFixed(Math.abs(t) >= 10000 ? 0 : 1) + "k" : (Math.abs(t) < 1 && t !== 0 ? t.toFixed(2) : String(+t.toFixed(1)));
+
+function lineChart(container, xs, series, opts) {
+  const all = series.flatMap(s => s.values);
+  const F = frame(container, all, opts); if (!F.has) return;
+  const {svg, W, H, m, y} = F; const x = i => m.l + (W - m.l - m.r) * (xs.length > 1 ? i / (xs.length - 1) : 0.5);
+  xs.forEach((v, i) => { const t = svgEl("text", {x: x(i), y: H - m.b + 16, "text-anchor": "middle"}); t.textContent = v; svg.appendChild(t); });
+  if (opts.highlight != null) { const i = xs.indexOf(+opts.highlight); if (i >= 0) svg.appendChild(svgEl("rect", {x: x(i) - 14, y: m.t, width: 28, height: H - m.t - m.b, fill: css("--hover")})); }
+  for (const s of series) {
+    let d = "", pen = false;
+    s.values.forEach((v, i) => { if (v === null || !Number.isFinite(v)) { pen = false; return; } d += (pen ? "L" : "M") + x(i).toFixed(1) + "," + y(v).toFixed(1); pen = true; });
+    svg.appendChild(svgEl("path", {d, fill: "none", stroke: s.color, "stroke-width": s.width || 2, "stroke-dasharray": s.dash || "", opacity: s.opacity || 1, "stroke-linejoin": "round"}));
+    if (s.marker) s.values.forEach((v, i) => { if (v !== null && Number.isFinite(v)) svg.appendChild(svgEl("circle", {cx: x(i), cy: y(v), r: 4, fill: s.color, stroke: css("--surface"), "stroke-width": 2})); });
+  }
+  const cross = svgEl("line", {y1: m.t, y2: H - m.b, stroke: css("--ink2"), "stroke-width": 1, opacity: 0}); svg.appendChild(cross);
+  const hit = svgEl("rect", {x: m.l, y: m.t, width: W - m.l - m.r, height: H - m.t - m.b, fill: "transparent"}); svg.appendChild(hit);
+  hit.addEventListener("pointermove", ev => { const r = svg.getBoundingClientRect(); const px = ev.clientX - r.left; const i = Math.max(0, Math.min(xs.length - 1, Math.round((px - m.l) / ((W - m.l - m.r) / Math.max(1, xs.length - 1)))));
+    cross.setAttribute("x1", x(i)); cross.setAttribute("x2", x(i)); cross.setAttribute("opacity", .6);
+    showTip(ev, (opts.xName || "castle") + " " + xs[i], series.filter(s => !s.noTip).map(s => ({color: s.color, value: s.values[i] === null || s.values[i] === undefined ? "-" : f(s.values[i], opts.digits ?? 1), label: s.name}))); });
+  hit.addEventListener("pointerleave", () => { cross.setAttribute("opacity", 0); hideTip(); });
+}
+
+function barChart(container, cats, series, opts) {
+  const stacked = !!opts.stacked;
+  let all = [];
+  if (stacked) cats.forEach((_, i) => { let p = 0, n = 0; for (const s of series) { const v = s.values[i] || 0; v >= 0 ? p += v : n += v; } all.push(p, n); });
+  else all = series.flatMap(s => s.values);
+  const F = frame(container, all, opts); if (!F.has) return;
+  const {svg, W, H, m, y} = F; const bw = (W - m.l - m.r) / cats.length;
+  cats.forEach((c, i) => { const t = svgEl("text", {x: m.l + bw * (i + 0.5), y: H - m.b + 16, "text-anchor": "middle"}); t.textContent = c; svg.appendChild(t); });
+  if (opts.highlight != null) { const i = cats.map(String).indexOf(String(opts.highlight)); if (i >= 0) svg.appendChild(svgEl("rect", {x: m.l + bw * i, y: m.t, width: bw, height: H - m.t - m.b, fill: css("--hover")})); }
+  cats.forEach((c, i) => {
+    let pos = 0, neg = 0; const inner = bw * 0.8, w = stacked ? inner : inner / series.length;
+    series.forEach((s, j) => {
+      const v = s.values[i]; if (v === null || v === undefined || !Number.isFinite(v)) return;
+      let y0, y1; if (stacked) { if (v >= 0) { y0 = pos; pos += v; y1 = pos; } else { y0 = neg; neg += v; y1 = neg; } } else { y0 = 0; y1 = v; }
+      const x0 = m.l + bw * i + bw * 0.1 + (stacked ? 0 : w * j);
+      const top = y(Math.max(y0, y1)), h = Math.max(0.5, Math.abs(y(y0) - y(y1)));
+      const r = svgEl("rect", {x: x0 + 1, y: top, width: Math.max(1, w - 2), height: h, fill: s.color, stroke: css("--surface"), "stroke-width": 1, rx: 2, tabindex: 0});
+      if (s.pattern) r.setAttribute("fill-opacity", 0.75);
+      const tipf = ev => { r.setAttribute("opacity", .8); showTip(ev, (opts.xName || "castle") + " " + c, [{color: s.color, value: f(v, opts.digits ?? 1), label: s.name}, ...(opts.extra ? opts.extra(i, s, j) : [])]); };
+      r.addEventListener("pointermove", tipf); r.addEventListener("focus", ev => { const b = r.getBoundingClientRect(); tipf({clientX: b.right, clientY: b.top}); });
+      r.addEventListener("pointerleave", () => { r.setAttribute("opacity", 1); hideTip(); }); r.addEventListener("blur", hideTip);
+      svg.appendChild(r);
+    });
+  });
+}
+function legend(id, items) { const L = $(id); L.textContent = ""; for (const it of items) { const s = el("span", {}); const k = el("i", {class: it.kind || ""}); if (it.kind !== "dash") k.style.background = it.color; s.appendChild(k); s.appendChild(document.createTextNode(it.name)); L.appendChild(s); } }
+
+// ---------- aggregation helpers
+function castleMean(courses, field, k) { return meanOf(D.castles.filter(x => courses.has(x.run) && x.castle === k && x.complete).map(x => x[field])); }
+function modeCourses(m) { return new Set(selCourses().filter(c => c.mode === m).map(c => c.run)); }
+function perModeCastle(field) { return modesShown().map(m => { const rs = modeCourses(m); return {name: m, color: css(modeVar(m)), values: CASTLES.map(k => castleMean(rs, field, k))}; }); }
+const statusBadge = s => { const b = el("span", {class: "badge b-" + (s === "NOT VERIFIED" ? "NV" : s)}, ({PASS: "✓ ", FAIL: "✗ ", WATCH: "! ", "NOT VERIFIED": "? "})[s] + s); return b; };
+
+function vstr(v, unit) {
+  if (v === null || v === undefined) return NM;
+  if (Array.isArray(v)) return "[" + v.map(x => vstr(x, unit)).join(", ") + "]";
+  if (typeof v === "object") return Object.entries(v).map(([k, x]) => k + "=" + vstr(x, unit)).join("; ");
+  if (typeof v === "number") return unit === "%" ? (100 * v).toFixed(1) + "%" : f(v, Math.abs(v) < 10 ? 3 : 1);
+  return String(v);
+}
+
+// ---------- panels
+function renderTiles() {
+  const T = $("tiles"); T.textContent = "";
+  const cnt = {}; D.kpis.filter(k => k.id !== "7A" && k.id !== "7B").forEach(k => cnt[k.status] = (cnt[k.status] || 0) + 1);
+  const add = (v, k) => { const t = el("div", {class: "tile"}); t.appendChild(el("div", {class: "v"}, v)); t.appendChild(el("div", {class: "k"}, k)); T.appendChild(t); };
+  add(presentCourses.length + " / " + (D.meta.expected.count || "?"), "courses found / expected");
+  add(selCourses().length, "courses selected");
+  for (const s of ["PASS", "FAIL", "WATCH", "NOT VERIFIED"]) add(cnt[s] || 0, "KPIs " + s);
+  add((D.meta.rules_versions || []).join(", ") || "-", "rules version");
+  add((D.meta.candidate.sha || "unknown").slice(0, 10), "candidate commit");
+}
+let kpiOpen = null;
+function renderKpis() {
+  const t = $("kpi-table"); t.textContent = "";
+  const hr = el("tr"); ["KPI", "name", "status", "decided by", "automatic", "checks", "missing inputs"].forEach(h => hr.appendChild(el("th", {}, h))); t.appendChild(hr);
+  for (const k of D.kpis) {
+    if (state.kpi !== "all" && k.id !== state.kpi && !(state.kpi === "7" && (k.id === "7A" || k.id === "7B"))) continue;
+    if (state.status !== "all" && k.status !== state.status) continue;
+    const tr = el("tr", {class: "click" + (kpiOpen === k.id ? " sel" : ""), tabindex: 0});
+    tr.appendChild(el("td", {}, k.id)); tr.appendChild(el("td", {}, k.name)); const sc = el("td"); sc.appendChild(statusBadge(k.status)); tr.appendChild(sc);
+    tr.appendChild(el("td", {}, k.status_source)); tr.appendChild(el("td", {class: "nw"}, k.automatic_status));
+    const cc = {}; k.checks.forEach(c => cc[c.status] = (cc[c.status] || 0) + 1);
+    tr.appendChild(el("td", {class: "nw"}, Object.entries(cc).map(([s, n]) => ({PASS: "\u2713", FAIL: "\u2717", WATCH: "!", "NOT VERIFIED": "?"})[s] + n + " " + s.toLowerCase()).join(", ") || "-")); tr.appendChild(el("td", {}, String(k.missing_inputs.length)));
+    const open = () => { kpiOpen = kpiOpen === k.id ? null : k.id; renderKpis(); };
+    tr.addEventListener("click", open); tr.addEventListener("keydown", e => { if (e.key === "Enter") open(); });
+    t.appendChild(tr);
+  }
+  const d = $("kpi-detail"); d.textContent = "";
+  const k = D.kpis.find(x => x.id === (kpiOpen || (state.kpi !== "all" ? state.kpi : null)));
+  if (!k) { d.appendChild(el("div", {class: "small"}, "No KPI selected.")); return; }
+  d.appendChild(el("h2", {}, "KPI " + k.id + ": " + k.name));
+  d.appendChild(el("div", {class: "small"}, k.question + " - " + k.automatic_rule + ". Analyst: " + (k.interpretation || "analyst evaluation pending") + (k.recommended_action ? " Action: " + k.recommended_action : "")));
+  if (k.checks.length) { const ct = el("table"); const h = el("tr"); ["check", "rule", "measured", "status", "evidence"].forEach(x => h.appendChild(el("th", {}, x))); ct.appendChild(h);
+    for (const c of k.checks) { const r = el("tr"); r.appendChild(el("td", {}, c.name)); r.appendChild(el("td", {}, c.rule)); r.appendChild(el("td", {}, c.measured)); const s = el("td"); s.appendChild(statusBadge(c.status)); r.appendChild(s);
+      r.appendChild(el("td", {}, (c.evidence.file || "") + (c.evidence.columns.length ? " [" + c.evidence.columns.join(", ") + "]" : ""))); ct.appendChild(r); } d.appendChild(ct); }
+  const mt = el("table"); const h = el("tr"); ["measurement", "value", "evidence", "worst case"].forEach(x => h.appendChild(el("th", {}, x))); mt.appendChild(h);
+  for (const mm of k.measurements) { const r = el("tr"); r.appendChild(el("td", {}, mm.name + (mm.unit ? " (" + mm.unit + ")" : "")));
+    const v = el("td", mm.measured ? {} : {class: "nm"}, mm.measured ? vstr(mm.value, mm.unit) : "NOT MEASURED: " + mm.note); r.appendChild(v);
+    r.appendChild(el("td", {}, (mm.evidence.file || "") + (mm.evidence.columns.length ? " [" + mm.evidence.columns.join(", ") + "]" : "")));
+    const w = mm.worst_case; r.appendChild(el("td", {}, w ? (w.run + (w.castle ? " castle " + w.castle : "") + " = " + vstr(w.value, mm.unit)) : "")); mt.appendChild(r); }
+  d.appendChild(mt);
+  for (const n of k.notes || []) d.appendChild(el("div", {class: "small"}, n));
+}
+function renderProgression() {
+  const field = state.metric, items = [];
+  const series = [];
+  for (const m of modesShown()) {
+    const col = css(modeVar(m));
+    for (const c of selCourses().filter(c => c.mode === m)) series.push({name: c.run, color: col, width: 1, opacity: 0.45, values: CASTLES.map(k => { const r = D.castles.find(x => x.run === c.run && x.castle === k); return r && r.complete ? num(r[field]) : null; })});
+    series.push({name: m + " mean", color: col, width: 3, marker: true, values: CASTLES.map(k => castleMean(modeCourses(m), field, k))});
+    items.push({name: m + " mean (thin: seeds)", color: col});
+    if (field === "total") { const tg = CASTLES.map(k => castleMean(modeCourses(m), "ctl_target_total", k)); if (tg.some(v => v !== null)) { series.push({name: m + " target", color: col, width: 1.5, dash: "6 4", values: tg}); items.push({name: m + " target", kind: "dash"}); } }
+  }
+  legend("prog-legend", items);
+  lineChart($("prog"), CASTLES, series, {height: 320, yLabel: (METRICS.find(x => x[0] === field) || [0, field])[1], xLabel: "castle (500 m each)", highlight: state.castle === "all" ? null : +state.castle});
+}
+function renderComposition() {
+  const C = $("comp"); C.textContent = "";
+  const boxes = modesShown().map(m => { const box = el("div"); box.appendChild(el("div", {class: "small"}, m)); const ch = el("div"); box.appendChild(ch); C.appendChild(box); return [m, ch]; });
+  for (const [m, ch] of boxes) {          // all boxes exist first, so each chart is sized to its final grid cell
+    const rs = modeCourses(m);
+    const lanes = ["terrain", "hazards", "enemies", "interaction"].map(l => ({name: l, color: css("--l-" + l), values: CASTLES.map(k => castleMean(rs, l, k))}));
+    lanes.push({name: "mitigation (subtracted)", color: css("--l-mitigation"), pattern: true, values: CASTLES.map(k => { const v = castleMean(rs, "mitigation", k); return v === null ? null : -v; })});
+    barChart(ch, CASTLES, lanes, {stacked: true, height: 240, yLabel: "points", highlight: state.castle === "all" ? null : state.castle,
+      extra: i => [{value: f(castleMean(rs, "total", i + 1), 0), label: "total (after mitigation)"}]});
+  }
+  if (!C.childNodes.length) C.appendChild(el("div", {class: "nm"}, "no course selected"));
+}
+function groupedByMode(id, legendId, valueFn, opts) {
+  const series = modesShown().map(m => ({name: m, color: css(modeVar(m)), values: CASTLES.map(k => valueFn(m, k))}));
+  legend(legendId, series.map(s => ({name: s.name, color: s.color, kind: "box"})));
+  barChart($(id), CASTLES, series, Object.assign({height: 250, highlight: state.castle === "all" ? null : state.castle}, opts));
+}
+function hazardCount(m, k, lane, type) {
+  const rs = modeCourses(m); if (!rs.size) return null;
+  const rows = D.hazard_types.filter(h => rs.has(h.run) && h.castle === k && h.lane === lane && (type === "all" || h.type === type));
+  if (!D.hazard_types.some(h => rs.has(h.run))) return null;
+  return rows.reduce((s, h) => s + h.placed, 0) / rs.size;
+}
+function renderHazEne() {
+  $("haz-title").textContent = (state.haz === "all" ? "Hazards" : state.haz.toLowerCase()) + " placed per castle (per course)";
+  groupedByMode("haz", "haz-legend", (m, k) => hazardCount(m, k, "HAZARDS", state.haz), {yLabel: "per course", extra: (i, s) => {
+    const rs = modeCourses(s.name); const cnt = {}; D.hazard_types.filter(h => rs.has(h.run) && h.castle === i + 1 && h.lane === "HAZARDS").forEach(h => cnt[h.type] = (cnt[h.type] || 0) + h.placed);
+    return Object.entries(cnt).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([t, n]) => ({value: f(n / rs.size, 1), label: t.toLowerCase()})); }});
+  groupedByMode("ene", "ene-legend", (m, k) => hazardCount(m, k, "ENEMIES", "all"), {yLabel: "per course", extra: (i, s) => {
+    const rs = modeCourses(s.name); const cnt = {}; D.hazard_types.filter(h => rs.has(h.run) && h.castle === i + 1 && h.lane === "ENEMIES").forEach(h => cnt[h.type] = (cnt[h.type] || 0) + h.placed);
+    return Object.entries(cnt).sort((a, b) => b[1] - a[1]).map(([t, n]) => ({value: f(n / rs.size, 1), label: t.toLowerCase()})); }});
+}
+function renderMech() {
+  $("mech-title").textContent = state.mech.toLowerCase() + " per castle (per course)";
+  const rs = selRuns(), n = Math.max(1, rs.size);
+  const rows = D.mechanics.filter(r => rs.has(r.run) && r.mechanic === state.mech);
+  const keys = [["placed", "--c-a"], ["main_route", "--c-b"], ["route_links", "--c-c"], ["solver_traversed", "--c-d"]];
+  const series = rows.length ? keys.map(([k, v]) => ({name: k.replace("_", " "), color: css(v), values: CASTLES.map(c => rows.filter(r => r.castle === c).reduce((s, r) => s + r[k], 0) / n)})) : [];
+  legend("mech-legend", series.map(s => ({name: s.name, color: s.color, kind: "box"})));
+  barChart($("mech"), CASTLES, series, {height: 250, yLabel: "per course", highlight: state.castle === "all" ? null : state.castle, empty: "mechanic data: " + NM});
+}
+function renderEnc() {
+  groupedByMode("avl", "avl-legend", (m, k) => castleMean(modeCourses(m), "avalanches", k), {yLabel: "per course", extra: (i, s) => {
+    const rs = modeCourses(s.name); return [["avalanche_blocks", "blocks"], ["avalanche_unfair", "refused as unfair"], ["avl_hits", "hits on the climber"]].map(([c, l]) => ({value: f(castleMean(rs, c, i + 1)), label: l})); }});
+  groupedByMode("enf", "enf-legend", (m, k) => castleMean(modeCourses(m), "enforcers", k), {yLabel: "per course", extra: (i, s) => {
+    const rs = modeCourses(s.name); return [["enforcers_yellow", "Yellow"], ["enforcers_orange", "Orange"], ["enforcers_red", "Red"]].map(([c, l]) => ({value: f(castleMean(rs, c, i + 1)), label: l})); }});
+  const series = perModeCastle("gen_wall_s").map(s => Object.assign(s, {marker: true}));
+  legend("gen-legend", series.map(s => ({name: s.name + " mean", color: s.color})));
+  lineChart($("gen"), CASTLES, series, {height: 250, yLabel: "s per castle", highlight: state.castle === "all" ? null : +state.castle});
+}
+const CT_COLS = [["run", "run"], ["castle", "castle"], ["complete", "complete"], ["terrain", "terrain"], ["hazards", "hazards"], ["enemies", "enemies"], ["interaction", "inter."],
+  ["mitigation", "mitig."], ["total", "total"], ["growth_pct", "growth"], ["ctl_target_total", "target"], ["win_sd", "window sd"], ["spike_windows", "spikes"],
+  ["hazards_placed", "haz."], ["enemies_placed", "enem."], ["avalanches", "avl"], ["enforcers", "enf"], ["unique_mechanics", "uniq. mech"], ["gen_wall_s", "gen s"]];
+let ctSort = {k: "run", dir: 1}, ctOpen = null;
+function renderCastleTable() {
+  const t = $("castle-table"); t.textContent = "";
+  const hr = el("tr"); for (const [k, l] of CT_COLS) { const th = el("th", {}, l + (ctSort.k === k ? (ctSort.dir > 0 ? " ▲" : " ▼") : "")); th.addEventListener("click", () => { ctSort = {k, dir: ctSort.k === k ? -ctSort.dir : 1}; renderCastleTable(); }); hr.appendChild(th); } t.appendChild(hr);
+  const rows = selCastles().slice().sort((a, b) => { const x = a[ctSort.k], y = b[ctSort.k]; const nx = num(x), ny = num(y); return ctSort.dir * ((nx !== null && ny !== null) ? nx - ny : String(x).localeCompare(String(y))) || a.castle - b.castle; });
+  for (const r of rows) { const tr = el("tr", {class: "click" + (ctOpen === r.run + "/" + r.castle ? " sel" : "")});
+    for (const [k] of CT_COLS) tr.appendChild(el("td", {}, k === "growth_pct" ? (num(r[k]) === null ? "-" : (100 * r[k]).toFixed(1) + "%") : (k === "run" || k === "complete" ? String(r[k]) : f(r[k], 1))));
+    tr.addEventListener("click", () => { ctOpen = ctOpen === r.run + "/" + r.castle ? null : r.run + "/" + r.castle; renderCastleTable(); }); t.appendChild(tr); }
+  const d = $("castle-detail"); d.textContent = "";
+  const r = D.castles.find(x => x.run + "/" + x.castle === ctOpen);
+  if (r) { d.appendChild(el("h2", {}, r.run + " castle " + r.castle + ": every field")); const tb = el("table");
+    for (const [k, v] of Object.entries(r)) { const tr = el("tr"); tr.appendChild(el("td", {}, k)); tr.appendChild(el("td", v === null ? {class: "nm"} : {}, v === null ? NM : String(v))); tb.appendChild(tr); } d.appendChild(tb); }
+}
+function renderSlices() {
+  const t = $("slice-table"); t.textContent = ""; const rs = selRuns();
+  const hr = el("tr"); ["run", "slice", "castle", "gen s", "failed attempts", "failed s", "solve s", "verdict / class"].forEach(h => hr.appendChild(el("th", {}, h))); t.appendChild(hr);
+  D.slices.filter(s => rs.has(s.run) && (state.castle === "all" || String(s.castle) === String(state.castle)) && num(s.gen_wall_s) !== null).sort((a, b) => b.gen_wall_s - a.gen_wall_s).slice(0, 25)
+    .forEach(s => { const tr = el("tr"); [s.run, s.slice, s.castle, f(s.gen_wall_s), f(s.failed_attempts, 0), f(s.failed_attempts_s), f(s.solve_wall_s), s.verdict || s.fail_class || "-"].forEach(v => tr.appendChild(el("td", {}, String(v)))); t.appendChild(tr); });
+}
+function renderModules() {
+  const t = $("mod-table"); t.textContent = ""; const rs = selRuns();
+  const agg = {}; for (const m of D.modules.filter(x => rs.has(x.run))) { const a = agg[m.kind] = agg[m.kind] || {tried: 0, acc: 0, fb: 0, early: null, refl: 0}; a.tried += m.tried || 0; a.acc += m.accepted_in_course || 0; a.fb += m.accepted_as_fallback || 0;
+    if (m.refused_early !== null && m.refused_early !== undefined) a.early = (a.early || 0) + m.refused_early; for (const c of ["refused_layer", "refused_hazard", "refused_plan", "refused_window", "refused_conflict", "refused_threat"]) a.refl += m[c] || 0; }
+  const hr = el("tr"); ["kind", "tried", "accepted", "rate", "as fallback", "refusal checks", "refused early"].forEach(h => hr.appendChild(el("th", {}, h))); t.appendChild(hr);
+  Object.entries(agg).sort((a, b) => b[1].tried - a[1].tried).forEach(([k, a]) => { const tr = el("tr"); [k, a.tried, a.acc, a.tried ? (100 * a.acc / a.tried).toFixed(1) + "%" : "-", a.fb, a.refl, a.early === null ? "-" : a.early].forEach(v => tr.appendChild(el("td", {}, String(v)))); t.appendChild(tr); });
+}
+function renderCourses() {
+  const t = $("course-table"); t.textContent = "";
+  const cols = [["run", "run"], ["present", "present"], ["gate_passes", "gate"], ["reached_m", "reached m"], ["castles_complete", "castles"], ["slices", "slices"], ["proven", "proven"], ["completed_false", "not completed"],
+    ["total", "total"], ["growth_c1_c10", "castle 1->10"], ["dips", "dips"], ["gen_s", "gen s"], ["solve_s", "solve s"], ["peak_heap_mb", "heap MB"], ["enforcers", "Enforcers"], ["avalanches", "avalanches"], ["rules_version", "rules"], ["commit", "commit"]];
+  const hr = el("tr"); cols.forEach(([, l]) => hr.appendChild(el("th", {}, l))); t.appendChild(hr);
+  for (const c of D.courses.filter(c => state.modes.has(c.mode) && (state.seed === "all" || String(c.seed) === state.seed))) { const tr = el("tr");
+    cols.forEach(([k]) => { const v = c[k]; tr.appendChild(el("td", v === null || v === undefined ? {class: "nm"} : {}, v === null || v === undefined ? "-" : k === "growth_c1_c10" ? (100 * v).toFixed(1) + "%" : typeof v === "number" ? f(v, 1) : String(v).slice(0, 12))); }); t.appendChild(tr); }
+}
+function render() {
+  $("title").textContent = D.meta.title + " dashboard";
+  $("ident").textContent = "Candidate " + (D.meta.candidate.sha || "unknown") + " | run " + (D.meta.run.url || D.meta.run.id || "local") + " | generated " + D.meta.generated_utc +
+    " | fingerprint " + ((D.meta.fingerprints || []).join(", ") || "not recorded");
+  renderTiles(); renderKpis(); renderProgression(); renderComposition(); renderHazEne(); renderMech(); renderEnc(); renderCastleTable(); renderSlices(); renderModules(); renderCourses();
+}
+let rt; addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(render, 150); });
+render();
+</script>
+</body>
+</html>

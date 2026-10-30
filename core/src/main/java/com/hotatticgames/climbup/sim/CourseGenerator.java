@@ -2845,6 +2845,27 @@ public final class CourseGenerator {
      * reach(rise)); each mortar fires from below the lower deck past the higher one. NORMAL and PUNISHER rows are unchanged.
      */
     static final float MORTAR_RISE0 = 0.2f, MORTAR_RISE1 = 0.45f;
+    /**
+     * Phase 3 of the generator directive (2026-10-30, NGH hazard acceptance): NGH mortar rows were accepted on 7% of tries, 80% of the refusals
+     * being the spiral-layer rule, mostly a row deck sitting just under 9.5 m above a launcher of the revolution below (most deficits under
+     * 0.25 m). A row deck that would clash with a lower layer is lifted in MORTAR_ADAPT_STEP steps, up to MORTAR_ADAPT_MAX more rise, to the first
+     * height that clears every layer; the gap is resized for the new rise. No rule is relaxed: commit() still checks every layer and proves every
+     * link. A deck that clears as drawn, or that no lift clears, is built exactly as before (no extra random draws).
+     */
+    static boolean MORTAR_ADAPT = Boolean.getBoolean("climb.mortarAdapt");          // (off until validated at full height: -Dclimb.mortarAdapt=true)
+    static final float MORTAR_ADAPT_STEP = 0.25f, MORTAR_ADAPT_MAX = 1.0f;
+    /** True if element {@code v}, not yet in the course, would clash with a spiral layer below it (this slice's earlier elements or the previous slices'). */
+    private boolean clashesBelow(Element v) {
+        for (int i = 0; i < c.size() - 2; i++) { Element f = c.get(i); if (f.y < v.y && layersClash(c, v, f)) return true; }
+        for (Element g : ghostElems) if (g.y < v.y && ghostClash(v, g)) return true;
+        return false;
+    }
+    /** True if element {@code v}, not yet in the course, would clash with any other spiral layer. */
+    private boolean clashesAny(Element v) {
+        for (int i = 0; i < c.size() - 2; i++) if (layersClash(c, v, c.get(i))) return true;
+        for (Element g : ghostElems) if (ghostClash(v, g)) return true;
+        return false;
+    }
     private List<Element> buildMortar(Element last, float d, int z, int attempt, List<Element> hzOut) {
         float inten = intensity(last.y);
         int n = 5 + rnd.nextInt(2) + (rnd.nextFloat() < late(last.y) ? 2 : 0);          // Build 71: longer mortar rows higher up
@@ -2854,9 +2875,17 @@ public final class CourseGenerator {
         boolean climbs = P == DifficultyProfile.NGH;          // NGH round 2 correction: the row climbs with the spiral (see MORTAR_RISE)
         for (int k = 0; k < n; k++) {
             float uR = cur.s + cur.w / 2f, rise = climbs ? r(MORTAR_RISE0, MORTAR_RISE1) : 0f;
-            float g = Math.min(3.0f, Math.max(2.2f, reach(rise) * lerp(0.55f, 0.72f, d) * r(0.95f, 1f) * (1f - 0.03f * attempt)));
+            float jit = r(0.95f, 1f);
+            float g = Math.min(3.0f, Math.max(2.2f, reach(rise) * lerp(0.55f, 0.72f, d) * jit * (1f - 0.03f * attempt)));
             float w = k == n - 1 ? 3.5f : r(2.4f, 3.2f);
             Element v = plat(Element.Type.STATIC, uR + g + w / 2f, cur.y + rise, w, z);
+            if (climbs && MORTAR_ADAPT && clashesBelow(v)) {          // Phase 3 (generator directive 2026-10-30): climb just past the revolution below
+                for (float add = MORTAR_ADAPT_STEP; add <= MORTAR_ADAPT_MAX + 1e-4f; add += MORTAR_ADAPT_STEP) {
+                    float r2 = rise + add, g2 = Math.min(3.0f, Math.max(2.2f, reach(r2) * lerp(0.55f, 0.72f, d) * jit * (1f - 0.03f * attempt)));
+                    Element v2 = plat(Element.Type.STATIC, uR + g2 + w / 2f, cur.y + r2, w, z);
+                    if (!clashesBelow(v2) && !clashesAny(v2)) { rise = r2; g = g2; v = v2; GenTrace.tally("mortar_row_lifted"); break; }
+                }
+            }
             es.add(v);
             Element m = hz(Element.Type.MORTAR, uR + g / 2f, cur.y - MORTAR_DEPTH, 0f, z);
             m.amp = MORTAR_DEPTH + rise + 2f * T.height; m.period = period * r(0.9f, 1.1f); m.phase = r(0f, 6.28f);      // Build 71 (owner): each mortar keeps its own time - no wait-jump-wait wave; a few gaps may line up for two or three jumps in a row

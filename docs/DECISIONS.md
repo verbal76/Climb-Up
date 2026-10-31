@@ -1514,3 +1514,30 @@ collision, input timing, replays or determinism fixtures changed; every new cue 
   timed seed 34's slice 0 and waited 3x that for seed 35's to be prepared; at radius 11.5 seed 35's costs about 3.5x seed 34's (measured locally
   69-71 s vs 19-20 s on a loaded machine), so it was not ready yet. The test now times the seed it prepares; its 5x assertion and claim are
   unchanged. The gem midpoint and run-spread tests pass at radius 11.5.
+- **Build 83 release hardening (owner directives 2026-10-30/31; record docs/reviews/BUILD83_RELEASE_HARDENING_2026-10-31.md).** Branch
+  `release/build-83-hardening` from the frozen candidate 2a7935b (left untouched with its CI 41117970356, campaign 41137500091 and T5 audit
+  41137503239). The ten Build 82 review findings re-implemented for Build 83 except finding 9 (constants refactor deferred): climb start off the
+  render thread with stale/cancel/failure protection, typed-code refusal before the play screen, record gate for mixed-rules and assisted
+  climbs, failure records with the failed climb's own seed and tuning, a runtime-independent tuning stamp (older stamps accepted and
+  restamped), Enforcer glow without allocations, and the live-tower slice-boundary fixes (Enforcer hop and crab follow by route deck,
+  checkpoint encounter resets by route position, Autopilot moving-hazard and live-avalanche windows by route deck). Owner achievement policy
+  and Steam statistics decisions C1-C3 implemented (competitive achievements and STAT_BEST_INFINITY_M on eligible climbs only; lifetime
+  falls; persisted world tracking, ALL_WORLDS progress and pending unlocks). Generation unchanged: fingerprint b0c5646446610a0274e036ab, 54
+  slices (3 modes x seeds 1-3 x 6) byte-identical to 2a7935b's, so the baseline campaign and T5 audit carry over. KPI 7B (separation
+  erosion) is not excepted yet: investigation delivered, no generation, tuning or threshold change (owner 2026-10-31). Packaging guard
+  (owner 2026-10-31): android.yml and windows.yml on this branch also accept `release/build-83-hardening`, for the release candidate's
+  private draft packages (test_build, nothing public, no OTA); the frozen branches' workflows are unchanged.
+- **The 30/15 Split - master difficulty progression principle (owner design decision and Build 83 approval, 2026-10-31; permanent record
+  docs/gameplay/DIFFICULTY_PROGRESSION_30_15.md).** Every mode targets about 30 % growth from castle 1 to castle 10, and adjacent modes about 15 %
+  separation at every castle, compounding (PUNISHER = 1.15 x NORMAL, NGH = 1.15 x PUNISHER). These are flexible design targets, not hard
+  tolerances. The three curves are linked: NORMAL first, the harder modes derived from it at all ten castles. This supersedes the independent
+  +38 / +49 / +42 % targets. Fairness, clearance, solvability, geometry integrity, execution windows, enemy anti-spam, route diversity and
+  determinism are never weakened to reach a number, and low scores are never filled with extra enemies or avalanches. The historical
+  KPI 7B FAIL of the Build 83 baseline 2a7935b stays as recorded. Feasibility (docs/reviews/BUILD83_30_15_FEASIBILITY_2026-10-31.md): the
+  harder modes' late castles sit at the generator's ceilings (jump demand at reach, hazard clearance, enemy anti-spam bound, interaction cap 40),
+  so the linked curves can only be met by shifting the system down. **Owner choice (2026-10-31): full 30/15 everywhere** - about NORMAL
+  640 -> 832, PUNISHER 736 -> 957, NGH 846 -> 1,100 in lane units (NORMAL 13-15 % easier than at 2a7935b; PUNISHER and NGH start 13-17 % easier
+  and finish near today's late values). **Reaction speed, Enforcers and avalanches are reported beside the score, not folded into the
+  generator's score** (owner 2026-10-31), so the controller places the same content per target as before. Implementation on
+  release/build-83-hardening as RULES_VERSION 20; tuning rounds are local single-course runs; one certification campaign, one full CI and
+  packaging only on the final SHA.

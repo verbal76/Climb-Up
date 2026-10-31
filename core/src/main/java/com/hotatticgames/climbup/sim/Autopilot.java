@@ -378,8 +378,21 @@ public final class Autopilot {
 
     static boolean movingNear(Course c, int a) {
         for (int k = 0; k <= 2; k++) { int i = c.deck(a, k); if (i >= 0 && (c.get(i).isMoving() || c.get(i).spins())) return true; }          // (DC6: route decks, the live tower's too)
-        int a0 = anchorIdx(c, a); for (Element h : c.hazards) if (h.anchor >= a0 - (firesAhead(h) ? 1 : 0) && h.anchor <= a0 + 2 && h.isMoving()) return true;
+        int a0 = anchorIdx(c, a), before = Math.max(0, c.deck(a0, -1)), hi = c.deck(a0, 2) < 0 ? c.size() - 1 : c.deck(a0, 2);
+        for (Element h : c.hazards) if (h.isMoving() && nearLink(c, a0, before, hi, h)) return true;
         return false;
+    }
+
+    /**
+     * Release hardening (Build 82 review finding 5): hazard {@code h} sits on the route deck before {@code a0} (a cannon, aimed cannon or mortar there
+     * fires across this link) or on one of the route decks {@code a0} .. two after it ({@code before} / {@code hi}), counted along the route as the
+     * decks above are: the live tower lists each slice's side structures after its route, so "a0 + 2" could name a decoy and miss the next slice's
+     * first decks. A hazard on a side structure is not on the link.
+     */
+    static boolean nearLink(Course c, int a0, int before, int hi, Element h) {
+        int at = h.anchor;
+        if (at < 0 || at >= c.size() || c.get(at).anchor >= 0) return false;
+        return at >= (firesAhead(h) ? before : a0) && at <= hi;
     }
 
     /**
@@ -391,8 +404,24 @@ public final class Autopilot {
      */
     static boolean avlLiveNear(Sim s, int a) {
         Course c = s.course; int a0 = anchorIdx(c, a);
-        for (int i = 0; i < c.hazards.size(); i++) { Element h = c.hazards.get(i); if (h.type == Element.Type.AVALANCHE && h.anchor >= a0 - 6 && h.anchor <= a0 + 2 && s.avalancheState(i) == 1) return true; }
+        for (int i = 0; i < c.hazards.size(); i++) {
+            Element h = c.hazards.get(i);
+            if (h.type == Element.Type.AVALANCHE && s.avalancheState(i) == 1 && avlSpan(c, a0, h.anchor)) return true;
+        }
         return false;
+    }
+    /**
+     * Release hardening: an avalanche triggered at element {@code anchor} spans route deck {@code a0} - its trigger deck from six route decks behind
+     * to two ahead, as documented, counted along the route rather than by index (the live tower lists each slice's side structures after its route);
+     * a trigger on a side structure counts by the route deck it hangs from.
+     */
+    static boolean avlSpan(Course c, int a0, int anchor) {
+        int lo = a0;
+        for (int k = 1; k <= 6; k++) { int q = c.deck(a0, -k); if (q < 0) break; lo = q; }
+        int hi = c.deck(a0, 2);
+        if (hi < 0) hi = c.size() - 1;
+        int at = anchor >= 0 && anchor < c.size() ? anchorIdx(c, anchor) : anchor;
+        return at >= lo && at <= hi;
     }
     /** Waits tried beside a live avalanche: 24 of them AVL_WAIT_STEP s apart (to 10.35 s), inside a trial AVL_TRIAL_EXTRA s longer than usual. */
     static final float AVL_WAIT_STEP = 0.45f, AVL_TRIAL_EXTRA = 8f;
@@ -400,7 +429,8 @@ public final class Autopilot {
     static float maxPeriod(Course c, int a) {
         float p = 0;
         for (int k = 0; k <= 2; k++) { int i = c.deck(a, k); if (i >= 0 && (c.get(i).isMoving() || c.get(i).spins())) p = Math.max(p, c.get(i).period); }
-        int a0 = anchorIdx(c, a); for (Element h : c.hazards) if (h.anchor >= a0 - (firesAhead(h) ? 1 : 0) && h.anchor <= a0 + 2 && h.isMoving()) p = Math.max(p, h.period);
+        int a0 = anchorIdx(c, a), before = Math.max(0, c.deck(a0, -1)), hi = c.deck(a0, 2) < 0 ? c.size() - 1 : c.deck(a0, 2);
+        for (Element h : c.hazards) if (h.isMoving() && nearLink(c, a0, before, hi, h)) p = Math.max(p, h.period);
         return p;
     }
     /** Build 79: a cannon (or mortar) on the platform before fires across this one, as CourseGenerator.commit proves it: a person waits for a clear moment here too

@@ -1,3 +1,18 @@
+## RESUME HERE (2026-10-31: BUILD 83 RELEASE HARDENING + THE 30/15 SPLIT on release/build-83-hardening)
+
+- Frozen, never modified: Build 82 (frozen/build-82-baseline, tag build-82-frozen-baseline, ccr-cb458cd1-w4dh5c, integration/build-82-repairs)
+  and the Build 83 pre-repair baseline fix/build-83-root-causes @ 2a7935b with CI 41117970356, campaign 41137500091, T5 audit 41137503239.
+- release/build-83-hardening (draft PR #20, DO NOT MERGE): the Build 82 review repairs re-implemented for Build 83, the owner achievement and
+  Steam statistics policy, the live-tower slice-boundary fixes. Generation-neutral: fingerprint b0c5646446610a0274e036ab, 54 slices identical to
+  2a7935b, bundled replay passes, focused tests 89/89 (docs/reviews/BUILD83_RELEASE_HARDENING_2026-10-31.md).
+- Packaging guard (owner 2026-10-31): android.yml / windows.yml on this branch also accept release/build-83-hardening; dispatch only with
+  test_build on (private draft, no tag, no OTA) and skip_tests on once the same SHA passed the full CI.
+- The 30/15 Split (owner design principle and approval, docs/gameplay/DIFFICULTY_PROGRESSION_30_15.md): owner chose full 30/15 everywhere
+  (NORMAL ~640 -> 832, PUNISHER ~736 -> 957, NGH ~846 -> 1,100 lane units); dynamic factors reported beside the score. Implementation = rules 20
+  on this branch; local single-course tuning rounds (at most 2 processes); then propose ONE certification campaign (9 courses + T5) for approval;
+  then ONE full CI via PR #20 retargeted to ccr-cb458cd1-w4dh5c (as PR #16 did for 2a7935b) and packaging on that exact SHA.
+- KPI 7B: no launch exception granted; investigation in scratchpad report BUILD83_KPI7B_INVESTIGATION (owner copy sent 2026-10-31).
+
 ## RESUME HERE (2026-10-28 overnight: OWNER REPAIR AUTHORISATIONS - integration/build-82-repairs, ONE CI, then the 30-course campaign)
 
 - Branches (all pushed, every commit [skip ci]): repair/ci-failures (Track 1: 30d3574 DC3+DC8, a0ddc41 solver recovery = DC1 pass 3, 7f168a4 saw

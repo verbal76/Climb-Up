@@ -399,8 +399,8 @@ public final class LaneReport {
             List<Object[]> T = new ArrayList<>();       // {rule, property, raw, weight}
             if (a.isPlatform() && b.isPlatform()) {
                 L.gap = Math.max(0f, Math.abs(c.dsWrap(b.s, a.s)) - a.halfW() - b.halfW()); L.reach = EncounterModel.reach(t, b.y - a.y);
-                L.ratio = L.reach > 0 ? Math.min(1.2, L.gap / L.reach) : 1.2; L.landW = b.w;
-                T.add(new Object[]{"T-GAP", "gap / longest jump at this rise", L.ratio, 2.0 * clamp((L.ratio - 0.4) / 0.6)});
+                L.ratio = Progression.reachRatio(c, t, a, b, L.gap); L.landW = b.w;          // rules 20: a launcher take-off against its own measured reach
+                T.add(new Object[]{"T-GAP", Progression.launcher(a) ? "rise / " + a.type + " measured reach at this gap" : "gap / longest jump at this rise", L.ratio, 2.0 * clamp((L.ratio - 0.4) / 0.6)});
                 if (L.ratio > 0.85) T.add(new Object[]{"T-LONG", "long jump / grab beyond 85% of reach (EncounterModel)", L.ratio, 3.0 * (L.ratio - 0.85)});
                 T.add(new Object[]{"T-LAND", "usable landing width (m)", (double) b.w, 1.5 * clamp((3.0 - b.w) / 2.0)});
             } else T.add(new Object[]{"T-TRAVERSE", "rope/cable link (owner-approved 0)", 0.0, 0.0});

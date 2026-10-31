@@ -1548,3 +1548,25 @@ collision, input timing, replays or determinism fixtures changed; every new cue 
   checkerboard instead of transparency; the owner supplied this PNG rather than have it edited. SplashScreen is unchanged (it fits any aspect;
   the logo's glow sits on the splash's dark #0B0910-like background). AssetsTest now checks the bundled copy against the master. No
   generation, simulation or save change.
+- **Rules 20: the 30/15 Split implemented on the corrected measurement (owner approval 2026-10-31; records
+  docs/reviews/BUILD83_CORRECTED_MEASUREMENT_2026-10-31.md, docs/gameplay/DIFFICULTY_PROGRESSION_30_15.md).**
+  - **Measurement.** The progression estimate and the lane report scored every launcher take-off (pad, spring, swing, elevator) against
+    plain-jump reach, so each scored the maximum, as the hardest possible jump. NORMAL, which has the most launchers, was inflated most, and the
+    gaps between modes were compressed. Launcher take-offs are now measured against the launcher's own measured reach (`CourseGenerator.reachAt`,
+    the C1 real-simulation tables; `Progression.reachRatio`). Pad and spring launches keep zero additional points (owner rule, confirmed 2026-10-31),
+    and execution difficulty stays in landing width and movement.
+  - **Targets.** The independent curves (630 -> 870, 700 -> 1,045, 850 -> 1,210) are replaced by the linked 30/15 curves. NORMAL castle 1 = 560
+    (the fitted line of the generator's own NORMAL castles on the corrected scale, 561), +30 % to castle 10; PUNISHER x1.15 and NGH x1.3225 at
+    every castle. Category shares are unchanged.
+  - **NORMAL.** Terrain demand caps at 0.9 at the top (was 1.0), so its late jumps stay a little short of the full reach. Its castle 10 had run
+    9 % above target with the terrain factor at its floor.
+  - **Reports.** cert_package gains a 30/15 section: linked target and deviation per castle, progression, and per-castle separation with mean /
+    min / max / early / middle / late. It adds no pass/fail rule, and the frozen KPI 7B erosion check is unchanged.
+  - **Unchanged.** EncounterModel's threat-budget `jump` term carries the same launcher artifact; it is left for review.
+  - **Evidence (local).** Six courses: mean deviation from the linked curves NORMAL +0.6 %, PUNISHER 0.0 %, NGH +3.0 %. Separation PUNISHER over
+    NORMAL 14.6 % mean (9.5 % late), NGH over PUNISHER 18.4 % mean (14.9 % late).
+  - **Fingerprint and replay.** Fingerprint 0ae9ca42c2a4e0ca82f0ed6b. Seed-12 replay re-recorded: 5,000 m, 10 doors, 2 respawns, 2 harness
+    skips (the stand-in autopilot made no progress for 4,000 steps twice; the rules 19 recording had none), finish step 410,861 (clock 410,862 =
+    1:54:07.700), events af39eb5c5c771db12a2dbdcd, states cabdce98527b98a5ca2e66f2.
+  - **Evidence invalidated.** Every course changes, so the 2a7935b campaign 41137500091 and T5 audit 41137503239 no longer certify generation;
+    a new certification campaign is required.

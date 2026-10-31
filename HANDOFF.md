@@ -7,10 +7,16 @@
   2a7935b, bundled replay passes, focused tests 89/89 (docs/reviews/BUILD83_RELEASE_HARDENING_2026-10-31.md).
 - Packaging guard (owner 2026-10-31): android.yml / windows.yml on this branch also accept release/build-83-hardening; dispatch only with
   test_build on (private draft, no tag, no OTA) and skip_tests on once the same SHA passed the full CI.
-- The 30/15 Split (owner design principle and approval, docs/gameplay/DIFFICULTY_PROGRESSION_30_15.md): owner chose full 30/15 everywhere
-  (NORMAL ~640 -> 832, PUNISHER ~736 -> 957, NGH ~846 -> 1,100 lane units); dynamic factors reported beside the score. Implementation = rules 20
-  on this branch; local single-course tuning rounds (at most 2 processes); then propose ONE certification campaign (9 courses + T5) for approval;
-  then ONE full CI via PR #20 retargeted to ccr-cb458cd1-w4dh5c (as PR #16 did for 2a7935b) and packaging on that exact SHA.
+- The 30/15 Split = RULES 20 (owner approval 2026-10-31; docs/gameplay/DIFFICULTY_PROGRESSION_30_15.md,
+  docs/reviews/BUILD83_CORRECTED_MEASUREMENT_2026-10-31.md):
+  - launcher take-offs measured against their own reach (`Progression.reachRatio`);
+  - linked curves, NORMAL 560 -> 728, PUNISHER x1.15, NGH x1.3225;
+  - NORMAL's terrain cap 0.9;
+  - a 30/15 report section in cert_package;
+  - fingerprint 0ae9ca42c2a4e0ca82f0ed6b; seed-12 replay re-recorded (finish 410,861, 1:54:07.700, 2 harness skips).
+  The 2a7935b campaign no longer certifies generation. Next: propose ONE certification campaign (9 courses + T5) for owner approval; then ONE
+  full CI via PR #20 retargeted to ccr-cb458cd1-w4dh5c (as PR #16 did for 2a7935b) and packaging (test_build, skip_tests) on that exact SHA.
+- Studio splash: the owner's pixel-art Hot Attic Games logo (branding/master/studio_splash_ff1450cf.png), 668cdc4.
 - KPI 7B: no launch exception granted; investigation in scratchpad report BUILD83_KPI7B_INVESTIGATION (owner copy sent 2026-10-31).
 
 ## RESUME HERE (2026-10-28 overnight: OWNER REPAIR AUTHORISATIONS - integration/build-82-repairs, ONE CI, then the 30-course campaign)

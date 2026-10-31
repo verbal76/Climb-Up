@@ -87,9 +87,17 @@ Because the 30/15 Split changes generation, the baseline campaign cannot certify
 
 ## Build 83 application (owner choices 2026-10-31)
 
-- **Full 30/15 everywhere.** The generator's late ceilings were measured on the Build 83 baseline: PUNISHER about 1,010-1,020 and NGH about
-  1,065-1,115 lane units at castles 8-10, limited by jump demand at reach, hazard clearance, the enemy anti-spam bound and the interaction cap.
-  So the linked curves are placed under NGH's ceiling: about NORMAL 640 -> 832, PUNISHER 736 -> 957, NGH 846 -> 1,100. NORMAL becomes easier
-  than at 2a7935b, and PUNISHER and NGH start lower and climb further. Feasibility: docs/reviews/BUILD83_30_15_FEASIBILITY_2026-10-31.md.
+- **Full 30/15 everywhere, on the corrected measurement.**
+  - The owner first chose the full 30/15 everywhere on the old scale (about NORMAL 640 -> 832). That was superseded the same day, once the
+    launcher-reach measurement error was found: the old score rated every pad, spring, swing and elevator take-off as the hardest possible jump.
+  - With launcher take-offs measured against their own measured reach (rules 20), the generator's own NORMAL castles fit a line starting at
+    561. NORMAL's castle 1 is anchored at **560**, and the linked curves are NORMAL 560 -> 728, PUNISHER 644 -> 837 and NGH 741 -> 963.
+  - On that scale the generator already ran within -6 to +11 % of them (docs/reviews/BUILD83_CORRECTED_MEASUREMENT_2026-10-31.md). Reaching them
+    needs easing only.
+  - The earlier feasibility note (docs/reviews/BUILD83_30_15_FEASIBILITY_2026-10-31.md) predates the measurement correction; its old-scale
+    numbers are kept for the record.
+- **Launcher measurement.** Pad and spring launches keep zero additional points (owner rule, confirmed 2026-10-31). Execution difficulty is
+  scored by landing geometry and movement as before.
+- **NORMAL stays approachable late.** NORMAL's terrain demand caps at 0.9 at the top (it was 1.0, plain jumps at the full reach by castle 10).
 - **Dynamic factors beside the score.** Reaction speed (PUNISHER 1.25x, NGH 1.5x), Enforcers and avalanches are reported next to each
   curve as acknowledged additional difficulty. They are not folded into the score the generator steers by.

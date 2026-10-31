@@ -36,6 +36,7 @@ public class ProgressionTest {
         assertEquals(LaneReport.X_BONUS, Progression.X_BONUS, 0f); assertEquals(LaneReport.X_CAP, Progression.X_CAP, 0f);
         assertEquals(LaneReport.TERRAIN_DEMANDING, Progression.TERRAIN_DEMANDING, 0f); assertEquals(LaneReport.WINDOW, Progression.WINDOW, 0f);
         assertEquals(DifficultyScore.FULL, Progression.REP_FULL); assertEquals(DifficultyScore.TAIL, Progression.REP_TAIL, 0f);
+        assertEquals("rules 21: one weight table (the shipped properties file overrides nothing)", Progression.POINTS, DifficultyScore.WEIGHTS);
     }
 
     @Test public void factorsStayInsideTheirBounds() {
@@ -70,25 +71,71 @@ public class ProgressionTest {
     }
 
     /**
-     * A closed loop with a deliberately biased "generator" (each castle comes out at bias x target x (0.7 + 0.3 x factor), the bias drawn per castle
-     * between 0.7 and 1.5): over 30 castles the factors stay inside their bounds and every castle that came out hard is followed by easing.
+     * Rules 21 closed loop on a model generator: castle n's category k comes out at bias_k x target x f_k^beta_k x (1 + noise), beta = the
+     * category's response to its factor (terrain responds weakly). Returns the base-factor history [castle][k] and the measured totals.
      */
-    @Test public void theFeedbackCannotRunAway() {
-        java.util.Random r = new java.util.Random(7);
-        for (DifficultyProfile p : new DifficultyProfile[]{N, P, G}) for (int trial = 0; trial < 50; trial++) {
-            Progression g = new Progression();
-            for (int n = 1; n <= 30; n++) {
-                float[] f = g.factors(n, p, SP);
-                float bias = 0.7f + 0.8f * r.nextFloat();
-                float[] rec = new float[Progression.REC]; rec[0] = n;
-                for (int k = 0; k < 4; k++) rec[1 + k] = p.target(n, k) * bias * (0.7f + 0.3f * f[k]);
-                g.castle = n + 1; if (g.doneN == Progression.KEEP) { System.arraycopy(g.done, 1, g.done, 0, Progression.KEEP - 1); g.doneN--; } g.done[g.doneN++] = rec;
-                float[] next = g.factors(n + 1, p, SP);
-                for (int k = 0; k < 4; k++) {
-                    assertTrue(next[k] >= p.factorLo(k) - 1e-6f && next[k] <= (k == Progression.H && p.capacityControl() ? Progression.CAP_BOUND : p.factorHi(k)) + 1e-6f);
-                    if (rec[1 + k] > 1.05f * p.target(n, k)) assertTrue("after a castle that came out hard the next factor is below 1", next[k] < 1f);
-                }
+    static float[][][] loop(DifficultyProfile p, float[] bias, float noise, long seed, int castles, float[] switchBias, int switchAt) {
+        float[] beta = {0.4f, 0.9f, 0.8f, 0.6f}; java.util.Random r = new java.util.Random(seed);
+        float[][] base = new float[castles + 1][], meas = new float[castles + 1][]; float[] prev = null;
+        for (int n = 1; n <= castles; n++) {
+            float[] pl = Progression.plan(n, prev, p, null);
+            float[] rec = new float[Progression.REC]; rec[0] = n; float[] b = n >= switchAt && switchBias != null ? switchBias : bias;
+            for (int k = 0; k < 4; k++) rec[1 + k] = (float) (p.target(n, k) * b[k] * Math.pow(pl[k], beta[k]) * (1 + noise * (2 * r.nextFloat() - 1)));
+            System.arraycopy(pl, 0, rec, Progression.R_BASE, 4); rec[Progression.R_PLAN] = pl[4]; System.arraycopy(pl, 5, rec, Progression.R_REQ, 4);
+            base[n] = java.util.Arrays.copyOf(pl, 4); meas[n] = new float[]{Progression.total(rec, 1)}; prev = rec;
+        }
+        return new float[][][]{base, meas};
+    }
+
+    /** Rules 21: a persistent bias the factors can absorb is learned and held (no reset to 1), with no castle-to-castle alternation. */
+    @Test public void aPersistentBiasIsLearnedAndHeldWithoutAlternation() {
+        for (DifficultyProfile p : new DifficultyProfile[]{N, P, G}) for (float bv : new float[]{0.85f, 1.15f, 1.25f}) {
+            float[][][] h = loop(p, new float[]{1f, bv, bv, 1f}, 0f, 1, 10, null, 0);
+            for (int k = 1; k <= 2; k++) {
+                int flips = 0; double last = 0;
+                for (int n = 2; n <= 10; n++) { double d = h[0][n][k] - h[0][n - 1][k]; if (Math.abs(d) > 0.005) { if (last != 0 && Math.signum(d) != Math.signum(last)) flips++; last = d; } }
+                assertTrue(p + " bias " + bv + " category " + k + ": the base factor does not alternate (" + flips + " reversals)", flips <= 1);
+                double need = Math.pow(1.0 / bv, 1.0 / (k == 1 ? 0.9 : 0.8));
+                float hi = k == Progression.H && p.capacityControl() ? Progression.CAP_BOUND : p.factorHi(k);
+                if (need >= p.factorLo(k) && need <= hi) assertTrue(p + " bias " + bv + ": the needed factor " + need + " is kept, not reset to 1 (" + h[0][10][k] + ")",
+                    Math.abs(h[0][10][k] - need) < Math.abs(1.0 - need) * 0.6 + 0.02);
             }
+        }
+    }
+
+    /** Noisy castles (±6 %): the factors follow the trend instead of swinging with every castle (the Rule 20 two-castle oscillation). */
+    @Test public void noiseDoesNotProduceATwoCastleOscillation() {
+        for (DifficultyProfile p : new DifficultyProfile[]{N, P, G}) for (long seed = 1; seed <= 20; seed++) {
+            float[][][] h = loop(p, new float[]{1.05f, 1.3f, 1.1f, 1.2f}, 0.06f, seed, 10, null, 0);
+            int alt = 0;
+            for (int n = 3; n <= 10; n++) {
+                double d1 = h[0][n][1] - h[0][n - 1][1], d0 = h[0][n - 1][1] - h[0][n - 2][1];
+                if (Math.abs(d1) > 0.03 && Math.abs(d0) > 0.03 && Math.signum(d1) != Math.signum(d0)) alt++;
+            }
+            assertTrue(p + " seed " + seed + ": hazard factor large reversals " + alt, alt <= 3);
+        }
+    }
+
+    /** Anti-windup: a factor held at its bound leaves it in the very next castle once the generator changes. */
+    @Test public void aBoundFactorLeavesTheBoundAsSoonAsItIsNoLongerNeeded() {
+        for (DifficultyProfile p : new DifficultyProfile[]{N, P}) {
+            float[][][] h = loop(p, new float[]{1f, 0.5f, 1f, 1f}, 0f, 1, 10, new float[]{1f, 1.6f, 1f, 1f}, 6);
+            assertEquals(p + ": the hazard factor sat on its bound", p.factorHi(Progression.H), h[0][6][Progression.H], 1e-4f);
+            assertTrue(p + ": and eases in the castle after the change (" + h[0][7][Progression.H] + ")", h[0][7][Progression.H] < p.factorHi(Progression.H) - 0.05f);
+        }
+    }
+
+    /** A castle that overshoots is followed by a smaller rise, never a drop below it (the planned glide), and its factors ease. */
+    @Test public void anOverHotCastleIsFollowedByASmallerRiseNotADrop() {
+        for (DifficultyProfile p : new DifficultyProfile[]{N, P, G}) for (int n = 2; n <= 10; n++) {
+            float[] prev = new float[Progression.REC]; prev[0] = n - 1;
+            for (int k = 0; k < 4; k++) { prev[1 + k] = p.target(n - 1, k) * 1.12f; prev[Progression.R_BASE + k] = 1f; }
+            float[] pl = Progression.plan(n, prev, p, null);
+            assertTrue(p + " castle " + n + ": planned at least 1.5 % above the over-hot castle", pl[4] >= Progression.total(prev, 1) * 1.015f - 1e-2f);
+            for (int k = 0; k < 4; k++) assertTrue("its factors ease (" + k + ")", pl[k] < 1f);
+            for (int k = 0; k < 4; k++) prev[1 + k] = p.target(n - 1, k) * 0.85f;
+            float[] up = Progression.plan(n, prev, p, null);
+            assertTrue(p + " castle " + n + ": a short castle is caught up by at most 6 %", up[4] <= Progression.total(prev, 1) * 1.06f + 1e-2f);
         }
     }
 
@@ -98,10 +145,13 @@ public class ProgressionTest {
             for (int n = 1; n <= 10; n++) { float sum = 0; for (int k = 0; k < 4; k++) sum += p.target(n, k); assertEquals("categories add up to the total", p.targetTotal(n), sum, 0.01f * p.targetTotal(n)); }
             assertEquals("castles past 10 keep castle 10's target", p.targetTotal(10), p.targetTotal(14), 0f);
         }
-        // The 30/15 Split (owner design principle, 2026-10-31; rules 20): every mode rises about 30 % from castle 1 to castle 10, and PUNISHER sits
-        // 15 % above NORMAL and NGH 15 % above PUNISHER at every castle, compounding - one linked system, never three independent curves.
+        // Rules 21 (owner Rule 21 directive 2026-10-31): 3.3 % compounded a castle (+33.9 % castle 1 -> 10), PUNISHER 15 % above NORMAL and NGH
+        // 15 % above PUNISHER at every castle - one linked system, never three independent curves.
         assertTrue("NOT GONNA HAPPEN is controlled", G.progression());
-        for (DifficultyProfile p : new DifficultyProfile[]{N, P, G}) assertEquals(p + " rises 30 % over the ten castles", 1.30f, p.targetTotal(10) / p.targetTotal(1), 1e-4f);
+        for (DifficultyProfile p : new DifficultyProfile[]{N, P, G}) {
+            for (int n = 2; n <= 10; n++) assertEquals(p + " grows 3.3 % at castle " + n, 1.033f, p.targetTotal(n) / p.targetTotal(n - 1), 1e-4f);
+            assertEquals(p + " rises 33.9 % over the ten castles", Math.pow(1.033, 9), p.targetTotal(10) / p.targetTotal(1), 1e-4);
+        }
         for (int n = 1; n <= 10; n++) {
             assertEquals("PUNISHER 15 % above NORMAL at castle " + n, 1.15f, P.targetTotal(n) / N.targetTotal(n), 1e-4f);
             assertEquals("NGH 15 % above PUNISHER at castle " + n, 1.15f, G.targetTotal(n) / P.targetTotal(n), 1e-4f);
@@ -157,7 +207,7 @@ public class ProgressionTest {
         assertArrayEquals(g.toArray(), back.toArray(), 0f);
         assertTrue(back.hasCapacity());
         Progression n = after(N, 5, all(1f));
-        assertEquals("NORMAL/PUNISHER state keeps its rules-13 layout", 3 + Progression.ACC + 4 + Progression.REC, n.toArray().length);
+        assertEquals("NORMAL/PUNISHER state layout (rules 21)", 3 + Progression.ACC + 4 + 9 + Progression.REC, n.toArray().length);
         assertFalse(Progression.of(n.toArray()).hasCapacity());
     }
 

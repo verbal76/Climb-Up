@@ -1570,3 +1570,41 @@ collision, input timing, replays or determinism fixtures changed; every new cue 
     1:54:07.700), events af39eb5c5c771db12a2dbdcd, states cabdce98527b98a5ca2e66f2.
   - **Evidence invalidated.** Every course changes, so the 2a7935b campaign 41137500091 and T5 audit 41137503239 no longer certify generation;
     a new certification campaign is required.
+
+## Build 83 Rule 21 (owner master implementation directive 2026-10-31; branch `experiment/build-83-rule-21` from Rule 20 `859ae77`; EXPERIMENT, not released)
+
+Engineering starting point: the Rule 20 forensic audit (read-only, 2026-10-31). Rule 20 is kept unchanged as the historical comparison (campaign
+41201387807 is the A/B baseline, never rerun). Every value below is generation-affecting (RULES_VERSION 21, new fingerprint and replays).
+
+- **Targets compound** (`DifficultyProfile.targetTotal`): NORMAL castle n = 560 x 1.033^(n-1) (+33.9 % castle 1 -> 10), PUNISHER x1.15, NGH
+  x1.3225 at every castle; castles past 10 hold castle 10. Rule 20's linear curve shrank its planned steps from 3.3 % to 2.6 %.
+- **Lane shares** (`DifficultyProfile.shares`): from the Rule 20 campaign's measured castle 1-3 and 8-10 lane shares, extrapolated to castles 1 and
+  10. NORMAL's terrain share falls 0.75 -> 0.67 (measured 0.75 -> 0.63) so terrain carries a real part of the rise (+19 % over the climb; the Rule 20
+  table planned +4 %). PUNISHER {.664 .208 .090 .038} -> {.620 .210 .122 .048}; NGH {.618 .219 .120 .043} -> {.577 .239 .141 .043}.
+- **One stateful controller** (`Progression.plan` / `factors`; no second governor; the optional slope-aware switch is removed and absorbed):
+  - base factors carried castle to castle: base(n) = base(n-1) x (wanted(n-1) / measured(n-1))^K, K = 1.0 terrain, 0.6 hazards, 0.6 enemies,
+    0.5 interaction; at most x/÷1.25 a castle; the profile's bounds clamp the stored state (anti-windup). Rule 20 recomputed 1 + 1.5 x error
+    relative to 1 every castle, which produced the two-castle oscillation (NORMAL hazards 0.70 / 1.02 / 0.77 / 1.22).
+  - planned glide: castle n is steered toward its target but never below +1.5 % or above +6 % of what castle n-1 measured (an over-hot castle is
+    followed by a smaller rise, not a drop; a short one is caught up over several castles).
+  - within-castle trim: from 30 % of the castle built, (castle-so-far wanted / measured)^0.5, bounded ±15 %.
+  - the castle's base, planned level, last-slice factors and requested factors are stored in its record (slice state FORMAT 3/4); an older
+    format starts fresh.
+- **Terrain steering** (`CourseGenerator.adjD`): the terrain factor now shifts jump demand additively (d + 0.5 (f - 1)); the Rule 20 multiplicative
+  form moved NORMAL's castle-1 demand of 0.1 by 0.018 at f = 1.3 (no lever). Bounds unchanged (0.05 .. max(d, 1.1)); every link still proven.
+- **NGH terrain head start** (`DifficultyProfile.terrainShift()`): 2,000 m instead of its 3,500 m curve shift (castle-1 terrain demand 0.46 instead
+  of 0.73; Rule 20 castle-1 terrain was 15 % over target). NGH opens with hazard 0.85 and interaction 0.9 (Rule 20: +16 % / +25 % at castle 1).
+  Its mechanics, red Enforcers, avalanches, reaction speed and curve shift for everything else are unchanged.
+- **Castle-2 Meadow** (`CourseGenerator.meadow`, owner directive 3.4): drop rows 0.08 a pick (was 0.10) and the section's other hazard modules and
+  plain-to-hazard conversions at 0.6, so the drops replace part of the hazard load instead of adding to it (Rule 20: castle 2 hazards +76 % over
+  target). The feature stays; the controller's hazard factor scales both.
+- **NGH capacity** (`Progression.CAP_ACCEPT_OK` 0.55 -> 0.40): the hold threshold sat above the 0.43-0.47 acceptance the generator achieves, so NGH
+  never escalated. Requested, applied and the constraint are recorded per castle; the applied value is what the base carries (no windup).
+- **Scoring:** weights and terrain terms have one definition (`Progression.POINTS`, `Progression.tGap/tLong/tLand` and the T_* constants), used by
+  the generator and by `LaneReport`/`DifficultyScore`; no weight changed. The interaction cap (2 per 25 m window) is kept: NGH sits at it, but
+  interaction is about 4 % of NGH's total, so even uncapped growth like its hazards' would add under 1 % - not a material limiter, and keeping it
+  keeps Rule 21 scores directly comparable with Rule 20's.
+- **Enemy ceiling 1.10, reaction speed and dynamic threats** unchanged (owner directive 3.5, 3.6).
+- **Diagnostics:** `castle_control.csv` gains the planned level, base / requested / last-slice factors, pacing class, controller action, reversals
+  and repeated ineffective corrections; `tools/ci/rule21_report.py` (consolidate job) prints per-seed castle rows with rejection classes, demand,
+  accepted module mix and generation cost, the A/B tables against the Rule 20 campaign and six charts from measured data.

@@ -16,7 +16,7 @@ license summary plus the controller glyph library. "Verified" = license text/sou
 | `fall.ogg` | Owner (Kevin), Suno | Owner's own; Suno terms | owner-supplied | as above |
 | Original synth SFX, pixel font, UI, VFX, title art, app icon | Hot Attic Games (this build) | Original | `tools/gen_*.py`, `ui/PixelFont.java`, `render/*` | **Yes** |
 | Build 83 synth cues and the mastered (level-matched) copies of every effect (`assets/audio/mastered/`) | Hot Attic Games (this build); the mastered copies inherit their source's licence (jeageroni clips: modification allowed; Helton Yan clips: CC BY 4.0, modified, still credited) | Original / as source | `tools/audio/gen_cues83.py`, `tools/audio/master_sfx.py`, `assets/data/sfx_levels.json` | **Yes** (same position as the sources) |
-| Studio splash logo | Owner-supplied `Hot_Attic_Games_Master_Logo…` | Owner's | `branding/master/studio_splash_e3d9bb56.png` | **Yes** |
+| Studio splash logo | Owner-supplied pixel-art Hot Attic Games logo (2026-10-31; replaces `Hot_Attic_Games_Master_Logo…`) | Owner's | `branding/master/studio_splash_ff1450cf.png` | **Yes** |
 
 ## Controller glyph library (studio-approved `Source.zip`)
 - **Pack:** JulioCacko "Input Prompts" (itch.io / FAB). **Asset license: CC0 1.0 Universal** (code license MIT). Owner-provided

@@ -1541,3 +1541,10 @@ collision, input timing, replays or determinism fixtures changed; every new cue 
   generator's score** (owner 2026-10-31), so the controller places the same content per target as before. Implementation on
   release/build-83-hardening as RULES_VERSION 20; tuning rounds are local single-course runs; one certification campaign, one full CI and
   packaging only on the final SHA.
+- **Studio splash replaced (owner, 2026-10-31).** The studio splash now shows the owner's pixel-art Hot Attic Games logo (house roof, glowing
+  window, chimney flame; 1254x1254 RGBA PNG with real transparency, sha256 ff1450cf09b011cb9529f433e2ebbb695ccfb3f7c942df404721fdd6d17cb676),
+  kept untouched as `branding/master/studio_splash_ff1450cf.png` and bundled byte-identical as `assets/branding/studio_splash.png`. It replaces
+  the earlier studio logo (the attic scene), whose master moved to `branding/master/retired/`. An earlier JPG of the same logo carried a painted
+  checkerboard instead of transparency; the owner supplied this PNG rather than have it edited. SplashScreen is unchanged (it fits any aspect;
+  the logo's glow sits on the splash's dark #0B0910-like background). AssetsTest now checks the bundled copy against the master. No
+  generation, simulation or save change.

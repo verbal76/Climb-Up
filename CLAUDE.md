@@ -96,7 +96,7 @@ Asset sources in priority order: 1) appropriately licensed free assets (CC0/publ
 Asset policy: **CC0 / public domain, else original/procedural** (chosen by the owner).
 
 - **Game icon:** none supplied; create an original one.
-- **Studio logo / splash:** OWNER-SUPPLIED file `Hot_Attic_Games_Master_Logo_ALPHA_FINAL.png` (1536x1024, sha256 e3d9bb5653eafb78...), kept untouched at `branding/master/studio_splash_e3d9bb56.png`. Use it; never generate a replacement.
+- **Studio logo / splash:** OWNER-SUPPLIED file (pixel-art Hot Attic Games logo, 1254x1254 RGBA PNG, sha256 ff1450cf09b011cb...), kept untouched at `branding/master/studio_splash_ff1450cf.png`; it replaced the earlier `Hot_Attic_Games_Master_Logo_ALPHA_FINAL.png` (now `branding/master/retired/studio_splash_e3d9bb56.png`) by owner decision on 2026-10-31. Use it; never generate a replacement.
 - **Game splash / title image:** none supplied; create an original one.
 
 ## A8. Informed overrides and acknowledged risks
@@ -326,7 +326,7 @@ Menu track plus gameplay track(s) matching the mood; loopable.
 ### Game branding and identity
 
 - **Game/app icon:** create an original asset in keeping with the art direction and the game's identity.
-- **Studio/developer splash:** uploaded master at `branding/master/studio_splash_e3d9bb56.png` (Hot_Attic_Games_Master_Logo_ALPHA_FINAL.png, 1536x1024, sha256 e3d9bb5653ea...). Never modify or overwrite the master; derive every size from it.
+- **Studio/developer splash:** uploaded master at `branding/master/studio_splash_ff1450cf.png` (owner's pixel-art Hot Attic Games logo, 1254x1254, sha256 ff1450cf09b0...; replaced the earlier master on 2026-10-31). Never modify or overwrite the master; derive every size from it.
 - **Game splash / title screen:** create an original asset in keeping with the art direction and the game's identity.
 
 Derive all required platform sizes, formats, adaptive-icon foreground/background and safe-zone variants automatically from the master artwork (for Android: mipmap densities, adaptive icon layers with the monochrome layer, Play Store 512px icon; splash via the platform splash API plus an in-game splash screen). Keep the master file untouched.

@@ -98,15 +98,15 @@ public class ProgressionTest {
             for (int n = 1; n <= 10; n++) { float sum = 0; for (int k = 0; k < 4; k++) sum += p.target(n, k); assertEquals("categories add up to the total", p.targetTotal(n), sum, 0.01f * p.targetTotal(n)); }
             assertEquals("castles past 10 keep castle 10's target", p.targetTotal(10), p.targetTotal(14), 0f);
         }
-        assertTrue("PUNISHER castle 1 sits at NORMAL castles 3-4 (owner)", P.targetTotal(1) >= N.targetTotal(3) && P.targetTotal(1) <= N.targetTotal(4));
-        assertEquals("PUNISHER castle 10 about 20% above NORMAL castle 10 (owner, provisional)", 1.2f, P.targetTotal(10) / N.targetTotal(10), 0.01f);
-        // rules 14 (owner 2026-10-27, "PUN C3-4 to +20%"): NOT GONNA HAPPEN has its own calibration, castle 1 at PUNISHER castles 3-4 (rules 13 measured
-        // 783-863 there), castle 10 about 20% above PUNISHER castle 10 (rules 13 measured mean 1,007; target 1,045)
-        assertTrue("NOT GONNA HAPPEN is now controlled", G.progression());
-        assertTrue("NGH castle 1 at PUNISHER castles 3-4 (owner): " + G.targetTotal(1), G.targetTotal(1) >= P.targetTotal(3) && G.targetTotal(1) <= 1.1f * P.targetTotal(4));
-        float r10 = G.targetTotal(10) / P.targetTotal(10);
-        assertTrue("NGH castle 10 about 20% above PUNISHER castle 10 (owner): " + r10, r10 >= 1.1f && r10 <= 1.25f);
-        for (int n = 1; n <= 10; n++) assertTrue("NGH above PUNISHER at castle " + n, G.targetTotal(n) > P.targetTotal(n));
+        // The 30/15 Split (owner design principle, 2026-10-31; rules 20): every mode rises about 30 % from castle 1 to castle 10, and PUNISHER sits
+        // 15 % above NORMAL and NGH 15 % above PUNISHER at every castle, compounding - one linked system, never three independent curves.
+        assertTrue("NOT GONNA HAPPEN is controlled", G.progression());
+        for (DifficultyProfile p : new DifficultyProfile[]{N, P, G}) assertEquals(p + " rises 30 % over the ten castles", 1.30f, p.targetTotal(10) / p.targetTotal(1), 1e-4f);
+        for (int n = 1; n <= 10; n++) {
+            assertEquals("PUNISHER 15 % above NORMAL at castle " + n, 1.15f, P.targetTotal(n) / N.targetTotal(n), 1e-4f);
+            assertEquals("NGH 15 % above PUNISHER at castle " + n, 1.15f, G.targetTotal(n) / P.targetTotal(n), 1e-4f);
+        }
+        assertEquals("NORMAL's castle 1 is the anchor the harder modes derive from", DifficultyProfile.NORMAL_CASTLE1, N.targetTotal(1), 1e-3f);
     }
 
     /** A state whose castle n-1 measured hazards at {@code hScale} of target, was built with hazard factor {@code fPrev}, and placed hazards at {@code acc}. */

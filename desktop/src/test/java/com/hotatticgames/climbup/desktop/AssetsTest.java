@@ -19,6 +19,13 @@ public class AssetsTest {
         assertTrue(new File(root(), "branding/studio_splash.png").isFile());
     }
 
+    /** The studio splash is the owner's master, byte for byte (owner 2026-10-31: the pixel-art Hot Attic Games logo). */
+    @Test public void theStudioSplashIsTheOwnersMasterUnmodified() throws Exception {
+        File master = new File(root(), "../branding/master/studio_splash_ff1450cf.png");
+        org.junit.Assume.assumeTrue("master not beside this asset folder", master.isFile());
+        assertArrayEquals(Files.readAllBytes(master.toPath()), Files.readAllBytes(new File(root(), "branding/studio_splash.png").toPath()));
+    }
+
     @Test public void theBundledTuningParses() throws Exception {
         Tuning t = Tuning.parse(new String(Files.readAllBytes(new File(root(), "data/tuning.json").toPath()), StandardCharsets.UTF_8));
         assertNotNull(t);

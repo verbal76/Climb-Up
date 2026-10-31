@@ -1514,3 +1514,59 @@ collision, input timing, replays or determinism fixtures changed; every new cue 
   timed seed 34's slice 0 and waited 3x that for seed 35's to be prepared; at radius 11.5 seed 35's costs about 3.5x seed 34's (measured locally
   69-71 s vs 19-20 s on a loaded machine), so it was not ready yet. The test now times the seed it prepares; its 5x assertion and claim are
   unchanged. The gem midpoint and run-spread tests pass at radius 11.5.
+- **Build 83 release hardening (owner directives 2026-10-30/31; record docs/reviews/BUILD83_RELEASE_HARDENING_2026-10-31.md).** Branch
+  `release/build-83-hardening` from the frozen candidate 2a7935b (left untouched with its CI 41117970356, campaign 41137500091 and T5 audit
+  41137503239). The ten Build 82 review findings re-implemented for Build 83 except finding 9 (constants refactor deferred): climb start off the
+  render thread with stale/cancel/failure protection, typed-code refusal before the play screen, record gate for mixed-rules and assisted
+  climbs, failure records with the failed climb's own seed and tuning, a runtime-independent tuning stamp (older stamps accepted and
+  restamped), Enforcer glow without allocations, and the live-tower slice-boundary fixes (Enforcer hop and crab follow by route deck,
+  checkpoint encounter resets by route position, Autopilot moving-hazard and live-avalanche windows by route deck). Owner achievement policy
+  and Steam statistics decisions C1-C3 implemented (competitive achievements and STAT_BEST_INFINITY_M on eligible climbs only; lifetime
+  falls; persisted world tracking, ALL_WORLDS progress and pending unlocks). Generation unchanged: fingerprint b0c5646446610a0274e036ab, 54
+  slices (3 modes x seeds 1-3 x 6) byte-identical to 2a7935b's, so the baseline campaign and T5 audit carry over. KPI 7B (separation
+  erosion) is not excepted yet: investigation delivered, no generation, tuning or threshold change (owner 2026-10-31). Packaging guard
+  (owner 2026-10-31): android.yml and windows.yml on this branch also accept `release/build-83-hardening`, for the release candidate's
+  private draft packages (test_build, nothing public, no OTA); the frozen branches' workflows are unchanged.
+- **The 30/15 Split - master difficulty progression principle (owner design decision and Build 83 approval, 2026-10-31; permanent record
+  docs/gameplay/DIFFICULTY_PROGRESSION_30_15.md).** Every mode targets about 30 % growth from castle 1 to castle 10, and adjacent modes about 15 %
+  separation at every castle, compounding (PUNISHER = 1.15 x NORMAL, NGH = 1.15 x PUNISHER). These are flexible design targets, not hard
+  tolerances. The three curves are linked: NORMAL first, the harder modes derived from it at all ten castles. This supersedes the independent
+  +38 / +49 / +42 % targets. Fairness, clearance, solvability, geometry integrity, execution windows, enemy anti-spam, route diversity and
+  determinism are never weakened to reach a number, and low scores are never filled with extra enemies or avalanches. The historical
+  KPI 7B FAIL of the Build 83 baseline 2a7935b stays as recorded. Feasibility (docs/reviews/BUILD83_30_15_FEASIBILITY_2026-10-31.md): the
+  harder modes' late castles sit at the generator's ceilings (jump demand at reach, hazard clearance, enemy anti-spam bound, interaction cap 40),
+  so the linked curves can only be met by shifting the system down. **Owner choice (2026-10-31): full 30/15 everywhere** - about NORMAL
+  640 -> 832, PUNISHER 736 -> 957, NGH 846 -> 1,100 in lane units (NORMAL 13-15 % easier than at 2a7935b; PUNISHER and NGH start 13-17 % easier
+  and finish near today's late values). **Reaction speed, Enforcers and avalanches are reported beside the score, not folded into the
+  generator's score** (owner 2026-10-31), so the controller places the same content per target as before. Implementation on
+  release/build-83-hardening as RULES_VERSION 20; tuning rounds are local single-course runs; one certification campaign, one full CI and
+  packaging only on the final SHA.
+- **Studio splash replaced (owner, 2026-10-31).** The studio splash now shows the owner's pixel-art Hot Attic Games logo (house roof, glowing
+  window, chimney flame; 1254x1254 RGBA PNG with real transparency, sha256 ff1450cf09b011cb9529f433e2ebbb695ccfb3f7c942df404721fdd6d17cb676),
+  kept untouched as `branding/master/studio_splash_ff1450cf.png` and bundled byte-identical as `assets/branding/studio_splash.png`. It replaces
+  the earlier studio logo (the attic scene), whose master moved to `branding/master/retired/`. An earlier JPG of the same logo carried a painted
+  checkerboard instead of transparency; the owner supplied this PNG rather than have it edited. SplashScreen is unchanged (it fits any aspect;
+  the logo's glow sits on the splash's dark #0B0910-like background). AssetsTest now checks the bundled copy against the master. No
+  generation, simulation or save change.
+- **Rules 20: the 30/15 Split implemented on the corrected measurement (owner approval 2026-10-31; records
+  docs/reviews/BUILD83_CORRECTED_MEASUREMENT_2026-10-31.md, docs/gameplay/DIFFICULTY_PROGRESSION_30_15.md).**
+  - **Measurement.** The progression estimate and the lane report scored every launcher take-off (pad, spring, swing, elevator) against
+    plain-jump reach, so each scored the maximum, as the hardest possible jump. NORMAL, which has the most launchers, was inflated most, and the
+    gaps between modes were compressed. Launcher take-offs are now measured against the launcher's own measured reach (`CourseGenerator.reachAt`,
+    the C1 real-simulation tables; `Progression.reachRatio`). Pad and spring launches keep zero additional points (owner rule, confirmed 2026-10-31),
+    and execution difficulty stays in landing width and movement.
+  - **Targets.** The independent curves (630 -> 870, 700 -> 1,045, 850 -> 1,210) are replaced by the linked 30/15 curves. NORMAL castle 1 = 560
+    (the fitted line of the generator's own NORMAL castles on the corrected scale, 561), +30 % to castle 10; PUNISHER x1.15 and NGH x1.3225 at
+    every castle. Category shares are unchanged.
+  - **NORMAL.** Terrain demand caps at 0.9 at the top (was 1.0), so its late jumps stay a little short of the full reach. Its castle 10 had run
+    9 % above target with the terrain factor at its floor.
+  - **Reports.** cert_package gains a 30/15 section: linked target and deviation per castle, progression, and per-castle separation with mean /
+    min / max / early / middle / late. It adds no pass/fail rule, and the frozen KPI 7B erosion check is unchanged.
+  - **Unchanged.** EncounterModel's threat-budget `jump` term carries the same launcher artifact; it is left for review.
+  - **Evidence (local).** Six courses: mean deviation from the linked curves NORMAL +0.6 %, PUNISHER 0.0 %, NGH +3.0 %. Separation PUNISHER over
+    NORMAL 14.6 % mean (9.5 % late), NGH over PUNISHER 18.4 % mean (14.9 % late).
+  - **Fingerprint and replay.** Fingerprint 0ae9ca42c2a4e0ca82f0ed6b. Seed-12 replay re-recorded: 5,000 m, 10 doors, 2 respawns, 2 harness
+    skips (the stand-in autopilot made no progress for 4,000 steps twice; the rules 19 recording had none), finish step 410,861 (clock 410,862 =
+    1:54:07.700), events af39eb5c5c771db12a2dbdcd, states cabdce98527b98a5ca2e66f2.
+  - **Evidence invalidated.** Every course changes, so the 2a7935b campaign 41137500091 and T5 audit 41137503239 no longer certify generation;
+    a new certification campaign is required.

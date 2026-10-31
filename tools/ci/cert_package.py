@@ -794,6 +794,10 @@ def eval_kpis(M, ev, candidate_sha):
         else:
             k.check(f"separation erosion, {p}", "at most 25% loss of the adjacent-mode percentage advantage, castle 1 -> 10", "PASS" if s["erosion"] <= 0.25 else "FAIL",
                     f"{100 * s['adv1']:+.1f}% -> {100 * s['adv10']:+.1f}%: erosion {100 * s['erosion']:.1f}%", "castles.csv")
+    # The 30/15 Split (owner design principle 2026-10-31, docs/gameplay/DIFFICULTY_PROGRESSION_30_15.md): measured against the linked curves over
+    # all ten castles. Reported, not judged: the principle sets no pass/fail tolerance (owner), and the frozen erosion check above is unchanged.
+    for name, val, unit in split_3015(M):
+        k.m(name, val, unit, "castles.csv", ["TOTAL_REFERENCE adj_sum"])
     # controller observability (castle_control.csv KPI 7B columns)
     ctl_cols = ["req_terrain", "saturated", "growth_vs_prev", "cum_growth", "planned_rise", "slope_error", "modules_attempted", "modules_refused", "modules_refused_early"]
     for col in ctl_cols:
@@ -1108,6 +1112,39 @@ def proven_check(M):
     n = sum(c["summary"]["solver_slices"] or 0 for c in cs); p = sum(c["summary"]["proven"] or 0 for c in cs)
     if n == 0: return ("NOT VERIFIED", "no solver slices (solver off?)", "solver.csv", ["verdict"])
     return ("PASS", f"{p} / {n} PROVEN_SOLVABLE", "solver.csv", ["verdict"])
+
+
+# The 30/15 Split's linked curves, as DifficultyProfile builds them (rules 20): NORMAL castle 1 = 560 lane points rising 30 % to castle 10;
+# PUNISHER 1.15 x NORMAL and NGH 1.15 x PUNISHER at every castle. Kept equal to DifficultyProfile.NORMAL_CASTLE1 / ARC / SEPARATION.
+SPLIT_N1, SPLIT_ARC, SPLIT_SEP = 560.0, 0.30, 1.15
+SPLIT_LEVEL = {"NORMAL": 1.0, "PUNISHER": SPLIT_SEP, "NGH": SPLIT_SEP * SPLIT_SEP}
+
+
+def split_target(mode, n):
+    return SPLIT_N1 * SPLIT_LEVEL[mode] * (1 + SPLIT_ARC * (n - 1) / 9.0)
+
+
+def split_3015(M):
+    """30/15 Split measurements over every castle: progression (castle 1 -> 10 and castles 1-3 -> 8-10), the linked target and the deviation from
+    it per castle, and each adjacent pair's separation per castle with its mean, minimum, maximum and early / middle / late means."""
+    c = M["curve"]; modes = [m for m in ("NORMAL", "PUNISHER", "NGH") if m in c]
+    full = {m: [c[m].get(i) for i in range(1, 11)] for m in modes}
+    full = {m: v for m, v in full.items() if all(x is not None for x in v)}
+    mean = lambda xs: sum(xs) / len(xs)
+    out = []
+    if not full:
+        return [("30/15 Split: castles 1-10 of each mode", None, "")]
+    out.append(("30/15 Split: linked target per castle", OrderedDict((m, [round(split_target(m, i), 1) for i in range(1, 11)]) for m in full), "points per castle"))
+    out.append(("30/15 Split: deviation from the linked target per castle", OrderedDict((m, [v[i - 1] / split_target(m, i) - 1 for i in range(1, 11)]) for m, v in full.items()), "% per castle"))
+    out.append(("30/15 Split: progression castle 1 -> 10 / castles 1-3 -> 8-10 (target about +30 %)",
+                OrderedDict((m, (v[9] / v[0] - 1, mean(v[7:]) / mean(v[:3]) - 1)) for m, v in full.items()), "%"))
+    for lo, hi in (("NORMAL", "PUNISHER"), ("PUNISHER", "NGH")):
+        if lo in full and hi in full:
+            s = [full[hi][i] / full[lo][i] - 1 for i in range(10)]
+            out.append((f"30/15 Split: {hi} over {lo} per castle (target about +15 %)", s, "% per castle"))
+            out.append((f"30/15 Split: {hi} over {lo} mean / min / max / early (1-3) / middle (4-7) / late (8-10)",
+                        (mean(s), min(s), max(s), mean(s[:3]), mean(s[3:7]), mean(s[7:])), "%"))
+    return out
 
 
 def separation(M):

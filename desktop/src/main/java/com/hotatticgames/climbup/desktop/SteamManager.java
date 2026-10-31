@@ -99,6 +99,12 @@ public final class SteamManager {
         applyUnlock(id);
     }
 
+    /** Steam has confirmed this achievement unlocked (running, stats delivered, set). False whenever that cannot be known. */
+    boolean isUnlocked(String id) {
+        if (!available || !statsReady || id == null) return false;
+        try { return userStats.isAchieved(id, false); } catch (Throwable t) { return false; }
+    }
+
     int getStat(String id) {
         if (!available || !statsReady) return 0;
         return liveStat(id);

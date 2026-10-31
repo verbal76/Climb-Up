@@ -16,6 +16,13 @@ public interface Achievements {
     /** Unlock the achievement with this Steam API id. Idempotent (Steam dedupes); a no-op when Steam is not running. */
     void unlock(String id);
 
+    /**
+     * Owner decision (2026-10-30): true only once the platform has confirmed this achievement is unlocked (Steam running, its stats delivered,
+     * the achievement set). The game keeps an earned id pending and retries until this is true, so nothing earned offline is lost; false by
+     * default (no platform: the ids simply stay pending).
+     */
+    default boolean unlocked(String id) { return false; }
+
     /** Current value of a persistent integer stat, or 0 if unknown / Steam not running. */
     default int stat(String id) { return 0; }
 

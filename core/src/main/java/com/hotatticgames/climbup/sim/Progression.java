@@ -193,8 +193,7 @@ public final class Progression {
             double y0 = a.y + yBase; int cs = castleOf(y0, sp); double[] q = acc(add, base, cs);
             double terr = 0;
             if (a.isPlatform() && b.isPlatform()) {
-                double gap = Math.max(0f, Math.abs(c.dsWrap(b.s, a.s)) - a.halfW() - b.halfW()), reach = EncounterModel.reach(t, b.y - a.y);
-                double ratio = reach > 0 ? Math.min(1.2, gap / reach) : 1.2;
+                double gap = Math.max(0f, Math.abs(c.dsWrap(b.s, a.s)) - a.halfW() - b.halfW()), ratio = reachRatio(c, t, a, b, gap);
                 terr += 2.0 * clamp((ratio - 0.4) / 0.6); if (ratio > 0.85) terr += 3.0 * (ratio - 0.85); terr += 1.5 * clamp((3.0 - b.w) / 2.0);
             }
             if (a.isMoving()) terr += 0.5;
@@ -229,6 +228,20 @@ public final class Progression {
         }
         capPending = null;
     }
+    /**
+     * How close a link comes to the take-off's physical reach (0 .. 1.2). A jump is measured against the longest plain jump at its rise
+     * ({@link EncounterModel#reach}); a launcher take-off - pad, spring, swing or elevator - against that launcher's own measured reach at the
+     * edge gap ({@link CourseGenerator#reachAt}, the real-simulation tables of correction C1). Rules 20 (owner 2026-10-31): before, a launcher's
+     * rise always exceeded plain-jump height, so every launcher link scored the maximum, as the hardest possible jump; the launch itself
+     * still scores nothing extra (owner rule: pad and spring travel 0) - its landing width and a moving target are scored as before.
+     */
+    static double reachRatio(Course c, Tuning t, Element a, Element b, double gap) {
+        if (launcher(a)) { float rv = CourseGenerator.reachAt(c, a, (float) gap); return rv > 0f ? Math.min(1.2, Math.max(0.0, (b.y - a.y) / rv)) : 1.2; }
+        double reach = EncounterModel.reach(t, b.y - a.y);
+        return reach > 0 ? Math.min(1.2, gap / reach) : 1.2;
+    }
+    /** Take-offs that launch the climber beyond a plain jump: measured against their own reach (rules 20). */
+    static boolean launcher(Element e) { return e.type == Element.Type.PAD || e.type == Element.Type.SPRING || e.type == Element.Type.SWING || e.type == Element.Type.MOVE_V; }
     private static double[] acc(double[][] add, int base, int cs) { int k = Math.max(0, Math.min(add.length - 1, cs - base)); if (add[k] == null) add[k] = new double[ACC]; return add[k]; }
     private static long key(double yAbs, float sp) { long w = (long) Math.floor(yAbs / WINDOW); return ((long) castleOf(yAbs, sp) << 32) | (w & 0xffffffffL); }
     static double clamp(double x) { return Math.max(0, Math.min(1, x)); }

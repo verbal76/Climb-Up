@@ -14,5 +14,6 @@ public final class SteamAchievements implements Achievements {
 
     @Override public void unlock(String id) { steam.unlock(id); }
     @Override public int stat(String id) { return steam.getStat(id); }
+    @Override public boolean unlocked(String id) { return steam.isUnlocked(id); }
     @Override public void stat(String id, int value) { steam.setStat(id, value); }
 }

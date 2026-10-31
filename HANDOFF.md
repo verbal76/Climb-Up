@@ -1,3 +1,24 @@
+## RESUME HERE (2026-10-31: BUILD 83 RELEASE HARDENING + THE 30/15 SPLIT on release/build-83-hardening)
+
+- Frozen, never modified: Build 82 (frozen/build-82-baseline, tag build-82-frozen-baseline, ccr-cb458cd1-w4dh5c, integration/build-82-repairs)
+  and the Build 83 pre-repair baseline fix/build-83-root-causes @ 2a7935b with CI 41117970356, campaign 41137500091, T5 audit 41137503239.
+- release/build-83-hardening (draft PR #20, DO NOT MERGE): the Build 82 review repairs re-implemented for Build 83, the owner achievement and
+  Steam statistics policy, the live-tower slice-boundary fixes. Generation-neutral: fingerprint b0c5646446610a0274e036ab, 54 slices identical to
+  2a7935b, bundled replay passes, focused tests 89/89 (docs/reviews/BUILD83_RELEASE_HARDENING_2026-10-31.md).
+- Packaging guard (owner 2026-10-31): android.yml / windows.yml on this branch also accept release/build-83-hardening; dispatch only with
+  test_build on (private draft, no tag, no OTA) and skip_tests on once the same SHA passed the full CI.
+- The 30/15 Split = RULES 20 (owner approval 2026-10-31; docs/gameplay/DIFFICULTY_PROGRESSION_30_15.md,
+  docs/reviews/BUILD83_CORRECTED_MEASUREMENT_2026-10-31.md):
+  - launcher take-offs measured against their own reach (`Progression.reachRatio`);
+  - linked curves, NORMAL 560 -> 728, PUNISHER x1.15, NGH x1.3225;
+  - NORMAL's terrain cap 0.9;
+  - a 30/15 report section in cert_package;
+  - fingerprint 0ae9ca42c2a4e0ca82f0ed6b; seed-12 replay re-recorded (finish 410,861, 1:54:07.700, 2 harness skips).
+  The 2a7935b campaign no longer certifies generation. Next: propose ONE certification campaign (9 courses + T5) for owner approval; then ONE
+  full CI via PR #20 retargeted to ccr-cb458cd1-w4dh5c (as PR #16 did for 2a7935b) and packaging (test_build, skip_tests) on that exact SHA.
+- Studio splash: the owner's pixel-art Hot Attic Games logo (branding/master/studio_splash_ff1450cf.png), 668cdc4.
+- KPI 7B: no launch exception granted; investigation in scratchpad report BUILD83_KPI7B_INVESTIGATION (owner copy sent 2026-10-31).
+
 ## RESUME HERE (2026-10-28 overnight: OWNER REPAIR AUTHORISATIONS - integration/build-82-repairs, ONE CI, then the 30-course campaign)
 
 - Branches (all pushed, every commit [skip ci]): repair/ci-failures (Track 1: 30d3574 DC3+DC8, a0ddc41 solver recovery = DC1 pass 3, 7f168a4 saw

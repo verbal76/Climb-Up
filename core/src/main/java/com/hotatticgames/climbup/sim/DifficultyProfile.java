@@ -68,9 +68,13 @@ public final class DifficultyProfile {
         this.threatPerLevel = threatPerLevel; this.threatCramped = threatCramped; this.quietKeyRooms = quietKeyRooms;
     }
 
-    /** NORMAL: occasional simple splits, every link within the threat budget, quiet key rooms first. */
+    /**
+     * NORMAL: occasional simple splits, every link within the threat budget, quiet key rooms first. Terrain cap 0.9 (rules 20, the 30/15 Split):
+     * its jump demand rises to 0.9 by the top instead of 1.0 (plain jumps at the full reach by castle 10), which kept castle 10 about 9 % above
+     * NORMAL's linked target with the terrain factor already at its floor; NORMAL stays approachable to the end.
+     */
     public static final DifficultyProfile NORMAL = new DifficultyProfile(0f, 1f, 70f, 3, 4.4f, false, 36f, 0.5f, 7, 7, false,
-        true, EncounterModel.THREAT_BASE, EncounterModel.THREAT_PER_LEVEL, EncounterModel.THREAT_CRAMPED, true, 8, 0.12f, 0.04f, 1f, Double.POSITIVE_INFINITY, 1f,
+        true, EncounterModel.THREAT_BASE, EncounterModel.THREAT_PER_LEVEL, EncounterModel.THREAT_CRAMPED, true, 8, 0.12f, 0.04f, 0.9f, Double.POSITIVE_INFINITY, 1f,
         0f, 0.3f, 0f, 0.4f, 1f);
     /**
      * PUNISHER: the curve read 1,250 m higher (owner 2026-10-27, rules 13: its castle 1 resembles NORMAL castles 3-4; rules 9-12 read it 2,000 m higher
@@ -113,7 +117,17 @@ public final class DifficultyProfile {
      * NOT GONNA HAPPEN (rules 14, owner 2026-10-27): castle 1 at PUNISHER castles 3-4 as measured in rules 13 (783-863: 850), castle 10 about 20% above
      * PUNISHER castle 10 as measured (mean 1,007: 1,210; 16% above PUNISHER's 1,045 target). Castles beyond 10 (the endless climb) keep castle 10's target.
      */
-    private float[] totals() { return this == NGH ? new float[]{850f, 1210f} : this == PUNISHER ? new float[]{700f, 1045f} : new float[]{630f, 870f}; }
+    private float[] totals() { float n1 = NORMAL_CASTLE1 * level(); return new float[]{n1, n1 * (1f + ARC)}; }
+    /**
+     * The 30/15 Split (owner design principle and Build 83 approval, 2026-10-31; docs/gameplay/DIFFICULTY_PROGRESSION_30_15.md): every mode rises
+     * {@link #ARC} (about 30 %) from castle 1 to castle 10, and each mode stands {@link #SEPARATION} (about 15 %) above the one below it at every
+     * castle, compounding (NGH = 1.3225 x NORMAL). NORMAL's castle-1 level is the straight-line fit of the generator's own NORMAL castles measured
+     * with the launcher-reach correction (rules 20; six-course measurement 2026-10-31: fit 561); the harder modes are derived from it, never set
+     * on their own. These replace the independent curves of rules 13-19 (NORMAL 630 -> 870, PUNISHER 700 -> 1,045, NGH 850 -> 1,210).
+     */
+    public static final float NORMAL_CASTLE1 = 560f, ARC = 0.30f, SEPARATION = 1.15f;
+    /** This mode's multiple of NORMAL at every castle: 1, 1.15 or 1.3225. */
+    public float level() { return this == NGH ? SEPARATION * SEPARATION : this == PUNISHER ? SEPARATION : 1f; }
     /**
      * Category shares {terrain, hazards, enemies, interaction} at castle 1 and castle 10, interpolated between (PROVISIONAL, from the rules-12 lane
      * means): NORMAL opens terrain-led (castle 1 measured 0.81 / 0.12 / 0.05 / 0.02) and hazards and enemies take a larger part as it rises; PUNISHER's

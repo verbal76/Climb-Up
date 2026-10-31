@@ -142,18 +142,52 @@ public final class LaneReport {
      * and over the first reported castle, the planned (target) rise, the slope error (growth minus {@link Progression#SLOPE_KEEP} of the planned
      * rise: negative means the castle rose less than the slope law keeps, a dip if growth is negative too), and the castle's module refusals.
      */
-    String controlColumns(int n, float[] r, float[] prev, double est, double first, DifficultyProfile P) {
+    String controlColumns(int n, float[] r, float[] prev, float[] prev2, double est, double first, DifficultyProfile P) {
         float[] q = Progression.startRequest(n, prev, P); StringBuilder sat = new StringBuilder();
         for (int k = 0; k < 4; k++) {
-            float fv = r[1 + Progression.ACC + k];
+            float fv = r[Progression.R_BASE + k];
             boolean lo = fv <= P.factorLo(k) + 1e-4f, hi = fv >= P.factorHi(k) - 1e-4f && !(k == 1 && P.capacityControl());
             if (lo || hi) sat.append(sat.length() > 0 ? ";" : "").append("THEX".charAt(k)).append(lo ? "-lo" : "-hi");
         }
         double pe = prev == null ? Double.NaN : Progression.total(prev, 1), g = prev == null ? Double.NaN : (est - pe) / pe;
         double rise = n > 1 && P.progression() ? (P.targetTotal(n) - P.targetTotal(n - 1)) / P.targetTotal(n - 1) : Double.NaN;
         int[] cm = n < castleMods.length ? castleMods[n] : new int[3];
+        // rules 21 controller diagnostics: the planned level, base / last-slice / requested factors, what the controller did and whether it reversed
+        StringBuilder act = new StringBuilder(), rev = new StringBuilder(), stuck = new StringBuilder();
+        for (int k = 0; k < 4; k++) {
+            if (prev == null) break;
+            double d1 = r[Progression.R_BASE + k] / Math.max(1e-6, prev[Progression.R_BASE + k] > 0 ? prev[Progression.R_BASE + k] : 1) - 1;
+            char c = "THEX".charAt(k);
+            if (d1 > 0.02) act.append(act.length() > 0 ? ";" : "").append(c).append("+"); else if (d1 < -0.02) act.append(act.length() > 0 ? ";" : "").append(c).append("-");
+            if (prev2 != null) {
+                double d0 = prev[Progression.R_BASE + k] / Math.max(1e-6, prev2[Progression.R_BASE + k] > 0 ? prev2[Progression.R_BASE + k] : 1) - 1;
+                if ((d0 > 0.02 && d1 < -0.02) || (d0 < -0.02 && d1 > 0.02)) rev.append(rev.length() > 0 ? ";" : "").append(c);
+                boolean atB0 = boundOf(prev[Progression.R_BASE + k], P, k), atB1 = boundOf(r[Progression.R_BASE + k], P, k);
+                if (atB0 && atB1 && Math.signum(errorOf(prev, P, n - 1, k)) == Math.signum(errorOf(r, P, n, k))) stuck.append(stuck.length() > 0 ? ";" : "").append(c);
+            }
+        }
         return String.join(",", f3(q[0]), f3(q[1]), f3(q[2]), f3(q[3]), sat.toString(), f3(g), f3(Double.isNaN(first) ? Double.NaN : (est - first) / first), f3(rise),
-            f3(g - Progression.SLOPE_KEEP * rise), "" + Progression.SLOPE, "" + cm[0], "" + cm[1], "" + cm[2]);
+            f3(g - rise), "rules" + CourseGenerator.RULES_VERSION, "" + cm[0], "" + cm[1], "" + cm[2],
+            f3(r[Progression.R_PLAN]), f3(r[Progression.R_PLAN] / P.targetTotal(n) - 1),
+            f3(r[Progression.R_LAST]), f3(r[Progression.R_LAST + 1]), f3(r[Progression.R_LAST + 2]), f3(r[Progression.R_LAST + 3]),
+            f3(r[Progression.R_REQ]), f3(r[Progression.R_REQ + 1]), f3(r[Progression.R_REQ + 2]), f3(r[Progression.R_REQ + 3]),
+            pacing(g), act.toString(), rev.toString(), stuck.toString());
+    }
+    /** Rules 21 pacing classes (owner directive section 3.2), castle-to-castle growth; evaluation only, never a rejection. */
+    static String pacing(double g) {
+        if (Double.isNaN(g)) return "";
+        double p = 100 * g;
+        if (p >= 3.0 && p <= 3.6) return "IDEAL";
+        if (p >= 2.5 && p < 3.0) return "MINOR_LOW";
+        if (p > 3.6 && p <= 4.5) return "MINOR_HIGH";
+        if ((p >= 1.5 && p < 2.5) || (p > 4.5 && p <= 6.0)) return "MODERATE";
+        return "SERIOUS";
+    }
+    static boolean boundOf(float f, DifficultyProfile P, int k) { return f <= P.factorLo(k) + 1e-4f || (f >= P.factorHi(k) - 1e-4f && !(k == 1 && P.capacityControl())); }
+    /** Relative error (planned share - measured) / planned share of category k in record r (castle n). */
+    static double errorOf(float[] r, DifficultyProfile P, int n, int k) {
+        double plan = r[Progression.R_PLAN] > 0 ? r[Progression.R_PLAN] : P.targetTotal(n), want = P.target(n, k) * plan / P.targetTotal(n);
+        return want > 0 ? (want - r[1 + k]) / want : 0;
     }
 
     void encounterTelemetry(int k, CourseGenerator.Framed f, GenTrace tr, Autopilot.Report rep) {
@@ -400,17 +434,17 @@ public final class LaneReport {
             if (a.isPlatform() && b.isPlatform()) {
                 L.gap = Math.max(0f, Math.abs(c.dsWrap(b.s, a.s)) - a.halfW() - b.halfW()); L.reach = EncounterModel.reach(t, b.y - a.y);
                 L.ratio = Progression.reachRatio(c, t, a, b, L.gap); L.landW = b.w;          // rules 20: a launcher take-off against its own measured reach
-                T.add(new Object[]{"T-GAP", Progression.launcher(a) ? "rise / " + a.type + " measured reach at this gap" : "gap / longest jump at this rise", L.ratio, 2.0 * clamp((L.ratio - 0.4) / 0.6)});
-                if (L.ratio > 0.85) T.add(new Object[]{"T-LONG", "long jump / grab beyond 85% of reach (EncounterModel)", L.ratio, 3.0 * (L.ratio - 0.85)});
-                T.add(new Object[]{"T-LAND", "usable landing width (m)", (double) b.w, 1.5 * clamp((3.0 - b.w) / 2.0)});
+                T.add(new Object[]{"T-GAP", Progression.launcher(a) ? "rise / " + a.type + " measured reach at this gap" : "gap / longest jump at this rise", L.ratio, Progression.tGap(L.ratio)});
+                if (L.ratio > 0.85) T.add(new Object[]{"T-LONG", "long jump / grab beyond 85% of reach (EncounterModel)", L.ratio, Progression.tLong(L.ratio)});
+                T.add(new Object[]{"T-LAND", "usable landing width (m)", (double) b.w, Progression.tLand(b.w)});
             } else T.add(new Object[]{"T-TRAVERSE", "rope/cable link (owner-approved 0)", 0.0, 0.0});
             if (a.type == Element.Type.PAD || a.type == Element.Type.SPRING) T.add(new Object[]{"T-LAUNCH", "pad/spring used to travel (owner-approved 0)", 0.0, 0.0});
-            if (a.isMoving()) T.add(new Object[]{"T-MOVE-TAKEOFF", "moving take-off (EncounterModel)", (double) a.amp, 0.5});
-            if (a.type == Element.Type.SEESAW || a.type == Element.Type.RAMP) T.add(new Object[]{"T-TILT-TAKEOFF", a.type + " take-off (EncounterModel)", (double) a.skin, 0.6});
-            if (a.type == Element.Type.RAMP && a.skin >= 2) T.add(new Object[]{"T-RAMP-VARIANT", "ramp skin " + a.skin + " (shaking/spinning/conveyor)", (double) a.skin, 0.4});
-            if (b.isMoving() || b.type == Element.Type.SWING) T.add(new Object[]{"T-MOVE-TARGET", "moving/swinging target, period " + b.period + " s (EncounterModel)", (double) b.period, 0.8});
-            if (a.crumbles() || a.holed()) T.add(new Object[]{"T-CRUMBLE", "crumbling or holed footing (EncounterModel)", 1.0, 0.7});
-            if (a.wet()) T.add(new Object[]{"T-WET", "slippery footing (EncounterModel)", 1.0, 0.4});
+            if (a.isMoving()) T.add(new Object[]{"T-MOVE-TAKEOFF", "moving take-off (EncounterModel)", (double) a.amp, Progression.T_MOVE_TAKEOFF});
+            if (a.type == Element.Type.SEESAW || a.type == Element.Type.RAMP) T.add(new Object[]{"T-TILT-TAKEOFF", a.type + " take-off (EncounterModel)", (double) a.skin, Progression.T_TILT_TAKEOFF});
+            if (a.type == Element.Type.RAMP && a.skin >= 2) T.add(new Object[]{"T-RAMP-VARIANT", "ramp skin " + a.skin + " (shaking/spinning/conveyor)", (double) a.skin, Progression.T_RAMP_VARIANT});
+            if (b.isMoving() || b.type == Element.Type.SWING) T.add(new Object[]{"T-MOVE-TARGET", "moving/swinging target, period " + b.period + " s (EncounterModel)", (double) b.period, Progression.T_MOVE_TARGET});
+            if (a.crumbles() || a.holed()) T.add(new Object[]{"T-CRUMBLE", "crumbling or holed footing (EncounterModel)", 1.0, Progression.T_CRUMBLE});
+            if (a.wet()) T.add(new Object[]{"T-WET", "slippery footing (EncounterModel)", 1.0, Progression.T_WET});
             double tsum = 0; for (Object[] x : T) tsum += (double) x[3]; L.terrain = tsum;
             for (Object[] x : T) for (int q = 0; q < L.windows.length; q++)
                 addRow(L.windows[q], "TERRAIN", (String) x[0], L.fromId + ">" + L.toId, (String) x[1], (double) x[2], (double) x[3], L.fractions[q], 1, null);
@@ -676,22 +710,27 @@ public final class LaneReport {
                 + "hazard_factor_requested,hazard_factor_applied,hazard_factor_lost,hazard_constraint,hazard_short_of_target,"
                 // KPI 7B controller observability (generator directive 2026-10-30; appended so readers by column name are unaffected)
                 + "req_terrain,req_hazards,req_enemies,req_interaction,saturated,growth_vs_prev,cum_growth,planned_rise,slope_error,slope_aware,"
-                + "modules_attempted,modules_refused,modules_refused_early");
+                + "modules_attempted,modules_refused,modules_refused_early,"
+                // rules 21 controller state (appended): the planned level and its offset from the target, the last slice's factors, the requested
+                // (unbounded) base factors, the pacing class, the base changes (+ raise / - ease), reversals and repeated ineffective corrections
+                + "planned_total,planned_vs_target,last_terrain,last_hazards,last_enemies,last_interaction,reqbase_terrain,reqbase_hazards,reqbase_enemies,reqbase_interaction,"
+                + "pacing_class,controller_action,reversals,ineffective_at_bound");
             DifficultyProfile P = DifficultyProfile.of(t); Progression pr = Progression.of(lastProg);
             double[][] lane = new double[12][6];
             for (Win x : windows.values()) { int cs = castleOf(x.index * WINDOW); lane[cs][0] += x.adj[0]; lane[cs][1] += x.adj[1]; lane[cs][2] += x.adj[2]; lane[cs][3] += x.interaction; lane[cs][4] += x.mitigation; lane[cs][5] += x.total(); }
             List<float[]> recs = new ArrayList<>(); for (int i = 0; i < pr.completedCount(); i++) recs.add(pr.completed(i));
-            if (lastProg != null) { float[] cur = pr.current(), r = new float[Progression.REC]; r[0] = pr.castle(); System.arraycopy(cur, 0, r, 1, Progression.ACC); System.arraycopy(pr.lastFactors(), 0, r, 1 + Progression.ACC, 4); recs.add(r); }
-            float[] prevRec = null; double first = Double.NaN;
+            if (lastProg != null) { float[] cur = pr.current(), r = new float[Progression.REC], pl = pr.currentPlan(P); r[0] = pr.castle(); System.arraycopy(cur, 0, r, 1, Progression.ACC);
+                System.arraycopy(pl, 0, r, Progression.R_BASE, 4); r[Progression.R_PLAN] = pl[4]; System.arraycopy(pr.lastFactors(), 0, r, Progression.R_LAST, 4); System.arraycopy(pl, 5, r, Progression.R_REQ, 4); recs.add(r); }
+            float[] prevRec = null, prevRec2 = null; double first = Double.NaN;
             for (float[] r : recs) {
                 int n = (int) r[0]; if (n < 1 || n > 10) continue; boolean partial = r == recs.get(recs.size() - 1) && lastProg != null;
-                float[] pr0 = prevRec != null && (int) prevRec[0] == n - 1 ? prevRec : null; prevRec = r;
+                float[] pr0 = prevRec != null && (int) prevRec[0] == n - 1 ? prevRec : null, pr00 = pr0 != null && prevRec2 != null && (int) prevRec2[0] == n - 2 ? prevRec2 : null; prevRec2 = prevRec; prevRec = r;
                 double est = Progression.total(r, 1), tgt = P.progression() ? P.targetTotal(n) : Double.NaN;
                 w.println(String.join(",", MODE[mode] + "-s" + seed, "" + n, partial ? "in_progress" : "complete", f3(tgt), f3(P.progression() ? P.target(n, 0) : Double.NaN), f3(P.progression() ? P.target(n, 1) : Double.NaN), f3(P.progression() ? P.target(n, 2) : Double.NaN), f3(P.progression() ? P.target(n, 3) : Double.NaN),
                     f3(r[1]), f3(r[2]), f3(r[3]), f3(r[4]), f3(r[5]), f3(est), f3(r[1 + Progression.A_LINKS]), f3(r[1 + Progression.A_CHALL]), f3(r[1 + Progression.A_REC]),
                     f3(r[1 + Progression.ACC]), f3(r[2 + Progression.ACC]), f3(r[3 + Progression.ACC]), f3(r[4 + Progression.ACC]),
                     f3(lane[n][0]), f3(lane[n][1]), f3(lane[n][2]), f3(lane[n][3]), f3(lane[n][4]), f3(lane[n][5]), f3(P.progression() ? (lane[n][5] - tgt) / tgt : Double.NaN),
-                    capacityColumns(pr, n, partial, P.progression() ? P.target(n, 1) - lane[n][1] : Double.NaN), controlColumns(n, r, pr0, est, first, P)));
+                    capacityColumns(pr, n, partial, P.progression() ? P.target(n, 1) - lane[n][1] : Double.NaN), controlColumns(n, r, pr0, pr00, est, first, P)));
                 if (n == 1 || Double.isNaN(first)) first = est;
             }
         }

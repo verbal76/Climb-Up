@@ -23,7 +23,7 @@ public class CastleAuditProbe {
             Tuning t = lvl == 0 ? base : base.hardCopy(lvl);
             DifficultyProfile P = DifficultyProfile.of(t);
             GameGrowth g = new GameGrowth(seed, t);
-            StringBuilder sb = new StringBuilder(String.format("== %s seed %d (castle spacing %.0f m, slope-aware %b)%n", new String[]{"NORMAL", "PUNISHER", "NGH"}[lvl], seed, t.castleSpacing, Progression.SLOPE));
+            StringBuilder sb = new StringBuilder(String.format("== %s seed %d (castle spacing %.0f m, rules %d)%n", new String[]{"NORMAL", "PUNISHER", "NGH"}[lvl], seed, t.castleSpacing, CourseGenerator.RULES_VERSION));
             double y = 0; int printed = 0, capPrinted = 0; long w0 = System.nanoTime();
             Map<Integer, float[]> req = new HashMap<>(); Map<Integer, int[]> mods = new TreeMap<>(); List<Float> totals = new ArrayList<>();
             Map<String, int[]> refusedBy = new TreeMap<>(); Map<String, Integer> whys = new TreeMap<>();          // Phase 3: refusal causes per module kind (all attempts)

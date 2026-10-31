@@ -19,13 +19,9 @@ public final class DifficultyScore {
     // a timed spike mat and a static spiked block are predictable once read: +1.
     static final EnumMap<Element.Type, Float> WEIGHTS = new EnumMap<>(Element.Type.class);
     static {
-        Object[][] d = {{Element.Type.CRAB, 1f}, {Element.Type.BLOB, 2f}, {Element.Type.SKULL, 3f}, {Element.Type.BEE, 2f}, {Element.Type.CLUB, -1f},
-            {Element.Type.SAW_H, 2f}, {Element.Type.SAW_V, 2f}, {Element.Type.PENDULUM, 2f}, {Element.Type.CANNON, 1f}, {Element.Type.AIMED, 2f},
-            {Element.Type.MORTAR, 2f}, {Element.Type.SPIKE_TRAP, 1f}, {Element.Type.SPIKE_BLOCK, 1f}, {Element.Type.SPIKE_DROP, 2f},
-            // 2026-10-27, by the same written rules (PROVISIONAL, not fitted to any graph): the Enforcer pursues and its hit launches you, the skull's
-            // behaviour class (+3); an avalanche is falling spiked weight that knocks you off the route (+2), scored once per avalanche, not per block
-            {Element.Type.ENFORCER, 3f}, {Element.Type.AVALANCHE, 2f}};
-        for (Object[] e : d) WEIGHTS.put((Element.Type) e[0], (Float) e[1]);
+        // Rules 21: one definition - the generator's own table (Progression.POINTS, the weights the progression controller steers by). The
+        // properties file below may still override a weight for a diagnostic run; ProgressionTest pins that the shipped file changes nothing.
+        WEIGHTS.putAll(Progression.POINTS);
         try (java.io.InputStream in = DifficultyScore.class.getResourceAsStream("/difficulty_weights.properties")) {
             if (in != null) { Properties p = new Properties(); p.load(in); for (String k : p.stringPropertyNames()) WEIGHTS.put(Element.Type.valueOf(k.trim()), Float.parseFloat(p.getProperty(k).trim())); }
         } catch (java.io.IOException e) { throw new IllegalStateException(e); }

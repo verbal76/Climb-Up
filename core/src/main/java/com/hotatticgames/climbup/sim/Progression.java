@@ -27,9 +27,13 @@ public final class Progression {
     public static final int T = 0, H = 1, E = 2, X = 3, M = 4;
     /** Per-castle accumulator: T, H, E, X, M, route links, challenge links, recovery platforms, highest absolute height measured. */
     static final int ACC = 9, A_LINKS = 5, A_CHALL = 6, A_REC = 7, A_TOP = 8;
-    /** Completed castles kept (bounded state): castle number, the accumulator, the four factors in force. */
-    static final int KEEP = 12, REC = 1 + ACC + 4;
-    static final int FORMAT = 1;
+    /**
+     * Completed castles kept (bounded state). Rules 21 record: castle number, the accumulator, the castle's BASE factors (what its slices were
+     * built from before the within-castle trim), the planned total it was steered toward, the factors of its last slice, and the requested
+     * (unbounded) base factors.
+     */
+    static final int KEEP = 12, R_BASE = 1 + ACC, R_PLAN = R_BASE + 4, R_LAST = R_PLAN + 1, R_REQ = R_LAST + 4, REC = R_REQ + 4;
+    static final int FORMAT = 3;
 
     /** The lane report's weights ({@code DifficultyScore.WEIGHTS}, pinned equal by ProgressionTest). */
     static final EnumMap<Element.Type, Float> POINTS = new EnumMap<>(Element.Type.class);
@@ -46,6 +50,15 @@ public final class Progression {
         switch (k) { case SAW_H: case SAW_V: case PENDULUM: case CANNON: case AIMED: case MORTAR: case SPIKE_TRAP: case SPIKE_BLOCK: case SPIKE_DROP: case AVALANCHE: return true; default: return false; }
     }
     static boolean demandingFooting(Element e) { return e.crumbles() || e.isMoving() || e.type == Element.Type.RAMP || e.type == Element.Type.SEESAW || e.type == Element.Type.SWING || e.wet(); }
+    /**
+     * The terrain terms (rules 21: the ONE definition; LaneReport's T-* ledger rules call these, so the generator's estimate and the certification
+     * report cannot drift apart). T-GAP 2 x clamp((ratio - 0.4) / 0.6); T-LONG 3 x (ratio - 0.85) above 0.85; T-LAND 1.5 x clamp((3 - width) / 2);
+     * moving take-off 0.5; seesaw/ramp take-off 0.6; ramp variant 0.4; moving or swinging target 0.8; crumbling or holed footing 0.7; wet 0.4.
+     */
+    public static final double T_MOVE_TAKEOFF = 0.5, T_TILT_TAKEOFF = 0.6, T_RAMP_VARIANT = 0.4, T_MOVE_TARGET = 0.8, T_CRUMBLE = 0.7, T_WET = 0.4;
+    public static double tGap(double ratio) { return 2.0 * clamp((ratio - 0.4) / 0.6); }
+    public static double tLong(double ratio) { return ratio > 0.85 ? 3.0 * (ratio - 0.85) : 0.0; }
+    public static double tLand(double w) { return 1.5 * clamp((3.0 - w) / 2.0); }
     public static final float WINDOW = 25f, X_BONUS = 0.5f, X_CAP = 2f, TERRAIN_DEMANDING = 1f, REP_TAIL = 0.25f; static final int REP_FULL = 3;
 
     // ------------------------------------------------------------------ state
@@ -55,6 +68,10 @@ public final class Progression {
     final float[][] done = new float[KEEP][]; int doneN;
     /** The factors the latest slice was generated with (diagnostics; also stored with each completed castle). */
     final float[] lastF = {1f, 1f, 1f, 1f};
+    /** The plan of the castle in progress: base factors, planned total, requested base factors (planned 0 = not set yet: derived on demand). */
+    final float[] curBase = {1f, 1f, 1f, 1f}, curReq = {1f, 1f, 1f, 1f}; float curPlanned;
+    /** The profile the latest slice was measured for (transient: set by addSlice, used when a castle closes). */
+    private DifficultyProfile prof;
 
     // ------------------------------------------------------------------ hazard capacity (NOT GONNA HAPPEN only; rules 14, owner amendment 2026-10-27)
     /**
@@ -74,20 +91,22 @@ public final class Progression {
     final float[] hcNow = {1f, 1f, HC_NONE};
     final float[][] capRec = new float[KEEP][]; int capRecN;
     private java.util.Map<Integer, float[]> capPending;
-    static final int FORMAT_CAP = 2;
+    static final int FORMAT_CAP = 4;
 
     public Progression copy() {
         Progression p = new Progression(); p.castle = castle; System.arraycopy(cur, 0, p.cur, 0, ACC);
         for (int i = 0; i < doneN; i++) p.done[i] = done[i].clone(); p.doneN = doneN; System.arraycopy(lastF, 0, p.lastF, 0, 4);
+        System.arraycopy(curBase, 0, p.curBase, 0, 4); System.arraycopy(curReq, 0, p.curReq, 0, 4); p.curPlanned = curPlanned; p.prof = prof;
         p.cap = cap; System.arraycopy(capCur, 0, p.capCur, 0, CAP_W); System.arraycopy(capPrev, 0, p.capPrev, 0, CAP_W); System.arraycopy(hcNow, 0, p.hcNow, 0, 3);
         for (int i = 0; i < capRecN; i++) p.capRec[i] = capRec[i].clone(); p.capRecN = capRecN;
         return p;
     }
     public float[] toArray() {
         int extra = cap ? 2 * CAP_W + 3 + 1 + capRecN * CAP_REC : 0;
-        float[] a = new float[3 + ACC + 4 + doneN * REC + extra]; int k = 0;
+        float[] a = new float[3 + ACC + 4 + 9 + doneN * REC + extra]; int k = 0;
         a[k++] = cap ? FORMAT_CAP : FORMAT; a[k++] = castle; a[k++] = doneN;
         for (float v : cur) a[k++] = v; for (float v : lastF) a[k++] = v;
+        for (float v : curBase) a[k++] = v; a[k++] = curPlanned; for (float v : curReq) a[k++] = v;
         for (int i = 0; i < doneN; i++) for (float v : done[i]) a[k++] = v;
         if (cap) {
             for (float v : capCur) a[k++] = v; for (float v : capPrev) a[k++] = v; for (float v : hcNow) a[k++] = v;
@@ -98,9 +117,10 @@ public final class Progression {
     /** The state stored in a slice (null or unknown: a fresh climb, no feedback yet). */
     public static Progression of(float[] a) {
         Progression p = new Progression();
-        if (a == null || a.length < 3 + ACC + 4 || ((int) a[0] != FORMAT && (int) a[0] != FORMAT_CAP)) return p;
+        if (a == null || a.length < 3 + ACC + 4 + 9 || ((int) a[0] != FORMAT && (int) a[0] != FORMAT_CAP)) return p;          // an older format (rules 20 or before): a fresh climb
         int k = 1; p.castle = (int) a[k++]; int n = (int) a[k++];
         for (int i = 0; i < ACC; i++) p.cur[i] = a[k++]; for (int i = 0; i < 4; i++) p.lastF[i] = a[k++];
+        for (int i = 0; i < 4; i++) p.curBase[i] = a[k++]; p.curPlanned = a[k++]; for (int i = 0; i < 4; i++) p.curReq[i] = a[k++];
         for (int i = 0; i < n && k + REC <= a.length; i++) { p.done[i] = new float[REC]; System.arraycopy(a, k, p.done[i], 0, REC); k += REC; p.doneN++; }
         if ((int) a[0] == FORMAT_CAP && k + 2 * CAP_W + 4 <= a.length) {
             p.cap = true;
@@ -120,7 +140,9 @@ public final class Progression {
     public static float total(float[] acc, int off) { return acc[off + T] + acc[off + H] + acc[off + E] + acc[off + X] - acc[off + M]; }
 
     private void complete() {
-        float[] r = new float[REC]; r[0] = castle; System.arraycopy(cur, 0, r, 1, ACC); System.arraycopy(lastF, 0, r, 1 + ACC, 4);
+        float[] r = new float[REC]; r[0] = castle; System.arraycopy(cur, 0, r, 1, ACC);
+        float[] pl = currentPlan();
+        System.arraycopy(pl, 0, r, R_BASE, 4); r[R_PLAN] = pl[4]; System.arraycopy(lastF, 0, r, R_LAST, 4); System.arraycopy(pl, 5, r, R_REQ, 4);
         if (doneN == KEEP) { System.arraycopy(done, 1, done, 0, KEEP - 1); doneN--; }
         done[doneN++] = r;
         if (cap) {
@@ -130,6 +152,8 @@ public final class Progression {
         }
         castle++; java.util.Arrays.fill(cur, 0f);
         if (cap && capPending != null) addCap(capPending.get(castle));
+        curPlanned = 0f;
+        if (prof != null && prof.progression()) { float[] nx = plan(castle, r, prof, this); System.arraycopy(nx, 0, curBase, 0, 4); curPlanned = nx[4]; System.arraycopy(nx, 5, curReq, 0, 4); }
     }
     private void addCap(float[] v) { if (v != null) for (int i = 0; i < CAP_W; i++) capCur[i] += v[i]; }
     /** The completed capacity records (NGH): {castle, attempts/accepted/points per kind, requested, applied, constraint}. */
@@ -156,7 +180,8 @@ public final class Progression {
      * castle the slice climbed past. {@code f} are the factors the slice was generated with.
      */
     public void addSlice(Course c, double yBase, Tuning t, float[] f) {
-        System.arraycopy(f, 0, lastF, 0, 4);
+        System.arraycopy(f, 0, lastF, 0, 4); prof = DifficultyProfile.of(t);
+        if (curPlanned <= 0f && prof.progression()) { float[] pl = currentPlan(); System.arraycopy(pl, 0, curBase, 0, 4); curPlanned = pl[4]; System.arraycopy(pl, 5, curReq, 0, 4); }
         float sp = t.castleSpacing > 0f ? t.castleSpacing : 500f;
         int rs = c.routeSize();
         // per (castle, window): hazard and enemy counts by type, interaction sum
@@ -194,14 +219,14 @@ public final class Progression {
             double terr = 0;
             if (a.isPlatform() && b.isPlatform()) {
                 double gap = Math.max(0f, Math.abs(c.dsWrap(b.s, a.s)) - a.halfW() - b.halfW()), ratio = reachRatio(c, t, a, b, gap);
-                terr += 2.0 * clamp((ratio - 0.4) / 0.6); if (ratio > 0.85) terr += 3.0 * (ratio - 0.85); terr += 1.5 * clamp((3.0 - b.w) / 2.0);
+                terr += tGap(ratio) + tLong(ratio) + tLand(b.w);
             }
-            if (a.isMoving()) terr += 0.5;
-            if (a.type == Element.Type.SEESAW || a.type == Element.Type.RAMP) terr += 0.6;
-            if (a.type == Element.Type.RAMP && a.skin >= 2) terr += 0.4;
-            if (b.isMoving() || b.type == Element.Type.SWING) terr += 0.8;
-            if (a.crumbles() || a.holed()) terr += 0.7;
-            if (a.wet()) terr += 0.4;
+            if (a.isMoving()) terr += T_MOVE_TAKEOFF;
+            if (a.type == Element.Type.SEESAW || a.type == Element.Type.RAMP) terr += T_TILT_TAKEOFF;
+            if (a.type == Element.Type.RAMP && a.skin >= 2) terr += T_RAMP_VARIANT;
+            if (b.isMoving() || b.type == Element.Type.SWING) terr += T_MOVE_TARGET;
+            if (a.crumbles() || a.holed()) terr += T_CRUMBLE;
+            if (a.wet()) terr += T_WET;
             q[T] += terr; q[A_LINKS] += 1;
             Set<Element.Type> hz = EnumSet.noneOf(Element.Type.class), en = EnumSet.noneOf(Element.Type.class);
             if (hazOn.containsKey(i)) hz.addAll(hazOn.get(i)); if (hazOn.containsKey(j)) hz.addAll(hazOn.get(j));
@@ -246,97 +271,121 @@ public final class Progression {
     private static long key(double yAbs, float sp) { long w = (long) Math.floor(yAbs / WINDOW); return ((long) castleOf(yAbs, sp) << 32) | (w & 0xffffffffL); }
     static double clamp(double x) { return Math.max(0, Math.min(1, x)); }
 
-    // ------------------------------------------------------------------ control
+    // ------------------------------------------------------------------ control (rules 21)
     /** Fraction of castle {@link #castle} measured so far. */
     float progress(float spacing) { return cur[A_TOP] <= 0f ? 0f : (float) Math.max(0.0, Math.min(1.0, (cur[A_TOP] - (castle - 1) * (double) spacing) / spacing)); }
 
-    /** Gain and the share of the castle in progress that must be built before its own error counts. */
-    static final float GAIN = 1.5f, PARTIAL_FROM = 0.35f, PARTIAL_WEIGHT = 0.5f;
+    /**
+     * Rules 21 control law (Build 83 Rule 20 forensic audit, owner Rule 21 directive 2026-10-31). Rules 13-20 computed every castle's factors afresh as
+     * 1 + 1.5 x (the previous castle's relative error), relative to 1 and blind to the factor that castle had been built with: a castle eased to 0.7
+     * that landed on target sent the next one back to 1.0, the built-in excess returned, and the factors alternated castle by castle (NORMAL hazards
+     * 0.70 / 1.02 / 0.77 / 1.22). Rules 21 keeps a correction STATE instead:
+     * <ul>
+     * <li><b>Base factors (integral, velocity form).</b> Castle n is built from base(n) = base(n-1) x (wanted(n-1) / measured(n-1))^K, per category,
+     * each castle's change limited to x/÷ {@link #STEP_MAX} and the result held inside the profile's bounds. A castle that lands on target keeps the
+     * factor that got it there (no reset to 1); a persistent mismatch is learned; the bound clamps the stored state, so nothing winds up past a bound
+     * (anti-windup). The gains K ({@link #GAIN_K}) are below 1 for the categories that respond about proportionally (no overcorrection, so no
+     * alternation) and 1 for terrain, which responds weakly.</li>
+     * <li><b>Planned level (overshoot / undershoot glide).</b> Castle n is steered toward its target, but never below 1.5 % above what castle n-1
+     * measured (an over-hot castle is followed by a smaller rise, not a drop) and never above 6 % over it (a short castle is caught up over several
+     * castles, not in one SERIOUS jump) ({@link #G_FLOOR}, {@link #G_CEIL}); castles past 10 hold castle 10's target. This replaces the optional
+     * slope-aware switch of rules 19-20.</li>
+     * <li><b>Within-castle trim.</b> Once {@link #PARTIAL_FROM} of the castle is built, each slice multiplies the base by
+     * (castle-so-far wanted / measured)^{@link #K_IN}, bounded to ±{@link #TRIM}: cumulative, so one unusual module moves it little, and it never
+     * changes an accepted slice.</li>
+     * </ul>
+     * Everything is a pure function of the state carried in the slices: same seed, same course, on every device and on resume.
+     */
+    static final float PARTIAL_FROM = 0.3f, PARTIAL_NEXT = 0.5f, STEP_MAX = 1.25f, TRIM = 0.15f, K_IN = 0.5f;
+    static final float[] GAIN_K = {1.0f, 0.6f, 0.6f, 0.5f};
+    static final double G_FLOOR = 0.015, G_CEIL = 0.06;
+    static final float[] ONE4 = {1f, 1f, 1f, 1f};
 
     /**
-     * Selection factors {T, H, E, X} for castle {@code n} (n is the castle being measured or the one after it): 1 means "as the static profile
-     * builds it". Each is 1 + GAIN * relative error (target - measured) / target, from the previous castle and, once enough of it is built, the
-     * castle in progress, clamped to the profile's bounds. No previous castle and too little of this one: no correction.
+     * The plan of castle {@code n} from the record of castle n-1 ({@code prev}, null for castle 1 or an unknown predecessor): {base T, H, E, X,
+     * planned total, requested (unbounded) base T, H, E, X}. {@code st}: the state whose hazard capacity applies (NGH), or null.
+     */
+    static float[] plan(int n, float[] prev, DifficultyProfile P, Progression st) {
+        float[] o = new float[9];
+        double tn = P.targetTotal(n);
+        if (prev == null) { float[] f0 = n == 1 ? P.initialFactors() : ONE4; System.arraycopy(f0, 0, o, 0, 4); System.arraycopy(f0, 0, o, 5, 4); o[4] = (float) tn; return o; }
+        int m = n - 1;
+        double meas = total(prev, 1), planPrev = prev[R_PLAN] > 0f ? prev[R_PLAN] : P.targetTotal(m);
+        double planned = tn;
+        if (n <= 10 && meas > 0) planned = Math.min(Math.max(tn, meas * (1 + G_FLOOR)), meas * (1 + G_CEIL));
+        o[4] = (float) planned;
+        double scale = planPrev / P.targetTotal(m);
+        for (int k = 0; k < 4; k++) {
+            double fPrev = prev[R_BASE + k] > 0f ? prev[R_BASE + k] : 1.0, want = P.target(m, k) * scale, got = prev[1 + k];
+            double ratio = got > 1e-3 ? want / got : STEP_MAX;
+            ratio = Math.max(1.0 / STEP_MAX, Math.min(STEP_MAX, Math.pow(Math.max(1e-6, ratio), GAIN_K[k])));
+            float req = (float) (fPrev * ratio);
+            o[5 + k] = req;
+            if (k == H && P.capacityControl() && st != null) o[k] = st.hazardControl(P, req, (float) fPrev)[1];
+            else o[k] = Math.max(P.factorLo(k), Math.min(P.factorHi(k), req));
+        }
+        return o;
+    }
+    /** The plan of the castle in progress (stored when the castle opened; derived on demand before the first slice). */
+    float[] currentPlan() { return currentPlan(prof); }
+    float[] currentPlan(DifficultyProfile P) {
+        if (curPlanned > 0f) { float[] o = new float[9]; System.arraycopy(curBase, 0, o, 0, 4); o[4] = curPlanned; System.arraycopy(curReq, 0, o, 5, 4); return o; }
+        return P == null ? new float[]{1, 1, 1, 1, 0, 1, 1, 1, 1} : plan(castle, record(castle - 1), P, this);
+    }
+    /** The castle in progress as if complete (its accumulator scaled to a whole castle), for the plan of the castle after it. */
+    private float[] virtualRecord(float frac, DifficultyProfile P) {
+        float[] r = new float[REC]; r[0] = castle; float[] pl = currentPlan(P);
+        for (int i = 0; i < ACC; i++) r[1 + i] = i < 5 ? cur[i] / Math.max(0.05f, frac) : cur[i];
+        System.arraycopy(pl, 0, r, R_BASE, 4); r[R_PLAN] = pl[4]; return r;
+    }
+
+    /**
+     * Selection factors {T, H, E, X} for castle {@code n} (n is the castle being measured or the one after it): the castle's base factors with the
+     * within-castle trim, inside the profile's bounds (NGH hazards: the capacity rule).
      */
     public float[] factors(int n, DifficultyProfile P, float spacing) { return factors(n, P, spacing, null); }
-    /** As {@link #factors(int, DifficultyProfile, float)}; also writes the requested (unbounded) factors into {@code requested} when given (reports, KPI 7B). */
+    /** As {@link #factors(int, DifficultyProfile, float)}; also writes the requested (unbounded) factors into {@code requested} when given (reports). */
     public float[] factors(int n, DifficultyProfile P, float spacing, float[] requested) {
         float[] f = {1f, 1f, 1f, 1f};
         if (requested != null) java.util.Arrays.fill(requested, 1f);
         if (!P.progression()) return f;
-        float[] prevAcc = null; int prevN = n - 1;
-        float[] partial = null; float frac = 0f;
+        float frac = progress(spacing);
+        float[] pl, trim = {1f, 1f, 1f, 1f};
         if (n == castle) {
-            float[] r = record(prevN); if (r != null) { prevAcc = new float[ACC]; System.arraycopy(r, 1, prevAcc, 0, ACC); }
-            frac = progress(spacing); if (frac >= PARTIAL_FROM) partial = cur;
-        } else if (n == castle + 1) {          // a slice climbing into the next castle: the castle in progress stands for its predecessor
-            if (progress(spacing) >= 0.5f) prevAcc = cur;
-        }
-        if (prevAcc == null && partial == null) { if (n == 1) { f = P.initialFactors(); if (requested != null) System.arraycopy(f, 0, requested, 0, 4); } return f; }          // castle 1 before a third of it is built: the profile's starting point
+            pl = currentPlan(P);
+            if (frac >= PARTIAL_FROM) for (int k = 0; k < 4; k++) {
+                double want = P.target(n, k) * (pl[4] / P.targetTotal(n)) * frac, got = cur[k];
+                double tr = got > 1e-3 ? Math.pow(want / got, K_IN) : 1 + TRIM;
+                trim[k] = (float) Math.max(1 - TRIM, Math.min(1 + TRIM, tr));
+            }
+        } else if (n == castle + 1) {
+            pl = frac >= PARTIAL_NEXT ? plan(n, virtualRecord(frac, P), P, this) : currentPlan(P);          // too little of the castle in progress to judge: carry its base on
+        } else pl = n == 1 ? plan(1, null, P, this) : currentPlan(P);
         for (int k = 0; k < 4; k++) {
-            double e = 0, wsum = 0;
-            if (prevAcc != null) {
-                double tg = P.target(prevN, k);
-                if (tg > 0) {
-                    double w = 1 - PARTIAL_WEIGHT * (partial != null ? 1 : 0);
-                    if (SLOPE) {          // the shortfall against the level planned for castle n, carried back to castle n-1's scale
-                        double tn = P.target(n, k), want = planned(n, k, prevAcc[k], P);
-                        e += w * (want * tg / tn - prevAcc[k]) / (want * tg / tn);
-                    } else e += w * (tg - prevAcc[k]) / tg;
-                    wsum += w;
-                }
-            }
-            if (partial != null) {
-                double tg = (SLOPE && prevAcc != null ? planned(n, k, prevAcc[k], P) : P.target(n, k)) * frac;
-                if (tg > 0) { double w = prevAcc != null ? PARTIAL_WEIGHT : 1; e += w * (tg - partial[k]) / tg; wsum += w; }
-            }
-            if (wsum <= 0) continue;
-            e /= wsum;
-            if (requested != null) requested[k] = (float) (1 + GAIN * e);
-            if (k == H && P.capacityControl()) { f[k] = hazardControl(n, P, (float) (1 + GAIN * e))[1]; continue; }
-            f[k] = (float) Math.max(P.factorLo(k), Math.min(P.factorHi(k), 1 + GAIN * e));
+            float req = pl[5 + k] * trim[k];
+            if (requested != null) requested[k] = req;
+            if (k == H && P.capacityControl()) { float[] hc = hazardControl(P, req, prevAppliedH(n)); f[k] = hc[1]; hcLast[0] = Math.max(req, hc[0]); hcLast[1] = hc[1]; hcLast[2] = hc[2]; }
+            else f[k] = Math.max(P.factorLo(k), Math.min(P.factorHi(k), pl[k] * trim[k]));
         }
         return f;
     }
+    /** The hazard factor the castle before {@code n} was built with (its base), or the latest slice's factor. */
+    float prevAppliedH(int n) { float[] r = record(n - 1); if (r != null && r[R_BASE + H] > 0f) return r[R_BASE + H]; if (n == castle + 1) return currentPlan()[H]; return lastF[H]; }
 
     /**
-     * Reports only (KPI 7B): the factors the controller requested (before its bounds) at the start of castle {@code n}, from the previous castle's
-     * completed record {@code prev} (layout of {@link #completed}; null for castle 1). This is {@link #factors}' own arithmetic for a castle with too
-     * little of itself built to count; NGH hazards give the request before capacity control.
+     * Reports only (KPI 7B): the requested (unbounded) base factors of castle {@code n} from the record of castle n-1 ({@code prev}, layout of
+     * {@link #completed}; null for castle 1), before capacity control.
      */
     public static float[] startRequest(int n, float[] prev, DifficultyProfile P) {
-        float[] q = {1f, 1f, 1f, 1f};
-        if (!P.progression()) return q;
-        if (prev == null) return n == 1 ? P.initialFactors() : q;
-        for (int k = 0; k < 4; k++) {
-            double tg = P.target(n - 1, k), e;
-            if (!(tg > 0)) continue;
-            if (SLOPE) { double tn = P.target(n, k), want = planned(n, k, prev[1 + k], P); e = 1 * (want * tg / tn - prev[1 + k]) / (want * tg / tn); }
-            else e = 1 * (tg - prev[1 + k]) / tg;
-            q[k] = (float) (1 + GAIN * e);
-        }
-        return q;
+        if (!P.progression()) return ONE4.clone();
+        float[] pl = plan(n, prev, P, null); return new float[]{pl[5], pl[6], pl[7], pl[8]};
     }
-
-    /**
-     * Slope-aware progression (owner generator directive 2026-10-30, KPI 7B; behind -Dclimb.progSlope until validated): the level castle n is
-     * steered toward in category k is its target, or the previous castle's measured level plus at least {@link #SLOPE_KEEP} of the planned rise,
-     * whichever is higher. A castle that came out under target is corrected exactly as before (the target is the higher of the two); one that came
-     * out over it is no longer followed by an easier castle, only by a smaller rise, so an over-hot start cannot flatten the climb.
-     */
-    static double planned(int n, int k, double prevMeasured, DifficultyProfile P) {
-        double tn = P.target(n, k), rise = Math.max(0.0, tn - P.target(n - 1, k));
-        return Math.max(tn, prevMeasured + SLOPE_KEEP * rise);
-    }
-    static boolean SLOPE = Boolean.getBoolean("climb.progSlope");
-    /** The share of the planned castle-to-castle rise a castle keeps above an over-target predecessor (PROVISIONAL). */
-    static final double SLOPE_KEEP = 0.5;
 
     // ------------------------------------------------------------------ capacity-aware hazard escalation (NGH)
     /** Escalation per castle above the previous castle's applied factor, while acceptance holds (PROVISIONAL). */
     public static final float CAP_STEP = 0.25f;
     /** Hazard-module acceptance (accepted / attempted, last castle and this one so far) below which NGH does not escalate further (PROVISIONAL). */
-    public static final float CAP_ACCEPT_OK = 0.55f;
+    public static final float CAP_ACCEPT_OK = 0.40f;          // rules 21: was 0.55, above the 0.43-0.47 the generator achieves (Rule 20 campaign P3c), so NGH never escalated
     /**
      * Computational bound, not a balancing value: at 3x the hazard modules' weights outweigh every other module class at castle 10 several times over,
      * after which more weight only means more refused attempts (generation time) without more placed hazards.
@@ -356,31 +405,23 @@ public final class Progression {
      * CAP_ACCEPT_OK (more weight would only mean more refused attempts), and never past CAP_BOUND. The static 1.35 of NORMAL/PUNISHER stays available
      * as the floor of the escalation room, so NGH is never held below what the other modes may ask.
      */
-    public float[] hazardControl(int n, DifficultyProfile P, float requested) {
+    public float[] hazardControl(int n, DifficultyProfile P, float requested) { return hazardControl(P, requested, prevAppliedH(n)); }
+    public float[] hazardControl(DifficultyProfile P, float requested, float prevApplied) {
         float req = Math.max(P.factorLo(H), requested), base = P.factorHi(H);
-        float[] r = record(n - 1); float prevApplied = r != null ? r[1 + ACC + H] : lastF[H];
         boolean accepting = capAcceptance() >= CAP_ACCEPT_OK;
         float room = accepting ? Math.max(base, prevApplied + CAP_STEP) : Math.max(base, prevApplied);
         float applied = Math.min(req, Math.min(room, CAP_BOUND));
         int code = applied >= req - 1e-6f ? HC_NONE : room >= CAP_BOUND ? HC_BOUND : accepting ? HC_RATE : HC_ACCEPTANCE;
         return new float[]{req, applied, code};
     }
-    /** The requested (unconstrained) hazard factor for castle {@code n}, as {@link #factors} computes it before the capacity rule. */
+    /** {requested, applied, constraint} of the hazard factor for castle {@code n}, exactly as {@link #factors} applies it (reports, GenTrace). */
     public float[] hazardControlFor(int n, DifficultyProfile P, float spacing) {
-        if (!P.capacityControl()) { float[] f = factors(n, P, spacing); return new float[]{f[H], f[H], HC_NONE}; }
-        float[] f = factors(n, P, spacing);          // applied value (capacity rule inside)
-        // recompute the request the same way factors does, for the report
-        float[] prevAcc = null; int prevN = n - 1; float[] partial = null; float frac = 0f;
-        if (n == castle) { float[] rr = record(prevN); if (rr != null) { prevAcc = new float[ACC]; System.arraycopy(rr, 1, prevAcc, 0, ACC); } frac = progress(spacing); if (frac >= PARTIAL_FROM) partial = cur; }
-        else if (n == castle + 1) { if (progress(spacing) >= 0.5f) prevAcc = cur; }
-        if (prevAcc == null && partial == null) return new float[]{f[H], f[H], HC_NONE};
-        double e = 0, wsum = 0;
-        if (prevAcc != null) { double tg = P.target(prevN, H); if (tg > 0) { double w = 1 - PARTIAL_WEIGHT * (partial != null ? 1 : 0);
-            if (SLOPE) { double ref = planned(n, H, prevAcc[H], P) * tg / P.target(n, H); e += w * (ref - prevAcc[H]) / ref; } else e += w * (tg - prevAcc[H]) / tg; wsum += w; } }
-        if (partial != null) { double tg = (SLOPE && prevAcc != null ? planned(n, H, prevAcc[H], P) : P.target(n, H)) * frac; if (tg > 0) { double w = prevAcc != null ? PARTIAL_WEIGHT : 1; e += w * (tg - partial[H]) / tg; wsum += w; } }
-        if (wsum <= 0) return new float[]{f[H], f[H], HC_NONE};
-        return hazardControl(n, P, (float) (1 + GAIN * e / wsum));
+        float[] f = factors(n, P, spacing, null);
+        if (!P.capacityControl()) return new float[]{f[H], f[H], HC_NONE};
+        return hcLast.clone();
     }
+    /** The hazard control of the latest {@link #factors} call (transient). */
+    private final float[] hcLast = {1f, 1f, HC_NONE};
 
     /**
      * Per-kind selection multipliers (NGH): each hazard module kind's measured yield (hazard points actually placed per attempt) relative to the pooled

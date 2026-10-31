@@ -37,6 +37,14 @@ public final class DifficultyProfile {
      * every mode (flat terrain progression, identical in all three modes). Every jump it asks for is still proven by the planner.
      */
     public final float terrainCap;
+    /**
+     * Rules 21: metres further up the 5,000 m TERRAIN curve this difficulty starts (endless climbs; its own value, no longer {@link #curveShift}).
+     * NGH read the terrain curve with its whole 3,500 m head start, so its castle-1 jump demand was already 0.73 (Rule 20 campaign: castle-1 terrain
+     * 15 % over target, +9 % terrain over the climb); at 2,000 m it opens at 0.46, still above PUNISHER's 0.33, and rises to its 1.15 cap.
+     * NORMAL 0 and PUNISHER 1,250 m are unchanged.
+     */
+    public float terrainShift() { return this == NGH ? NGH_TERRAIN_SHIFT : curveShift; }
+    public static final float NGH_TERRAIN_SHIFT = 2000f;
     /** Owner rule (2026-10-26): absolute height from which enemies may pursue onto protected hazard platforms (NORMAL never; PROVISIONAL heights). */
     public final double pursuitFromY;
     /** How strongly the late-climb hazard, trap and mortar weights grow with {@code late()} (owner 2026-10-26: PUNISHER/NGH hazards stayed flat over the ten castles; PROVISIONAL). NORMAL 1. */
@@ -117,30 +125,30 @@ public final class DifficultyProfile {
      * NOT GONNA HAPPEN (rules 14, owner 2026-10-27): castle 1 at PUNISHER castles 3-4 as measured in rules 13 (783-863: 850), castle 10 about 20% above
      * PUNISHER castle 10 as measured (mean 1,007: 1,210; 16% above PUNISHER's 1,045 target). Castles beyond 10 (the endless climb) keep castle 10's target.
      */
-    private float[] totals() { float n1 = NORMAL_CASTLE1 * level(); return new float[]{n1, n1 * (1f + ARC)}; }
     /**
-     * The 30/15 Split (owner design principle and Build 83 approval, 2026-10-31; docs/gameplay/DIFFICULTY_PROGRESSION_30_15.md): every mode rises
-     * {@link #ARC} (about 30 %) from castle 1 to castle 10, and each mode stands {@link #SEPARATION} (about 15 %) above the one below it at every
-     * castle, compounding (NGH = 1.3225 x NORMAL). NORMAL's castle-1 level is the straight-line fit of the generator's own NORMAL castles measured
-     * with the launcher-reach correction (rules 20; six-course measurement 2026-10-31: fit 561); the harder modes are derived from it, never set
-     * on their own. These replace the independent curves of rules 13-19 (NORMAL 630 -> 870, PUNISHER 700 -> 1,045, NGH 850 -> 1,210).
+     * Rules 21 (owner Rule 21 directive 2026-10-31): compounded progression. NORMAL castle n = {@link #NORMAL_CASTLE1} x {@link #GROWTH}^(n-1)
+     * (3.3 % per castle, +33.9 % castle 1 -> 10; Rule 20 interpolated linearly, so its planned steps shrank from 3.3 % to 2.6 %), and every mode
+     * stands {@link #SEPARATION} above the one below it at every castle (PUNISHER 1.15 x NORMAL, NGH 1.3225 x NORMAL). Castles past 10 keep castle
+     * 10's target. NORMAL's castle-1 anchor stays 560 (Rule 20 measured 541).
      */
-    public static final float NORMAL_CASTLE1 = 560f, ARC = 0.30f, SEPARATION = 1.15f;
+    public static final float NORMAL_CASTLE1 = 560f, GROWTH = 1.033f, SEPARATION = 1.15f;
+    /** Rule 20's linear arc, kept only for reports that print the superseded design (never used by generation). */
+    public static final float ARC = 0.30f;
     /** This mode's multiple of NORMAL at every castle: 1, 1.15 or 1.3225. */
     public float level() { return this == NGH ? SEPARATION * SEPARATION : this == PUNISHER ? SEPARATION : 1f; }
     /**
-     * Category shares {terrain, hazards, enemies, interaction} at castle 1 and castle 10, interpolated between (PROVISIONAL, from the rules-12 lane
-     * means): NORMAL opens terrain-led (castle 1 measured 0.81 / 0.12 / 0.05 / 0.02) and hazards and enemies take a larger part as it rises; PUNISHER's
-     * enemy share is held near 0.10-0.12 (rules 12 reached 0.14) so its difficulty comes from terrain and hazards, not enemy counts (owner). NOT GONNA
-     * HAPPEN (rules 14) carries more hazards (avalanches) and its red Enforcers: 0.58 / 0.21 / 0.17 / 0.04 rising to 0.55 / 0.25 / 0.16 / 0.04.
+     * Category shares {terrain, hazards, enemies, interaction} at castle 1 and castle 10, interpolated between (rules 21: the Rule 20 campaign
+     * 41201387807's castle 1-3 and 8-10 mean lane shares, extrapolated to castles 1 and 10). NORMAL's terrain share falls less than measured (0.75 ->
+     * 0.67 rather than 0.75 -> 0.63), so terrain carries a real part of the rise (+19 % terrain over the climb, against the near-flat +4 % of the
+     * Rule 20 table) instead of leaving it all to the small hazard and enemy lanes; its castle-1 hazard share leaves out the castle-2 spike.
      */
     private float[][] shares() {
-        if (this == NGH) return new float[][]{{0.58f, 0.21f, 0.17f, 0.04f}, {0.55f, 0.25f, 0.16f, 0.04f}};
-        return this == PUNISHER ? new float[][]{{0.66f, 0.20f, 0.10f, 0.04f}, {0.62f, 0.22f, 0.12f, 0.04f}}
-                                : new float[][]{{0.80f, 0.13f, 0.05f, 0.02f}, {0.64f, 0.23f, 0.09f, 0.04f}};
+        if (this == NGH) return new float[][]{{0.618f, 0.219f, 0.120f, 0.043f}, {0.577f, 0.239f, 0.141f, 0.043f}};
+        return this == PUNISHER ? new float[][]{{0.664f, 0.208f, 0.090f, 0.038f}, {0.620f, 0.210f, 0.122f, 0.048f}}
+                                : new float[][]{{0.750f, 0.160f, 0.060f, 0.030f}, {0.670f, 0.200f, 0.085f, 0.045f}};
     }
     /** Intended castle-n total. */
-    public float targetTotal(int n) { float[] t = totals(); float u = Math.max(0f, Math.min(1f, (n - 1) / 9f)); return t[0] + (t[1] - t[0]) * u; }
+    public float targetTotal(int n) { return (float) (NORMAL_CASTLE1 * level() * Math.pow(GROWTH, Math.max(0, Math.min(9, n - 1)))); }
     /** Intended castle-n value of category k (Progression.T, H, E, X). */
     public float target(int n, int k) { float[][] s = shares(); float u = Math.max(0f, Math.min(1f, (n - 1) / 9f)); return targetTotal(n) * (s[0][k] + (s[1][k] - s[0][k]) * u); }
     /**
@@ -159,9 +167,10 @@ public final class DifficultyProfile {
      * Castle 1's factors before any of it is measured (PROVISIONAL): PUNISHER opens 8-11% above its castle-1 target with neutral factors (rules 13
      * iteration 1, seeds 1-2: 755-778 against 700; its Enforcer and avalanche encounters contribute only 2-7 points of that, the surplus is ordinary
      * terrain and hazard selection under its 1,250 m head start); it opens with lighter hazard and enemy selection instead, and its terrain eased
-     * slightly. NORMAL and NOT GONNA HAPPEN open neutral (NGH rules 13 measured about 784 against 850).
+     * slightly. NORMAL opens neutral. NOT GONNA HAPPEN (rules 21) opens with lighter hazard and interaction selection: the Rule 20 campaign measured
+     * its castle 1 at +16 % hazards and +25 % interaction over target with neutral factors (its terrain is eased through {@link #terrainShift()}).
      */
-    public float[] initialFactors() { return this == PUNISHER ? new float[]{0.9f, 0.8f, 0.8f, 0.9f} : new float[]{1f, 1f, 1f, 1f}; }
+    public float[] initialFactors() { return this == PUNISHER ? new float[]{0.9f, 0.8f, 0.8f, 0.9f} : this == NGH ? new float[]{1f, 0.85f, 1f, 0.9f} : new float[]{1f, 1f, 1f, 1f}; }
     /** History-aware variety strength (VarietyMemory.A): PUNISHER 0.45 (rules 12), NORMAL 0.25 (rules 13: a lighter touch), NGH 0.35 (rules 14). */
     public float varietyStrength() { return this == PUNISHER ? 0.45f : this == NORMAL ? 0.25f : 0.35f; }
 
